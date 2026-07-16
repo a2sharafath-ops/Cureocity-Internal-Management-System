@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint } from "@/lib/roles";
+
+const TODAY_ISO = "2026-07-02";
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -207,6 +209,90 @@ export async function updateLeadStage(formData: FormData) {
   await supabase.from("leads").update({ stage }).eq("id", id);
   await logAudit(p, "Lead stage changed", lead?.name, `→ ${stage}`);
   revalidatePath("/leads");
+}
+
+// ---- consultations (professional workspace) --------------------------------
+
+export async function createConsultation(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const kind = String(formData.get("kind"));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  if (!client_id || !kind) return;
+  const supabase = createClient();
+  await supabase.from("consultations").insert({
+    client_id, kind, notes, status: "scheduled", by_name: p.name, by_role: p.role,
+  });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Consultation created", c?.name, kind);
+  revalidatePath("/pro");
+}
+
+export async function completeConsultation(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const summary = String(formData.get("summary") ?? "").trim() || null;
+  const supabase = createClient();
+  await supabase.from("consultations").update({ status: "completed", summary }).eq("id", id);
+  revalidatePath("/pro");
+  revalidatePath("/", "layout");
+}
+
+export async function toggleConsultFlag(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const field = String(formData.get("field")); // "approved" | "shared"
+  const value = String(formData.get("value")) === "true";
+  if (field !== "approved" && field !== "shared") return;
+  const supabase = createClient();
+  await supabase.from("consultations").update({ [field]: !value }).eq("id", id);
+  revalidatePath("/pro");
+  revalidatePath("/", "layout");
+}
+
+// ---- BluePrint -------------------------------------------------------------
+
+export async function requestBlood(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageBlueprint(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  await supabase.from("blood_requests").upsert({
+    client_id, requested_at: TODAY_ISO, submitted: false,
+  });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Blood report requested", c?.name, null);
+  revalidatePath("/blueprint");
+}
+
+export async function markBloodReceived(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageBlueprint(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  await supabase.from("blood_requests").update({ submitted: true, submitted_date: TODAY_ISO }).eq("client_id", client_id);
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Blood report received", c?.name, null);
+  revalidatePath("/blueprint");
+}
+
+export async function generateBlueprint(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageBlueprint(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const consolidated = String(formData.get("consolidated") ?? "").trim() || null;
+  const supabase = createClient();
+  await supabase.from("blueprints").upsert({
+    client_id, consolidated, status: "generated", generated: true, generated_date: TODAY_ISO,
+    updated_at: new Date().toISOString(),
+  });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Blueprint generated", c?.name, null);
+  revalidatePath("/blueprint");
+  revalidatePath("/", "layout");
 }
 
 // ---- clients ---------------------------------------------------------------

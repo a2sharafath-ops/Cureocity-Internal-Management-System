@@ -10,6 +10,8 @@ const NAV = [
   { href: "/leads", label: "Leads", icon: "✦" },
   { href: "/sessions", label: "Sessions", icon: "🏋" },
   { href: "/trainer", label: "Trainer", icon: "🎽" },
+  { href: "/pro", label: "Consultations", icon: "🩺" },
+  { href: "/blueprint", label: "BluePrint", icon: "🧬" },
   { href: "/packages", label: "Packages", icon: "▦" },
   { href: "/users", label: "Users & Roles", icon: "⚙" },
   { href: "/audit", label: "Audit Log", icon: "☰" },

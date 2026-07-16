@@ -34,11 +34,13 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
 
   if (!client) notFound();
 
-  const [{ data: sessions }, { data: trainerData }] = await Promise.all([
+  const [{ data: sessions }, { data: trainerData }, { data: consultData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
+    supabase.from("consultations").select("id, kind, status, summary, approved, shared, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
   ]);
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
+  const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
@@ -171,6 +173,31 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
               </table>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Consultations */}
+      <div
+        style={{
+          marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)",
+          boxShadow: "var(--shadow)", padding: "18px 20px",
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>🩺 Consultations ({consults.length})</div>
+        {consults.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultations yet.</div>
+        ) : (
+          consults.map((cs) => (
+            <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.kind}</span>
+                <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "#eef2f1", color: cs.status === "completed" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{cs.status}</span>
+                {cs.approved && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
+                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
+              </div>
+              {cs.summary && <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>{cs.summary}</div>}
+            </div>
+          ))
         )}
       </div>
     </div>
