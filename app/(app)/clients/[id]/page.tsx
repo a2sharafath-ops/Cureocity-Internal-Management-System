@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
+import FileUploadForm from "@/components/FileUploadForm";
+import FilesGrid from "@/components/FilesGrid";
 import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 
@@ -50,6 +52,14 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   const { data: portalProfile } = showPortal
     ? await supabase.from("profiles").select("email").eq("client_id", params.id).eq("role", "Client").maybeSingle()
     : { data: null };
+
+  // files + signed URLs
+  const { data: fileRows } = await supabase
+    .from("files").select("id, name, kind, path, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
+  const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
+    const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
+    return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
+  }));
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
@@ -208,6 +218,22 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
             </div>
           ))
         )}
+      </div>
+
+      {/* Files */}
+      <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>📎 Files &amp; documents</div>
+        <FilesGrid files={files} />
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Upload blood report (PDF/image)</div>
+            <FileUploadForm variant="staff" clientId={params.id} kind="blood_report" label="Upload blood report" accept=".pdf,image/*" />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Upload progress photo</div>
+            <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
+          </div>
+        </div>
       </div>
 
       {/* Portal access (staff) */}

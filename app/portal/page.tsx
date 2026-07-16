@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { submitBloodSelf } from "@/lib/actions";
 import { BP_SCORES, band, type BpScores } from "@/lib/blueprint";
+import FileUploadForm from "@/components/FileUploadForm";
+import FilesGrid from "@/components/FilesGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +37,18 @@ export default async function PortalHome() {
 
   const pkg = (client as { packages: { name: string; is_facility: boolean } | null }).packages;
 
-  const [{ data: sessions }, { data: consults }, { data: bpData }, { data: bloodData }] = await Promise.all([
+  const [{ data: sessions }, { data: consults }, { data: bpData }, { data: bloodData }, { data: fileRows }] = await Promise.all([
     supabase.from("sessions").select("seq, date, hour, status").eq("client_id", client.id).order("seq"),
     supabase.from("consultations").select("kind, summary, created_at").eq("client_id", client.id).eq("shared", true).order("created_at", { ascending: false }),
     supabase.from("blueprints").select("generated, generated_date, consolidated, scores").eq("client_id", client.id).eq("generated", true).maybeSingle(),
     supabase.from("blood_requests").select("submitted, submitted_date, requested_at").eq("client_id", client.id).maybeSingle(),
+    supabase.from("files").select("id, name, kind, path, created_at").eq("client_id", client.id).order("created_at", { ascending: false }),
   ]);
+
+  const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
+    const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
+    return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
+  }));
 
   const sess = (sessions ?? []) as { seq: number; date: string; hour: number; status: string }[];
   const shared = (consults ?? []) as { kind: string; summary: string | null; created_at: string }[];
@@ -121,13 +128,11 @@ export default async function PortalHome() {
                 <b style={{ color: "#166534" }}>received ✓{blood.submitted_date ? ` (${blood.submitted_date})` : ""}</b>
               ) : (
                 <>
-                  <b style={{ color: "#92400e" }}>requested</b>
-                  <form action={submitBloodSelf} style={{ marginTop: 8 }}>
-                    <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                      I&apos;ve submitted my blood report
-                    </button>
-                    <div style={{ marginTop: 4, fontSize: 11, color: "var(--muted)" }}>Hand your report to the clinic, then tap this to confirm.</div>
-                  </form>
+                  <b style={{ color: "#92400e" }}>requested — upload your report</b>
+                  <div style={{ marginTop: 8 }}>
+                    <FileUploadForm variant="portal" kind="blood_report" label="Upload blood report" accept=".pdf,image/*" />
+                    <div style={{ marginTop: 4, fontSize: 11, color: "var(--muted)" }}>PDF or photo · max 10 MB.</div>
+                  </div>
                 </>
               )}
             </div>
@@ -152,6 +157,18 @@ export default async function PortalHome() {
           ) : (
             <div style={{ fontSize: 13, color: "var(--muted)" }}>Your blueprint is being prepared.</div>
           )}
+        </>
+      )}
+
+      {/* My files & progress photos */}
+      {card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>My files &amp; progress photos</div>
+          <FilesGrid files={files} />
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Add a progress photo</div>
+            <FileUploadForm variant="portal" kind="progress_photo" label="Upload photo" accept="image/*" />
+          </div>
         </>
       )}
 

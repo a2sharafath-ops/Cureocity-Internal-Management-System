@@ -337,6 +337,62 @@ export async function saveBlueprintScores(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// ---- file uploads (Supabase Storage) ---------------------------------------
+
+async function storeFile(clientId: string, kind: string, file: File, uploadedBy: string) {
+  const supabase = createClient();
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${clientId}/${crypto.randomUUID()}-${safe}`;
+  const { error } = await supabase.storage.from("client-files").upload(path, file, {
+    contentType: file.type || undefined,
+    upsert: false,
+  });
+  if (error) return { error: error.message };
+  await supabase.from("files").insert({ client_id: clientId, bucket: "client-files", path, name: file.name, kind, uploaded_by: uploadedBy });
+  return { ok: true };
+}
+
+export type UploadState = { error?: string; ok?: string };
+
+// staff upload for a client (client 360)
+export async function uploadClientFile(_prev: UploadState, formData: FormData): Promise<UploadState> {
+  const me = await getProfile();
+  if (!me || me.role === "Client") return { error: "Not authorized." };
+  const clientId = String(formData.get("client_id"));
+  const kind = String(formData.get("kind") || "document");
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file to upload." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
+  const r = await storeFile(clientId, kind, file, me.name);
+  if (r.error) return { error: r.error };
+  const supabase = createClient();
+  const { data: c } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
+  await logAudit(me, "File uploaded", c?.name, `${kind}: ${file.name}`);
+  revalidatePath(`/clients/${clientId}`);
+  return { ok: "Uploaded." };
+}
+
+// client uploads from the portal (their own files)
+export async function uploadPortalFile(_prev: UploadState, formData: FormData): Promise<UploadState> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  const { data: prof } = await supabase.from("profiles").select("client_id, name").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return { error: "No client linked to your login." };
+  const kind = String(formData.get("kind") || "document");
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file to upload." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
+  const r = await storeFile(prof.client_id, kind, file, prof.name ?? "Client");
+  if (r.error) return { error: r.error };
+  if (kind === "blood_report") {
+    await supabase.from("blood_requests").update({ submitted: true, submitted_date: TODAY_ISO }).eq("client_id", prof.client_id);
+  }
+  await logAudit({ id: user.id, name: prof.name ?? undefined, role: "Client" }, "File uploaded (portal)", prof.name, `${kind}: ${file.name}`);
+  revalidatePath("/portal");
+  return { ok: "Uploaded." };
+}
+
 // client marks their own blood report submitted (portal)
 export async function submitBloodSelf() {
   const supabase = createClient();
