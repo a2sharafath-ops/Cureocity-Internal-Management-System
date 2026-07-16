@@ -17,6 +17,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("id", user.id)
     .maybeSingle();
 
+  // clients don't use the staff app
+  if (profile?.role === "Client") redirect("/portal");
+
   const name = profile?.name ?? user.email?.split("@")[0] ?? "User";
   const role = profile?.role ?? "Staff";
   const initials = name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();

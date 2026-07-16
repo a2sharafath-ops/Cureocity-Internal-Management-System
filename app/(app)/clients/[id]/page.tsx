@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
+import PortalLoginForm from "@/components/PortalLoginForm";
+import { getProfile } from "@/lib/auth";
+import { canWrite } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +44,12 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   ]);
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
   const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
+
+  const me = await getProfile();
+  const showPortal = canWrite(me?.role ?? "");
+  const { data: portalProfile } = showPortal
+    ? await supabase.from("profiles").select("email").eq("client_id", params.id).eq("role", "Client").maybeSingle()
+    : { data: null };
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
@@ -200,6 +209,14 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           ))
         )}
       </div>
+
+      {/* Portal access (staff) */}
+      {showPortal && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>🔑 Client Portal access</div>
+          <PortalLoginForm clientId={params.id} existingEmail={portalProfile?.email ?? null} />
+        </div>
+      )}
     </div>
   );
 }

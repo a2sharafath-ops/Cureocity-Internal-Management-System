@@ -135,6 +135,32 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
   return { ok: `Created ${email} as ${role}. Share the temporary password with them.` };
 }
 
+export async function createPortalLogin(_prev: InviteState, formData: FormData): Promise<InviteState> {
+  const me = await getProfile();
+  if (!me || !canWrite(me.role)) return { error: "Not authorized." };
+
+  const clientId = String(formData.get("client_id"));
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  if (!clientId || !email || !password) return { error: "Email and a password are required." };
+  if (password.length < 6) return { error: "Password must be at least 6 characters." };
+
+  const admin = createAdminClient();
+  const { data: cl } = await admin.from("clients").select("name").eq("id", clientId).maybeSingle();
+  const { data, error } = await admin.auth.admin.createUser({
+    email, password, email_confirm: true, user_metadata: { name: cl?.name ?? email },
+  });
+  if (error) return { error: error.message };
+
+  const uid = data.user?.id;
+  if (uid) {
+    await admin.from("profiles").upsert({ id: uid, email, name: cl?.name ?? email, role: "Client", client_id: clientId });
+  }
+  await logAudit(me, "Portal login created", cl?.name ?? email, email);
+  revalidatePath(`/clients/${clientId}`);
+  return { ok: `Portal login created for ${email}. Share the password with the client.` };
+}
+
 export async function updateUserRole(formData: FormData) {
   const me = await getProfile();
   if (!me || me.role !== "Administrator") return; // only admins manage roles
