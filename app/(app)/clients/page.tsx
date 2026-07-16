@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
 
@@ -36,7 +37,16 @@ export default async function ClientsPage() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Clients</h1>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+        <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
+        <span style={{ flex: 1 }} />
+        <Link
+          href="/clients/new"
+          style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+        >
+          + New Client
+        </Link>
+      </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         CRM · live from Supabase
       </p>

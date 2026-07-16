@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import SessionActions from "@/components/SessionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -33,16 +34,16 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
 
   if (!client) notFound();
 
-  const { data: sessions } = await supabase
-    .from("sessions")
-    .select("*, staff(name)")
-    .eq("client_id", params.id)
-    .order("seq", { ascending: true });
+  const [{ data: sessions }, { data: trainerData }] = await Promise.all([
+    supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
+    supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
+  ]);
+  const trainers = (trainerData ?? []) as { id: string; name: string }[];
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
     id: string; seq: number; date: string; hour: number; status: string; rescheduled: boolean;
-    staff: { name: string } | null;
+    trainer_id: string; staff: { name: string } | null;
   }[];
   const done = sess.filter((s) => s.status === "completed").length;
 
@@ -67,6 +68,13 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
           </div>
         </div>
+        <span style={{ flex: 1 }} />
+        <Link
+          href={`/clients/${params.id}/edit`}
+          style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+        >
+          ✎ Edit
+        </Link>
       </div>
 
       {/* Profile */}
@@ -118,6 +126,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
                     <th style={{ padding: "8px 12px" }}>Time</th>
                     <th style={{ padding: "8px 12px" }}>Trainer</th>
                     <th style={{ padding: "8px 12px" }}>Status</th>
+                    <th style={{ padding: "8px 12px" }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -144,6 +153,17 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
                         >
                           {s.status}
                         </span>
+                      </td>
+                      <td style={{ padding: "8px 12px" }}>
+                        <SessionActions
+                          id={s.id}
+                          clientId={client.id}
+                          date={s.date}
+                          hour={s.hour}
+                          trainerId={s.trainer_id}
+                          status={s.status}
+                          trainers={trainers}
+                        />
                       </td>
                     </tr>
                   ))}

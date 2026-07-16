@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import LeadStageSelect from "@/components/LeadStageSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -56,9 +57,7 @@ export default async function LeadsPage() {
                   <td style={{ padding: "12px 16px" }}>{l.source ?? "—"}</td>
                   <td style={{ padding: "12px 16px" }}>{l.fde ?? "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
-                    <span style={{ background: "var(--purple-bg)", color: "#6d28d9", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>
-                      {l.stage ?? "—"}
-                    </span>
+                    <LeadStageSelect id={l.id} stage={l.stage ?? "1-New Lead"} />
                   </td>
                 </tr>
               ))}
