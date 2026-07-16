@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { BP_SCORES, band, type BpScores } from "@/lib/blueprint";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
+import MealSelfForm from "@/components/MealSelfForm";
+import { MEALS, type MealLog } from "@/lib/meals";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,10 @@ export default async function PortalHome() {
     supabase.from("blood_requests").select("submitted, submitted_date, requested_at").eq("client_id", client.id).maybeSingle(),
     supabase.from("files").select("id, name, kind, path, created_at").eq("client_id", client.id).order("created_at", { ascending: false }),
   ]);
+
+  const { data: mealRows } = await supabase.from("meal_logs").select("*").eq("client_id", client.id).eq("date", TODAY);
+  const mealMap = new Map(((mealRows ?? []) as MealLog[]).map((m) => [m.meal, m]));
+  const showMeals = !pkg?.is_facility;
 
   const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
     const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
@@ -157,6 +163,19 @@ export default async function PortalHome() {
           ) : (
             <div style={{ fontSize: 13, color: "var(--muted)" }}>Your blueprint is being prepared.</div>
           )}
+        </>
+      )}
+
+      {/* Today's meals */}
+      {showMeals && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>🍽️ Today&apos;s meals</div>
+          <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>Log what you eat and ask your dietitian anything.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+            {MEALS.map((m) => (
+              <MealSelfForm key={m.key} meal={m.key} label={m.label} icon={m.icon} log={mealMap.get(m.key) ?? null} />
+            ))}
+          </div>
         </>
       )}
 

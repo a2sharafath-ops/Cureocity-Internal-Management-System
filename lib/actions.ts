@@ -421,6 +421,69 @@ export async function generateBlueprint(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// ---- meal monitoring -------------------------------------------------------
+
+// client logs a meal / asks a question (portal)
+export async function saveMealSelf(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return;
+  const meal = String(formData.get("meal"));
+  const description = String(formData.get("description") ?? "").trim() || null;
+  const doubt = String(formData.get("doubt") ?? "").trim() || null;
+  await supabase.from("meal_logs").upsert(
+    { client_id: prof.client_id, date: TODAY_ISO, meal, description, doubt, updated_at: new Date().toISOString() },
+    { onConflict: "client_id,date,meal" }
+  );
+  revalidatePath("/portal");
+}
+
+// dietitian: review a logged meal
+export async function reviewMeal(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const meal = String(formData.get("meal"));
+  const review = String(formData.get("review") ?? "").trim() || null;
+  const supabase = createClient();
+  await supabase.from("meal_logs").upsert(
+    { client_id, date: TODAY_ISO, meal, review, updated_at: new Date().toISOString() },
+    { onConflict: "client_id,date,meal" }
+  );
+  revalidatePath("/meals");
+}
+
+// dietitian: nudge a missing meal
+export async function nudgeMeal(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const meal = String(formData.get("meal"));
+  const supabase = createClient();
+  await supabase.from("meal_logs").upsert(
+    { client_id, date: TODAY_ISO, meal, nudged: true, updated_at: new Date().toISOString() },
+    { onConflict: "client_id,date,meal" }
+  );
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Meal follow-up nudge", c?.name, meal);
+  revalidatePath("/meals");
+}
+
+// dietitian: answer a client's meal question
+export async function answerMealDoubt(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const meal = String(formData.get("meal"));
+  const answer = String(formData.get("answer") ?? "").trim() || null;
+  const supabase = createClient();
+  await supabase.from("meal_logs").update({ doubt_answer: answer, updated_at: new Date().toISOString() })
+    .eq("client_id", client_id).eq("date", TODAY_ISO).eq("meal", meal);
+  revalidatePath("/meals");
+}
+
 // ---- clients ---------------------------------------------------------------
 
 function parseClientForm(formData: FormData) {
