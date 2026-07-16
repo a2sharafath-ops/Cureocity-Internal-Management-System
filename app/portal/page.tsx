@@ -7,9 +7,11 @@ import { MEALS, type MealLog } from "@/lib/meals";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
+import { todayISO } from "@/lib/today";
+
 export const dynamic = "force-dynamic";
 
-const TODAY = "2026-07-02";
+const TODAY = todayISO();
 
 function fmtHour(h: number | null) {
   if (h == null) return "—";

@@ -6,9 +6,11 @@ import { canSee } from "@/lib/roles";
 import SessionActions from "@/components/SessionActions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
+import { todayISO, todayLabel } from "@/lib/today";
+
 export const dynamic = "force-dynamic";
 
-const TODAY = "2026-07-02";
+const TODAY = todayISO();
 
 function fmtHour(h: number | null) {
   if (h == null) return "—";
@@ -79,7 +81,7 @@ export default async function TrainerPage() {
       <RealtimeRefresh tables={["sessions"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Trainer Workspace</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Session board · today Thu, Jul 2, 2026
+        Session board · today {todayLabel()}
       </p>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>

@@ -49,7 +49,7 @@ export default function ClientForm({
         </div>
         <div>
           <label style={label}>Joined date</label>
-          <input style={input} type="date" name="joined" defaultValue={c.joined ?? "2026-07-02"} />
+          <input style={input} type="date" name="joined" defaultValue={c.joined ?? new Date().toISOString().slice(0,10)} />
         </div>
         <div>
           <label style={label}>Package</label>

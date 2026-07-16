@@ -31,7 +31,7 @@ export default function MeasurementForm({ clientId }: { clientId: string }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
         <div>
           <label style={{ fontSize: 11, color: "var(--muted)" }}>Date</label>
-          <input style={input} type="date" name="date" defaultValue="2026-07-02" />
+          <input style={input} type="date" name="date" defaultValue={new Date().toISOString().slice(0,10)} />
         </div>
         {FIELDS.map((f) => (
           <div key={f.name}>

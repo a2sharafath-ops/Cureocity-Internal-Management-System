@@ -3,9 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
+import { todayISO } from "@/lib/today";
+
 export const dynamic = "force-dynamic";
 
-const TODAY = "2026-07-02";
+const TODAY = todayISO();
 
 function fmtHour(h: number | null) {
   if (h == null) return "—";
@@ -44,7 +46,7 @@ export default async function SessionsPage() {
       <RealtimeRefresh tables={["sessions"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Upcoming Sessions</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Strength sessions · {todayCount} today · {sess.length} upcoming (from Jul 2)
+        Strength sessions · {todayCount} today · {sess.length} upcoming (from today)
       </p>
 
       {error ? (

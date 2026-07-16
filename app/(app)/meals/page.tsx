@@ -8,9 +8,11 @@ import MealStaffCell from "@/components/MealStaffCell";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
+import { todayISO, todayLabel } from "@/lib/today";
+
 export const dynamic = "force-dynamic";
 
-const TODAY = "2026-07-02";
+const TODAY = todayISO();
 
 export default async function MealsPage() {
   const me = await getProfile();
@@ -38,7 +40,7 @@ export default async function MealsPage() {
       <RealtimeRefresh tables={["meal_logs"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Meal Monitoring</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Today Thu, Jul 2 · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}
+        Today {todayLabel()} · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}
       </p>
 
       {clients.length === 0 ? (

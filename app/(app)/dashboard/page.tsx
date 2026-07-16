@@ -4,9 +4,11 @@ import { getProfile, getViewRole } from "@/lib/auth";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
+import { todayISO, todayLabel } from "@/lib/today";
+
 export const dynamic = "force-dynamic";
 
-const TODAY = "2026-07-02";
+const TODAY = todayISO();
 
 function fmtHour(h: number | null) {
   if (h == null) return "—";
@@ -73,7 +75,7 @@ export default async function DashboardPage() {
       <RealtimeRefresh tables={["sessions","leads","consultations"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Dashboard</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        {me?.name} · {role} · today Thu, Jul 2, 2026
+        {me?.name} · {role} · today {todayLabel()}
       </p>
 
       {/* KPI row — tailored per role */}

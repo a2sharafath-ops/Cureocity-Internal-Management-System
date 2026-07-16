@@ -8,8 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
 import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
+import { todayISO } from "@/lib/today";
 
-const TODAY_ISO = "2026-07-02";
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -299,7 +299,7 @@ export async function requestBlood(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
   await supabase.from("blood_requests").upsert({
-    client_id, requested_at: TODAY_ISO, submitted: false,
+    client_id, requested_at: todayISO(), submitted: false,
   });
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report requested", c?.name, null);
@@ -311,7 +311,7 @@ export async function markBloodReceived(formData: FormData) {
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
-  await supabase.from("blood_requests").update({ submitted: true, submitted_date: TODAY_ISO }).eq("client_id", client_id);
+  await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", client_id);
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report received", c?.name, null);
   revalidatePath("/blueprint");
@@ -386,7 +386,7 @@ export async function uploadPortalFile(_prev: UploadState, formData: FormData): 
   const r = await storeFile(prof.client_id, kind, file, prof.name ?? "Client");
   if (r.error) return { error: r.error };
   if (kind === "blood_report") {
-    await supabase.from("blood_requests").update({ submitted: true, submitted_date: TODAY_ISO }).eq("client_id", prof.client_id);
+    await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", prof.client_id);
   }
   await logAudit({ id: user.id, name: prof.name ?? undefined, role: "Client" }, "File uploaded (portal)", prof.name, `${kind}: ${file.name}`);
   revalidatePath("/portal");
@@ -400,7 +400,7 @@ export async function submitBloodSelf() {
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id, role, name").eq("id", user.id).maybeSingle();
   if (!prof?.client_id) return;
-  await supabase.from("blood_requests").update({ submitted: true, submitted_date: TODAY_ISO }).eq("client_id", prof.client_id);
+  await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", prof.client_id);
   await logAudit({ id: user.id, name: prof.name ?? undefined, role: prof.role ?? undefined }, "Blood report submitted (portal)", prof.name, null);
   revalidatePath("/portal");
 }
@@ -412,7 +412,7 @@ export async function generateBlueprint(formData: FormData) {
   const consolidated = String(formData.get("consolidated") ?? "").trim() || null;
   const supabase = createClient();
   await supabase.from("blueprints").upsert({
-    client_id, consolidated, status: "generated", generated: true, generated_date: TODAY_ISO,
+    client_id, consolidated, status: "generated", generated: true, generated_date: todayISO(),
     updated_at: new Date().toISOString(),
   });
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
@@ -436,7 +436,7 @@ export async function addMeasurement(formData: FormData) {
   const supabase = createClient();
   await supabase.from("measurements").insert({
     client_id,
-    date: String(formData.get("date") || TODAY_ISO),
+    date: String(formData.get("date") || todayISO()),
     weight: num("weight"), bmi: num("bmi"), body_fat: num("body_fat"),
     muscle_mass: num("muscle_mass"), visceral_fat: num("visceral_fat"),
     waist: num("waist"), hip: num("hip"), resting_hr: num("resting_hr"),
@@ -461,7 +461,7 @@ export async function saveMealSelf(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   const doubt = String(formData.get("doubt") ?? "").trim() || null;
   await supabase.from("meal_logs").upsert(
-    { client_id: prof.client_id, date: TODAY_ISO, meal, description, doubt, updated_at: new Date().toISOString() },
+    { client_id: prof.client_id, date: todayISO(), meal, description, doubt, updated_at: new Date().toISOString() },
     { onConflict: "client_id,date,meal" }
   );
   revalidatePath("/portal");
@@ -476,7 +476,7 @@ export async function reviewMeal(formData: FormData) {
   const review = String(formData.get("review") ?? "").trim() || null;
   const supabase = createClient();
   await supabase.from("meal_logs").upsert(
-    { client_id, date: TODAY_ISO, meal, review, updated_at: new Date().toISOString() },
+    { client_id, date: todayISO(), meal, review, updated_at: new Date().toISOString() },
     { onConflict: "client_id,date,meal" }
   );
   revalidatePath("/meals");
@@ -490,7 +490,7 @@ export async function nudgeMeal(formData: FormData) {
   const meal = String(formData.get("meal"));
   const supabase = createClient();
   await supabase.from("meal_logs").upsert(
-    { client_id, date: TODAY_ISO, meal, nudged: true, updated_at: new Date().toISOString() },
+    { client_id, date: todayISO(), meal, nudged: true, updated_at: new Date().toISOString() },
     { onConflict: "client_id,date,meal" }
   );
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
@@ -507,7 +507,7 @@ export async function answerMealDoubt(formData: FormData) {
   const answer = String(formData.get("answer") ?? "").trim() || null;
   const supabase = createClient();
   await supabase.from("meal_logs").update({ doubt_answer: answer, updated_at: new Date().toISOString() })
-    .eq("client_id", client_id).eq("date", TODAY_ISO).eq("meal", meal);
+    .eq("client_id", client_id).eq("date", todayISO()).eq("meal", meal);
   revalidatePath("/meals");
 }
 
