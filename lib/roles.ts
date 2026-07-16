@@ -15,6 +15,8 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/clients": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/leads": ["Administrator", "Manager", "Front Desk"],
   "/sessions": ["Administrator", "Manager", "Front Desk", "Health Professional"],
+  "/trainer": ["Administrator", "Manager", "Front Desk", "Health Professional"],
+  "/packages": ["Administrator", "Manager", "Front Desk"],
   "/users": ["Administrator"],
   "/audit": ["Administrator"],
 };
@@ -34,4 +36,9 @@ export function canWrite(role: string): boolean {
 // Who can reschedule / complete strength sessions (front desk + trainers).
 export function canManageSessions(role: string): boolean {
   return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+}
+
+// Who can activate/deactivate packages.
+export function canManagePackages(role: string): boolean {
+  return ["Administrator", "Manager"].includes(role);
 }

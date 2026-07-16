@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages } from "@/lib/roles";
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -180,6 +180,19 @@ export async function markSessionComplete(formData: FormData) {
   if (c) await supabase.from("clients").update({ used: (c.used ?? 0) + 1 }).eq("id", clientId);
   await logAudit(p, "Session completed", c?.name, null);
   revalidatePath("/", "layout");
+}
+
+// ---- packages --------------------------------------------------------------
+
+export async function togglePackageActive(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return;
+  const id = String(formData.get("id"));
+  const active = String(formData.get("active")) === "true";
+  const supabase = createClient();
+  await supabase.from("packages").update({ active: !active }).eq("id", id);
+  await logAudit(p, active ? "Package deactivated" : "Package activated", id, null);
+  revalidatePath("/packages");
 }
 
 // ---- leads -----------------------------------------------------------------
