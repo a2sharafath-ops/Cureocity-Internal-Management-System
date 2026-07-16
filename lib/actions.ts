@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
 import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint } from "@/lib/roles";
+import { BP_SCORES } from "@/lib/blueprint";
 
 const TODAY_ISO = "2026-07-02";
 
@@ -303,6 +304,38 @@ export async function markBloodReceived(formData: FormData) {
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report received", c?.name, null);
   revalidatePath("/blueprint");
+}
+
+export async function saveBlueprintScores(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageBlueprint(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const scores: Record<string, number> = {};
+  for (const s of BP_SCORES) {
+    const raw = formData.get("s_" + s.key);
+    if (raw !== null && String(raw).trim() !== "") {
+      const n = Math.max(0, Math.min(100, Number(raw)));
+      if (!Number.isNaN(n)) scores[s.key] = n;
+    }
+  }
+  const supabase = createClient();
+  await supabase.from("blueprints").upsert({ client_id, scores, updated_at: new Date().toISOString() });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Blueprint scores updated", c?.name, `${Object.keys(scores).length}/9 scores`);
+  revalidatePath("/blueprint");
+  revalidatePath("/", "layout");
+}
+
+// client marks their own blood report submitted (portal)
+export async function submitBloodSelf() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("client_id, role, name").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return;
+  await supabase.from("blood_requests").update({ submitted: true, submitted_date: TODAY_ISO }).eq("client_id", prof.client_id);
+  await logAudit({ id: user.id, name: prof.name ?? undefined, role: prof.role ?? undefined }, "Blood report submitted (portal)", prof.name, null);
+  revalidatePath("/portal");
 }
 
 export async function generateBlueprint(formData: FormData) {

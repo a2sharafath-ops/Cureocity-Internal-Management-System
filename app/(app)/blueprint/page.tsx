@@ -5,6 +5,9 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import BloodActions from "@/components/BloodActions";
 import BlueprintGenerate from "@/components/BlueprintGenerate";
+import BlueprintScores from "@/components/BlueprintScores";
+import { canManageBlueprint } from "@/lib/roles";
+import type { BpScores } from "@/lib/blueprint";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +41,8 @@ export default async function BlueprintPage() {
     return REQUIRED.filter((k) => consults.some((c) => c.client_id === cid && c.kind === k && c.approved)).length;
   }
 
+  const canEditScores = canManageBlueprint(me.role);
+
   return (
     <div style={{ maxWidth: 1000 }}>
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>BluePrint</h1>
@@ -52,13 +57,14 @@ export default async function BlueprintPage() {
               <th style={{ padding: "12px 16px" }}>Client</th>
               <th style={{ padding: "12px 16px" }}>Blood report</th>
               <th style={{ padding: "12px 16px" }}>Consults approved</th>
+              <th style={{ padding: "12px 16px" }}>Health scores</th>
               <th style={{ padding: "12px 16px" }}>Blueprint</th>
             </tr>
           </thead>
           <tbody>
             {clients.map((c) => {
               const appr = approvedCount(c.id);
-              const bp = bps.get(c.id) as { generated: boolean; consolidated: string | null } | undefined;
+              const bp = bps.get(c.id) as { generated: boolean; consolidated: string | null; scores: BpScores | null } | undefined;
               return (
                 <tr key={c.id} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>
                   <td style={{ padding: "12px 16px" }}>
@@ -70,6 +76,9 @@ export default async function BlueprintPage() {
                   </td>
                   <td style={{ padding: "12px 16px" }}>{appr} / 3</td>
                   <td style={{ padding: "12px 16px" }}>
+                    <BlueprintScores clientId={c.id} scores={bp?.scores ?? null} canEdit={canEditScores} />
+                  </td>
+                  <td style={{ padding: "12px 16px" }}>
                     <BlueprintGenerate clientId={c.id} generated={!!bp?.generated} ready={appr === 3} consolidated={bp?.consolidated ?? null} />
                   </td>
                 </tr>
@@ -77,7 +86,7 @@ export default async function BlueprintPage() {
             })}
             {clients.length === 0 && (
               <tr>
-                <td colSpan={4} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
+                <td colSpan={5} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
                   No BluePrint clients yet — assign the BluePrint package to a client to start.
                 </td>
               </tr>

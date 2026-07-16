@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { submitBloodSelf } from "@/lib/actions";
+import { BP_SCORES, band, type BpScores } from "@/lib/blueprint";
 
 export const dynamic = "force-dynamic";
 
@@ -37,13 +39,13 @@ export default async function PortalHome() {
   const [{ data: sessions }, { data: consults }, { data: bpData }, { data: bloodData }] = await Promise.all([
     supabase.from("sessions").select("seq, date, hour, status").eq("client_id", client.id).order("seq"),
     supabase.from("consultations").select("kind, summary, created_at").eq("client_id", client.id).eq("shared", true).order("created_at", { ascending: false }),
-    supabase.from("blueprints").select("generated, generated_date, consolidated").eq("client_id", client.id).eq("generated", true).maybeSingle(),
+    supabase.from("blueprints").select("generated, generated_date, consolidated, scores").eq("client_id", client.id).eq("generated", true).maybeSingle(),
     supabase.from("blood_requests").select("submitted, submitted_date, requested_at").eq("client_id", client.id).maybeSingle(),
   ]);
 
   const sess = (sessions ?? []) as { seq: number; date: string; hour: number; status: string }[];
   const shared = (consults ?? []) as { kind: string; summary: string | null; created_at: string }[];
-  const bp = bpData as { generated: boolean; generated_date: string | null; consolidated: string | null } | null;
+  const bp = bpData as { generated: boolean; generated_date: string | null; consolidated: string | null; scores: BpScores | null } | null;
   const blood = bloodData as { submitted: boolean; submitted_date: string | null; requested_at: string | null } | null;
 
   const done = sess.filter((s) => s.status === "completed").length;
@@ -113,14 +115,39 @@ export default async function PortalHome() {
         <>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>BluePrint</div>
           {blood && (
-            <div style={{ fontSize: 13, marginBottom: 6 }}>
-              🩸 Blood report: {blood.submitted ? <b style={{ color: "#166534" }}>received ✓</b> : <b style={{ color: "#92400e" }}>requested — please submit</b>}
+            <div style={{ fontSize: 13, marginBottom: 10 }}>
+              🩸 Blood report:{" "}
+              {blood.submitted ? (
+                <b style={{ color: "#166534" }}>received ✓{blood.submitted_date ? ` (${blood.submitted_date})` : ""}</b>
+              ) : (
+                <>
+                  <b style={{ color: "#92400e" }}>requested</b>
+                  <form action={submitBloodSelf} style={{ marginTop: 8 }}>
+                    <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      I&apos;ve submitted my blood report
+                    </button>
+                    <div style={{ marginTop: 4, fontSize: 11, color: "var(--muted)" }}>Hand your report to the clinic, then tap this to confirm.</div>
+                  </form>
+                </>
+              )}
             </div>
           )}
           {bp?.generated ? (
             <div style={{ fontSize: 13 }}>
               🧬 <b style={{ color: "#166534" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
               {bp.consolidated && <div style={{ marginTop: 6, color: "var(--muted)" }}>{bp.consolidated}</div>}
+              {bp.scores && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                  {BP_SCORES.filter((s) => bp.scores && typeof bp.scores[s.key] === "number").map((s) => {
+                    const b = band(bp.scores![s.key]);
+                    return (
+                      <span key={s.key} style={{ background: b.bg, color: b.color, borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 600 }}>
+                        {s.label}: {bp.scores![s.key]} · {b.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             <div style={{ fontSize: 13, color: "var(--muted)" }}>Your blueprint is being prepared.</div>
