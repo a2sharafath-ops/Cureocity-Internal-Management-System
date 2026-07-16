@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import LeadStageSelect from "@/components/LeadStageSelect";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 type Lead = {
@@ -25,6 +27,7 @@ export default async function LeadsPage() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
+      <RealtimeRefresh tables={["leads"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Leads</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Pipeline · live from Supabase · {leads.length} lead{leads.length === 1 ? "" : "s"}

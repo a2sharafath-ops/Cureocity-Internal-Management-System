@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 const TODAY = "2026-07-02";
@@ -39,6 +41,7 @@ export default async function SessionsPage() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
+      <RealtimeRefresh tables={["sessions"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Upcoming Sessions</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Strength sessions · {todayCount} today · {sess.length} upcoming (from Jul 2)

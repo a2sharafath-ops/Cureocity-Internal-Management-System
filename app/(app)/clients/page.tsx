@@ -4,6 +4,8 @@ import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
 import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 type Raw = {
@@ -42,7 +44,8 @@ export default async function ClientsPage() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
+        <RealtimeRefresh tables={["clients"]} />
+      <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
         <span style={{ flex: 1 }} />
         {writer && (
           <Link

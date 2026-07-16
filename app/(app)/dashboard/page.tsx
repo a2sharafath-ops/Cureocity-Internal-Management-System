@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 const TODAY = "2026-07-02";
@@ -68,6 +70,7 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ maxWidth: 1040 }}>
+      <RealtimeRefresh tables={["sessions","leads","consultations"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Dashboard</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         {me?.name} · {role} · today Thu, Jul 2, 2026

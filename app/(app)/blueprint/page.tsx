@@ -9,6 +9,8 @@ import BlueprintScores from "@/components/BlueprintScores";
 import { canManageBlueprint } from "@/lib/roles";
 import type { BpScores } from "@/lib/blueprint";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 const REQUIRED = ["Doctor", "Diet", "Trainer"];
@@ -45,6 +47,7 @@ export default async function BlueprintPage() {
 
   return (
     <div style={{ maxWidth: 1000 }}>
+      <RealtimeRefresh tables={["blood_requests","consultations","blueprints"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>BluePrint</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         BluePrint-package clients · blood report → 3 consultations approved → generate · {clients.length} client{clients.length === 1 ? "" : "s"}

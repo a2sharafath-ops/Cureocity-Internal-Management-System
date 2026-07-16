@@ -9,6 +9,8 @@ import MeasurementForm from "@/components/MeasurementForm";
 import { getProfile } from "@/lib/auth";
 import { canWrite, canConsult } from "@/lib/roles";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 function fmtHour(h: number | null) {
@@ -90,7 +92,8 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs"]} />
+      <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
           </div>

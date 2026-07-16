@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import SessionActions from "@/components/SessionActions";
+import RealtimeRefresh from "@/components/RealtimeRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,7 @@ export default async function TrainerPage() {
 
   return (
     <div style={{ maxWidth: 900 }}>
+      <RealtimeRefresh tables={["sessions"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Trainer Workspace</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Session board · today Thu, Jul 2, 2026

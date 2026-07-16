@@ -6,6 +6,8 @@ import { canSee } from "@/lib/roles";
 import { MEALS, type MealLog } from "@/lib/meals";
 import MealStaffCell from "@/components/MealStaffCell";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 const TODAY = "2026-07-02";
@@ -33,6 +35,7 @@ export default async function MealsPage() {
 
   return (
     <div style={{ maxWidth: 1040 }}>
+      <RealtimeRefresh tables={["meal_logs"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Meal Monitoring</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Today Thu, Jul 2 · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}

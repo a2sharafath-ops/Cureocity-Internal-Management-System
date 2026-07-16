@@ -5,6 +5,8 @@ import FilesGrid from "@/components/FilesGrid";
 import MealSelfForm from "@/components/MealSelfForm";
 import { MEALS, type MealLog } from "@/lib/meals";
 
+import RealtimeRefresh from "@/components/RealtimeRefresh";
+
 export const dynamic = "force-dynamic";
 
 const TODAY = "2026-07-02";
@@ -73,7 +75,8 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files"]} />
+      <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
           {!pkg?.is_facility && sess.length > 0 ? ` · ${done} of ${sess.length} strength sessions done` : ""}
