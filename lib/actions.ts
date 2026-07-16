@@ -67,6 +67,34 @@ export async function signOut() {
   redirect("/login");
 }
 
+export type PwState = { error?: string; ok?: string };
+
+export async function changePassword(_prev: PwState, formData: FormData): Promise<PwState> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !user.email) return { error: "You must be signed in." };
+
+  const current = String(formData.get("current") ?? "");
+  const next = String(formData.get("next") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (next.length < 6) return { error: "New password must be at least 6 characters." };
+  if (next !== confirm) return { error: "New passwords don't match." };
+
+  // verify the current password before changing it
+  const check = await supabase.auth.signInWithPassword({ email: user.email, password: current });
+  if (check.error) return { error: "Current password is incorrect." };
+
+  const { error } = await supabase.auth.updateUser({ password: next });
+  if (error) return { error: error.message };
+
+  const me = await getProfile();
+  await logAudit(me, "Password changed", user.email, null);
+  return { ok: "Your password has been updated." };
+}
+
 const ALLOWED_ROLES = [
   "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
 ];

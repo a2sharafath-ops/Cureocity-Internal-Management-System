@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { createClient } from "@/lib/supabase/server";
@@ -35,11 +36,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
           <span style={{ flex: 1 }} />
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12 }}>
-              {initials}
-            </span>
-            <b style={{ fontSize: 13 }}>{name}</b>
-            <span style={{ color: "var(--muted)" }}>· {role}</span>
+            <Link href="/account" title="My account" style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none", color: "inherit" }}>
+              <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12 }}>
+                {initials}
+              </span>
+              <b style={{ fontSize: 13 }}>{name}</b>
+              <span style={{ color: "var(--muted)" }}>· {role}</span>
+            </Link>
             <form action={signOut} style={{ marginLeft: 8 }}>
               <button
                 type="submit"
