@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
 import { canWrite, canManageSessions } from "@/lib/roles";
 
@@ -41,6 +42,23 @@ export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+const ALLOWED_ROLES = [
+  "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
+];
+
+export async function updateUserRole(formData: FormData) {
+  const me = await getProfile();
+  if (!me || me.role !== "Administrator") return; // only admins manage roles
+  const id = String(formData.get("id"));
+  const role = String(formData.get("role"));
+  if (!ALLOWED_ROLES.includes(role)) return;
+  if (id === me.id && role !== "Administrator") return; // don't let an admin demote themselves
+  const admin = createAdminClient();
+  await admin.from("profiles").update({ role }).eq("id", id);
+  revalidatePath("/users");
+  revalidatePath("/", "layout");
 }
 
 // ---- sessions --------------------------------------------------------------

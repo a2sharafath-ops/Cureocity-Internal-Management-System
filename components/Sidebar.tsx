@@ -9,6 +9,7 @@ const NAV = [
   { href: "/clients", label: "Clients", icon: "◉" },
   { href: "/leads", label: "Leads", icon: "✦" },
   { href: "/sessions", label: "Sessions", icon: "🏋" },
+  { href: "/users", label: "Users & Roles", icon: "⚙" },
 ];
 
 export default function Sidebar({ role = "Staff" }: { role?: string }) {
