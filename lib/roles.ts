@@ -16,6 +16,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/leads": ["Administrator", "Manager", "Front Desk"],
   "/sessions": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/users": ["Administrator"],
+  "/audit": ["Administrator"],
 };
 
 export function canSee(role: string, href: string): boolean {

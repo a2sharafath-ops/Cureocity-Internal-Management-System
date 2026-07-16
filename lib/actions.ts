@@ -36,6 +36,29 @@ function buildSessions(
   return rows;
 }
 
+// ---- audit -----------------------------------------------------------------
+
+async function logAudit(
+  actor: { id?: string; name?: string; role?: string } | null,
+  action: string,
+  target?: string | null,
+  detail?: string | null
+) {
+  try {
+    const supabase = createClient();
+    await supabase.from("audit_log").insert({
+      actor_id: actor?.id ?? null,
+      actor_name: actor?.name ?? null,
+      actor_role: actor?.role ?? null,
+      action,
+      target: target ?? null,
+      detail: detail ?? null,
+    });
+  } catch {
+    // never let logging failures break the action
+  }
+}
+
 // ---- auth ------------------------------------------------------------------
 
 export async function signOut() {
@@ -77,6 +100,7 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
     // the signup trigger creates a Front Desk profile; set the chosen name + role
     await admin.from("profiles").upsert({ id: uid, email, name: name || email.split("@")[0], role });
   }
+  await logAudit(me, "Staff created", email, `role: ${role}`);
   revalidatePath("/users");
   return { ok: `Created ${email} as ${role}. Share the temporary password with them.` };
 }
@@ -89,7 +113,9 @@ export async function updateUserRole(formData: FormData) {
   if (!ALLOWED_ROLES.includes(role)) return;
   if (id === me.id && role !== "Administrator") return; // don't let an admin demote themselves
   const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("email, role").eq("id", id).maybeSingle();
   await admin.from("profiles").update({ role }).eq("id", id);
+  await logAudit(me, "Role changed", target?.email ?? id, `${target?.role ?? "?"} → ${role}`);
   revalidatePath("/users");
   revalidatePath("/", "layout");
 }
@@ -104,10 +130,13 @@ export async function rescheduleSession(formData: FormData) {
   const hour = Number(formData.get("hour"));
   const trainer_id = String(formData.get("trainer_id"));
   const supabase = createClient();
+  const { data: s } = await supabase.from("sessions").select("seq, clients(name)").eq("id", id).maybeSingle();
   await supabase
     .from("sessions")
     .update({ date, hour, trainer_id, rescheduled: true })
     .eq("id", id);
+  const cName = (s as { clients?: { name?: string } } | null)?.clients?.name;
+  await logAudit(p, "Session rescheduled", cName, `#${s?.seq ?? "?"} → ${date} ${hour}:00`);
   revalidatePath("/", "layout");
 }
 
@@ -119,8 +148,9 @@ export async function markSessionComplete(formData: FormData) {
   const supabase = createClient();
   await supabase.from("sessions").update({ status: "completed" }).eq("id", id);
   // bump the client's used count
-  const { data: c } = await supabase.from("clients").select("used").eq("id", clientId).maybeSingle();
+  const { data: c } = await supabase.from("clients").select("used, name").eq("id", clientId).maybeSingle();
   if (c) await supabase.from("clients").update({ used: (c.used ?? 0) + 1 }).eq("id", clientId);
+  await logAudit(p, "Session completed", c?.name, null);
   revalidatePath("/", "layout");
 }
 
@@ -132,7 +162,9 @@ export async function updateLeadStage(formData: FormData) {
   const id = String(formData.get("id"));
   const stage = String(formData.get("stage"));
   const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name").eq("id", id).maybeSingle();
   await supabase.from("leads").update({ stage }).eq("id", id);
+  await logAudit(p, "Lead stage changed", lead?.name, `→ ${stage}`);
   revalidatePath("/leads");
 }
 
@@ -182,6 +214,7 @@ export async function createClientRecord(formData: FormData) {
       await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, c.joined, pkg.sessions));
     }
   }
+  await logAudit(p, "Client created", c.name, code);
   revalidatePath("/clients");
   redirect("/clients");
 }
@@ -193,6 +226,7 @@ export async function updateClientRecord(formData: FormData) {
   const supabase = createClient();
   const c = parseClientForm(formData);
   await supabase.from("clients").update(c).eq("id", id);
+  await logAudit(p, "Client updated", c.name, null);
   revalidatePath("/", "layout");
   redirect(`/clients/${id}`);
 }
