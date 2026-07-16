@@ -5,8 +5,9 @@ import SessionActions from "@/components/SessionActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
+import MeasurementForm from "@/components/MeasurementForm";
 import { getProfile } from "@/lib/auth";
-import { canWrite } from "@/lib/roles";
+import { canWrite, canConsult } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,11 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
     const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
   }));
+
+  const canMeasure = canWrite(me?.role ?? "") || canConsult(me?.role ?? "");
+  const { data: measureRows } = await supabase
+    .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: false }).limit(12);
+  const measures = (measureRows ?? []) as { id: string; date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; resting_hr: number | null; recorded_by: string | null }[];
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
@@ -218,6 +224,48 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
             </div>
           ))
         )}
+      </div>
+
+      {/* Measurements / InBody */}
+      <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>📏 Measurements / InBody</div>
+        </div>
+        {measures.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>No measurements recorded yet.</div>
+        ) : (
+          <div style={{ overflowX: "auto", marginBottom: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11 }}>
+                  <th style={{ padding: "6px 10px" }}>Date</th>
+                  <th style={{ padding: "6px 10px" }}>Weight</th>
+                  <th style={{ padding: "6px 10px" }}>BMI</th>
+                  <th style={{ padding: "6px 10px" }}>Body fat %</th>
+                  <th style={{ padding: "6px 10px" }}>Muscle</th>
+                  <th style={{ padding: "6px 10px" }}>Visceral</th>
+                  <th style={{ padding: "6px 10px" }}>Waist/Hip</th>
+                  <th style={{ padding: "6px 10px" }}>RHR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {measures.map((m) => (
+                  <tr key={m.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 10px" }}>{m.date}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.weight ?? "—"}{m.weight ? " kg" : ""}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.bmi ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.body_fat ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.muscle_mass ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.visceral_fat ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{(m.waist ?? "—")}/{(m.hip ?? "—")}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.resting_hr ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {canMeasure && <MeasurementForm clientId={params.id} />}
       </div>
 
       {/* Files */}

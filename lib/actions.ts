@@ -421,6 +421,33 @@ export async function generateBlueprint(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// ---- measurements / InBody -------------------------------------------------
+
+export async function addMeasurement(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !(canWrite(p.role) || canConsult(p.role))) return;
+  const client_id = String(formData.get("client_id"));
+  const num = (k: string) => {
+    const v = formData.get(k);
+    if (v === null || String(v).trim() === "") return null;
+    const n = Number(v);
+    return Number.isNaN(n) ? null : n;
+  };
+  const supabase = createClient();
+  await supabase.from("measurements").insert({
+    client_id,
+    date: String(formData.get("date") || TODAY_ISO),
+    weight: num("weight"), bmi: num("bmi"), body_fat: num("body_fat"),
+    muscle_mass: num("muscle_mass"), visceral_fat: num("visceral_fat"),
+    waist: num("waist"), hip: num("hip"), resting_hr: num("resting_hr"),
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    recorded_by: p.name,
+  });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Measurement recorded", c?.name, null);
+  revalidatePath(`/clients/${client_id}`);
+}
+
 // ---- meal monitoring -------------------------------------------------------
 
 // client logs a meal / asks a question (portal)

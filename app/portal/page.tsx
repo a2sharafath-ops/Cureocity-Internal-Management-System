@@ -51,6 +51,11 @@ export default async function PortalHome() {
   const mealMap = new Map(((mealRows ?? []) as MealLog[]).map((m) => [m.meal, m]));
   const showMeals = !pkg?.is_facility;
 
+  const { data: latestM } = await supabase
+    .from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat")
+    .eq("client_id", client.id).order("date", { ascending: false }).limit(1).maybeSingle();
+  const m = latestM as { date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
+
   const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
     const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
@@ -163,6 +168,20 @@ export default async function PortalHome() {
           ) : (
             <div style={{ fontSize: 13, color: "var(--muted)" }}>Your blueprint is being prepared.</div>
           )}
+        </>
+      )}
+
+      {/* Latest measurement */}
+      {m && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>📏 Latest measurement <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {m.date}</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12, fontSize: 14 }}>
+            <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Weight</div>{m.weight != null ? `${m.weight} kg` : "—"}</div>
+            <div><div style={{ color: "var(--muted)", fontSize: 11 }}>BMI</div>{m.bmi ?? "—"}</div>
+            <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Body fat</div>{m.body_fat != null ? `${m.body_fat}%` : "—"}</div>
+            <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Muscle</div>{m.muscle_mass != null ? `${m.muscle_mass} kg` : "—"}</div>
+            <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Visceral fat</div>{m.visceral_fat ?? "—"}</div>
+          </div>
         </>
       )}
 
