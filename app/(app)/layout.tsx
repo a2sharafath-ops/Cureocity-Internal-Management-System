@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import RolePreview from "@/components/RolePreview";
 import { createClient } from "@/lib/supabase/server";
+import { getViewRole } from "@/lib/auth";
 import { signOut } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +22,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // clients don't use the staff app
   if (profile?.role === "Client") redirect("/portal");
 
+  const { real, effective, preview } = await getViewRole();
   const name = profile?.name ?? user.email?.split("@")[0] ?? "User";
-  const role = profile?.role ?? "Staff";
+  const role = effective; // display + nav follow the (possibly previewed) role
   const initials = name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
 
   return (
@@ -38,7 +41,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Cureocity — Internal Management System
           </span>
           <span style={{ flex: 1 }} />
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+          {real === "Administrator" && <RolePreview preview={preview} />}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginLeft: 12 }}>
             <Link href="/account" title="My account" style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none", color: "inherit" }}>
               <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12 }}>
                 {initials}

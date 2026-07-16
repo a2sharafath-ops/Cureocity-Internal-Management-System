@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -68,6 +69,16 @@ export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export async function setPreviewRole(formData: FormData) {
+  const me = await getProfile();
+  if (!me || me.role !== "Administrator") return; // only admins can preview
+  const role = String(formData.get("role") ?? "");
+  const store = cookies();
+  if (!role || role === "off") store.delete("preview_role");
+  else store.set("preview_role", role, { path: "/", sameSite: "lax" });
+  revalidatePath("/", "layout");
 }
 
 export type PwState = { error?: string; ok?: string };
