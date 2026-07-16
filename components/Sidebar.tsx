@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { canSee } from "@/lib/roles";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "▚" },
@@ -10,8 +11,9 @@ const NAV = [
   { href: "/sessions", label: "Sessions", icon: "🏋" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ role = "Staff" }: { role?: string }) {
   const pathname = usePathname();
+  const nav = NAV.filter((item) => canSee(role, item.href));
   return (
     <aside
       style={{
@@ -38,7 +40,7 @@ export default function Sidebar() {
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link

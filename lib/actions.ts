@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
+import { canWrite, canManageSessions } from "@/lib/roles";
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -33,9 +35,19 @@ function buildSessions(
   return rows;
 }
 
+// ---- auth ------------------------------------------------------------------
+
+export async function signOut() {
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
 // ---- sessions --------------------------------------------------------------
 
 export async function rescheduleSession(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
   const date = String(formData.get("date"));
   const hour = Number(formData.get("hour"));
@@ -49,6 +61,8 @@ export async function rescheduleSession(formData: FormData) {
 }
 
 export async function markSessionComplete(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
   const clientId = String(formData.get("client_id"));
   const supabase = createClient();
@@ -62,6 +76,8 @@ export async function markSessionComplete(formData: FormData) {
 // ---- leads -----------------------------------------------------------------
 
 export async function updateLeadStage(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
   const id = String(formData.get("id"));
   const stage = String(formData.get("stage"));
   const supabase = createClient();
@@ -90,6 +106,8 @@ function parseClientForm(formData: FormData) {
 }
 
 export async function createClientRecord(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
   const supabase = createClient();
   const c = parseClientForm(formData);
   if (!c.name) return;
@@ -118,6 +136,8 @@ export async function createClientRecord(formData: FormData) {
 }
 
 export async function updateClientRecord(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
   const id = String(formData.get("id"));
   const supabase = createClient();
   const c = parseClientForm(formData);

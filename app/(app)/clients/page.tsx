@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
+import { getProfile } from "@/lib/auth";
+import { canWrite } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +19,8 @@ type Raw = {
 
 export default async function ClientsPage() {
   const supabase = createClient();
+  const profile = await getProfile();
+  const writer = canWrite(profile?.role ?? "");
   const { data, error } = await supabase
     .from("clients")
     .select("id, code, name, phone, used, branch, joined, packages(name, sessions, is_facility)")
@@ -40,12 +44,14 @@ export default async function ClientsPage() {
       <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
         <span style={{ flex: 1 }} />
-        <Link
-          href="/clients/new"
-          style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
-        >
-          + New Client
-        </Link>
+        {writer && (
+          <Link
+            href="/clients/new"
+            style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+          >
+            + New Client
+          </Link>
+        )}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         CRM · live from Supabase
