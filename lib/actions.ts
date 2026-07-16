@@ -48,6 +48,39 @@ const ALLOWED_ROLES = [
   "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
 ];
 
+export type InviteState = { error?: string; ok?: string };
+
+export async function inviteStaff(_prev: InviteState, formData: FormData): Promise<InviteState> {
+  const me = await getProfile();
+  if (!me || me.role !== "Administrator") return { error: "Not authorized." };
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const name = String(formData.get("name") ?? "").trim();
+  const role = String(formData.get("role") ?? "Front Desk");
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) return { error: "Email and a temporary password are required." };
+  if (password.length < 6) return { error: "Password must be at least 6 characters." };
+  if (!ALLOWED_ROLES.includes(role)) return { error: "Invalid role." };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { name },
+  });
+  if (error) return { error: error.message };
+
+  const uid = data.user?.id;
+  if (uid) {
+    // the signup trigger creates a Front Desk profile; set the chosen name + role
+    await admin.from("profiles").upsert({ id: uid, email, name: name || email.split("@")[0], role });
+  }
+  revalidatePath("/users");
+  return { ok: `Created ${email} as ${role}. Share the temporary password with them.` };
+}
+
 export async function updateUserRole(formData: FormData) {
   const me = await getProfile();
   if (!me || me.role !== "Administrator") return; // only admins manage roles

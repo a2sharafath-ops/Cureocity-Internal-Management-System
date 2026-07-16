@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import UserRoleSelect from "@/components/UserRoleSelect";
+import AddStaffForm from "@/components/AddStaffForm";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ export default async function UsersPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Manage staff access · {users.length} user{users.length === 1 ? "" : "s"} · Administrator only
       </p>
+
+      <AddStaffForm />
 
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
@@ -76,18 +79,8 @@ export default async function UsersPage() {
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 16, background: "var(--card)", border: "1px solid var(--border)",
-          borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px",
-          color: "var(--muted)", fontSize: 13, lineHeight: 1.6,
-        }}
-      >
-        <b style={{ color: "var(--ink)" }}>Adding staff:</b> create the login in Supabase →
-        Authentication → Users (Add user → Create new user, with a password + Auto Confirm).
-        They&apos;ll appear here automatically with the default <b>Front Desk</b> role — then set
-        their correct role above. (Your own role is locked so you can&apos;t accidentally lock
-        yourself out.)
+      <div style={{ marginTop: 14, color: "var(--muted)", fontSize: 12 }}>
+        Your own role is locked so you can&apos;t accidentally lock yourself out of admin.
       </div>
     </div>
   );
