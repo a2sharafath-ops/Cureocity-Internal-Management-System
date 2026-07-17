@@ -133,7 +133,7 @@ export default async function DashboardPage() {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {pill("📊 Overview", "/dashboard", true)}
         {pill("🚪 Access & Check-in", "/access")}
-        {pill("🎟️ Passes", "/pos")}
+        {pill("🎟️ Passes", "/passes")}
         {pill("🛒 Store", "/pos")}
       </div>
 

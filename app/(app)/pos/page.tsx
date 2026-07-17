@@ -1,42 +1,35 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
-import { usePass, restockProduct } from "@/lib/actions";
+import { restockProduct } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import PosCart from "@/components/PosCart";
-import PassSell from "@/components/PassSell";
 import ProductForm from "@/components/ProductForm";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN");
 
-export default async function PosPage() {
+export default async function StorePage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/pos")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [productsR, clientsR, passTypesR, passesR, salesR] = await Promise.all([
+  const [productsR, clientsR, salesR] = await Promise.all([
     supabase.from("products").select("id, sku, name, category, price, stock, active").order("category").order("name"),
     supabase.from("clients").select("id, name").order("name"),
-    supabase.from("pass_types").select("id, name, price, entries, valid_days").eq("active", true).order("price"),
-    supabase.from("passes").select("id, name, guest_name, entries_total, entries_used, valid_until, status, price, clients(id, name)").order("created_at", { ascending: false }).limit(40),
-    supabase.from("sales").select("id, total, method, created_at").gte("created_at", todayISO()),
+    supabase.from("sales").select("id, total, created_at").gte("created_at", todayISO()),
   ]);
 
   const products = (productsR.data ?? []) as { id: string; sku: string | null; name: string; category: string; price: number; stock: number; active: boolean }[];
   const clients = (clientsR.data ?? []) as { id: string; name: string }[];
-  const passTypes = (passTypesR.data ?? []) as { id: string; name: string; price: number; entries: number; valid_days: number }[];
-  const passes = (passesR.data ?? []) as unknown as { id: string; name: string | null; guest_name: string | null; entries_total: number; entries_used: number; valid_until: string | null; status: string; price: number; clients: { id: string; name: string } | null }[];
-  const sales = (salesR.data ?? []) as { id: string; total: number; method: string; created_at: string }[];
+  const sales = (salesR.data ?? []) as { id: string; total: number; created_at: string }[];
 
   const activeProducts = products.filter((p) => p.active);
   const todayRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
   const lowStock = products.filter((p) => p.active && p.stock <= 5).length;
-  const activePasses = passes.filter((p) => p.status === "active").length;
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
@@ -47,19 +40,18 @@ export default async function PosPage() {
 
   return (
     <div style={{ maxWidth: 1120 }}>
-      <RealtimeRefresh tables={["products", "passes", "sales"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Passes &amp; retail POS</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Sell day passes &amp; punch cards, ring up retail. Every sale posts a paid invoice into Billing.</p>
+      <RealtimeRefresh tables={["products", "sales"]} />
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Retail Store</h1>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Point-of-sale for supplements, merchandise &amp; accessories. Every sale posts a paid invoice into Billing.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
         {stat("Today's sales", money(todayRevenue))}
         {stat("Transactions today", String(sales.length))}
-        {stat("Active passes", String(activePasses))}
         {stat("Low stock", String(lowStock), lowStock ? "var(--red)" : "var(--teal-dark)")}
       </div>
 
       {/* ---- Retail POS ---- */}
-      <h2 style={{ fontSize: 15, margin: "0 0 10px" }}>Retail POS</h2>
+      <h2 style={{ fontSize: 15, margin: "0 0 10px" }}>Checkout</h2>
       <div style={{ marginBottom: 28 }}><PosCart products={activeProducts} clients={clients} /></div>
 
       {/* ---- Products / stock ---- */}
@@ -68,7 +60,7 @@ export default async function PosPage() {
         <span style={{ flex: 1 }} />
         <ProductForm />
       </div>
-      <div style={{ ...box, overflow: "hidden", marginBottom: 28 }}>
+      <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead><tr><th style={th}>Product</th><th style={th}>SKU</th><th style={th}>Category</th><th style={th}>Price</th><th style={th}>Stock</th><th style={th}>Restock</th></tr></thead>
           <tbody>
@@ -88,43 +80,6 @@ export default async function PosPage() {
               </tr>
             ))}
             {products.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No products yet.</td></tr>}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ---- Passes ---- */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px" }}>
-        <h2 style={{ fontSize: 15, margin: 0 }}>Gym passes</h2>
-        <span style={{ flex: 1 }} />
-        <PassSell passTypes={passTypes} clients={clients} />
-      </div>
-      <div style={{ ...box, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead><tr><th style={th}>Pass</th><th style={th}>Holder</th><th style={th}>Entries</th><th style={th}>Valid until</th><th style={th}>Status</th><th style={th} /></tr></thead>
-          <tbody>
-            {passes.map((p) => {
-              const expired = p.status === "active" && p.valid_until && p.valid_until < todayISO();
-              const status = expired ? "expired" : p.status;
-              const chip = status === "active" ? ["var(--green-bg)", "#166534"] : status === "used" ? ["#eef2f1", "var(--muted)"] : ["#fee2e2", "var(--red)"];
-              return (
-                <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ ...td, fontWeight: 600 }}>{p.name ?? "Pass"}</td>
-                  <td style={td}>{p.clients ? <Link href={`/clients/${p.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none" }}>{p.clients.name}</Link> : (p.guest_name ?? "Guest")}</td>
-                  <td style={td}>{p.entries_used}/{p.entries_total >= 999 ? "∞" : p.entries_total}</td>
-                  <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{p.valid_until ?? "—"}</td>
-                  <td style={td}><span style={{ background: chip[0], color: chip[1], borderRadius: 999, padding: "2px 10px", fontWeight: 600, fontSize: 12 }}>{status}</span></td>
-                  <td style={td}>
-                    {status === "active" && (
-                      <form action={usePass} style={{ textAlign: "right" }}>
-                        <input type="hidden" name="id" value={p.id} />
-                        <button type="submit" style={{ border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Check in</button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-            {passes.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No passes sold yet.</td></tr>}
           </tbody>
         </table>
       </div>
