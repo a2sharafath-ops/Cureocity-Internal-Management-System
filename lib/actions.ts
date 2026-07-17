@@ -802,6 +802,45 @@ export async function addEncounter(formData: FormData) {
   revalidatePath(`/emr/${client_id}`);
 }
 
+// ---- wearables sync --------------------------------------------------------
+
+export async function addWearableReading(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const n = (k: string) => {
+    const v = formData.get(k);
+    if (v === null || String(v).trim() === "") return null;
+    const x = Number(v);
+    return Number.isNaN(x) ? null : Math.round(x);
+  };
+  const supabase = createClient();
+  await supabase.from("wearable_readings").upsert(
+    { client_id, date: String(formData.get("date") || todayISO()), source: "manual",
+      steps: n("steps"), resting_hr: n("resting_hr"), sleep_min: n("sleep_min"), active_min: n("active_min"), calories: n("calories") },
+    { onConflict: "client_id,date,source" }
+  );
+  await logAudit(p, "Wearable reading added", await clientName(supabase, client_id), null);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function setWearableConnection(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const provider = String(formData.get("provider"));
+  const status = String(formData.get("status") || "connected");
+  if (!client_id || !provider) return;
+  const supabase = createClient();
+  await supabase.from("wearable_connections").upsert(
+    { client_id, provider, status, connected_at: new Date().toISOString() },
+    { onConflict: "client_id,provider" }
+  );
+  await logAudit(p, `Wearable ${status}`, await clientName(supabase, client_id), provider);
+  revalidatePath(`/clients/${client_id}`);
+}
+
 // ---- habits & streaks ------------------------------------------------------
 
 export async function createHabit(formData: FormData) {

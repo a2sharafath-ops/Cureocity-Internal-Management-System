@@ -7,6 +7,7 @@ import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
 import HabitForm from "@/components/HabitForm";
+import { WearableForm, WearableConnect } from "@/components/WearableForm";
 import { archiveHabit } from "@/lib/actions";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { todayISO } from "@/lib/today";
@@ -92,6 +93,16 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   }
   const habToday = todayISO();
 
+  const [{ data: wearConns }, { data: wearReads }] = await Promise.all([
+    supabase.from("wearable_connections").select("provider, status").eq("client_id", params.id),
+    supabase.from("wearable_readings").select("date, steps, resting_hr, sleep_min, active_min, calories, source").eq("client_id", params.id).order("date", { ascending: false }).limit(30),
+  ]);
+  const connMap: Record<string, string> = {};
+  for (const c of ((wearConns ?? []) as { provider: string; status: string }[])) connMap[c.provider] = c.status;
+  const reads = (wearReads ?? []) as { date: string; steps: number | null; resting_hr: number | null; sleep_min: number | null; active_min: number | null; calories: number | null; source: string }[];
+  const latestRead = reads[0] ?? null;
+  const stepTrend = reads.slice(0, 7).reverse(); // oldest→newest of last 7
+
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
     id: string; seq: number; date: string; hour: number; status: string; rescheduled: boolean;
@@ -115,7 +126,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections"]} />
       <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
@@ -362,6 +373,52 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Wearables */}
+      {(canCoach || reads.length > 0) && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontWeight: 700 }}>⌚ Wearables</div>
+            {latestRead && <span style={{ color: "var(--muted)", fontSize: 12 }}>· latest {latestRead.date}</span>}
+            <span style={{ flex: 1 }} />
+            {canCoach && <WearableForm clientId={params.id} />}
+          </div>
+
+          {latestRead ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12, fontSize: 14, marginTop: 12 }}>
+                <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Steps</div><b>{latestRead.steps?.toLocaleString() ?? "—"}</b></div>
+                <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Sleep</div><b>{latestRead.sleep_min != null ? `${Math.floor(latestRead.sleep_min / 60)}h ${latestRead.sleep_min % 60}m` : "—"}</b></div>
+                <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Resting HR</div><b>{latestRead.resting_hr ?? "—"}{latestRead.resting_hr != null ? " bpm" : ""}</b></div>
+                <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Active</div><b>{latestRead.active_min != null ? `${latestRead.active_min} min` : "—"}</b></div>
+                <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Calories</div><b>{latestRead.calories?.toLocaleString() ?? "—"}</b></div>
+              </div>
+              {stepTrend.some((r) => r.steps != null) && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 6 }}>Steps · last 7 readings</div>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 60 }}>
+                    {(() => { const max = Math.max(1, ...stepTrend.map((r) => r.steps ?? 0)); return stepTrend.map((r, i) => (
+                      <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                        <div title={`${r.steps ?? 0} steps`} style={{ width: "100%", background: "var(--teal)", borderRadius: "4px 4px 0 0", height: `${Math.round(((r.steps ?? 0) / max) * 48)}px`, minHeight: 2 }} />
+                        <div style={{ fontSize: 9, color: "var(--muted)" }}>{r.date.slice(5)}</div>
+                      </div>
+                    )); })()}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>No wearable data yet.</div>
+          )}
+
+          {canCoach && (
+            <>
+              <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 14, marginBottom: 2 }}>Linked devices (integration-ready)</div>
+              <WearableConnect clientId={params.id} connected={connMap} />
+            </>
           )}
         </div>
       )}
