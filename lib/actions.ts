@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -791,6 +791,95 @@ export async function addEncounter(formData: FormData) {
   });
   await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
   revalidatePath(`/emr/${client_id}`);
+}
+
+// ---- insurance & claims ----------------------------------------------------
+
+async function claimsGuard() {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return null;
+  return p;
+}
+
+export async function addInsurer(formData: FormData) {
+  const p = await claimsGuard(); if (!p) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("insurers").insert({
+    name, kind: String(formData.get("kind") || "private"),
+    contact: String(formData.get("contact") ?? "").trim() || null,
+  });
+  await logAudit(p, "Insurer added", name, null);
+  revalidatePath("/claims");
+}
+
+export async function addPolicy(formData: FormData) {
+  const p = await claimsGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  const insurer_id = String(formData.get("insurer_id") || "") || null;
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("insurance_policies").insert({
+    client_id, insurer_id,
+    policy_number: String(formData.get("policy_number") ?? "").trim() || null,
+    plan_name: String(formData.get("plan_name") ?? "").trim() || null,
+    coverage_amount: Number(formData.get("coverage_amount")) || 0,
+    valid_from: String(formData.get("valid_from") || "") || null,
+    valid_to: String(formData.get("valid_to") || "") || null,
+    status: "active",
+  });
+  await logAudit(p, "Insurance policy added", await clientName(supabase, client_id), null);
+  revalidatePath("/claims");
+}
+
+function nextClaimNumber() {
+  const d = new Date();
+  return `CLM-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+export async function createClaim(formData: FormData) {
+  const p = await claimsGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const supabase = createClient();
+  const policy_id = String(formData.get("policy_id") || "") || null;
+  let insurer_id: string | null = null;
+  if (policy_id) {
+    const { data: pol } = await supabase.from("insurance_policies").select("insurer_id").eq("id", policy_id).maybeSingle();
+    insurer_id = (pol?.insurer_id as string | null) ?? null;
+  }
+  await supabase.from("claims").insert({
+    client_id, policy_id, insurer_id,
+    claim_number: nextClaimNumber(),
+    service_desc: String(formData.get("service_desc") ?? "").trim() || null,
+    amount_claimed: Number(formData.get("amount_claimed")) || 0,
+    status: "draft", created_by: p.name,
+  });
+  await logAudit(p, "Claim created", await clientName(supabase, client_id), null);
+  revalidatePath("/claims");
+}
+
+export async function setClaimStatus(formData: FormData) {
+  const p = await claimsGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["draft", "submitted", "in_review", "approved", "rejected", "paid"].includes(status)) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = { status };
+  if (status === "submitted") patch.submitted_date = todayISO();
+  if (status === "approved" || status === "rejected") {
+    patch.decision_date = todayISO();
+    if (status === "approved") {
+      const approved = Number(formData.get("amount_approved"));
+      if (!Number.isNaN(approved)) patch.amount_approved = approved;
+    }
+  }
+  const note = String(formData.get("notes") ?? "").trim();
+  if (note) patch.notes = note;
+  await supabase.from("claims").update(patch).eq("id", id);
+  await logAudit(p, `Claim → ${status}`, null, null);
+  revalidatePath("/claims");
 }
 
 // ---- e-prescriptions + lab/imaging orders ----------------------------------

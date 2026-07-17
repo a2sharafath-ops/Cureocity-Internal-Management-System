@@ -20,6 +20,7 @@ const NAV = [
   { href: "/packages", label: "Packages", icon: "▦" },
   { href: "/billing", label: "Billing", icon: "💳" },
   { href: "/subscriptions", label: "Subscriptions", icon: "🔁" },
+  { href: "/claims", label: "Insurance & Claims", icon: "🏥" },
   { href: "/retention", label: "Retention", icon: "💚" },
   { href: "/pos", label: "Passes & POS", icon: "🛒" },
   { href: "/reports", label: "Reports", icon: "📊" },

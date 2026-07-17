@@ -28,6 +28,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/emr": ["Administrator", "Manager", "Health Professional"],
   "/orders": ["Administrator", "Manager", "Health Professional"],
+  "/claims": ["Administrator", "Manager", "Finance"],
   "/reports": ["Administrator", "Manager", "Finance"],
   "/users": ["Administrator"],
   "/audit": ["Administrator"],
@@ -93,4 +94,9 @@ export function canPos(role: string): boolean {
 // Who can view/edit the clinical EMR (PHI — clinicians only).
 export function canEmr(role: string): boolean {
   return ["Administrator", "Manager", "Health Professional"].includes(role);
+}
+
+// Who can manage insurance & claims.
+export function canClaims(role: string): boolean {
+  return ["Administrator", "Manager", "Finance"].includes(role);
 }
