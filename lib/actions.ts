@@ -9,6 +9,8 @@ import { getProfile } from "@/lib/auth";
 import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
+import { paymentConfig } from "@/lib/payments/config";
+import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 
 
 // ---- helpers ---------------------------------------------------------------
@@ -791,6 +793,59 @@ export async function addEncounter(formData: FormData) {
   });
   await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
   revalidatePath(`/emr/${client_id}`);
+}
+
+// ---- online payments (key-ready scaffold) ----------------------------------
+
+// Create a gateway order for an unpaid invoice. Returns {configured:false}
+// until payment env vars are set — the UI shows a friendly notice in that case.
+export async function startInvoicePayment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return { configured: false as const, error: "Not permitted" };
+  const cfg = paymentConfig();
+  if (!cfg.configured) return { configured: false as const };
+
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  const { data: inv } = await supabase.from("invoices").select("id, num, amount, status, description").eq("id", id).maybeSingle();
+  if (!inv || inv.status !== "Unpaid") return { configured: true as const, ok: false, error: "Invoice not payable" };
+
+  try {
+    if (cfg.provider === "razorpay") {
+      const order = await createRazorpayOrder(Number(inv.amount), `INV-${inv.num ?? id.slice(0, 6)}`, { invoice_id: id });
+      await supabase.from("invoices").update({ gateway: "razorpay", gateway_order_id: order.id }).eq("id", id);
+      return {
+        configured: true as const, ok: true, provider: "razorpay" as const,
+        orderId: order.id, amount: order.amount, currency: order.currency,
+        keyId: cfg.publicKeyId, invoiceId: id,
+        description: inv.description ?? `Invoice INV-${inv.num ?? ""}`,
+      };
+    }
+    return { configured: true as const, ok: false, error: `Provider ${cfg.provider} not wired for checkout yet` };
+  } catch (e) {
+    return { configured: true as const, ok: false, error: e instanceof Error ? e.message : "Gateway error" };
+  }
+}
+
+// Confirm a completed checkout (verifies signature server-side) and mark paid.
+export async function confirmInvoicePayment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return { ok: false, error: "Not permitted" };
+  const id = String(formData.get("id"));
+  const orderId = String(formData.get("order_id"));
+  const paymentId = String(formData.get("payment_id"));
+  const signature = String(formData.get("signature"));
+  if (!verifyCheckoutSignature(orderId, paymentId, signature)) {
+    return { ok: false, error: "Signature verification failed" };
+  }
+  const supabase = createClient();
+  await supabase.from("invoices").update({
+    status: "Paid", paid_date: todayISO(), method: "Online",
+    gateway: "razorpay", gateway_order_id: orderId, gateway_payment_id: paymentId,
+  }).eq("id", id);
+  await logAudit(p, "Invoice paid online", `INV ${id.slice(0, 6)}`, paymentId);
+  revalidatePath("/billing");
+  return { ok: true };
 }
 
 // ---- compliance & governance -----------------------------------------------

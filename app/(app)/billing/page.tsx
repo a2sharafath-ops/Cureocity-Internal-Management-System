@@ -7,6 +7,8 @@ import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
+import PayOnlineButton from "@/components/PayOnlineButton";
+import { paymentStatus } from "@/lib/payments/config";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,7 @@ export default async function BillingPage() {
   const unpaid = invoices.filter((i) => i.status === "Unpaid").reduce((s, i) => s + Number(i.amount), 0);
   const unpaidCount = invoices.filter((i) => i.status === "Unpaid").length;
   const editable = canBill(me.role);
+  const pay = paymentStatus();
 
   const kpi = (label: string, value: string, sub?: string) => (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 16px", flex: 1, minWidth: 170 }}>
@@ -66,6 +69,15 @@ export default async function BillingPage() {
         {kpi("Total invoices", String(invoices.length))}
       </div>
 
+      {editable && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: pay.configured ? "var(--green-bg)" : "#eef2f1", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 13 }}>
+          <span style={{ fontWeight: 600 }}>Online payments:</span>
+          {pay.configured
+            ? <span style={{ color: "#166534" }}>● Live via {pay.provider} — unpaid invoices show a “Pay online” button.</span>
+            : <span style={{ color: "var(--muted)" }}>○ Not configured. Add <code>PAYMENT_PROVIDER</code> + gateway keys in your environment to enable one-click collection (webhook: <code>/api/payments/webhook</code>).</span>}
+        </div>
+      )}
+
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load invoices.</b> {error.message}
@@ -93,7 +105,12 @@ export default async function BillingPage() {
                   <td style={{ padding: "12px 16px" }}>{i.description}<div style={{ color: "var(--muted)", fontSize: 11 }}>{i.issued_date ?? ""}{i.method ? ` · ${i.method}` : ""}</div></td>
                   <td style={{ padding: "12px 16px", fontWeight: 600 }}>{money(i.amount)}</td>
                   <td style={{ padding: "12px 16px" }}>{statusChip(i.status)}</td>
-                  {editable && <td style={{ padding: "12px 16px", textAlign: "right" }}><InvoiceActions id={i.id} status={i.status} /></td>}
+                  {editable && <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                      {i.status === "Unpaid" && <PayOnlineButton invoiceId={i.id} configured={pay.configured} />}
+                      <InvoiceActions id={i.id} status={i.status} />
+                    </div>
+                  </td>}
                 </tr>
               ))}
               {invoices.length === 0 && (
