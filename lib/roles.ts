@@ -41,6 +41,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/users": ["Administrator"],
   "/compliance": ["Administrator", "Manager"],
   "/tasks": "all",
+  "/hr": ["Administrator", "Manager", "HR"],
   "/exlib": ["Administrator", "Manager", "Health Professional"],
   "/notifications": ["Administrator", "Manager"],
   "/audit": ["Administrator"],
@@ -126,4 +127,9 @@ export function canCompliance(role: string): boolean {
 // Who can manage message templates & campaigns.
 export function canCampaigns(role: string): boolean {
   return ["Administrator", "Manager", "Front Desk"].includes(role);
+}
+
+// Who can manage HR (attendance, leave, payroll).
+export function canHr(role: string): boolean {
+  return ["Administrator", "Manager", "HR"].includes(role);
 }

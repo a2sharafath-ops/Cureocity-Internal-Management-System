@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { getPersona } from "@/lib/personas";
@@ -834,6 +834,79 @@ export async function recordCheckin(formData: FormData) {
   });
   await logAudit(p, `Check-${String(formData.get("direction") || "in") === "out" ? "out" : "in"}`, client_id ? await clientName(supabase, client_id) : guest_name, null);
   revalidatePath("/access");
+}
+
+// ---- HR: attendance / leave / payroll --------------------------------------
+
+export async function markAttendance(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const staff_id = String(formData.get("staff_id"));
+  const status = String(formData.get("status"));
+  if (!staff_id || !["present", "absent", "leave", "half"].includes(status)) return;
+  const supabase = createClient();
+  await supabase.from("attendance").upsert(
+    { staff_id, date: String(formData.get("date") || todayISO()), status, marked_by: p.name },
+    { onConflict: "staff_id,date" }
+  );
+  revalidatePath("/hr");
+}
+
+export async function addLeave(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const staff_id = String(formData.get("staff_id"));
+  const from_date = String(formData.get("from_date") || "");
+  const to_date = String(formData.get("to_date") || from_date);
+  if (!staff_id || !from_date) return;
+  const supabase = createClient();
+  await supabase.from("leaves").insert({
+    staff_id, from_date, to_date,
+    type: String(formData.get("type") || "Casual"),
+    reason: String(formData.get("reason") ?? "").trim() || null,
+    status: "pending",
+  });
+  await logAudit(p, "Leave requested", null, null);
+  revalidatePath("/hr");
+}
+
+export async function setLeaveStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["pending", "approved", "rejected"].includes(status)) return;
+  const supabase = createClient();
+  await supabase.from("leaves").update({ status, decided_by: p.name }).eq("id", id);
+  await logAudit(p, `Leave ${status}`, null, null);
+  revalidatePath("/hr");
+}
+
+export async function upsertPayroll(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const staff_id = String(formData.get("staff_id"));
+  const month = String(formData.get("month") || todayISO().slice(0, 7));
+  const base = Number(formData.get("base")) || 0;
+  const lop_days = Number(formData.get("lop_days")) || 0;
+  if (!staff_id) return;
+  const net = Math.max(0, Math.round(base - (base / 30) * lop_days));
+  const supabase = createClient();
+  await supabase.from("payroll").upsert(
+    { staff_id, month, base, lop_days, net, status: "pending" },
+    { onConflict: "staff_id,month" }
+  );
+  revalidatePath("/hr");
+}
+
+export async function payPayroll(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("payroll").update({ status: "paid", paid_date: todayISO() }).eq("id", id);
+  await logAudit(p, "Payroll paid", null, null);
+  revalidatePath("/hr");
 }
 
 // ---- team tasks ------------------------------------------------------------

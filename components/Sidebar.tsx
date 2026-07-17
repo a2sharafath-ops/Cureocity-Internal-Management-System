@@ -60,6 +60,7 @@ const SECTIONS: NavSection[] = [
   {
     title: "People",
     items: [
+      { href: "/hr", label: "HR", icon: "👥" },
       { href: "/kb", label: "SOP's", icon: "📖" },
     ],
   },
