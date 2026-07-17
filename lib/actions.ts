@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -662,6 +662,61 @@ export async function processDueRenewals() {
   await logAudit(p, "Processed due renewals", null, `${(due ?? []).length} renewed`);
   revalidatePath("/subscriptions");
   revalidatePath("/billing");
+}
+
+// ---- retention: NPS + referrals --------------------------------------------
+
+export async function recordNps(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const score = Math.max(0, Math.min(10, Number(formData.get("score"))));
+  if (!client_id || Number.isNaN(score)) return;
+  const supabase = createClient();
+  await supabase.from("nps_responses").insert({
+    client_id, score,
+    comment: String(formData.get("comment") ?? "").trim() || null,
+    channel: String(formData.get("channel") ?? "front-desk"),
+    created_by: p.name,
+  });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, `NPS recorded (${score})`, c?.name, null);
+  revalidatePath("/retention");
+}
+
+export async function createReferral(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const referred_name = String(formData.get("referred_name") ?? "").trim();
+  if (!referred_name) return;
+  const referrer_id = String(formData.get("referrer_id") || "") || null;
+  const supabase = createClient();
+  await supabase.from("referrals").insert({
+    referrer_id, referred_name,
+    referred_phone: String(formData.get("referred_phone") ?? "").trim() || null,
+    referred_email: String(formData.get("referred_email") ?? "").trim() || null,
+    note: String(formData.get("note") ?? "").trim() || null,
+    created_by: p.name,
+  });
+  await logAudit(p, "Referral added", referred_name, null);
+  revalidatePath("/retention");
+}
+
+export async function setReferralStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["invited", "joined", "rewarded"].includes(status)) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = { status };
+  if (status === "rewarded") {
+    const reward = Number(formData.get("reward_amount"));
+    if (!Number.isNaN(reward)) patch.reward_amount = reward;
+  }
+  await supabase.from("referrals").update(patch).eq("id", id);
+  await logAudit(p, `Referral → ${status}`, null, null);
+  revalidatePath("/retention");
 }
 
 // ---- measurements / InBody -------------------------------------------------
