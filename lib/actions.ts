@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { paymentConfig } from "@/lib/payments/config";
@@ -800,6 +800,100 @@ export async function addEncounter(formData: FormData) {
   });
   await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
   revalidatePath(`/emr/${client_id}`);
+}
+
+// ---- comms templates & campaigns -------------------------------------------
+
+export async function createTemplate(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCampaigns(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  const subject = String(formData.get("subject") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!name || !subject || !body) return;
+  const supabase = createClient();
+  await supabase.from("message_templates").insert({
+    name, subject, body,
+    category: String(formData.get("category") || "General"), active: true, created_by: p.name,
+  });
+  await logAudit(p, "Template created", name, null);
+  revalidatePath("/campaigns");
+}
+
+export async function archiveTemplate(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCampaigns(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("message_templates").update({ active: false }).eq("id", String(formData.get("id")));
+  await logAudit(p, "Template archived", null, null);
+  revalidatePath("/campaigns");
+}
+
+export async function createCampaign(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCampaigns(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  const template_id = String(formData.get("template_id") || "") || null;
+  if (!name || !template_id) return;
+  const supabase = createClient();
+  await supabase.from("campaigns").insert({
+    name, template_id, audience: String(formData.get("audience") || "all"),
+    status: "draft", created_by: p.name,
+  });
+  await logAudit(p, "Campaign created", name, null);
+  revalidatePath("/campaigns");
+}
+
+// Resolve an audience to recipient clients (id, name, email).
+async function resolveAudience(supabase: ReturnType<typeof createClient>, audience: string) {
+  const { data: clients } = await supabase.from("clients").select("id, name, email, package_id").not("email", "is", null);
+  let list = ((clients ?? []) as { id: string; name: string; email: string | null; package_id: string | null }[]).filter((c) => c.email);
+
+  if (audience === "members") {
+    list = list.filter((c) => c.package_id);
+  } else if (audience === "subscribers") {
+    const { data: subs } = await supabase.from("subscriptions").select("client_id").eq("status", "active");
+    const set = new Set(((subs ?? []) as { client_id: string }[]).map((s) => s.client_id));
+    list = list.filter((c) => set.has(c.id));
+  } else if (audience === "lapsed") {
+    const { data: recent } = await supabase.from("sessions").select("client_id, date").gte("date", addDays(todayISO(), -30));
+    const active = new Set(((recent ?? []) as { client_id: string }[]).map((s) => s.client_id));
+    list = list.filter((c) => !active.has(c.id));
+  }
+  return list;
+}
+
+export async function sendCampaignNow(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCampaigns(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  const { data: camp } = await supabase.from("campaigns").select("id, name, audience, status, template_id").eq("id", id).maybeSingle();
+  if (!camp || camp.status === "sent") return;
+  const { data: tpl } = await supabase.from("message_templates").select("subject, body").eq("id", camp.template_id ?? "").maybeSingle();
+  if (!tpl) return;
+
+  const recipients = await resolveAudience(supabase, camp.audience);
+  let count = 0;
+  for (const c of recipients) {
+    if (!c.email) continue;
+    const subject = tpl.subject.replace(/\{\{\s*name\s*\}\}/g, c.name);
+    const html = tpl.body.replace(/\{\{\s*name\s*\}\}/g, c.name);
+    let result;
+    try { result = await sendEmail(c.email, subject, html); }
+    catch { result = { status: "failed" as const, error: "Unexpected" }; }
+    await supabase.from("email_log").insert({
+      to_email: c.email, client_id: c.id, template: `campaign:${camp.name}`, subject,
+      status: result.status, provider: "resend",
+      provider_id: "providerId" in result ? result.providerId ?? null : null,
+      error: "error" in result ? result.error ?? null : null,
+      created_by: p.name,
+    });
+    count++;
+  }
+  await supabase.from("campaigns").update({ status: "sent", sent_count: count, sent_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Campaign sent", camp.name, `${count} recipients`);
+  revalidatePath("/campaigns");
 }
 
 // ---- wearables sync --------------------------------------------------------

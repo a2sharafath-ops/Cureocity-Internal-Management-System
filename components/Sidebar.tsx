@@ -48,6 +48,7 @@ const SECTIONS: NavSection[] = [
     title: "Growth",
     items: [
       { href: "/retention", label: "Retention", icon: "💚" },
+      { href: "/campaigns", label: "Campaigns", icon: "📣" },
       { href: "/reports", label: "Reports", icon: "📊" },
     ],
   },

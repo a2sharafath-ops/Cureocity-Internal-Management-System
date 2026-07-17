@@ -26,6 +26,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/subscriptions": ["Administrator", "Manager", "Finance"],
   "/retention": ["Administrator", "Manager", "Front Desk"],
+  "/campaigns": ["Administrator", "Manager", "Front Desk"],
   "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/emr": ["Administrator", "Manager", "Health Professional"],
   "/orders": ["Administrator", "Manager", "Health Professional"],
@@ -112,4 +113,9 @@ export function canClaims(role: string): boolean {
 // Who can access compliance & governance (consent, breach, retention).
 export function canCompliance(role: string): boolean {
   return ["Administrator", "Manager"].includes(role);
+}
+
+// Who can manage message templates & campaigns.
+export function canCampaigns(role: string): boolean {
+  return ["Administrator", "Manager", "Front Desk"].includes(role);
 }
