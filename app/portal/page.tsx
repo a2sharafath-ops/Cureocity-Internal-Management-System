@@ -7,6 +7,7 @@ import MessageThread, { type Msg } from "@/components/MessageThread";
 import MessageReply from "@/components/MessageReply";
 import ClassBookButton from "@/components/ClassBookButton";
 import HabitCheck from "@/components/HabitCheck";
+import { FormFill } from "@/components/FormComponents";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { MEALS, type MealLog } from "@/lib/meals";
 
@@ -107,6 +108,10 @@ export default async function PortalHome() {
   const { data: cwRows } = await supabase.from("client_workouts").select("id, name, type, items").eq("client_id", client.id).order("created_at", { ascending: false }).limit(3);
   const myWorkouts = (cwRows ?? []) as unknown as { id: string; name: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[] }[];
 
+  const { data: formRows } = await supabase
+    .from("form_responses").select("id, forms(name, type, fields)").eq("client_id", client.id).eq("status", "pending");
+  const myForms = (formRows ?? []) as unknown as { id: string; forms: { name: string; type: string; fields: { label: string; kind: string }[] } | null }[];
+
   const [{ data: classRows }, { data: availRows }, { data: myBookings }] = await Promise.all([
     supabase.from("classes").select("id, title, date, hour, rooms(name), staff(name)").gte("date", TODAY).order("date").order("hour").limit(20),
     supabase.from("class_availability").select("id, capacity, booked"),
@@ -133,7 +138,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -301,6 +306,24 @@ export default async function PortalHome() {
                 </div>
               );
             })}
+          </div>
+        </>
+      )}
+
+      {/* Forms to complete */}
+      {myForms.length > 0 && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>📝 Forms to complete</div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {myForms.map((r) => (
+              <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <b style={{ fontSize: 14 }}>{r.forms?.name ?? "Form"}</b>
+                  <span style={{ flex: 1 }} />
+                  {r.forms && <FormFill responseId={r.id} name={r.forms.name} type={r.forms.type} fields={r.forms.fields} />}
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}

@@ -13,6 +13,8 @@ import { getPersona } from "@/lib/personas";
 import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { paymentConfig } from "@/lib/payments/config";
+import { telehealthConfig } from "@/lib/telehealth/config";
+import crypto from "crypto";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 import { sendEmail } from "@/lib/email/send";
 import { renderChoice, tplInvoiceCreated, tplPaymentReceived, type Template } from "@/lib/email/templates";
@@ -1681,6 +1683,85 @@ export async function confirmInvoicePayment(formData: FormData) {
   if (invc?.clients?.email) await notifyEmail({ supabase, to: invc.clients.email, clientId: invc.client_id, template: "payment", tpl: tplPaymentReceived(invc.clients.name ?? "there", `INV-${String(invc.num ?? 0).padStart(3, "0")}`, Number(invc.amount)), actor: p.name });
   revalidatePath("/billing");
   return { ok: true };
+}
+
+// ---- dynamic intake / consent forms ----------------------------------------
+
+export async function createForm(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  let fields: { label: string; kind: string }[] = [];
+  try { fields = JSON.parse(String(formData.get("fields") || "[]")); } catch { fields = []; }
+  fields = fields.filter((f) => f.label && f.label.trim());
+  const supabase = createClient();
+  await supabase.from("forms").insert({
+    name, type: String(formData.get("type") || "intake"), fields, active: true, created_by: p.name,
+  });
+  await logAudit(p, "Form created", name, null);
+  revalidatePath("/forms");
+}
+
+export async function assignForm(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const form_id = String(formData.get("form_id"));
+  const client_id = String(formData.get("client_id"));
+  if (!form_id || !client_id) return;
+  const supabase = createClient();
+  await supabase.from("form_responses").insert({ form_id, client_id, answers: {}, status: "pending" });
+  await logAudit(p, "Form assigned", await clientName(supabase, client_id), null);
+  revalidatePath("/forms");
+}
+
+// staff- or client-submitted answers. answers is a JSON string of {label: value}.
+export async function submitFormResponse(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const id = String(formData.get("id"));
+  let answers: Record<string, string> = {};
+  try { answers = JSON.parse(String(formData.get("answers") || "{}")); } catch { answers = {}; }
+  const signed_by = String(formData.get("signed_by") ?? "").trim() || null;
+  await supabase.from("form_responses").update({
+    answers, status: "completed", signed_by, signed_at: new Date().toISOString(),
+  }).eq("id", id);
+  revalidatePath("/forms");
+  revalidatePath("/portal");
+}
+
+// ---- telehealth video sessions ---------------------------------------------
+
+export async function createTelehealthSession(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id") || "") || null;
+  const cfg = telehealthConfig();
+  const slug = "Cureocity-" + crypto.randomUUID().slice(0, 8);
+  const room_url = `${cfg.baseUrl.replace(/\/$/, "")}/${slug}`;
+  const supabase = createClient();
+  await supabase.from("telehealth_sessions").insert({
+    client_id, provider: cfg.provider, room_url, status: "scheduled",
+    scheduled_for: String(formData.get("scheduled_for") || "") || null,
+    created_by: p.name,
+  });
+  await logAudit(p, "Telehealth session created", client_id ? await clientName(supabase, client_id) : null, null);
+  revalidatePath("/telehealth");
+}
+
+export async function setTelehealthStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["scheduled", "active", "ended"].includes(status)) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = { status };
+  if (status === "active") patch.started_at = new Date().toISOString();
+  if (status === "ended") patch.ended_at = new Date().toISOString();
+  await supabase.from("telehealth_sessions").update(patch).eq("id", id);
+  revalidatePath("/telehealth");
 }
 
 // ---- national health identity (ABHA / UHID) --------------------------------

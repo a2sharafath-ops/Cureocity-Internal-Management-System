@@ -23,6 +23,7 @@ const SECTIONS: NavSection[] = [
       { href: "/classes", label: "Group Classes", icon: "🧘" },
       { href: "/access", label: "Access & Check-in", icon: "🚪" },
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },
+      { href: "/forms", label: "Forms & Consent", icon: "📝" },
       { href: "/followups", label: "Follow-ups", icon: "📞" },
       { href: "/messages", label: "Communications", icon: "💬" },
       { href: "/campaigns", label: "Campaigns", icon: "📣" },
@@ -35,6 +36,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/careteam", label: "Care Team Hub", icon: "🧑‍⚕️" },
       { href: "/pro", label: "Consultations", icon: "🩺" },
+      { href: "/telehealth", label: "Telehealth", icon: "📹" },
       { href: "/emr", label: "Patient Records", icon: "📋" },
       { href: "/orders", label: "Orders & Labs", icon: "🧪" },
       { href: "/meals", label: "Meal Monitoring", icon: "🍽" },
