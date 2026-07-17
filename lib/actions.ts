@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -662,6 +662,135 @@ export async function processDueRenewals() {
   await logAudit(p, "Processed due renewals", null, `${(due ?? []).length} renewed`);
   revalidatePath("/subscriptions");
   revalidatePath("/billing");
+}
+
+// ---- EMR: problems / allergies / meds / vitals / SOAP ----------------------
+
+const emrText = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim() || null;
+const emrNum = (fd: FormData, k: string) => {
+  const v = fd.get(k);
+  if (v === null || String(v).trim() === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+};
+async function emrGuard() {
+  const p = await getProfile();
+  if (!p || !canEmr(p.role)) return null;
+  return p;
+}
+async function clientName(supabase: ReturnType<typeof createClient>, id: string) {
+  const { data } = await supabase.from("clients").select("name").eq("id", id).maybeSingle();
+  return data?.name ?? null;
+}
+
+export async function addProblem(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  const description = emrText(formData, "description");
+  if (!client_id || !description) return;
+  const supabase = createClient();
+  await supabase.from("problems").insert({
+    client_id, description, code: emrText(formData, "code"),
+    onset_date: emrText(formData, "onset_date"), status: "active", noted_by: p.name,
+  });
+  await logAudit(p, "Problem added", await clientName(supabase, client_id), description);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function resolveProblem(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const to = String(formData.get("to") || "resolved");
+  const supabase = createClient();
+  await supabase.from("problems").update({
+    status: to, resolved_date: to === "resolved" ? todayISO() : null,
+  }).eq("id", id);
+  await logAudit(p, `Problem → ${to}`, null, null);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function addAllergy(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  const substance = emrText(formData, "substance");
+  if (!client_id || !substance) return;
+  const supabase = createClient();
+  await supabase.from("allergies").insert({
+    client_id, substance, reaction: emrText(formData, "reaction"),
+    severity: String(formData.get("severity") || "moderate"), noted_by: p.name,
+  });
+  await logAudit(p, "Allergy added", await clientName(supabase, client_id), substance);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function deleteAllergy(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  await supabase.from("allergies").delete().eq("id", id);
+  await logAudit(p, "Allergy removed (entered in error)", null, null);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function addMedication(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  const name = emrText(formData, "name");
+  if (!client_id || !name) return;
+  const supabase = createClient();
+  await supabase.from("medications").insert({
+    client_id, name, dose: emrText(formData, "dose"), frequency: emrText(formData, "frequency"),
+    route: String(formData.get("route") || "oral"), start_date: emrText(formData, "start_date") ?? todayISO(),
+    status: "active", prescriber: p.name, notes: emrText(formData, "notes"),
+  });
+  await logAudit(p, "Medication added", await clientName(supabase, client_id), name);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function stopMedication(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  await supabase.from("medications").update({ status: "stopped", end_date: todayISO() }).eq("id", id);
+  await logAudit(p, "Medication stopped", null, null);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function addVitals(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("vitals").insert({
+    client_id, date: String(formData.get("date") || todayISO()),
+    systolic: emrNum(formData, "systolic"), diastolic: emrNum(formData, "diastolic"),
+    pulse: emrNum(formData, "pulse"), temp_c: emrNum(formData, "temp_c"),
+    resp_rate: emrNum(formData, "resp_rate"), spo2: emrNum(formData, "spo2"),
+    weight: emrNum(formData, "weight"), height: emrNum(formData, "height"),
+    notes: emrText(formData, "notes"), recorded_by: p.name,
+  });
+  await logAudit(p, "Vitals recorded", await clientName(supabase, client_id), null);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function addEncounter(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("encounters").insert({
+    client_id, date: String(formData.get("date") || todayISO()),
+    type: String(formData.get("type") || "Office visit"),
+    chief_complaint: emrText(formData, "chief_complaint"),
+    subjective: emrText(formData, "subjective"), objective: emrText(formData, "objective"),
+    assessment: emrText(formData, "assessment"), plan: emrText(formData, "plan"),
+    provider: p.name,
+  });
+  await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
+  revalidatePath(`/emr/${client_id}`);
 }
 
 // ---- gym passes + retail POS -----------------------------------------------

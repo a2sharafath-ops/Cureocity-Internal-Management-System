@@ -26,6 +26,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/subscriptions": ["Administrator", "Manager", "Finance"],
   "/retention": ["Administrator", "Manager", "Front Desk"],
   "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
+  "/emr": ["Administrator", "Manager", "Health Professional"],
   "/reports": ["Administrator", "Manager", "Finance"],
   "/users": ["Administrator"],
   "/audit": ["Administrator"],
@@ -86,4 +87,9 @@ export function canRetention(role: string): boolean {
 // Who can sell passes / run the retail POS.
 export function canPos(role: string): boolean {
   return ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
+}
+
+// Who can view/edit the clinical EMR (PHI — clinicians only).
+export function canEmr(role: string): boolean {
+  return ["Administrator", "Manager", "Health Professional"].includes(role);
 }

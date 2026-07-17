@@ -13,6 +13,7 @@ const NAV = [
   { href: "/classes", label: "Group Classes", icon: "🧘" },
   { href: "/trainer", label: "Trainer", icon: "🎽" },
   { href: "/pro", label: "Consultations", icon: "🩺" },
+  { href: "/emr", label: "EMR / Charts", icon: "📋" },
   { href: "/meals", label: "Meal Monitoring", icon: "🍽" },
   { href: "/blueprint", label: "BluePrint", icon: "🧬" },
   { href: "/packages", label: "Packages", icon: "▦" },

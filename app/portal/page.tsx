@@ -71,6 +71,17 @@ export default async function PortalHome() {
     .from("messages").select("id, sender, sender_name, body, created_at").eq("client_id", client.id).order("created_at", { ascending: true });
   const messages = (msgRows ?? []) as Msg[];
 
+  // read-only medical record (RLS scopes to own rows)
+  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }] = await Promise.all([
+    supabase.from("problems").select("description, status").eq("client_id", client.id).eq("status", "active"),
+    supabase.from("allergies").select("substance, severity").eq("client_id", client.id),
+    supabase.from("medications").select("name, dose, frequency").eq("client_id", client.id).eq("status", "active"),
+  ]);
+  const myProblems = (emrProblems ?? []) as { description: string; status: string }[];
+  const myAllergies = (emrAllergies ?? []) as { substance: string; severity: string }[];
+  const myMeds = (emrMeds ?? []) as { name: string; dose: string | null; frequency: string | null }[];
+  const hasEmr = myProblems.length > 0 || myAllergies.length > 0 || myMeds.length > 0;
+
   const [{ data: classRows }, { data: availRows }, { data: myBookings }] = await Promise.all([
     supabase.from("classes").select("id, title, date, hour, rooms(name), staff(name)").gte("date", TODAY).order("date").order("hour").limit(20),
     supabase.from("class_availability").select("id, capacity, booked"),
@@ -97,7 +108,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -206,6 +217,28 @@ export default async function PortalHome() {
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Body fat</div>{m.body_fat != null ? `${m.body_fat}%` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Muscle</div>{m.muscle_mass != null ? `${m.muscle_mass} kg` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Visceral fat</div>{m.visceral_fat ?? "—"}</div>
+          </div>
+        </>
+      )}
+
+      {/* Medical record (read-only) */}
+      {hasEmr && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>🩺 My health record</div>
+          {myAllergies.length > 0 && (
+            <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", marginBottom: 10, color: "var(--red)", fontSize: 13 }}>
+              <b>Allergies:</b> {myAllergies.map((a) => `${a.substance}${a.severity === "severe" ? " (severe)" : ""}`).join(", ")}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, fontSize: 14 }}>
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 4 }}>Active problems</div>
+              {myProblems.length ? myProblems.map((p, i) => <div key={i}>• {p.description}</div>) : <div style={{ color: "var(--muted)" }}>None recorded</div>}
+            </div>
+            <div>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 4 }}>Current medications</div>
+              {myMeds.length ? myMeds.map((md, i) => <div key={i}>• {md.name}{md.dose ? ` ${md.dose}` : ""}{md.frequency ? ` · ${md.frequency}` : ""}</div>) : <div style={{ color: "var(--muted)" }}>None recorded</div>}
+            </div>
           </div>
         </>
       )}
