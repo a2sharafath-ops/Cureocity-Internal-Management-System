@@ -44,11 +44,17 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
   const { data: client } = await supabase
     .from("clients")
-    .select("*, packages(name, sessions, is_facility)")
+    .select("*, packages(name, sessions, is_facility, price)")
     .eq("id", params.id)
     .maybeSingle();
 
   if (!client) notFound();
+  const c0 = client as Record<string, unknown>;
+  const ageOf = (dob: unknown): number | null => {
+    if (!dob || typeof dob !== "string") return null;
+    const d = new Date(dob); if (Number.isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
+  };
 
   const [{ data: sessions }, { data: trainerData }, { data: consultData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
@@ -107,12 +113,41 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
-  const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
+  // owner / coach names, blueprint status, onboarding journey follow-ups
+  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }] = await Promise.all([
+    supabase.from("staff").select("id, name"),
+    supabase.from("blueprints").select("generated, generated_date, scores").eq("client_id", params.id).maybeSingle(),
+    supabase.from("followups").select("label, due_date, status, kind").eq("client_id", params.id).order("due_date"),
+  ]);
+  const staffMap = new Map(((staffAll ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
+  const ownerName = c0.owner ? (staffMap.get(String(c0.owner)) ?? null) : null;
+  const coachName = c0.pro_id ? (staffMap.get(String(c0.pro_id)) ?? null) : null;
+  const bp = (bpRow ?? null) as { generated: boolean; generated_date: string | null; scores: Record<string, number> | null } | null;
+  const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
+  const clientAge = ageOf(c0.dob);
+
+  const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
   const sess = (sessions ?? []) as {
     id: string; seq: number; date: string; hour: number; status: string; rescheduled: boolean;
     trainer_id: string; staff: { name: string } | null;
   }[];
   const done = sess.filter((s) => s.status === "completed").length;
+
+  // ---- Client Journey milestones (Service Timeline) ----
+  const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed");
+  const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind);
+  const consultState = (kind: string): "done" | "progress" | "pending" => hasConsult(kind) ? "done" : scheduledConsult(kind) ? "progress" : "pending";
+  const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string }[] = [
+    { label: "Package Purchase", state: pkg ? "done" : "pending", detail: pkg?.name ?? "No package yet", when: client.joined ?? "—" },
+    { label: "Initial Doctor Consultation", state: consultState("Doctor"), detail: "Doctor Consultation", when: hasConsult("Doctor") ? "Completed" : scheduledConsult("Doctor") ? "Scheduled" : "Not scheduled" },
+    { label: "Initial Diet Consultation", state: consultState("Diet"), detail: "Diet Consultation", when: hasConsult("Diet") ? "Completed" : scheduledConsult("Diet") ? "Scheduled" : "Not scheduled" },
+    { label: "Initial Fitness Assessment", state: consultState("Trainer"), detail: "Fitness Services", when: hasConsult("Trainer") ? "Completed" : scheduledConsult("Trainer") ? "Scheduled" : "Not scheduled" },
+    { label: "BluePrint (PHB) Generated", state: bp?.generated ? "done" : "pending", detail: bp?.generated ? "Ready to download" : "Pending consultations", when: bp?.generated_date ?? "—" },
+  ];
+  for (const f of followups.filter((x) => x.kind === "onboarding")) {
+    journey.push({ label: f.label, state: f.status === "done" ? "done" : f.status === "skipped" ? "pending" : "progress", detail: "Onboarding protocol", when: (f.due_date < todayISO() && f.status === "pending" ? "Overdue " : "Due ") + f.due_date });
+  }
+  const dotColor = (s: string) => s === "done" ? "#16a34a" : s === "progress" ? "#f59e0b" : "#cbd5e1";
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -153,30 +188,84 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </div>
 
       {tab === "overview" && (<>
-      {/* Profile */}
-      <div
-        style={{
-          background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)",
-          boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16,
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>Profile</div>
+      {/* Personal Info */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>Personal Info</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           <Stat label="Phone" value={client.phone} />
           <Stat label="Email" value={client.email} />
-          <Stat label="Branch" value={client.branch} />
+          <Stat label="Age" value={clientAge != null ? `${clientAge} yrs` : "—"} />
           <Stat label="Gender" value={client.gender} />
           <Stat label="Occupation" value={client.occupation} />
           <Stat label="Height / Weight" value={`${client.height ?? "—"} cm · ${client.weight ?? "—"} kg`} />
-          <Stat label="Conditions" value={client.conditions} />
-          <Stat label="Goals" value={(client.goals ?? []).join(", ") || "—"} />
+          <Stat label="Location" value={(c0.address as string) ?? null} />
+          <Stat label="Branch" value={client.branch} />
           <Stat label="Emergency" value={client.emergency} />
+          <Stat label="Health Coach" value={coachName} />
+          <Stat label="Owner (Front Desk)" value={ownerName} />
+          {(c0.abha_id || c0.uhid) ? <Stat label="ABHA / UHID" value={`${c0.abha_id ?? "—"} / ${c0.uhid ?? "—"}`} /> : <div />}
         </div>
+      </div>
+
+      {/* Health Profile */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>Health Profile</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <Stat label="Primary Goal" value={(client.goals ?? []).join(", ") || "—"} />
+          <Stat label="Conditions" value={client.conditions} />
+        </div>
+      </div>
+
+      {/* Deals / Packages */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>Deals / Packages</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: invoices.length ? 12 : 0 }}>
+          <Stat label="Package" value={pkg?.name ?? "—"} />
+          <Stat label="Price" value={pkg ? `₹${Number(pkg.price ?? 0).toLocaleString("en-IN")}` : "—"} />
+          <Stat label="Joined" value={client.joined} />
+          <Stat label="Status" value={<span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>Active</span>} />
+        </div>
+        {showBilling && invoices.length > 0 && (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>
+            <tbody>
+              {invoices.map((i) => (
+                <tr key={i.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "8px 6px", color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
+                  <td style={{ padding: "8px 6px" }}>{i.description}</td>
+                  <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
+                  <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
+                  <td style={{ padding: "8px 6px", textAlign: "right" }}><InvoiceActions id={i.id} status={i.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {showBilling && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
       </div>
 
       </>)}
 
       {tab === "timeline" && (<>
+      {/* Client Journey */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700 }}>Client Journey</div>
+          <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>green = complete · amber = in progress</span>
+        </div>
+        <div style={{ display: "grid", gap: 2 }}>
+          {journey.map((m, i) => (
+            <div key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+              <div style={{ width: 12, height: 12, borderRadius: "50%", background: dotColor(m.state), marginTop: 4, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <b style={{ fontSize: 13.5 }}>{m.label}</b>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.detail}</div>
+                <div style={{ fontSize: 11.5, color: "var(--teal-dark)", marginTop: 2 }}>🕐 {m.when}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Sessions */}
       <div
         style={{
@@ -278,39 +367,60 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
       </div>
 
-      {/* Billing */}
-      {showBilling && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 700 }}>💳 Billing</div>
-            <span style={{ flex: 1 }} />
-            <InvoiceForm clientId={params.id} />
-          </div>
-          {invoices.length === 0 ? (
-            <div style={{ color: "var(--muted)", fontSize: 13 }}>No invoices for this client.</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <tbody>
-                {invoices.map((i) => (
-                  <tr key={i.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 6px", color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
-                    <td style={{ padding: "8px 6px" }}>{i.description}</td>
-                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "8px 6px" }}>
-                      <span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span>
-                    </td>
-                    <td style={{ padding: "8px 6px", textAlign: "right" }}><InvoiceActions id={i.id} status={i.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
       </>)}
 
       {tab === "card" && (<>
+      {/* Care records — consultations by discipline */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>🗂 Care records</div>
+          <span style={{ flex: 1 }} />
+          {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Patient Records →</Link>}
+        </div>
+        {consults.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
+        ) : (
+          ["Doctor", "Diet", "Trainer", "Coach", "Psychologist"].map((kind) => {
+            const list = consults.filter((c) => c.kind === kind);
+            if (list.length === 0) return null;
+            return (
+              <div key={kind} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px", margin: "6px 0 4px" }}>{kind} consultations ({list.length})</div>
+                {list.map((cs) => (
+                  <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "8px 0" }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "#eef2f1", color: cs.status === "completed" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.status}</span>
+                      {cs.approved && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
+                      {cs.shared && <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
+                    </div>
+                    {cs.summary && <div style={{ marginTop: 5, fontSize: 13, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{cs.summary}</div>}
+                  </div>
+                ))}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* BluePrint status */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontWeight: 700 }}>🧬 BluePrint</div>
+          <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
+          <span style={{ flex: 1 }} />
+          {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
+        </div>
+        {bp?.scores && Object.keys(bp.scores).length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 12 }}>
+            {Object.entries(bp.scores).slice(0, 9).map(([k, v]) => (
+              <div key={k} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px" }}>
+                <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{k}</div><b style={{ fontSize: 14 }}>{v}</b>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
