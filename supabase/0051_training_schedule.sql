@@ -66,3 +66,19 @@ create policy recovery_client_read on recovery_sessions for select using (client
 alter publication supabase_realtime add table trainer_slots;
 alter publication supabase_realtime add table assessments;
 alter publication supabase_realtime add table recovery_sessions;
+
+-- Extra trainers so the weekly grid has real columns (matches the prototype).
+insert into staff (id, name, designation, department, role, is_trainer, color) values
+  ('tr2', 'Annakutty',        'Fitness Trainer', 'Fitness', 'Health Professional', true, '#2563eb'),
+  ('tr3', 'Athul AM',         'Fitness Trainer', 'Fitness', 'Health Professional', true, '#d97706'),
+  ('tr4', 'Anurudh K Shaiju', 'Fitness Trainer', 'Fitness', 'Health Professional', true, '#7c3aed'),
+  ('tr5', 'Sarath Kumar',     'Fitness Trainer', 'Fitness', 'Health Professional', true, '#dc2626')
+on conflict (id) do nothing;
+
+-- Branch (from 0050) — only if that column exists; otherwise skip harmlessly.
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name='staff' and column_name='branch') then
+    update staff set branch = 'Calicut' where id in ('tr4','tr5');
+  end if;
+end $$;

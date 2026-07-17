@@ -296,6 +296,15 @@ export async function markAssessmentBooked(formData: FormData) {
   revalidatePath("/sessions");
 }
 
+export async function completeAssessment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("assessments").update({ status: "done" }).eq("id", id);
+  revalidatePath("/sessions");
+}
+
 export async function addRecoverySession(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSessions(p.role)) return;

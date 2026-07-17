@@ -4,12 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   setTrainerSlot, assignTrainerSlot, unassignTrainerSlot,
-  createAssessment, markAssessmentBooked, addRecoverySession, completeRecoverySession,
+  createAssessment, markAssessmentBooked, completeAssessment, addRecoverySession, completeRecoverySession,
 } from "@/lib/actions";
 
 export type Trainer = { id: string; name: string; color: string };
 export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null };
-export type AssessmentRow = { id: string; clientName: string | null; kind: string; due_date: string; status: string; trainerName: string | null };
+export type AssessmentRow = { id: string; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; trainerName: string | null };
 export type RecoveryRow = { id: string; clientName: string | null; kind: string; date: string; hour: number | null; staffName: string | null; status: string };
 export type ClassRow = { id: string; title: string; trainerName: string | null; date: string; hour: number; capacity: number; booked: number };
 
@@ -23,10 +23,10 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" };
 
 export default function TrainingScheduleView({
-  today, trainers, hours, slots, clients, staff, assessments, recovery, classes, canWrite,
+  today, trainers, hours, slots, clients, staff, assessments, assessmentRecords, recovery, classes, canWrite,
 }: {
   today: string; trainers: Trainer[]; hours: number[]; slots: Slot[]; clients: { id: string; name: string }[];
-  staff: { id: string; name: string }[]; assessments: AssessmentRow[]; recovery: RecoveryRow[]; classes: ClassRow[]; canWrite: boolean;
+  staff: { id: string; name: string }[]; assessments: AssessmentRow[]; assessmentRecords: AssessmentRow[]; recovery: RecoveryRow[]; classes: ClassRow[]; canWrite: boolean;
 }) {
   const [tab, setTab] = useState<"slots" | "studio" | "recovery">("slots");
   const [assigning, setAssigning] = useState<{ trainer_id: string; hour: number } | null>(null);
@@ -158,12 +158,31 @@ export default function TrainingScheduleView({
                 <b>{a.clientName ?? "—"}</b>
                 <span style={{ color: "var(--muted)" }}>due {fmtDate(a.due_date)}{a.trainerName ? ` · ${a.trainerName}` : ""}</span>
                 <span style={{ flex: 1 }} />
-                {a.status === "booked" ? <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>booked</span> : (
+                {a.status === "booked" ? (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>booked</span>
+                    {canWrite && <form action={completeAssessment}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark done</button></form>}
+                  </div>
+                ) : (
                   <div style={{ display: "flex", gap: 6 }}>
                     <Link href="/appointments" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, textDecoration: "none", color: "var(--teal-dark)", fontWeight: 600 }}>Book →</Link>
                     {canWrite && <form action={markAssessmentBooked}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark booked</button></form>}
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+
+          {/* Recent assessment records */}
+          <div style={{ ...box, padding: "16px 18px", marginTop: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>🗂 Recent assessment records</div>
+            {assessmentRecords.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No completed assessments yet.</div> : assessmentRecords.map((a) => (
+              <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                {tagChip(a.kind === "reassessment" ? "Re-assessment" : "Initial Assessment")}
+                <b>{a.clientName ?? "—"}</b>
+                <span style={{ color: "var(--muted)" }}>{a.scheduled_date ? `done ${fmtDate(a.scheduled_date)}` : `due ${fmtDate(a.due_date)}`}{a.trainerName ? ` · ${a.trainerName}` : ""}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>completed</span>
               </div>
             ))}
           </div>

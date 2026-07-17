@@ -21,7 +21,7 @@ export default async function SessionsPage() {
     supabase.from("staff").select("id, name, color, is_trainer").order("name"),
     supabase.from("trainer_slots").select("trainer_id, hour, status, client_id, clients(name), tag"),
     supabase.from("clients").select("id, name").order("name"),
-    supabase.from("assessments").select("id, kind, due_date, status, clients(name), staff:trainer_id(name)").neq("status", "done").order("due_date"),
+    supabase.from("assessments").select("id, kind, due_date, status, scheduled_date, clients(name), staff:trainer_id(name)").order("due_date", { ascending: false }).limit(60),
     supabase.from("recovery_sessions").select("id, kind, date, hour, status, clients(name), staff:staff_id(name)").gte("date", today).order("date").limit(40),
     supabase.from("classes").select("id, title, date, hour, capacity, staff:trainer_id(name), class_bookings(id)").gte("date", today).order("date").limit(30),
   ]);
@@ -34,8 +34,10 @@ export default async function SessionsPage() {
   const slots: Slot[] = ((slotsR.data ?? []) as unknown as { trainer_id: string; hour: number; status: string; client_id: string | null; clients: { name: string } | null; tag: string | null }[])
     .map((s) => ({ trainer_id: s.trainer_id, hour: s.hour, status: s.status, client_id: s.client_id, clientName: s.clients?.name ?? null, tag: s.tag }));
 
-  const assessments: AssessmentRow[] = ((assessR.data ?? []) as unknown as { id: string; kind: string; due_date: string; status: string; clients: { name: string } | null; staff: { name: string } | null }[])
-    .map((a) => ({ id: a.id, kind: a.kind, due_date: a.due_date, status: a.status, clientName: a.clients?.name ?? null, trainerName: a.staff?.name ?? null }));
+  const allAssess: AssessmentRow[] = ((assessR.data ?? []) as unknown as { id: string; kind: string; due_date: string; status: string; scheduled_date: string | null; clients: { name: string } | null; staff: { name: string } | null }[])
+    .map((a) => ({ id: a.id, kind: a.kind, due_date: a.due_date, status: a.status, scheduled_date: a.scheduled_date, clientName: a.clients?.name ?? null, trainerName: a.staff?.name ?? null }));
+  const assessments = allAssess.filter((a) => a.status !== "done").sort((x, y) => x.due_date < y.due_date ? -1 : 1);
+  const assessmentRecords = allAssess.filter((a) => a.status === "done").slice(0, 12);
 
   const recovery: RecoveryRow[] = ((recovR.data ?? []) as unknown as { id: string; kind: string; date: string; hour: number | null; status: string; clients: { name: string } | null; staff: { name: string } | null }[])
     .map((r) => ({ id: r.id, kind: r.kind, date: r.date, hour: r.hour, status: r.status, clientName: r.clients?.name ?? null, staffName: r.staff?.name ?? null }));
@@ -51,7 +53,7 @@ export default async function SessionsPage() {
 
       <TrainingScheduleView
         today={today} trainers={trainers} hours={HOURS} slots={slots} clients={clients}
-        staff={staff} assessments={assessments} recovery={recovery} classes={classes} canWrite={writer}
+        staff={staff} assessments={assessments} assessmentRecords={assessmentRecords} recovery={recovery} classes={classes} canWrite={writer}
       />
     </div>
   );
