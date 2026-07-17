@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { todayISO } from "@/lib/today";
 import { sendEmail } from "@/lib/email/send";
 import { tplAppointmentReminder } from "@/lib/email/templates";
+import { buildFollowupRows } from "@/lib/followups";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -103,13 +104,28 @@ async function sendReminders(supabase: Admin) {
   return reminders;
 }
 
+async function generateFollowups(supabase: Admin) {
+  const [{ data: clients }, { data: subs }] = await Promise.all([
+    supabase.from("clients").select("id, joined"),
+    supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
+  ]);
+  const rows = buildFollowupRows(
+    (clients ?? []) as { id: string; joined: string | null }[],
+    (subs ?? []) as { client_id: string; renews_on: string | null }[],
+    "auto",
+  );
+  if (rows.length) await supabase.from("followups").upsert(rows, { onConflict: "client_id,label", ignoreDuplicates: true });
+  return rows.length;
+}
+
 export async function runDaily() {
   const supabase = createAdminClient();
   const renewed = await processRenewals(supabase);
   const reminders = await sendReminders(supabase);
+  const followups = await generateFollowups(supabase);
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
-    target: null, detail: `renewed ${renewed} · reminders ${reminders}`,
+    target: null, detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`,
   });
-  return { renewed, reminders, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, ranAt: new Date().toISOString() };
 }

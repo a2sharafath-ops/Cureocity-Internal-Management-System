@@ -9,6 +9,8 @@ import { getProfile } from "@/lib/auth";
 import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
+import { getPersona } from "@/lib/personas";
+import { buildFollowupRows } from "@/lib/followups";
 import { paymentConfig } from "@/lib/payments/config";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 import { sendEmail } from "@/lib/email/send";
@@ -80,6 +82,18 @@ export async function setPreviewRole(formData: FormData) {
   if (!me || me.role !== "Administrator") return; // only admins can preview
   const role = String(formData.get("role") ?? "");
   const store = cookies();
+
+  // Professional persona → step into that professional's workspace
+  const persona = getPersona(role);
+  if (persona) {
+    store.set("preview_role", "Health Professional", { path: "/", sameSite: "lax" });
+    store.set("preview_profession", persona.key, { path: "/", sameSite: "lax" });
+    revalidatePath("/", "layout");
+    redirect(persona.route);
+  }
+
+  // Plain role preview (or clear)
+  store.delete("preview_profession");
   if (!role || role === "off") store.delete("preview_role");
   else store.set("preview_role", role, { path: "/", sameSite: "lax" });
   revalidatePath("/", "layout");
@@ -800,6 +814,86 @@ export async function addEncounter(formData: FormData) {
   });
   await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
   revalidatePath(`/emr/${client_id}`);
+}
+
+// ---- access & check-in -----------------------------------------------------
+
+export async function recordCheckin(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id") || "") || null;
+  const guest_name = String(formData.get("guest_name") ?? "").trim() || null;
+  if (!client_id && !guest_name) return;
+  const supabase = createClient();
+  await supabase.from("checkins").insert({
+    client_id, guest_name,
+    method: String(formData.get("method") || "manual"),
+    direction: String(formData.get("direction") || "in"),
+    note: String(formData.get("note") ?? "").trim() || null,
+    by_name: p.name,
+  });
+  await logAudit(p, `Check-${String(formData.get("direction") || "in") === "out" ? "out" : "in"}`, client_id ? await clientName(supabase, client_id) : guest_name, null);
+  revalidatePath("/access");
+}
+
+// ---- front-desk follow-up queue --------------------------------------------
+
+export async function generateFollowups() {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const supabase = createClient();
+  const [{ data: clients }, { data: subs }] = await Promise.all([
+    supabase.from("clients").select("id, joined"),
+    supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
+  ]);
+  const rows = buildFollowupRows(
+    (clients ?? []) as { id: string; joined: string | null }[],
+    (subs ?? []) as { client_id: string; renews_on: string | null }[],
+    p.name,
+  );
+  if (rows.length) await supabase.from("followups").upsert(rows, { onConflict: "client_id,label", ignoreDuplicates: true });
+  await logAudit(p, "Follow-ups generated", null, `${rows.length} touchpoints`);
+  revalidatePath("/followups");
+}
+
+export async function completeFollowup(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({
+    status: "done", note: String(formData.get("note") ?? "").trim() || null,
+    done_by: p.name, done_at: new Date().toISOString(),
+  }).eq("id", id);
+  await logAudit(p, "Follow-up completed", null, null);
+  revalidatePath("/followups");
+  revalidatePath("/dashboard");
+}
+
+export async function skipFollowup(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({ status: "skipped", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Follow-up skipped", null, null);
+  revalidatePath("/followups");
+}
+
+export async function addFollowup(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const label = String(formData.get("label") ?? "").trim();
+  const due_date = String(formData.get("due_date") || todayISO());
+  if (!client_id || !label) return;
+  const supabase = createClient();
+  await supabase.from("followups").upsert(
+    { client_id, kind: "custom", label, due_date, priority: String(formData.get("priority") || "normal"), created_by: p.name },
+    { onConflict: "client_id,label", ignoreDuplicates: true }
+  );
+  await logAudit(p, "Follow-up added", await clientName(supabase, client_id), label);
+  revalidatePath("/followups");
 }
 
 // ---- comms templates & campaigns -------------------------------------------

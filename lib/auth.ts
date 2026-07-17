@@ -29,13 +29,16 @@ export async function getProfile(): Promise<Profile | null> {
 
 // Effective (display) role — Administrators can preview another role via a cookie.
 // The REAL role still governs all permissions; this only changes what's shown.
-export async function getViewRole(): Promise<{ real: string; effective: string; preview: string | null }> {
+export async function getViewRole(): Promise<{ real: string; effective: string; preview: string | null; profession: string | null }> {
   const me = await getProfile();
   const real = me?.role ?? "Staff";
   let preview: string | null = null;
+  let profession: string | null = null;
   if (real === "Administrator") {
     const c = cookies().get("preview_role")?.value;
     if (c) preview = c;
+    const p = cookies().get("preview_profession")?.value;
+    if (p) profession = p;
   }
-  return { real, effective: preview ?? real, preview };
+  return { real, effective: preview ?? real, preview, profession };
 }

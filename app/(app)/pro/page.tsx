@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getProfile } from "@/lib/auth";
+import { getProfile, getViewRole } from "@/lib/auth";
 import { canConsult, canSee } from "@/lib/roles";
+import { getPersona } from "@/lib/personas";
 import ConsultationForm from "@/components/ConsultationForm";
 import ConsultationItem, { type Consult } from "@/components/ConsultationItem";
 
@@ -15,6 +16,12 @@ export default async function ProPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/pro")) redirect("/dashboard");
 
+  // If an admin has stepped into a professional persona, focus this workspace
+  // on that discipline (Doctor / Coach / Psychologist).
+  const { profession } = await getViewRole();
+  const persona = getPersona(profession);
+  const disciplineKind = persona?.kind && persona.kind !== "Trainer" && persona.kind !== "Diet" ? persona.kind : null;
+
   const supabase = createClient();
   const [{ data: consultData }, { data: clientData }] = await Promise.all([
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, by_name, created_at, clients(name)").order("created_at", { ascending: false }).limit(100),
@@ -22,7 +29,8 @@ export default async function ProPage() {
     supabase.from("clients").select("id, name, packages(is_facility)").order("name"),
   ]);
 
-  const consults = (consultData ?? []) as unknown as Row[];
+  const allConsults = (consultData ?? []) as unknown as Row[];
+  const consults = disciplineKind ? allConsults.filter((c) => c.kind === disciplineKind) : allConsults;
   const clients = ((clientData ?? []) as unknown as { id: string; name: string; packages: { is_facility: boolean } | null }[])
     .filter((c) => c.packages && !c.packages.is_facility)
     .map((c) => ({ id: c.id, name: c.name }));
@@ -33,9 +41,10 @@ export default async function ProPage() {
   return (
     <div style={{ maxWidth: 900 }}>
       <RealtimeRefresh tables={["consultations"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Professional Workspace</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>{persona ? `${persona.label} Workspace` : "Professional Workspace"}</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Consultations · {consults.length} total · {pending} to complete
+        {disciplineKind ? `${disciplineKind} consultations` : "Consultations"} · {consults.length} total · {pending} to complete
+        {persona && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600, marginLeft: 8 }}>Persona view</span>}
       </p>
 
       {canEdit && <ConsultationForm clients={clients} />}

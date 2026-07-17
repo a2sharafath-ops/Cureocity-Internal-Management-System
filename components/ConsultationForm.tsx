@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createConsultation } from "@/lib/actions";
 
-const KINDS = ["Doctor", "Diet", "Trainer", "Coach"];
+const KINDS = ["Doctor", "Diet", "Trainer", "Coach", "Psychologist"];
 
 const input: React.CSSProperties = {
   width: "100%", padding: "8px 10px", border: "1px solid var(--border)",
