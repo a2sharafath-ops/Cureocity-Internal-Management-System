@@ -6,6 +6,10 @@ import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
+import HabitForm from "@/components/HabitForm";
+import { archiveHabit } from "@/lib/actions";
+import { currentStreak, last7Count } from "@/lib/habits";
+import { todayISO } from "@/lib/today";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import { getProfile } from "@/lib/auth";
@@ -76,6 +80,18 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: false }).limit(12);
   const measures = (measureRows ?? []) as { id: string; date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; resting_hr: number | null; recorded_by: string | null }[];
 
+  const canCoach = canConsult(me?.role ?? "");
+  const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
+    supabase.from("habits").select("id, name, icon, cadence, target_per_week, active").eq("client_id", params.id).eq("active", true).order("created_at"),
+    supabase.from("habit_logs").select("habit_id, date").eq("client_id", params.id).eq("done", true),
+  ]);
+  const habits = (habitRows ?? []) as { id: string; name: string; icon: string | null; cadence: string; target_per_week: number; active: boolean }[];
+  const habitDates = new Map<string, Set<string>>();
+  for (const l of ((habitLogRows ?? []) as { habit_id: string; date: string }[])) {
+    (habitDates.get(l.habit_id) ?? habitDates.set(l.habit_id, new Set()).get(l.habit_id)!).add(l.date);
+  }
+  const habToday = todayISO();
+
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
     id: string; seq: number; date: string; hour: number; status: string; rescheduled: boolean;
@@ -99,7 +115,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs"]} />
       <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
@@ -307,6 +323,48 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         )}
         {canMeasure && <MeasurementForm clientId={params.id} />}
       </div>
+
+      {/* Habits & streaks */}
+      {(canCoach || habits.length > 0) && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontWeight: 700 }}>🔥 Habits &amp; streaks</div>
+            <span style={{ flex: 1 }} />
+            {canCoach && <HabitForm clientId={params.id} />}
+          </div>
+          {habits.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>No habits assigned yet.</div>
+          ) : (
+            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+              {habits.map((h) => {
+                const dates = habitDates.get(h.id) ?? new Set<string>();
+                const streak = currentStreak(dates, habToday);
+                const week = last7Count(dates, habToday);
+                const hit = week >= h.target_per_week;
+                return (
+                  <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+                    <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{h.name}</div>
+                      <div style={{ color: "var(--muted)", fontSize: 12 }}>{h.cadence} · target {h.target_per_week}/wk</div>
+                    </div>
+                    <div style={{ textAlign: "right", minWidth: 88 }}>
+                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--teal-dark)" : "var(--muted)" }}>🔥 {streak}d streak</div>
+                      <div style={{ fontSize: 12, color: hit ? "#166534" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
+                    </div>
+                    {canCoach && (
+                      <form action={archiveHabit}>
+                        <input type="hidden" name="id" value={h.id} /><input type="hidden" name="client_id" value={params.id} />
+                        <button type="submit" title="Archive" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>Archive</button>
+                      </form>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>

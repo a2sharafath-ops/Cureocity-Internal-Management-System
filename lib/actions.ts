@@ -802,6 +802,56 @@ export async function addEncounter(formData: FormData) {
   revalidatePath(`/emr/${client_id}`);
 }
 
+// ---- habits & streaks ------------------------------------------------------
+
+export async function createHabit(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const name = String(formData.get("name") ?? "").trim();
+  if (!client_id || !name) return;
+  const supabase = createClient();
+  await supabase.from("habits").insert({
+    client_id, name,
+    cadence: String(formData.get("cadence") || "daily"),
+    target_per_week: Number(formData.get("target_per_week")) || 7,
+    icon: String(formData.get("icon") || "✅"),
+    active: true, created_by: p.name,
+  });
+  await logAudit(p, "Habit assigned", await clientName(supabase, client_id), name);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function archiveHabit(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  await supabase.from("habits").update({ active: false }).eq("id", id);
+  await logAudit(p, "Habit archived", null, null);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+// client checks a habit on/off for today (portal)
+export async function toggleHabitSelf(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return;
+  const habit_id = String(formData.get("habit_id"));
+  const done = String(formData.get("done") || "true") === "true";
+  // ensure the habit belongs to this client
+  const { data: h } = await supabase.from("habits").select("id, client_id").eq("id", habit_id).maybeSingle();
+  if (!h || h.client_id !== prof.client_id) return;
+  await supabase.from("habit_logs").upsert(
+    { habit_id, client_id: prof.client_id, date: todayISO(), done },
+    { onConflict: "habit_id,date" }
+  );
+  revalidatePath("/portal");
+}
+
 // ---- appointments / calendar -----------------------------------------------
 
 export async function createAppointment(formData: FormData) {

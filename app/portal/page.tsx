@@ -6,6 +6,8 @@ import MealSelfForm from "@/components/MealSelfForm";
 import MessageThread, { type Msg } from "@/components/MessageThread";
 import MessageReply from "@/components/MessageReply";
 import ClassBookButton from "@/components/ClassBookButton";
+import HabitCheck from "@/components/HabitCheck";
+import { currentStreak, last7Count } from "@/lib/habits";
 import { MEALS, type MealLog } from "@/lib/meals";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -88,6 +90,16 @@ export default async function PortalHome() {
   const myAppts = (apptRows ?? []) as unknown as { id: string; type: string | null; title: string | null; date: string; hour: number; status: string; staff: { name: string } | null }[];
   const apptHour = (h: number) => { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr}:00 ${am ? "AM" : "PM"}`; };
 
+  const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
+    supabase.from("habits").select("id, name, icon, target_per_week").eq("client_id", client.id).eq("active", true).order("created_at"),
+    supabase.from("habit_logs").select("habit_id, date").eq("client_id", client.id).eq("done", true),
+  ]);
+  const myHabits = (habitRows ?? []) as { id: string; name: string; icon: string | null; target_per_week: number }[];
+  const habitDoneDates = new Map<string, Set<string>>();
+  for (const l of ((habitLogRows ?? []) as { habit_id: string; date: string }[])) {
+    (habitDoneDates.get(l.habit_id) ?? habitDoneDates.set(l.habit_id, new Set()).get(l.habit_id)!).add(l.date);
+  }
+
   const [{ data: classRows }, { data: availRows }, { data: myBookings }] = await Promise.all([
     supabase.from("classes").select("id, title, date, hour, rooms(name), staff(name)").gte("date", TODAY).order("date").order("hour").limit(20),
     supabase.from("class_availability").select("id, capacity, booked"),
@@ -114,7 +126,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -223,6 +235,32 @@ export default async function PortalHome() {
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Body fat</div>{m.body_fat != null ? `${m.body_fat}%` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Muscle</div>{m.muscle_mass != null ? `${m.muscle_mass} kg` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Visceral fat</div>{m.visceral_fat ?? "—"}</div>
+          </div>
+        </>
+      )}
+
+      {/* Habits & streaks */}
+      {myHabits.length > 0 && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>🔥 My habits <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· tap to check off today</span></div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {myHabits.map((h) => {
+              const dates = habitDoneDates.get(h.id) ?? new Set<string>();
+              const doneToday = dates.has(TODAY);
+              const streak = currentStreak(dates, TODAY);
+              const week = last7Count(dates, TODAY);
+              return (
+                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+                  <HabitCheck habitId={h.id} doneToday={doneToday} />
+                  <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
+                  <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{h.name}</div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700, color: streak > 0 ? "var(--teal-dark)" : "var(--muted)", fontSize: 14 }}>🔥 {streak}d</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>{week}/{h.target_per_week} this week</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </>
       )}
