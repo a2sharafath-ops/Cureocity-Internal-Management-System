@@ -25,7 +25,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
 
   const cid = params.id;
   const supabase = createClient();
-  const { data: client } = await supabase.from("clients").select("id, code, name, phone, gender, dob, conditions").eq("id", cid).maybeSingle();
+  const { data: client } = await supabase.from("clients").select("id, code, name, phone, gender, dob, conditions, abha_id, uhid").eq("id", cid).maybeSingle();
   if (!client) notFound();
 
   const [problemsR, allergiesR, medsR, vitalsR, encountersR, rxR, ordersR] = await Promise.all([
@@ -72,6 +72,11 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code ?? "—"} · {client.gender ?? "—"}{a != null ? ` · ${a} yrs` : ""}{client.phone ? ` · ${client.phone}` : ""}
           </div>
+          {(client.abha_id || client.uhid) && (
+            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2, fontFamily: "monospace" }}>
+              {client.abha_id ? `ABHA ${client.abha_id}` : ""}{client.abha_id && client.uhid ? " · " : ""}{client.uhid ? `UHID ${client.uhid}` : ""}
+            </div>
+          )}
         </div>
         <span style={{ flex: 1 }} />
         <a href={`/api/fhir/${cid}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600, border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", marginRight: 10 }}>⤓ Export FHIR</a>

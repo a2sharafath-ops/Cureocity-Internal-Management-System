@@ -1683,6 +1683,23 @@ export async function confirmInvoicePayment(formData: FormData) {
   return { ok: true };
 }
 
+// ---- national health identity (ABHA / UHID) --------------------------------
+
+export async function setClientIdentity(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCompliance(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("clients").update({
+    abha_id: String(formData.get("abha_id") ?? "").trim() || null,
+    uhid: String(formData.get("uhid") ?? "").trim() || null,
+  }).eq("id", client_id);
+  await logAudit(p, "Health identity updated", await clientName(supabase, client_id), null);
+  revalidatePath("/compliance");
+  revalidatePath(`/clients/${client_id}`);
+}
+
 // ---- compliance & governance -----------------------------------------------
 
 async function complianceGuard() {

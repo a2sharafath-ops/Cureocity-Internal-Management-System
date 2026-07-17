@@ -33,6 +33,7 @@ const SECTIONS: NavSection[] = [
   {
     title: "Clinical",
     items: [
+      { href: "/careteam", label: "Care Team Hub", icon: "🧑‍⚕️" },
       { href: "/pro", label: "Consultations", icon: "🩺" },
       { href: "/emr", label: "Patient Records", icon: "📋" },
       { href: "/orders", label: "Orders & Labs", icon: "🧪" },
