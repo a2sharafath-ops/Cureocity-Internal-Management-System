@@ -9,6 +9,7 @@ export type ClientRow = {
   age: number | null; branch: string | null; used: number;
   package_name: string | null; is_facility: boolean; package_sessions: number;
   is_blueprint: boolean; status: string; coach: string | null; owner: string | null;
+  journey: { steps: { label: string; done: boolean }[]; done: number; total: number; stage: string };
 };
 
 export default function ClientsTable({ clients, staff, writer }: { clients: ClientRow[]; staff: { id: string; name: string }[]; writer: boolean }) {
@@ -55,10 +56,10 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
       </div>
 
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 920 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 1040 }}>
           <thead>
             <tr>
-              <th style={th}>Name</th><th style={th}>Age</th><th style={th}>Package</th><th style={th}>Status</th>
+              <th style={th}>Name</th><th style={th}>Age</th><th style={th}>Package</th><th style={th}>Journey</th><th style={th}>Status</th>
               <th style={th}>Health Coach</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
             </tr>
           </thead>
@@ -72,6 +73,14 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}>
                     <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>
                     <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : left != null ? `${left} of ${c.package_sessions} credits left` : "—"}</div>
+                  </td>
+                  <td style={td}>
+                    <div style={{ display: "flex", gap: 3 }} title={c.journey.steps.map((s) => `${s.done ? "✓" : "○"} ${s.label}`).join("   ")}>
+                      {c.journey.steps.map((s, i) => (
+                        <span key={i} style={{ width: 18, height: 6, borderRadius: 3, background: s.done ? "#16a34a" : "#e2e8f0" }} />
+                      ))}
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{c.journey.done}/{c.journey.total} · {c.journey.stage}</div>
                   </td>
                   <td style={td}>{statusChip(c.status)}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.coach ?? "—"}</td>
@@ -97,7 +106,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>No matching clients</td></tr>
+              <tr><td colSpan={9} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>No matching clients</td></tr>
             )}
           </tbody>
         </table>

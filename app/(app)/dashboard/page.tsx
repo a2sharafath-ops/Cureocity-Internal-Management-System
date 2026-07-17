@@ -38,7 +38,8 @@ function Kpi({ icon, iconBg, iconColor, label, value, sub, href }: { icon: strin
 export default async function DashboardPage() {
   const me = await getProfile();
   const { effective } = await getViewRole();
-  const role = effective;
+  // Super Admin sees exactly what an Administrator sees (unless previewing another role).
+  const role = effective === "Super Admin" ? "Administrator" : effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);
   const isPro = role === "Health Professional";
 

@@ -6,8 +6,5 @@
 
 update profiles
    set role = 'Super Admin',
-       name = coalesce(nullif(name, ''), 'Sharafath Athimannil')
+       name = 'Sharafath Athimannil'
  where email = 'admin@cureo.city';
-
--- If you also want the display name changed to Sharafath regardless, use:
--- update profiles set name = 'Sharafath Athimannil' where email = 'admin@cureo.city';
