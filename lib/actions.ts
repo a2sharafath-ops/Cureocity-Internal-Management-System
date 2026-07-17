@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -419,6 +419,40 @@ export async function generateBlueprint(formData: FormData) {
   await logAudit(p, "Blueprint generated", c?.name, null);
   revalidatePath("/blueprint");
   revalidatePath("/", "layout");
+}
+
+// ---- messages / inbox ------------------------------------------------------
+
+export async function sendMessageStaff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canMessage(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const body = String(formData.get("body") ?? "").trim();
+  if (!client_id || !body) return;
+  const supabase = createClient();
+  await supabase.from("messages").insert({ client_id, sender: "staff", sender_name: p.name, body });
+  revalidatePath("/messages");
+  revalidatePath(`/messages/${client_id}`);
+}
+
+export async function sendMessageSelf(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("client_id, name").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return;
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) return;
+  await supabase.from("messages").insert({ client_id: prof.client_id, sender: "client", sender_name: prof.name, body });
+  revalidatePath("/portal");
+}
+
+export async function markThreadRead(clientId: string) {
+  const p = await getProfile();
+  if (!p || !canMessage(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("messages").update({ read: true }).eq("client_id", clientId).eq("sender", "client").eq("read", false);
+  revalidatePath("/messages");
 }
 
 // ---- billing / invoices ----------------------------------------------------

@@ -3,6 +3,8 @@ import { BP_SCORES, band, type BpScores } from "@/lib/blueprint";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
 import MealSelfForm from "@/components/MealSelfForm";
+import MessageThread, { type Msg } from "@/components/MessageThread";
+import MessageReply from "@/components/MessageReply";
 import { MEALS, type MealLog } from "@/lib/meals";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -64,6 +66,10 @@ export default async function PortalHome() {
     .from("invoices").select("id, num, description, amount, status").eq("client_id", client.id).order("created_at", { ascending: false });
   const invoices = (invRows ?? []) as { id: string; num: number | null; description: string | null; amount: number; status: string }[];
 
+  const { data: msgRows } = await supabase
+    .from("messages").select("id, sender, sender_name, body, created_at").eq("client_id", client.id).order("created_at", { ascending: true });
+  const messages = (msgRows ?? []) as Msg[];
+
   const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
     const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
@@ -81,7 +87,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -220,6 +226,15 @@ export default async function PortalHome() {
             </div>
           ))}
           <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)" }}>Pay unpaid invoices at the front desk. Online payment coming soon.</div>
+        </>
+      )}
+
+      {/* Messages */}
+      {card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>💬 Messages with your team</div>
+          <MessageThread messages={messages} viewer="client" />
+          <MessageReply variant="portal" />
         </>
       )}
 
