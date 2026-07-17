@@ -836,6 +836,86 @@ export async function recordCheckin(formData: FormData) {
   revalidatePath("/access");
 }
 
+// ---- team tasks ------------------------------------------------------------
+
+export async function addTask(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return; // any signed-in staff
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return;
+  const supabase = createClient();
+  await supabase.from("tasks").insert({
+    title,
+    assignee_id: String(formData.get("assignee_id") || "") || null,
+    client_id: String(formData.get("client_id") || "") || null,
+    type: String(formData.get("type") || "Ops"),
+    priority: String(formData.get("priority") || "Medium"),
+    due_date: String(formData.get("due_date") || "") || null,
+    status: "todo", created_by: p.name,
+  });
+  await logAudit(p, "Task created", title, null);
+  revalidatePath("/tasks");
+}
+
+export async function setTaskStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["todo", "doing", "blocked", "done"].includes(status)) return;
+  const supabase = createClient();
+  await supabase.from("tasks").update({ status }).eq("id", id);
+  revalidatePath("/tasks");
+}
+
+export async function deleteTask(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return;
+  const supabase = createClient();
+  await supabase.from("tasks").delete().eq("id", String(formData.get("id")));
+  revalidatePath("/tasks");
+}
+
+// ---- exercise library ------------------------------------------------------
+
+export async function addExercise(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("exercises").insert({
+    name, mode: String(formData.get("mode") || "Offline"), type: String(formData.get("type") || "Strength"),
+  });
+  await logAudit(p, "Exercise added", name, null);
+  revalidatePath("/exlib");
+}
+
+export async function toggleExercise(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("exercises").update({ active: String(formData.get("to") || "true") === "true" }).eq("id", String(formData.get("id")));
+  revalidatePath("/exlib");
+}
+
+export async function addTemplate(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  let items: { exercise: string; sets?: string; reps?: string; rest?: string }[] = [];
+  try { items = JSON.parse(String(formData.get("items") || "[]")); } catch { items = []; }
+  items = items.filter((i) => i.exercise && i.exercise.trim());
+  const supabase = createClient();
+  await supabase.from("workout_templates").insert({
+    name, mode: String(formData.get("mode") || "Offline"), type: String(formData.get("type") || "Strength"),
+    items, created_by: p.name,
+  });
+  await logAudit(p, "Workout template created", name, `${items.length} exercises`);
+  revalidatePath("/exlib");
+}
+
 // ---- operating expenses ----------------------------------------------------
 
 export async function addExpense(formData: FormData) {

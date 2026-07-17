@@ -38,6 +38,7 @@ const SECTIONS: NavSection[] = [
       { href: "/meals", label: "Meal Monitoring", icon: "🍽" },
       { href: "/blueprint", label: "BluePrint", icon: "🧬" },
       { href: "/trainer", label: "Trainer", icon: "🎽" },
+      { href: "/exlib", label: "Exercise Library", icon: "🏃" },
     ],
   },
   {
@@ -60,6 +61,12 @@ const SECTIONS: NavSection[] = [
     title: "People",
     items: [
       { href: "/kb", label: "SOP's", icon: "📖" },
+    ],
+  },
+  {
+    title: "Sprint",
+    items: [
+      { href: "/tasks", label: "Tasks", icon: "✔" },
     ],
   },
   {
