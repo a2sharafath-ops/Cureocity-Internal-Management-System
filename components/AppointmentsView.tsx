@@ -59,11 +59,13 @@ export default function AppointmentsView({
   return (
     <div>
       {/* sub-view tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         {tabBtn("calendar", "📅", "Calendar")}
         {tabBtn("tracker", "⏳", "Tracker")}
         {tabBtn("list", "📋", "List")}
         {tabBtn("records", "🗂", "Records")}
+        <span style={{ flex: 1 }} />
+        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "" })} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
       </div>
 
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>
