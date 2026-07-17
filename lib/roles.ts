@@ -27,6 +27,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/packages": ["Administrator", "Manager", "Front Desk"],
   "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/expenses": ["Administrator", "Manager", "Finance"],
+  "/finsheets": ["Administrator", "Manager", "Finance"],
   "/kb": "all",
   "/subscriptions": ["Administrator", "Manager", "Finance"],
   "/retention": ["Administrator", "Manager", "Front Desk"],

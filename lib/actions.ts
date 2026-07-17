@@ -989,6 +989,79 @@ export async function addTemplate(formData: FormData) {
   revalidatePath("/exlib");
 }
 
+// ---- finance sheets: payables / estimates / ledger -------------------------
+
+export async function addPayable(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return; // Admin / Manager / Finance
+  const vendor = String(formData.get("vendor") ?? "").trim();
+  if (!vendor) return;
+  const supabase = createClient();
+  await supabase.from("payables").insert({
+    vendor, item: String(formData.get("item") ?? "").trim() || null,
+    amount: Number(formData.get("amount")) || 0,
+    due_date: String(formData.get("due_date") || "") || null,
+    status: "Unpaid", created_by: p.name,
+  });
+  await logAudit(p, "Payable added", vendor, null);
+  revalidatePath("/finsheets");
+}
+
+export async function payPayable(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("payables").update({ status: "Paid" }).eq("id", String(formData.get("id")));
+  await logAudit(p, "Payable paid", null, null);
+  revalidatePath("/finsheets");
+}
+
+export async function addEstimate(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return;
+  const lead_name = String(formData.get("lead_name") ?? "").trim();
+  if (!lead_name) return;
+  const supabase = createClient();
+  await supabase.from("estimates").insert({
+    lead_name, item: String(formData.get("item") ?? "").trim() || null,
+    amount: Number(formData.get("amount")) || 0,
+    date: String(formData.get("date") || todayISO()),
+    status: String(formData.get("status") || "Sent"), created_by: p.name,
+  });
+  await logAudit(p, "Estimate created", lead_name, null);
+  revalidatePath("/finsheets");
+}
+
+export async function setEstimateStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return;
+  const status = String(formData.get("status"));
+  if (!["Draft", "Sent", "Accepted", "Expired"].includes(status)) return;
+  const supabase = createClient();
+  await supabase.from("estimates").update({ status }).eq("id", String(formData.get("id")));
+  await logAudit(p, `Estimate ${status}`, null, null);
+  revalidatePath("/finsheets");
+}
+
+export async function addLedgerEntry(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return;
+  const account = String(formData.get("account") || "bank");
+  const amount = Number(formData.get("amount")) || 0;
+  if (!amount) return;
+  const supabase = createClient();
+  await supabase.from("ledger").insert({
+    account, date: String(formData.get("date") || todayISO()),
+    ref: String(formData.get("ref") ?? "").trim() || null,
+    party: String(formData.get("party") ?? "").trim() || null,
+    kind: String(formData.get("kind") ?? "").trim() || (account === "cash" ? "Cash" : "NEFT"),
+    direction: String(formData.get("direction") || "in"),
+    amount, created_by: p.name,
+  });
+  await logAudit(p, `${account} entry`, null, `${formData.get("direction")} ₹${amount}`);
+  revalidatePath("/finsheets");
+}
+
 // ---- operating expenses ----------------------------------------------------
 
 export async function addExpense(formData: FormData) {

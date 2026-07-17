@@ -78,6 +78,7 @@ const SECTIONS: NavSection[] = [
       { href: "/subscriptions", label: "Subscriptions", icon: "🔁" },
       { href: "/pos", label: "Passes & POS", icon: "🛒" },
       { href: "/claims", label: "Insurance", icon: "🏥" },
+      { href: "/finsheets", label: "Finance Sheets", icon: "📑" },
       { href: "/reports", label: "Reports", icon: "📊" },
     ],
   },
