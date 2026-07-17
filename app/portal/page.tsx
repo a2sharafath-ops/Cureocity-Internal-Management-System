@@ -5,6 +5,7 @@ import FilesGrid from "@/components/FilesGrid";
 import MealSelfForm from "@/components/MealSelfForm";
 import MessageThread, { type Msg } from "@/components/MessageThread";
 import MessageReply from "@/components/MessageReply";
+import ClassBookButton from "@/components/ClassBookButton";
 import { MEALS, type MealLog } from "@/lib/meals";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -70,6 +71,15 @@ export default async function PortalHome() {
     .from("messages").select("id, sender, sender_name, body, created_at").eq("client_id", client.id).order("created_at", { ascending: true });
   const messages = (msgRows ?? []) as Msg[];
 
+  const [{ data: classRows }, { data: availRows }, { data: myBookings }] = await Promise.all([
+    supabase.from("classes").select("id, title, date, hour, rooms(name), staff(name)").gte("date", TODAY).order("date").order("hour").limit(20),
+    supabase.from("class_availability").select("id, capacity, booked"),
+    supabase.from("class_bookings").select("class_id"),
+  ]);
+  const classes = (classRows ?? []) as unknown as { id: string; title: string; date: string; hour: number; rooms: { name: string } | null; staff: { name: string } | null }[];
+  const avail = new Map((availRows ?? []).map((a: { id: string; capacity: number; booked: number }) => [a.id, a]));
+  const mine = new Set(((myBookings ?? []) as { class_id: string }[]).map((b) => b.class_id));
+
   const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
     const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
@@ -87,7 +97,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -226,6 +236,27 @@ export default async function PortalHome() {
             </div>
           ))}
           <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)" }}>Pay unpaid invoices at the front desk. Online payment coming soon.</div>
+        </>
+      )}
+
+      {/* Group classes */}
+      {classes.length > 0 && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>🧘 Group classes</div>
+          {classes.map((c) => {
+            const a = avail.get(c.id) as { capacity: number; booked: number } | undefined;
+            const booked = mine.has(c.id);
+            const full = !!a && a.booked >= a.capacity;
+            return (
+              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                <div style={{ flex: 1 }}>
+                  <b>{c.title}</b>
+                  <div style={{ color: "var(--muted)", fontSize: 12 }}>{c.rooms?.name ?? ""} · {c.date} · {fmtHour(c.hour)}{a ? ` · ${a.booked}/${a.capacity}` : ""}</div>
+                </div>
+                <ClassBookButton classId={c.id} booked={booked} full={full && !booked} />
+              </div>
+            );
+          })}
         </>
       )}
 

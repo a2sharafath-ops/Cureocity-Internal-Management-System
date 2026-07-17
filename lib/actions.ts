@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -419,6 +419,85 @@ export async function generateBlueprint(formData: FormData) {
   await logAudit(p, "Blueprint generated", c?.name, null);
   revalidatePath("/blueprint");
   revalidatePath("/", "layout");
+}
+
+// ---- group classes + room booking ------------------------------------------
+
+export async function createClass(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClasses(p.role)) return;
+  const room_id = String(formData.get("room_id"));
+  const title = String(formData.get("title") ?? "").trim() || "Class";
+  const trainer_id = String(formData.get("trainer_id")) || null;
+  const date = String(formData.get("date"));
+  const hour = Number(formData.get("hour")) || 9;
+  const capacity = Number(formData.get("capacity")) || 12;
+  if (!room_id || !date) return;
+  const supabase = createClient();
+  await supabase.from("classes").insert({ room_id, title, trainer_id, date, hour, capacity });
+  await logAudit(p, "Class created", title, `${date} ${hour}:00`);
+  revalidatePath("/classes");
+}
+
+export async function deleteClass(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClasses(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("classes").delete().eq("id", id);
+  revalidatePath("/classes");
+}
+
+async function classHasRoom(supabase: ReturnType<typeof createClient>, classId: string) {
+  const { data: cls } = await supabase.from("classes").select("capacity").eq("id", classId).maybeSingle();
+  if (!cls) return false;
+  const { count } = await supabase.from("class_bookings").select("id", { count: "exact", head: true }).eq("class_id", classId);
+  return (count ?? 0) < (cls.capacity ?? 0);
+}
+
+export async function bookClientStaff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClasses(p.role)) return;
+  const class_id = String(formData.get("class_id"));
+  const client_id = String(formData.get("client_id"));
+  if (!class_id || !client_id) return;
+  const supabase = createClient();
+  if (!(await classHasRoom(supabase, class_id))) return;
+  await supabase.from("class_bookings").insert({ class_id, client_id });
+  revalidatePath("/classes");
+}
+
+export async function cancelBookingStaff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClasses(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("class_bookings").delete().eq("id", id);
+  revalidatePath("/classes");
+}
+
+// portal: client books / cancels their own class
+export async function bookClassSelf(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return;
+  const class_id = String(formData.get("class_id"));
+  if (!class_id || !(await classHasRoom(supabase, class_id))) return;
+  await supabase.from("class_bookings").insert({ class_id, client_id: prof.client_id });
+  revalidatePath("/portal");
+}
+
+export async function cancelClassSelf(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
+  if (!prof?.client_id) return;
+  const class_id = String(formData.get("class_id"));
+  await supabase.from("class_bookings").delete().eq("class_id", class_id).eq("client_id", prof.client_id);
+  revalidatePath("/portal");
 }
 
 // ---- messages / inbox ------------------------------------------------------

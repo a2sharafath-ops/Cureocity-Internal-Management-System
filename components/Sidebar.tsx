@@ -10,6 +10,7 @@ const NAV = [
   { href: "/leads", label: "Leads", icon: "✦" },
   { href: "/messages", label: "Messages", icon: "💬" },
   { href: "/sessions", label: "Sessions", icon: "🏋" },
+  { href: "/classes", label: "Group Classes", icon: "🧘" },
   { href: "/trainer", label: "Trainer", icon: "🎽" },
   { href: "/pro", label: "Consultations", icon: "🩺" },
   { href: "/meals", label: "Meal Monitoring", icon: "🍽" },
