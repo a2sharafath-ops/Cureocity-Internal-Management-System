@@ -77,6 +77,29 @@ async function sendReminders(supabase: Admin) {
     already.add(email);
     reminders++;
   }
+
+  // also remind tomorrow's calendar appointments
+  const { data: appts } = await supabase
+    .from("appointments")
+    .select("id, hour, client_id, title, clients(name, email)")
+    .eq("date", tomorrow).eq("status", "scheduled");
+  for (const a of (appts ?? []) as unknown as { id: string; hour: number | null; client_id: string; title: string | null; clients: { name: string | null; email: string | null } | null }[]) {
+    const email = a.clients?.email;
+    if (!email || already.has(email)) continue;
+    const tpl = tplAppointmentReminder(a.clients?.name ?? "there", `tomorrow${fmtHour(a.hour)}${a.title ? ` — ${a.title}` : ""}`);
+    let result;
+    try { result = await sendEmail(email, tpl.subject, tpl.html); }
+    catch { result = { status: "failed" as const, error: "Unexpected" }; }
+    await supabase.from("email_log").insert({
+      to_email: email, client_id: a.client_id, template: "reminder", subject: tpl.subject,
+      status: result.status, provider: "resend",
+      provider_id: "providerId" in result ? result.providerId ?? null : null,
+      error: "error" in result ? result.error ?? null : null,
+      created_by: "cron",
+    });
+    already.add(email);
+    reminders++;
+  }
   return reminders;
 }
 

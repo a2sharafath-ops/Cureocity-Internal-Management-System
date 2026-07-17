@@ -82,6 +82,12 @@ export default async function PortalHome() {
   const myMeds = (emrMeds ?? []) as { name: string; dose: string | null; frequency: string | null }[];
   const hasEmr = myProblems.length > 0 || myAllergies.length > 0 || myMeds.length > 0;
 
+  const { data: apptRows } = await supabase
+    .from("appointments").select("id, type, title, date, hour, status, staff(name)")
+    .eq("client_id", client.id).gte("date", TODAY).eq("status", "scheduled").order("date").order("hour").limit(8);
+  const myAppts = (apptRows ?? []) as unknown as { id: string; type: string | null; title: string | null; date: string; hour: number; status: string; staff: { name: string } | null }[];
+  const apptHour = (h: number) => { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr}:00 ${am ? "AM" : "PM"}`; };
+
   const [{ data: classRows }, { data: availRows }, { data: myBookings }] = await Promise.all([
     supabase.from("classes").select("id, title, date, hour, rooms(name), staff(name)").gte("date", TODAY).order("date").order("hour").limit(20),
     supabase.from("class_availability").select("id, capacity, booked"),
@@ -108,7 +114,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -217,6 +223,22 @@ export default async function PortalHome() {
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Body fat</div>{m.body_fat != null ? `${m.body_fat}%` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Muscle</div>{m.muscle_mass != null ? `${m.muscle_mass} kg` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Visceral fat</div>{m.visceral_fat ?? "—"}</div>
+          </div>
+        </>
+      )}
+
+      {/* Upcoming appointments */}
+      {myAppts.length > 0 && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>📅 Upcoming appointments</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {myAppts.map((a) => (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
+                <div style={{ minWidth: 92, fontWeight: 600, fontSize: 14 }}>{new Date(a.date + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</div>
+                <div style={{ minWidth: 76, color: "var(--muted)", fontSize: 13 }}>{apptHour(a.hour)}</div>
+                <div style={{ flex: 1, fontSize: 14 }}>{a.title ?? a.type}{a.staff?.name ? <span style={{ color: "var(--muted)" }}> · {a.staff.name}</span> : ""}</div>
+              </div>
+            ))}
           </div>
         </>
       )}

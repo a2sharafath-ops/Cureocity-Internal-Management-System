@@ -11,6 +11,7 @@ const NAV = [
   { href: "/messages", label: "Messages", icon: "💬" },
   { href: "/sessions", label: "Sessions", icon: "🏋" },
   { href: "/classes", label: "Group Classes", icon: "🧘" },
+  { href: "/appointments", label: "Appointments", icon: "📅" },
   { href: "/trainer", label: "Trainer", icon: "🎽" },
   { href: "/pro", label: "Consultations", icon: "🩺" },
   { href: "/emr", label: "EMR / Charts", icon: "📋" },

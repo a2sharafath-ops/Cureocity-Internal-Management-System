@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { paymentConfig } from "@/lib/payments/config";
@@ -800,6 +800,58 @@ export async function addEncounter(formData: FormData) {
   });
   await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
   revalidatePath(`/emr/${client_id}`);
+}
+
+// ---- appointments / calendar -----------------------------------------------
+
+export async function createAppointment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canAppointments(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const date = String(formData.get("date") || "");
+  if (!client_id || !date) return;
+  const supabase = createClient();
+  await supabase.from("appointments").insert({
+    client_id,
+    provider_id: String(formData.get("provider_id") || "") || null,
+    type: String(formData.get("type") || "Consultation"),
+    title: String(formData.get("title") ?? "").trim() || null,
+    date, hour: Number(formData.get("hour")) || 9,
+    duration_min: Number(formData.get("duration_min")) || 30,
+    location: String(formData.get("location") ?? "").trim() || null,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    status: "scheduled", created_by: p.name,
+  });
+  await logAudit(p, "Appointment booked", await clientName(supabase, client_id), date);
+  revalidatePath("/appointments");
+}
+
+export async function setAppointmentStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canAppointments(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["scheduled", "completed", "cancelled", "no_show"].includes(status)) return;
+  const supabase = createClient();
+  await supabase.from("appointments").update({ status }).eq("id", id);
+  await logAudit(p, `Appointment → ${status}`, null, null);
+  revalidatePath("/appointments");
+}
+
+export async function rescheduleAppointment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canAppointments(p.role)) return;
+  const id = String(formData.get("id"));
+  const date = String(formData.get("date") || "");
+  const hour = Number(formData.get("hour"));
+  const patch: Record<string, unknown> = {};
+  if (date) patch.date = date;
+  if (!Number.isNaN(hour)) patch.hour = hour;
+  if (Object.keys(patch).length === 0) return;
+  const supabase = createClient();
+  await supabase.from("appointments").update(patch).eq("id", id);
+  await logAudit(p, "Appointment rescheduled", null, date);
+  revalidatePath("/appointments");
 }
 
 // ---- email notifications (key-ready scaffold) ------------------------------

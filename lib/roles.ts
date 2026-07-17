@@ -17,6 +17,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/messages": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/sessions": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/classes": ["Administrator", "Manager", "Front Desk", "Health Professional"],
+  "/appointments": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/trainer": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/pro": ["Administrator", "Manager", "Health Professional"],
   "/meals": ["Administrator", "Manager", "Health Professional"],
@@ -80,6 +81,11 @@ export function canMessage(role: string): boolean {
 
 // Who can schedule group classes / manage bookings.
 export function canClasses(role: string): boolean {
+  return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+}
+
+// Who can book / manage calendar appointments.
+export function canAppointments(role: string): boolean {
   return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
 }
 
