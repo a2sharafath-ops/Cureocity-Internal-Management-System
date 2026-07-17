@@ -20,11 +20,13 @@ function dayNum(iso: string) { return new Date(iso + "T00:00:00Z").getUTCDate();
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
 
 export default function AppointmentsView({
-  today, days, hours, appts, providers, clients,
+  today, days, hours, appts, providers, clients, weekLabel, prevHref, nextHref, isThisWeek,
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
   providers: Provider[]; clients: { id: string; name: string }[];
+  weekLabel: string; prevHref: string; nextHref: string; isThisWeek: boolean;
 }) {
+  const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--teal-dark)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records">("calendar");
   const [disc, setDisc] = useState("All");
   const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string }>({ open: false, date: today, hour: 10, provider: "" });
@@ -58,14 +60,30 @@ export default function AppointmentsView({
 
   return (
     <div>
+      {/* header: title + New Booking */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+        <div>
+          <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Appointment Calendar</h1>
+          <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Calendar · tracker · list · records — consultations, assessments &amp; follow-ups</p>
+        </div>
+        <span style={{ flex: 1 }} />
+        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "" })} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
+      </div>
+
+      {/* week nav */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0 14px", flexWrap: "wrap" }}>
+        <Link href={prevHref} style={navBtn}>← Prev</Link>
+        <Link href="/appointments" style={{ ...navBtn, background: isThisWeek ? "var(--teal)" : "#fff", color: isThisWeek ? "#fff" : "var(--teal-dark)" }}>This week</Link>
+        <Link href={nextHref} style={navBtn}>Next →</Link>
+        <span style={{ color: "var(--muted)", fontSize: 14, fontWeight: 600 }}>{weekLabel}</span>
+      </div>
+
       {/* sub-view tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         {tabBtn("calendar", "📅", "Calendar")}
         {tabBtn("tracker", "⏳", "Tracker")}
         {tabBtn("list", "📋", "List")}
         {tabBtn("records", "🗂", "Records")}
-        <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "" })} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
       </div>
 
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>

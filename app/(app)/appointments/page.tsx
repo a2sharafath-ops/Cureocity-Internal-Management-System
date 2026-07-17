@@ -58,22 +58,15 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   }));
 
   const weekLabel = `${new Date(weekStart + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} – ${new Date(weekEnd + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
-  const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--teal-dark)", fontWeight: 600 };
 
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["appointments"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Appointment Calendar</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>Calendar · tracker · list · records — consultations, assessments &amp; follow-ups</p>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 14px", flexWrap: "wrap" }}>
-        <Link href={`/appointments?week=${offset - 1}`} style={navBtn}>← Prev</Link>
-        <Link href="/appointments" style={{ ...navBtn, background: offset === 0 ? "var(--teal)" : "#fff", color: offset === 0 ? "#fff" : "var(--teal-dark)" }}>This week</Link>
-        <Link href={`/appointments?week=${offset + 1}`} style={navBtn}>Next →</Link>
-        <span style={{ color: "var(--muted)", fontSize: 14, fontWeight: 600 }}>{weekLabel}</span>
-      </div>
-
-      <AppointmentsView today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} />
+      <AppointmentsView
+        today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients}
+        weekLabel={weekLabel} prevHref={`/appointments?week=${offset - 1}`} nextHref={`/appointments?week=${offset + 1}`} isThisWeek={offset === 0}
+      />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>
         🏋 Training sessions (strength / PT slots) — which client trains with which trainer — are managed on the <Link href="/sessions" style={{ color: "var(--teal-dark)", fontWeight: 600 }}>Training Schedule</Link> page.
