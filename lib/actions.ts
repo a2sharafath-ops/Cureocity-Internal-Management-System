@@ -271,7 +271,7 @@ export async function updateLeadStage(formData: FormData) {
   revalidatePath("/leads");
 }
 
-const LEAD_FIELDS = ["name", "phone", "source", "campaign", "interest", "urgency", "history", "goals", "location", "budget", "profession", "fde"];
+const LEAD_FIELDS = ["name", "phone", "source", "campaign", "interest", "urgency", "history", "goals", "location", "budget", "profession", "fde", "objection", "notes"];
 
 export async function createLead(formData: FormData) {
   const p = await getProfile();
@@ -281,9 +281,10 @@ export async function createLead(formData: FormData) {
   const supabase = createClient();
   const { data: last } = await supabase.from("leads").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
   const num = ((last?.num as number | null) ?? 0) + 1;
-  const row: Record<string, unknown> = { num, stage: "1-New Lead" };
+  const row: Record<string, unknown> = { num };
   for (const f of LEAD_FIELDS) row[f] = String(formData.get(f) ?? "").trim() || null;
   row.name = name;
+  row.stage = String(formData.get("stage") || "").trim() || "1-New Lead";
   await supabase.from("leads").insert(row);
   await logAudit(p, "Lead added", name, null);
   revalidatePath("/leads");
@@ -297,6 +298,8 @@ export async function updateLead(formData: FormData) {
   const supabase = createClient();
   const patch: Record<string, unknown> = {};
   for (const f of LEAD_FIELDS) patch[f] = String(formData.get(f) ?? "").trim() || null;
+  const stage = String(formData.get("stage") || "").trim();
+  if (stage) patch.stage = stage;
   await supabase.from("leads").update(patch).eq("id", id);
   await logAudit(p, "Lead updated", String(formData.get("name") ?? ""), null);
   revalidatePath("/leads");

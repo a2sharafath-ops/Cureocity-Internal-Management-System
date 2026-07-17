@@ -23,7 +23,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
 
   const supabase = createClient();
   const [{ data: leadRow }, { data: pkgRows }, { data: campRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde").eq("id", params.id).maybeSingle(),
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
   ]);
@@ -76,8 +76,16 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         </div>
       </div>
 
-      {/* convert */}
-      <div style={{ ...box, marginBottom: 16, background: "#f0fdf9" }}>
+      {/* edit details */}
+      <div style={{ ...box, marginBottom: 16 }}>
+        <b style={{ fontSize: 15 }}>Lead details</b>
+        <div style={{ marginTop: 12 }}>
+          <LeadEditForm lead={lead} campaigns={campaigns} />
+        </div>
+      </div>
+
+      {/* convert — kept at the bottom */}
+      <div style={{ ...box, background: "#f0fdf9" }}>
         <b style={{ fontSize: 15 }}>Convert to client</b>
         <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 12px" }}>Pick a package — this creates the client, schedules sessions and raises the package invoice, then takes you to billing to collect payment.</p>
         <form action={convertLeadWithPackage} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
@@ -95,14 +103,6 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           </div>
           <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Convert &amp; create invoice →</button>
         </form>
-      </div>
-
-      {/* edit details */}
-      <div style={box}>
-        <b style={{ fontSize: 15 }}>Lead details</b>
-        <div style={{ marginTop: 12 }}>
-          <LeadEditForm lead={lead} campaigns={campaigns} />
-        </div>
       </div>
     </div>
   );

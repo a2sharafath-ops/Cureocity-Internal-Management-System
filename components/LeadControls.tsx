@@ -11,6 +11,7 @@ export type Lead = {
   id: string; name: string; phone: string | null; source: string | null; campaign: string | null; interest: string | null;
   urgency: string | null; history: string | null; goals: string | null; location: string | null;
   budget: string | null; profession: string | null; fde: string | null; stage: string | null;
+  objection: string | null; notes: string | null;
 };
 
 const SOURCES = ["Walk-in", "Instagram", "Facebook", "Google / Search", "WhatsApp", "Referral", "Website", "Event / Camp", "Phone enquiry", "Other"];
@@ -19,6 +20,8 @@ const URGENCY = ["Medical advice to exercise", "Strong - wants to start now", "E
 const GOALS = ["Specific weight loss target", "Manage health condition (diabetes/BP etc)", "Build muscle/body composition", "Rehab/pain management", "General fitness/energy", "Look better", "No specific goal"];
 const HISTORY = ["Had PT before", "Regular gym-goer (1+ year)", "Used to go but stopped", "Online/home workouts only", "Tried a few times", "Complete beginner"];
 const BUDGET = ["Doesnt ask price first - quality focused", "Mentions premium gyms", "Asks price immediately", "Compares to budget gyms", "Says too expensive"];
+const STAGES = ["1-New Lead", "2-Discovery", "3-Product Match", "4-Visit/Trial", "5-Close", "6-Nurture", "LOST"];
+const OBJECTIONS = ["Price too high", "Timing not right now", "Location / distance", "Needs to consult family", "Comparing other gyms", "Not sure of commitment", "Medical clearance pending"];
 
 function Sel({ name, label, opts, def }: { name: string; label: string; opts: string[]; def?: string | null }) {
   return <div style={{ display: "grid", gap: 3 }}><label style={lbl}>{label}</label><select style={input} name={name} defaultValue={def ?? ""}><option value="">—</option>{opts.map((o) => <option key={o}>{o}</option>)}</select></div>;
@@ -46,7 +49,12 @@ export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string
         <Sel name="budget" label="Budget signal" opts={BUDGET} def={lead?.budget} />
         <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Location</label><input style={input} name="location" defaultValue={lead?.location ?? ""} /></div>
       </div>
-      <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Profession</label><input style={input} name="profession" defaultValue={lead?.profession ?? ""} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Profession</label><input style={input} name="profession" defaultValue={lead?.profession ?? ""} /></div>
+        <Sel name="stage" label="Pipeline stage" opts={STAGES} def={lead?.stage ?? "1-New Lead"} />
+        <Sel name="objection" label="Objection (if raised)" opts={OBJECTIONS} def={lead?.objection} />
+      </div>
+      <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Notes</label><textarea style={{ ...input, minHeight: 60, resize: "vertical", fontFamily: "inherit" }} name="notes" defaultValue={lead?.notes ?? ""} placeholder="Enquiry context, preferences, follow-up notes…" /></div>
     </>
   );
 }
