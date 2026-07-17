@@ -11,6 +11,8 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { paymentConfig } from "@/lib/payments/config";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
+import { sendEmail } from "@/lib/email/send";
+import { renderChoice, tplInvoiceCreated, tplPaymentReceived, type Template } from "@/lib/email/templates";
 
 
 // ---- helpers ---------------------------------------------------------------
@@ -556,6 +558,11 @@ export async function createInvoice(formData: FormData) {
     num, client_id, description, amount, method, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
   });
   await logAudit(p, "Invoice created", description, `₹${amount}`);
+  // best-effort email to the client (logs 'skipped' until email is configured)
+  if (client_id) {
+    const { data: c } = await supabase.from("clients").select("name, email").eq("id", client_id).maybeSingle();
+    if (c?.email) await notifyEmail({ supabase, to: c.email, clientId: client_id, template: "invoice", tpl: tplInvoiceCreated(c.name ?? "there", `INV-${String(num).padStart(3, "0")}`, amount, description), actor: p.name });
+  }
   revalidatePath("/billing");
   if (client_id) revalidatePath(`/clients/${client_id}`);
 }
@@ -795,6 +802,47 @@ export async function addEncounter(formData: FormData) {
   revalidatePath(`/emr/${client_id}`);
 }
 
+// ---- email notifications (key-ready scaffold) ------------------------------
+
+// Best-effort notifier: sends via provider when configured, always logs the
+// attempt to email_log. Never throws — safe to call from other actions.
+async function notifyEmail(opts: {
+  supabase: ReturnType<typeof createClient>;
+  to: string | null | undefined;
+  clientId?: string | null;
+  template: string;
+  tpl: Template;
+  actor?: string | null;
+}) {
+  const { supabase, to, clientId, template, tpl, actor } = opts;
+  if (!to) return;
+  let result;
+  try { result = await sendEmail(to, tpl.subject, tpl.html); }
+  catch { result = { status: "failed" as const, error: "Unexpected" }; }
+  try {
+    await supabase.from("email_log").insert({
+      to_email: to, client_id: clientId ?? null, template, subject: tpl.subject,
+      status: result.status, provider: "resend",
+      provider_id: "providerId" in result ? result.providerId ?? null : null,
+      error: "error" in result ? result.error ?? null : null,
+      created_by: actor ?? null,
+    });
+  } catch { /* logging must never break the caller */ }
+}
+
+export async function sendTestEmail(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCompliance(p.role)) return;
+  const to = String(formData.get("to") ?? "").trim();
+  const template = String(formData.get("template") || "welcome");
+  const name = String(formData.get("name") ?? "there").trim() || "there";
+  if (!to) return;
+  const supabase = createClient();
+  await notifyEmail({ supabase, to, template, tpl: renderChoice(template, name), actor: p.name });
+  await logAudit(p, "Test email attempted", to, template);
+  revalidatePath("/notifications");
+}
+
 // ---- online payments (key-ready scaffold) ----------------------------------
 
 // Create a gateway order for an unpaid invoice. Returns {configured:false}
@@ -844,6 +892,10 @@ export async function confirmInvoicePayment(formData: FormData) {
     gateway: "razorpay", gateway_order_id: orderId, gateway_payment_id: paymentId,
   }).eq("id", id);
   await logAudit(p, "Invoice paid online", `INV ${id.slice(0, 6)}`, paymentId);
+  // best-effort receipt email
+  const { data: inv } = await supabase.from("invoices").select("num, amount, client_id, clients(name, email)").eq("id", id).maybeSingle();
+  const invc = inv as unknown as { num: number | null; amount: number; client_id: string | null; clients: { name: string | null; email: string | null } | null } | null;
+  if (invc?.clients?.email) await notifyEmail({ supabase, to: invc.clients.email, clientId: invc.client_id, template: "payment", tpl: tplPaymentReceived(invc.clients.name ?? "there", `INV-${String(invc.num ?? 0).padStart(3, "0")}`, Number(invc.amount)), actor: p.name });
   revalidatePath("/billing");
   return { ok: true };
 }
