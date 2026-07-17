@@ -26,6 +26,7 @@ const SECTIONS: NavSection[] = [
       { href: "/messages", label: "Communications", icon: "💬" },
       { href: "/campaigns", label: "Campaigns", icon: "📣" },
       { href: "/retention", label: "Retention", icon: "💚" },
+      { href: "/targets", label: "Sales Targets", icon: "🎯" },
     ],
   },
   {
@@ -43,6 +44,7 @@ const SECTIONS: NavSection[] = [
     title: "Admin",
     items: [
       { href: "/packages", label: "Packages", icon: "▦" },
+      { href: "/services", label: "Services", icon: "≣" },
       { href: "/users", label: "Users & Roles", icon: "⚙" },
       { href: "/notifications", label: "Notifications", icon: "✉" },
       { href: "/audit", label: "Audit Log", icon: "☰" },

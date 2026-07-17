@@ -836,6 +836,55 @@ export async function recordCheckin(formData: FormData) {
   revalidatePath("/access");
 }
 
+// ---- services catalogue ----------------------------------------------------
+
+export async function addService(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const dayRaw = formData.get("day_offset");
+  const day_offset = dayRaw && String(dayRaw).trim() !== "" ? Number(dayRaw) : null;
+  const supabase = createClient();
+  await supabase.from("services").insert({
+    name, category: String(formData.get("category") || "General"),
+    mode: String(formData.get("mode") || "Offline"),
+    slot_based: String(formData.get("slot_based") || "") === "on",
+    day_offset: Number.isNaN(day_offset as number) ? null : day_offset,
+  });
+  await logAudit(p, "Service added", name, null);
+  revalidatePath("/services");
+}
+
+export async function toggleService(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return;
+  const id = String(formData.get("id"));
+  const to = String(formData.get("to") || "true") === "true";
+  const supabase = createClient();
+  await supabase.from("services").update({ active: to }).eq("id", id);
+  await logAudit(p, `Service ${to ? "activated" : "deactivated"}`, null, null);
+  revalidatePath("/services");
+}
+
+// ---- monthly sales targets -------------------------------------------------
+
+export async function setSalesTarget(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return; // Admin / Manager
+  const month = String(formData.get("month") || todayISO().slice(0, 7));
+  const supabase = createClient();
+  await supabase.from("sales_targets").upsert({
+    month,
+    revenue_target: Number(formData.get("revenue_target")) || 0,
+    new_clients_target: Number(formData.get("new_clients_target")) || 0,
+    renewals_target: Number(formData.get("renewals_target")) || 0,
+    set_by: p.name, updated_at: new Date().toISOString(),
+  }, { onConflict: "month" });
+  await logAudit(p, "Sales targets set", month, null);
+  revalidatePath("/targets");
+}
+
 // ---- front-desk follow-up queue --------------------------------------------
 
 export async function generateFollowups() {
