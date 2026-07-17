@@ -904,8 +904,9 @@ export async function sendMessageStaff(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const body = String(formData.get("body") ?? "").trim();
   if (!client_id || !body) return;
+  const channel = String(formData.get("channel") || "WhatsApp");
   const supabase = createClient();
-  await supabase.from("messages").insert({ client_id, sender: "staff", sender_name: p.name, body });
+  await supabase.from("messages").insert({ client_id, sender: "staff", sender_name: p.name, body, channel });
   revalidatePath("/messages");
   revalidatePath(`/messages/${client_id}`);
 }
@@ -1821,11 +1822,12 @@ export async function createTemplate(formData: FormData) {
   if (!name || !subject || !body) return;
   const supabase = createClient();
   await supabase.from("message_templates").insert({
-    name, subject, body,
+    name, subject, body, channel: String(formData.get("channel") || "WhatsApp"),
     category: String(formData.get("category") || "General"), active: true, created_by: p.name,
   });
   await logAudit(p, "Template created", name, null);
   revalidatePath("/campaigns");
+  revalidatePath("/messages");
 }
 
 export async function archiveTemplate(formData: FormData) {

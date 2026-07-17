@@ -23,7 +23,6 @@ const SECTIONS: NavSection[] = [
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },
       { href: "/followups", label: "Follow-ups", icon: "📞" },
       { href: "/messages", label: "Communications", icon: "💬" },
-      { href: "/campaigns", label: "Campaigns", icon: "📣" },
       { href: "/retention", label: "Retention", icon: "💚" },
       { href: "/targets", label: "Sales Targets", icon: "🎯" },
     ],
