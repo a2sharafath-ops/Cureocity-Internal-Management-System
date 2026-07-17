@@ -74,6 +74,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
           </div>
         </div>
         <span style={{ flex: 1 }} />
+        <a href={`/api/fhir/${cid}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600, border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", marginRight: 10 }}>⤓ Export FHIR</a>
         <Link href={`/clients/${cid}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>360° profile →</Link>
       </div>
 

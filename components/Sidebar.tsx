@@ -25,6 +25,7 @@ const NAV = [
   { href: "/pos", label: "Passes & POS", icon: "🛒" },
   { href: "/reports", label: "Reports", icon: "📊" },
   { href: "/users", label: "Users & Roles", icon: "⚙" },
+  { href: "/compliance", label: "Compliance", icon: "🛡" },
   { href: "/audit", label: "Audit Log", icon: "☰" },
 ];
 

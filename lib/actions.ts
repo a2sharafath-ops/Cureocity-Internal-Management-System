@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -791,6 +791,88 @@ export async function addEncounter(formData: FormData) {
   });
   await logAudit(p, "Encounter documented", await clientName(supabase, client_id), emrText(formData, "chief_complaint"));
   revalidatePath(`/emr/${client_id}`);
+}
+
+// ---- compliance & governance -----------------------------------------------
+
+async function complianceGuard() {
+  const p = await getProfile();
+  if (!p || !canCompliance(p.role)) return null;
+  return p;
+}
+
+export async function addConsent(formData: FormData) {
+  const p = await complianceGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  const type = String(formData.get("type") ?? "").trim();
+  if (!client_id || !type) return;
+  const supabase = createClient();
+  await supabase.from("consents").insert({
+    client_id, type, granted: true,
+    method: String(formData.get("method") || "signed"),
+    granted_date: String(formData.get("granted_date") || todayISO()),
+    expires_date: String(formData.get("expires_date") || "") || null,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    recorded_by: p.name,
+  });
+  await logAudit(p, "Consent recorded", await clientName(supabase, client_id), type);
+  revalidatePath("/compliance");
+}
+
+export async function revokeConsent(formData: FormData) {
+  const p = await complianceGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("consents").update({ granted: false, revoked_date: todayISO() }).eq("id", id);
+  await logAudit(p, "Consent revoked", null, null);
+  revalidatePath("/compliance");
+}
+
+export async function addBreach(formData: FormData) {
+  const p = await complianceGuard(); if (!p) return;
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return;
+  const supabase = createClient();
+  await supabase.from("breach_incidents").insert({
+    title,
+    description: String(formData.get("description") ?? "").trim() || null,
+    severity: String(formData.get("severity") || "medium"),
+    affected_count: Number(formData.get("affected_count")) || 0,
+    discovered_date: String(formData.get("discovered_date") || todayISO()),
+    status: "open", created_by: p.name,
+  });
+  await logAudit(p, "Breach incident logged", title, null);
+  revalidatePath("/compliance");
+}
+
+export async function setBreachStatus(formData: FormData) {
+  const p = await complianceGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["open", "investigating", "contained", "closed"].includes(status)) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = { status };
+  if (String(formData.get("report") || "") === "1") {
+    patch.reported_to_authority = true;
+    patch.reported_date = todayISO();
+  }
+  await supabase.from("breach_incidents").update(patch).eq("id", id);
+  await logAudit(p, `Breach → ${status}`, null, null);
+  revalidatePath("/compliance");
+}
+
+export async function addRetentionPolicy(formData: FormData) {
+  const p = await complianceGuard(); if (!p) return;
+  const data_type = String(formData.get("data_type") ?? "").trim();
+  if (!data_type) return;
+  const supabase = createClient();
+  await supabase.from("retention_policies").insert({
+    data_type, retain_years: Number(formData.get("retain_years")) || 7,
+    legal_basis: String(formData.get("legal_basis") ?? "").trim() || null,
+    action_after: String(formData.get("action_after") || "archive"),
+  });
+  await logAudit(p, "Retention policy added", data_type, null);
+  revalidatePath("/compliance");
 }
 
 // ---- insurance & claims ----------------------------------------------------
