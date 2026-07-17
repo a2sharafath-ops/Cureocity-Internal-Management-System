@@ -19,6 +19,7 @@ const NAV = [
   { href: "/billing", label: "Billing", icon: "💳" },
   { href: "/subscriptions", label: "Subscriptions", icon: "🔁" },
   { href: "/retention", label: "Retention", icon: "💚" },
+  { href: "/pos", label: "Passes & POS", icon: "🛒" },
   { href: "/reports", label: "Reports", icon: "📊" },
   { href: "/users", label: "Users & Roles", icon: "⚙" },
   { href: "/audit", label: "Audit Log", icon: "☰" },

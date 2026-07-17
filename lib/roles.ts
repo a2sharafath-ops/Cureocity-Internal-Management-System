@@ -25,6 +25,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/subscriptions": ["Administrator", "Manager", "Finance"],
   "/retention": ["Administrator", "Manager", "Front Desk"],
+  "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/reports": ["Administrator", "Manager", "Finance"],
   "/users": ["Administrator"],
   "/audit": ["Administrator"],
@@ -80,4 +81,9 @@ export function canClasses(role: string): boolean {
 // Who can manage retention (at-risk, NPS, referrals).
 export function canRetention(role: string): boolean {
   return ["Administrator", "Manager", "Front Desk"].includes(role);
+}
+
+// Who can sell passes / run the retail POS.
+export function canPos(role: string): boolean {
+  return ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }

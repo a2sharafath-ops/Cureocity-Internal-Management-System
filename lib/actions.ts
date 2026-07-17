@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -662,6 +662,140 @@ export async function processDueRenewals() {
   await logAudit(p, "Processed due renewals", null, `${(due ?? []).length} renewed`);
   revalidatePath("/subscriptions");
   revalidatePath("/billing");
+}
+
+// ---- gym passes + retail POS -----------------------------------------------
+
+export async function sellPass(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canPos(p.role)) return;
+  const pass_type_id = String(formData.get("pass_type_id"));
+  if (!pass_type_id) return;
+  const supabase = createClient();
+  const { data: pt } = await supabase.from("pass_types").select("name, price, valid_days, entries").eq("id", pass_type_id).maybeSingle();
+  if (!pt) return;
+  const client_id = String(formData.get("client_id") || "") || null;
+  const guest_name = String(formData.get("guest_name") ?? "").trim() || null;
+  const method = String(formData.get("method") ?? "Cash");
+  const validUntil = addDays(todayISO(), Number(pt.valid_days) || 1);
+  const { data: pass } = await supabase.from("passes").insert({
+    pass_type_id, client_id, guest_name,
+    guest_phone: String(formData.get("guest_phone") ?? "").trim() || null,
+    name: pt.name, price: pt.price, entries_total: pt.entries, entries_used: 0,
+    valid_until: validUntil, status: "active", created_by: p.name,
+  }).select("id").maybeSingle();
+  // record revenue as a paid invoice
+  const num = await nextInvoiceNum(supabase);
+  await supabase.from("invoices").insert({
+    num, client_id, description: `Pass — ${pt.name}${guest_name ? ` (${guest_name})` : ""}`,
+    amount: pt.price, method, status: "Paid", issued_date: todayISO(), paid_date: todayISO(), created_by: p.name,
+  });
+  await logAudit(p, "Pass sold", pt.name, guest_name ?? "member");
+  revalidatePath("/pos");
+  revalidatePath("/billing");
+  return pass?.id;
+}
+
+export async function usePass(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canPos(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  const { data: pass } = await supabase.from("passes").select("entries_total, entries_used, status, valid_until, name").eq("id", id).maybeSingle();
+  if (!pass || pass.status !== "active") return;
+  if (pass.valid_until && pass.valid_until < todayISO()) {
+    await supabase.from("passes").update({ status: "expired" }).eq("id", id);
+    return;
+  }
+  const used = Number(pass.entries_used) + 1;
+  const status = used >= Number(pass.entries_total) ? "used" : "active";
+  await supabase.from("passes").update({ entries_used: used, status }).eq("id", id);
+  await logAudit(p, "Pass check-in", pass.name, `${used}/${pass.entries_total}`);
+  revalidatePath("/pos");
+}
+
+export async function addProduct(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canPos(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("products").insert({
+    name,
+    sku: String(formData.get("sku") ?? "").trim() || null,
+    category: String(formData.get("category") ?? "General").trim() || "General",
+    price: Number(formData.get("price")) || 0,
+    stock: Number(formData.get("stock")) || 0,
+  });
+  await logAudit(p, "Product added", name, null);
+  revalidatePath("/pos");
+}
+
+export async function restockProduct(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canPos(p.role)) return;
+  const id = String(formData.get("id"));
+  const delta = Number(formData.get("delta")) || 0;
+  const supabase = createClient();
+  const { data: prod } = await supabase.from("products").select("stock, name").eq("id", id).maybeSingle();
+  if (!prod) return;
+  const next = Math.max(0, Number(prod.stock) + delta);
+  await supabase.from("products").update({ stock: next }).eq("id", id);
+  await logAudit(p, "Stock adjusted", prod.name, `${delta >= 0 ? "+" : ""}${delta}`);
+  revalidatePath("/pos");
+}
+
+// POS checkout: cart is a JSON string of [{id, qty}], plus method / client / discount.
+export async function recordSale(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canPos(p.role)) return { ok: false, error: "Not permitted" };
+  let cart: { id: string; qty: number }[] = [];
+  try { cart = JSON.parse(String(formData.get("cart") || "[]")); } catch { cart = []; }
+  cart = cart.filter((l) => l.id && Number(l.qty) > 0);
+  if (cart.length === 0) return { ok: false, error: "Cart is empty" };
+
+  const supabase = createClient();
+  const { data: prods } = await supabase.from("products").select("id, name, price, stock").in("id", cart.map((l) => l.id));
+  const byId = new Map((prods ?? []).map((pr) => [pr.id, pr]));
+
+  const lines: { product_id: string; name: string; qty: number; unit_price: number; line_total: number }[] = [];
+  for (const l of cart) {
+    const pr = byId.get(l.id);
+    if (!pr) continue;
+    const qty = Math.min(Number(l.qty), Number(pr.stock)); // don't oversell
+    if (qty <= 0) return { ok: false, error: `${pr.name} is out of stock` };
+    lines.push({ product_id: pr.id, name: pr.name, qty, unit_price: Number(pr.price), line_total: Number(pr.price) * qty });
+  }
+  if (lines.length === 0) return { ok: false, error: "Nothing sellable in cart" };
+
+  const subtotal = lines.reduce((s, l) => s + l.line_total, 0);
+  const discount = Math.max(0, Number(formData.get("discount")) || 0);
+  const total = Math.max(0, subtotal - discount);
+  const method = String(formData.get("method") ?? "Cash");
+  const client_id = String(formData.get("client_id") || "") || null;
+  const guest_name = String(formData.get("guest_name") ?? "").trim() || null;
+
+  const { data: sale } = await supabase.from("sales").insert({
+    client_id, guest_name, subtotal, discount, total, method, created_by: p.name,
+  }).select("id").maybeSingle();
+  if (!sale) return { ok: false, error: "Could not create sale" };
+
+  await supabase.from("sale_items").insert(lines.map((l) => ({ sale_id: sale.id, ...l })));
+  // decrement stock
+  for (const l of lines) {
+    const pr = byId.get(l.product_id)!;
+    await supabase.from("products").update({ stock: Math.max(0, Number(pr.stock) - l.qty) }).eq("id", l.product_id);
+  }
+  // record revenue as a paid invoice
+  const num = await nextInvoiceNum(supabase);
+  await supabase.from("invoices").insert({
+    num, client_id, description: `Retail sale — ${lines.length} item${lines.length === 1 ? "" : "s"}`,
+    amount: total, method, status: "Paid", issued_date: todayISO(), paid_date: todayISO(), created_by: p.name,
+  });
+  await logAudit(p, "Retail sale", `${lines.length} items`, `₹${total}`);
+  revalidatePath("/pos");
+  revalidatePath("/billing");
+  return { ok: true, total };
 }
 
 // ---- retention: NPS + referrals --------------------------------------------
