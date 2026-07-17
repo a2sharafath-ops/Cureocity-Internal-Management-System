@@ -151,7 +151,7 @@ export default function Sidebar({ role = "Staff", canPersona = false }: { role?:
         {canPersona && (
           <div style={{ marginTop: 14 }}>
             <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "#6ea69d" }}>
-              Workspaces
+              View as…
             </div>
             {PERSONAS.map((p) => {
               const active = pathname.startsWith(p.route);
@@ -168,7 +168,7 @@ export default function Sidebar({ role = "Staff", canPersona = false }: { role?:
                       color: active ? "#fff" : "#cfe8e3", background: active ? "var(--sidebar-hover)" : "transparent",
                     }}
                   >
-                    {p.label} Workspace
+                    {p.icon} {p.label}
                   </button>
                 </form>
               );
