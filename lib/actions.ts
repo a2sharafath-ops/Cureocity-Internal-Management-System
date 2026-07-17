@@ -229,6 +229,95 @@ export async function setUserBranch(formData: FormData) {
 
 // ---- sessions --------------------------------------------------------------
 
+// ---- training schedule: trainer slots, assessments, recovery ---------------
+
+// Toggle a trainer/hour slot between available and unavailable.
+export async function setTrainerSlot(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const trainer_id = String(formData.get("trainer_id"));
+  const hour = Number(formData.get("hour"));
+  const status = String(formData.get("status")); // available | unavailable
+  const supabase = createClient();
+  await supabase.from("trainer_slots").upsert(
+    { trainer_id, hour, status, client_id: null, tag: null, updated_by: p.name, updated_at: new Date().toISOString() },
+    { onConflict: "trainer_id,hour" }
+  );
+  revalidatePath("/sessions");
+}
+
+// Assign a client (with a tag) to an available trainer slot.
+export async function assignTrainerSlot(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const trainer_id = String(formData.get("trainer_id"));
+  const hour = Number(formData.get("hour"));
+  const client_id = String(formData.get("client_id")) || null;
+  const tag = String(formData.get("tag") || "PT");
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("trainer_slots").upsert(
+    { trainer_id, hour, status: "available", client_id, tag, updated_by: p.name, updated_at: new Date().toISOString() },
+    { onConflict: "trainer_id,hour" }
+  );
+  revalidatePath("/sessions");
+}
+
+// Clear a client from a slot (keeps it available).
+export async function unassignTrainerSlot(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const trainer_id = String(formData.get("trainer_id"));
+  const hour = Number(formData.get("hour"));
+  const supabase = createClient();
+  await supabase.from("trainer_slots").update({ client_id: null, tag: null, updated_by: p.name }).eq("trainer_id", trainer_id).eq("hour", hour);
+  revalidatePath("/sessions");
+}
+
+export async function createAssessment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const client_id = String(formData.get("client_id")) || null;
+  const trainer_id = String(formData.get("trainer_id")) || null;
+  const kind = String(formData.get("kind") || "initial");
+  const due_date = String(formData.get("due_date") || todayISO());
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("assessments").insert({ client_id, trainer_id, kind, due_date, status: "due", created_by: p.name });
+  revalidatePath("/sessions");
+}
+
+export async function markAssessmentBooked(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("assessments").update({ status: "booked", scheduled_date: todayISO() }).eq("id", id);
+  revalidatePath("/sessions");
+}
+
+export async function addRecoverySession(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const client_id = String(formData.get("client_id")) || null;
+  const kind = String(formData.get("kind") || "Recovery");
+  const staff_id = String(formData.get("staff_id")) || null;
+  const date = String(formData.get("date") || todayISO());
+  const hour = Number(formData.get("hour")) || null;
+  const supabase = createClient();
+  await supabase.from("recovery_sessions").insert({ client_id, kind, staff_id, date, hour, status: "scheduled", created_by: p.name });
+  revalidatePath("/sessions");
+}
+
+export async function completeRecoverySession(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("recovery_sessions").update({ status: "completed" }).eq("id", id);
+  revalidatePath("/sessions");
+}
+
 export async function rescheduleSession(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSessions(p.role)) return;
