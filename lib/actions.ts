@@ -793,6 +793,89 @@ export async function addEncounter(formData: FormData) {
   revalidatePath(`/emr/${client_id}`);
 }
 
+// ---- e-prescriptions + lab/imaging orders ----------------------------------
+
+export async function createPrescription(formData: FormData) {
+  const p = await emrGuard(); if (!p) return { ok: false, error: "Not permitted" };
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return { ok: false, error: "No patient" };
+  let items: { drug: string; dose?: string; frequency?: string; route?: string; duration?: string; quantity?: string; instructions?: string }[] = [];
+  try { items = JSON.parse(String(formData.get("items") || "[]")); } catch { items = []; }
+  items = items.filter((i) => i.drug && i.drug.trim());
+  if (items.length === 0) return { ok: false, error: "No drugs added" };
+
+  const supabase = createClient();
+  const status = String(formData.get("status") || "signed"); // draft | signed
+  const { data: rx } = await supabase.from("prescriptions").insert({
+    client_id, status,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    flags: String(formData.get("flags") ?? "").trim() || null,
+    provider: p.name,
+    signed_date: status === "signed" ? todayISO() : null,
+  }).select("id").maybeSingle();
+  if (!rx) return { ok: false, error: "Could not create" };
+
+  await supabase.from("prescription_items").insert(items.map((i) => ({
+    prescription_id: rx.id, drug: i.drug.trim(),
+    dose: i.dose?.trim() || null, frequency: i.frequency?.trim() || null,
+    route: i.route?.trim() || "oral", duration: i.duration?.trim() || null,
+    quantity: i.quantity?.trim() || null, instructions: i.instructions?.trim() || null,
+  })));
+  await logAudit(p, `Prescription ${status}`, await clientName(supabase, client_id), `${items.length} drug(s)`);
+  revalidatePath(`/emr/${client_id}`);
+  return { ok: true };
+}
+
+export async function setPrescriptionStatus(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const status = String(formData.get("status"));
+  if (!["draft", "signed", "dispensed", "cancelled"].includes(status)) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = { status };
+  if (status === "signed") patch.signed_date = todayISO();
+  await supabase.from("prescriptions").update(patch).eq("id", id);
+  await logAudit(p, `Prescription → ${status}`, null, null);
+  revalidatePath(`/emr/${client_id}`);
+}
+
+export async function createOrder(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  const test = String(formData.get("test") ?? "").trim();
+  if (!client_id || !test) return;
+  const supabase = createClient();
+  await supabase.from("orders").insert({
+    client_id, test,
+    category: String(formData.get("category") || "lab"),
+    priority: String(formData.get("priority") || "routine"),
+    notes: String(formData.get("notes") ?? "").trim() || null,
+    status: "ordered", provider: p.name,
+  });
+  await logAudit(p, "Order placed", await clientName(supabase, client_id), test);
+  revalidatePath(`/emr/${client_id}`);
+  revalidatePath("/orders");
+}
+
+export async function setOrderStatus(formData: FormData) {
+  const p = await emrGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id") || "");
+  const status = String(formData.get("status"));
+  if (!["ordered", "collected", "resulted", "cancelled"].includes(status)) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = { status };
+  if (status === "resulted") {
+    patch.result = String(formData.get("result") ?? "").trim() || null;
+    patch.result_date = todayISO();
+  }
+  await supabase.from("orders").update(patch).eq("id", id);
+  await logAudit(p, `Order → ${status}`, null, null);
+  if (client_id) revalidatePath(`/emr/${client_id}`);
+  revalidatePath("/orders");
+}
+
 // ---- gym passes + retail POS -----------------------------------------------
 
 export async function sellPass(formData: FormData) {

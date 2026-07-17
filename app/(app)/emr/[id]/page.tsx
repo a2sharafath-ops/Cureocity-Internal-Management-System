@@ -6,6 +6,9 @@ import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ProblemForm, AllergyForm, MedicationForm, VitalsForm, EncounterForm } from "@/components/EmrForms";
 import { ProblemToggle, MedStop, AllergyDelete } from "@/components/EmrActions";
+import RxForm from "@/components/RxForm";
+import OrderForm from "@/components/OrderForm";
+import { OrderActions, RxStatus } from "@/components/OrderActions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +28,14 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
   const { data: client } = await supabase.from("clients").select("id, code, name, phone, gender, dob, conditions").eq("id", cid).maybeSingle();
   if (!client) notFound();
 
-  const [problemsR, allergiesR, medsR, vitalsR, encountersR] = await Promise.all([
+  const [problemsR, allergiesR, medsR, vitalsR, encountersR, rxR, ordersR] = await Promise.all([
     supabase.from("problems").select("id, code, description, status, onset_date, resolved_date, noted_by").eq("client_id", cid).order("created_at", { ascending: false }),
     supabase.from("allergies").select("id, substance, reaction, severity, noted_by").eq("client_id", cid).order("created_at", { ascending: false }),
     supabase.from("medications").select("id, name, dose, frequency, route, status, start_date, end_date, prescriber").eq("client_id", cid).order("created_at", { ascending: false }),
     supabase.from("vitals").select("id, date, systolic, diastolic, pulse, temp_c, resp_rate, spo2, weight, notes, recorded_by").eq("client_id", cid).order("date", { ascending: false }).limit(20),
     supabase.from("encounters").select("id, date, type, chief_complaint, subjective, objective, assessment, plan, provider").eq("client_id", cid).order("date", { ascending: false }).limit(30),
+    supabase.from("prescriptions").select("id, status, notes, flags, provider, signed_date, created_at, prescription_items(drug, dose, frequency, route, duration, quantity)").eq("client_id", cid).order("created_at", { ascending: false }).limit(30),
+    supabase.from("orders").select("id, category, test, priority, status, result, result_date, provider, created_at").eq("client_id", cid).order("created_at", { ascending: false }).limit(40),
   ]);
 
   const problems = (problemsR.data ?? []) as { id: string; code: string | null; description: string; status: string; onset_date: string | null; resolved_date: string | null; noted_by: string | null }[];
@@ -38,6 +43,11 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
   const meds = (medsR.data ?? []) as { id: string; name: string; dose: string | null; frequency: string | null; route: string | null; status: string; start_date: string | null; end_date: string | null; prescriber: string | null }[];
   const vitals = (vitalsR.data ?? []) as { id: string; date: string; systolic: number | null; diastolic: number | null; pulse: number | null; temp_c: number | null; resp_rate: number | null; spo2: number | null; weight: number | null; notes: string | null; recorded_by: string | null }[];
   const encounters = (encountersR.data ?? []) as { id: string; date: string; type: string; chief_complaint: string | null; subjective: string | null; objective: string | null; assessment: string | null; plan: string | null; provider: string | null }[];
+  const prescriptions = (rxR.data ?? []) as unknown as { id: string; status: string; notes: string | null; flags: string | null; provider: string | null; signed_date: string | null; created_at: string; prescription_items: { drug: string; dose: string | null; frequency: string | null; route: string | null; duration: string | null; quantity: string | null }[] }[];
+  const orders = (ordersR.data ?? []) as { id: string; category: string; test: string; priority: string; status: string; result: string | null; result_date: string | null; provider: string | null; created_at: string }[];
+
+  const activeMedNames = meds.filter((m) => m.status === "active").map((m) => m.name);
+  const allergyNames = allergies.map((al) => al.substance);
 
   const card: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 18, marginBottom: 18 };
   const th: React.CSSProperties = { padding: "8px 12px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
@@ -181,6 +191,65 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
             </div>
           ))}
         </div>
+      </section>
+
+      {/* prescriptions */}
+      <section style={card}>
+        {sectionHead("e-Prescriptions", <RxForm clientId={cid} allergies={allergyNames} currentMeds={activeMedNames} />)}
+        {prescriptions.length === 0 && <div style={{ color: "var(--muted)", fontSize: 14 }}>No prescriptions.</div>}
+        <div style={{ display: "grid", gap: 10 }}>
+          {prescriptions.map((r) => {
+            const chip = r.status === "signed" ? ["var(--green-bg)", "#166534"] : r.status === "dispensed" ? ["#e0f2f1", "var(--teal-dark)"] : r.status === "cancelled" ? ["#fee2e2", "var(--red)"] : ["#eef2f1", "var(--muted)"];
+            return (
+              <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ background: chip[0], color: chip[1], borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{r.status}</span>
+                  <span style={{ color: "var(--muted)", fontSize: 12 }}>{r.signed_date ?? r.created_at.slice(0, 10)} · {r.provider ?? ""}</span>
+                  <span style={{ flex: 1 }} />
+                  <RxStatus id={r.id} clientId={cid} status={r.status} />
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <tbody>
+                    {r.prescription_items.map((it, i) => (
+                      <tr key={i} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
+                        <td style={{ ...td, fontWeight: 600 }}>{it.drug}</td>
+                        <td style={td}>{it.dose ?? ""}</td>
+                        <td style={td}>{it.frequency ?? ""}</td>
+                        <td style={{ ...td, color: "var(--muted)" }}>{it.route ?? ""}{it.duration ? ` · ${it.duration}` : ""}{it.quantity ? ` · #${it.quantity}` : ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {r.flags && <div style={{ marginTop: 8, background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>⚠ Flagged at signing: {r.flags}</div>}
+                {r.notes && <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>{r.notes}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* lab / imaging orders */}
+      <section style={card}>
+        {sectionHead("Lab & imaging orders", <OrderForm clientId={cid} />)}
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead><tr><th style={th}>Test</th><th style={th}>Type</th><th style={th}>Priority</th><th style={th}>Status</th><th style={th}>Result</th><th style={th} /></tr></thead>
+          <tbody>
+            {orders.map((o) => {
+              const chip = o.status === "resulted" ? ["var(--green-bg)", "#166534"] : o.status === "cancelled" ? ["#fee2e2", "var(--red)"] : o.status === "collected" ? ["var(--amber-bg)", "#92400e"] : ["#eef2f1", "var(--muted)"];
+              return (
+                <tr key={o.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ ...td, fontWeight: 600 }}>{o.test}</td>
+                  <td style={{ ...td, color: "var(--muted)" }}>{o.category}</td>
+                  <td style={td}>{o.priority !== "routine" ? <span style={{ color: o.priority === "stat" ? "var(--red)" : "#92400e", fontWeight: 600, textTransform: "uppercase", fontSize: 12 }}>{o.priority}</span> : <span style={{ color: "var(--muted)" }}>routine</span>}</td>
+                  <td style={td}><span style={{ background: chip[0], color: chip[1], borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{o.status}</span></td>
+                  <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{o.result ? `${o.result}${o.result_date ? ` (${o.result_date})` : ""}` : "—"}</td>
+                  <td style={{ ...td, textAlign: "right" }}><OrderActions id={o.id} clientId={cid} status={o.status} /></td>
+                </tr>
+              );
+            })}
+            {orders.length === 0 && <tr><td colSpan={6} style={{ ...td, color: "var(--muted)", padding: "14px 12px" }}>No orders.</td></tr>}
+          </tbody>
+        </table>
       </section>
     </div>
   );
