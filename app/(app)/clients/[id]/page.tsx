@@ -38,7 +38,8 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function ClientDetailPage({ params }: { params: { id: string } }) {
+export default async function ClientDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string } }) {
+  const tab = ["overview", "timeline", "card"].includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
   const supabase = createClient();
 
   const { data: client } = await supabase
@@ -141,6 +142,14 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         </Link>
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {[["overview", "Overview"], ["timeline", "Service Timeline"], ["card", "Client Card"]].map(([key, label]) => (
+          <Link key={key} href={`/clients/${params.id}?tab=${key}`} style={{ padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{label}</Link>
+        ))}
+      </div>
+
+      {tab === "overview" && (<>
       {/* Profile */}
       <div
         style={{
@@ -162,6 +171,9 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         </div>
       </div>
 
+      </>)}
+
+      {tab === "timeline" && (<>
       {/* Sessions */}
       <div
         style={{
@@ -293,6 +305,9 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         </div>
       )}
 
+      </>)}
+
+      {tab === "card" && (<>
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
@@ -446,6 +461,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           <PortalLoginForm clientId={params.id} existingEmail={portalProfile?.email ?? null} />
         </div>
       )}
+      </>)}
     </div>
   );
 }
