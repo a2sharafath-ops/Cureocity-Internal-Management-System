@@ -2,8 +2,9 @@
 // today or yesterday) the habit was marked done.
 
 function addDays(iso: string, days: number) {
-  const d = new Date(iso + "T00:00:00");
-  d.setDate(d.getDate() + days);
+  // UTC math so the result is independent of the server's timezone
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 

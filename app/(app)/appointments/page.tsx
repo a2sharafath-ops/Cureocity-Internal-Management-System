@@ -12,10 +12,10 @@ export const dynamic = "force-dynamic";
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 7am..9pm
 function hourLabel(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${am ? "AM" : "PM"}`; }
-function addDays(iso: string, days: number) { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); }
-function mondayOf(iso: string) { const d = new Date(iso + "T00:00:00"); const dow = (d.getDay() + 6) % 7; return addDays(iso, -dow); }
-function dayName(iso: string) { return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" }); }
-function dayNum(iso: string) { return new Date(iso + "T00:00:00").getDate(); }
+function addDays(iso: string, days: number) { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+function mondayOf(iso: string) { const d = new Date(iso + "T00:00:00Z"); const dow = (d.getUTCDay() + 6) % 7; return addDays(iso, -dow); }
+function dayName(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }); }
+function dayNum(iso: string) { return new Date(iso + "T00:00:00Z").getUTCDate(); }
 
 type Appt = { id: string; client_id: string; type: string | null; title: string | null; date: string; hour: number; duration_min: number; status: string; provider_id: string | null; clients: { id: string; name: string } | null; staff: { name: string } | null };
 
