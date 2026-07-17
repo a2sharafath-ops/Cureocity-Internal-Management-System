@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { inviteStaff, type InviteState } from "@/lib/actions";
+import { BRANCHES } from "@/lib/branches";
 
 const ROLES = [
   "Front Desk", "Health Professional", "Manager", "Finance", "HR", "Staff", "Administrator", "Super Admin",
@@ -74,6 +75,12 @@ export default function AddStaffForm() {
               <label style={label}>Role</label>
               <select style={input} name="role" defaultValue="Front Desk">
                 {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={label}>Branch</label>
+              <select style={input} name="branch" defaultValue="Kochi">
+                {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div>

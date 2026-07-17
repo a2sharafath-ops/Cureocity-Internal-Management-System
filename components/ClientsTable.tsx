@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { setClientOwner } from "@/lib/actions";
+import { BRANCHES } from "@/lib/branches";
 
 export type ClientRow = {
   id: string; code: string | null; name: string; phone: string | null; email: string | null;
@@ -16,11 +17,13 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<"all" | "blueprint">("all");
   const [status, setStatus] = useState("All");
+  const [branch, setBranch] = useState("All");
 
   const query = q.trim().toLowerCase();
   const rows = clients.filter((c) => {
     if (tab === "blueprint" && !c.is_blueprint) return false;
     if (status !== "All" && c.status !== status) return false;
+    if (branch !== "All" && (c.branch ?? "") !== branch) return false;
     if (!query) return true;
     return c.name.toLowerCase().includes(query) || (c.phone ?? "").toLowerCase().includes(query) ||
       (c.email ?? "").toLowerCase().includes(query) || (c.code ?? "").toLowerCase().includes(query);
@@ -50,6 +53,10 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, phone, or email" style={{ maxWidth: 340, width: "100%", padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, outline: "none", background: "#fff" }} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, background: "#fff" }}>
           <option>All</option><option>Active</option><option>Completed</option>
+        </select>
+        <select value={branch} onChange={(e) => setBranch(e.target.value)} style={{ padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, background: "#fff" }}>
+          <option value="All">All branches</option>
+          {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
         <span style={{ flex: 1 }} />
         <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>{rows.length} client{rows.length === 1 ? "" : "s"}</span>

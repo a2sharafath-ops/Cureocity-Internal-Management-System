@@ -1,3 +1,5 @@
+import { BRANCHES } from "@/lib/branches";
+
 type Pkg = { id: string; name: string };
 type ClientData = {
   id?: string;
@@ -63,8 +65,7 @@ export default function ClientForm({
         <div>
           <label style={label}>Branch</label>
           <select style={input} name="branch" defaultValue={c.branch ?? "Kochi"}>
-            <option>Kochi</option>
-            <option>Kozhikode</option>
+            {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
         </div>
         <div>

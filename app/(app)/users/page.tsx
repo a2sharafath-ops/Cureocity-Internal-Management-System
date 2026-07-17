@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import UserRoleSelect from "@/components/UserRoleSelect";
+import UserBranchSelect from "@/components/UserBranchSelect";
 import AddStaffForm from "@/components/AddStaffForm";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ type ProfileRow = {
   email: string | null;
   name: string | null;
   role: string;
+  branch: string | null;
   created_at: string;
 };
 
@@ -22,7 +24,7 @@ export default async function UsersPage() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, name, role, created_at")
+    .select("id, email, name, role, branch, created_at")
     .order("created_at", { ascending: true });
 
   const users = (data ?? []) as ProfileRow[];
@@ -47,6 +49,7 @@ export default async function UsersPage() {
               <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 12 }}>
                 <th style={{ padding: "12px 16px" }}>User</th>
                 <th style={{ padding: "12px 16px" }}>Email</th>
+                <th style={{ padding: "12px 16px" }}>Branch</th>
                 <th style={{ padding: "12px 16px" }}>Role</th>
               </tr>
             </thead>
@@ -63,13 +66,16 @@ export default async function UsersPage() {
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{u.email ?? "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
+                    <UserBranchSelect id={u.id} branch={u.branch} />
+                  </td>
+                  <td style={{ padding: "12px 16px" }}>
                     <UserRoleSelect id={u.id} role={u.role} disabled={u.id === me.id} />
                   </td>
                 </tr>
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={3} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={4} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
                     No users yet
                   </td>
                 </tr>

@@ -145,6 +145,7 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const role = String(formData.get("role") ?? "Front Desk");
+  const branch = String(formData.get("branch") ?? "Kochi");
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) return { error: "Email and a temporary password are required." };
@@ -163,9 +164,9 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
   const uid = data.user?.id;
   if (uid) {
     // the signup trigger creates a Front Desk profile; set the chosen name + role
-    await admin.from("profiles").upsert({ id: uid, email, name: name || email.split("@")[0], role });
+    await admin.from("profiles").upsert({ id: uid, email, name: name || email.split("@")[0], role, branch });
   }
-  await logAudit(me, "Staff created", email, `role: ${role}`);
+  await logAudit(me, "Staff created", email, `role: ${role} · ${branch}`);
   revalidatePath("/users");
   return { ok: `Created ${email} as ${role}. Share the temporary password with them.` };
 }
@@ -209,6 +210,21 @@ export async function updateUserRole(formData: FormData) {
   await logAudit(me, "Role changed", target?.email ?? id, `${target?.role ?? "?"} → ${role}`);
   revalidatePath("/users");
   revalidatePath("/", "layout");
+}
+
+// Assign a staff/user to a branch (Kochi / Calicut).
+export async function setUserBranch(formData: FormData) {
+  const me = await getProfile();
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return;
+  const id = String(formData.get("id"));
+  const branch = String(formData.get("branch"));
+  const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("email, name").eq("id", id).maybeSingle();
+  await admin.from("profiles").update({ branch }).eq("id", id);
+  // keep the matching care-team staff row (by name) in sync when there is one
+  if (target?.name) await admin.from("staff").update({ branch }).eq("name", target.name);
+  await logAudit(me, "Branch changed", target?.email ?? id, branch);
+  revalidatePath("/users");
 }
 
 // ---- sessions --------------------------------------------------------------

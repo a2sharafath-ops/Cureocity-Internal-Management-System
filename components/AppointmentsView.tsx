@@ -1,0 +1,203 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { createAppointment } from "@/lib/actions";
+import AppointmentActions from "@/components/AppointmentActions";
+
+export type ViewAppt = {
+  id: string; client_id: string; clientName: string | null; type: string | null; title: string | null;
+  date: string; hour: number; duration_min: number; status: string; provider_id: string | null; providerName: string | null;
+};
+export type Provider = { id: string; name: string; color: string; discipline: string };
+
+const DISCIPLINES = ["All", "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"];
+
+function hourLabel(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${am ? "AM" : "PM"}`; }
+function hourLabelFull(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr}:00 ${am ? "AM" : "PM"}`; }
+function dayName(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }); }
+function dayNum(iso: string) { return new Date(iso + "T00:00:00Z").getUTCDate(); }
+function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
+
+export default function AppointmentsView({
+  today, days, hours, appts, providers, clients,
+}: {
+  today: string; days: string[]; hours: number[]; appts: ViewAppt[];
+  providers: Provider[]; clients: { id: string; name: string }[];
+}) {
+  const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records">("calendar");
+  const [disc, setDisc] = useState("All");
+  const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string }>({ open: false, date: today, hour: 10, provider: "" });
+
+  const provMap = new Map(providers.map((p) => [p.id, p]));
+  const provDisc = (pid: string | null) => (pid ? provMap.get(pid)?.discipline ?? null : null);
+  const provColor = (pid: string | null) => (pid ? provMap.get(pid)?.color ?? "#0f766e" : "#0f766e");
+
+  const visible = appts.filter((a) => a.status !== "cancelled" && (disc === "All" || provDisc(a.provider_id) === disc));
+  const cells = new Map<string, ViewAppt[]>();
+  for (const a of visible) { const k = `${a.date}|${a.hour}`; (cells.get(k) ?? cells.set(k, []).get(k)!).push(a); }
+
+  const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
+  const statusStyle = (s: string): React.CSSProperties => s === "completed" ? { opacity: 0.6 } : s === "no_show" ? { opacity: 0.6, textDecoration: "line-through" } : {};
+  const chip = (active: boolean): React.CSSProperties => ({ padding: "6px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: active ? "var(--teal)" : "#fff", color: active ? "#fff" : "var(--muted)" });
+  const statusChip = (s: string) => {
+    const m: Record<string, [string, string]> = { scheduled: ["#dbeafe", "#1e40af"], completed: ["var(--green-bg)", "#166534"], no_show: ["var(--red-bg)", "#991b1b"], cancelled: ["#eef2f1", "#64748b"] };
+    const [bg, fg] = m[s] ?? ["#eef2f1", "#64748b"];
+    return <span style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{s.replace("_", " ")}</span>;
+  };
+
+  const openBooking = (date: string, hour: number) => setBooking({ open: true, date, hour, provider: "" });
+  const sorted = [...visible].sort((a, b) => a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1);
+  const upcoming = sorted.filter((a) => a.date >= today && a.status === "scheduled");
+  const records = sorted.filter((a) => a.status === "completed" || a.date < today);
+  const counts = { scheduled: visible.filter((a) => a.status === "scheduled").length, completed: visible.filter((a) => a.status === "completed").length, no_show: visible.filter((a) => a.status === "no_show").length };
+
+  const tabBtn = (key: typeof tab, icon: string, label: string) => (
+    <button type="button" onClick={() => setTab(key)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 15px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{icon} {label}</button>
+  );
+
+  return (
+    <div>
+      {/* sub-view tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        {tabBtn("calendar", "📅", "Calendar")}
+        {tabBtn("tracker", "⏳", "Tracker")}
+        {tabBtn("list", "📋", "List")}
+        {tabBtn("records", "🗂", "Records")}
+      </div>
+
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>
+        Consultations, assessments &amp; follow-ups — doctor, dietitian, psychologist, health coach and fitness assessments. Click any empty cell to book.
+      </p>
+
+      {/* discipline filter + provider legend */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        {DISCIPLINES.map((d) => <button key={d} type="button" onClick={() => setDisc(d)} style={chip(disc === d)}>{d}</button>)}
+        <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 4px" }} />
+        {providers.map((p) => (
+          <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--muted)" }}>
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: p.color }} />{p.name}
+          </span>
+        ))}
+      </div>
+
+      {/* inline booking form */}
+      {booking.open && (
+        <form action={createAppointment} onSubmit={() => setTimeout(() => setBooking((b) => ({ ...b, open: false })), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue=""><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider</label><select style={input} name="provider_id" defaultValue={booking.provider}><option value="">— any —</option>{providers.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue="Consultation"><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required defaultValue={booking.date} /></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time</label><select style={input} name="hour" defaultValue={String(booking.hour)}>{hours.map((h) => <option key={h} value={h}>{hourLabelFull(h)}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Duration</label><select style={input} name="duration_min" defaultValue="30"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Book</button>
+            <button type="button" onClick={() => setBooking((b) => ({ ...b, open: false }))} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {tab === "calendar" && (
+        <div style={{ ...box, overflow: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 56, padding: "8px 6px", borderBottom: "1px solid var(--border)" }} />
+                {days.map((d) => (
+                  <th key={d} style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", background: d === today ? "#e0f2f1" : "transparent" }}>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>{dayName(d)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: d === today ? "var(--teal-dark)" : "inherit" }}>{dayNum(d)}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {hours.map((h) => (
+                <tr key={h}>
+                  <td style={{ padding: "4px 6px", color: "var(--muted)", fontSize: 11, textAlign: "right", verticalAlign: "top", borderTop: "1px solid var(--border)" }}>{hourLabel(h)}</td>
+                  {days.map((d) => {
+                    const list = cells.get(`${d}|${h}`) ?? [];
+                    return (
+                      <td key={d} onClick={() => list.length === 0 && openBooking(d, h)} style={{ borderTop: "1px solid var(--border)", borderLeft: "1px solid var(--border)", padding: 3, verticalAlign: "top", height: 42, cursor: list.length === 0 ? "pointer" : "default", background: d === today ? "rgba(224,242,241,0.35)" : "transparent" }}>
+                        {list.map((a) => {
+                          const col = provColor(a.provider_id);
+                          return (
+                            <div key={a.id} style={{ ...statusStyle(a.status), background: col + "1a", borderLeft: `3px solid ${col}`, borderRadius: 6, padding: "3px 6px", marginBottom: 3 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.2 }}>
+                                {a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "inherit", textDecoration: "none" }}>{a.clientName}</Link> : "—"}
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{a.title ?? a.type}{a.providerName ? ` · ${a.providerName}` : ""}</div>
+                              <AppointmentActions id={a.id} status={a.status} />
+                            </div>
+                          );
+                        })}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "tracker" && (
+        <div>
+          <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+            {([["Scheduled", counts.scheduled, "#1e40af"], ["Completed", counts.completed, "#166534"], ["No-shows", counts.no_show, "#991b1b"]] as const).map(([k, v, c]) => (
+              <div key={k} style={{ ...box, padding: "14px 18px", minWidth: 130 }}>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{k}</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: c }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...box, padding: "14px 18px" }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Upcoming ({upcoming.length})</div>
+            {upcoming.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>Nothing upcoming this week.</div> : upcoming.map((a) => (
+              <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: provColor(a.provider_id) }} />
+                <b style={{ minWidth: 120 }}>{fmtDate(a.date)} · {hourLabel(a.hour)}</b>
+                <span style={{ flex: 1 }}>{a.clientName ?? "—"} <span style={{ color: "var(--muted)" }}>· {a.title ?? a.type} · {a.providerName ?? "any"}</span></span>
+                <AppointmentActions id={a.id} status={a.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(tab === "list" || tab === "records") && (
+        <div style={{ ...box, overflow: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
+            <thead>
+              <tr style={{ color: "var(--muted)", fontSize: 12, textAlign: "left" }}>
+                <th style={{ padding: "10px 14px" }}>Date</th><th style={{ padding: "10px 14px" }}>Time</th>
+                <th style={{ padding: "10px 14px" }}>Patient</th><th style={{ padding: "10px 14px" }}>Type</th>
+                <th style={{ padding: "10px 14px" }}>Provider</th><th style={{ padding: "10px 14px" }}>Status</th><th style={{ padding: "10px 14px" }} />
+              </tr>
+            </thead>
+            <tbody>
+              {(tab === "list" ? sorted : records).map((a) => (
+                <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "10px 14px" }}>{fmtDate(a.date)}</td>
+                  <td style={{ padding: "10px 14px" }}>{hourLabel(a.hour)}</td>
+                  <td style={{ padding: "10px 14px" }}>{a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{a.clientName}</Link> : "—"}</td>
+                  <td style={{ padding: "10px 14px" }}>{a.title ?? a.type ?? "—"}</td>
+                  <td style={{ padding: "10px 14px" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: provColor(a.provider_id) }} />{a.providerName ?? "—"}</span></td>
+                  <td style={{ padding: "10px 14px" }}>{statusChip(a.status)}</td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}><AppointmentActions id={a.id} status={a.status} /></td>
+                </tr>
+              ))}
+              {(tab === "list" ? sorted : records).length === 0 && (
+                <tr><td colSpan={7} style={{ padding: "24px 14px", textAlign: "center", color: "var(--muted)" }}>No appointments</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
