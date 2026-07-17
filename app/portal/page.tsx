@@ -104,6 +104,9 @@ export default async function PortalHome() {
     .from("wearable_readings").select("date, steps, sleep_min, resting_hr, active_min").eq("client_id", client.id).order("date", { ascending: false }).limit(1);
   const wear = (wearRows?.[0] ?? null) as { date: string; steps: number | null; sleep_min: number | null; resting_hr: number | null; active_min: number | null } | null;
 
+  const { data: cwRows } = await supabase.from("client_workouts").select("id, name, type, items").eq("client_id", client.id).order("created_at", { ascending: false }).limit(3);
+  const myWorkouts = (cwRows ?? []) as unknown as { id: string; name: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[] }[];
+
   const [{ data: classRows }, { data: availRows }, { data: myBookings }] = await Promise.all([
     supabase.from("classes").select("id, title, date, hour, rooms(name), staff(name)").gte("date", TODAY).order("date").order("hour").limit(20),
     supabase.from("class_availability").select("id, capacity, booked"),
@@ -130,7 +133,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -252,6 +255,26 @@ export default async function PortalHome() {
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Sleep</div>{wear.sleep_min != null ? `${Math.floor(wear.sleep_min / 60)}h ${wear.sleep_min % 60}m` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Resting HR</div>{wear.resting_hr != null ? `${wear.resting_hr} bpm` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Active</div>{wear.active_min != null ? `${wear.active_min} min` : "—"}</div>
+          </div>
+        </>
+      )}
+
+      {/* Assigned workouts */}
+      {myWorkouts.length > 0 && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>🏃 My workout plan</div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {myWorkouts.map((w) => (
+              <div key={w.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{w.name} <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {w.type}</span></div>
+                {w.items.map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ fontWeight: 600 }}>{it.exercise}</span>
+                    <span style={{ color: "var(--muted)" }}>{it.sets ?? ""} × {it.reps ?? ""}{it.rest ? ` · ${it.rest}` : ""}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         </>
       )}

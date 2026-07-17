@@ -8,7 +8,7 @@ import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
 import HabitForm from "@/components/HabitForm";
 import { WearableForm, WearableConnect } from "@/components/WearableForm";
-import { archiveHabit } from "@/lib/actions";
+import { archiveHabit, removeWorkout } from "@/lib/actions";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { todayISO } from "@/lib/today";
 import InvoiceActions from "@/components/InvoiceActions";
@@ -104,6 +104,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const latestRead = reads[0] ?? null;
   const stepTrend = reads.slice(0, 7).reverse(); // oldest→newest of last 7
 
+  const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
+  const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
+
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean } | null }).packages;
   const sess = (sessions ?? []) as {
     id: string; seq: number; date: string; hour: number; status: string; rescheduled: boolean;
@@ -127,7 +130,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts"]} />
       <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
@@ -434,6 +437,43 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 14, marginBottom: 2 }}>Linked devices (integration-ready)</div>
               <WearableConnect clientId={params.id} connected={connMap} />
             </>
+          )}
+        </div>
+      )}
+
+      {/* Assigned workouts */}
+      {(canCoach || workouts.length > 0) && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>🏃 Assigned workouts</div>
+            <span style={{ flex: 1 }} />
+            {canCoach && <Link href="/exlib" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
+          </div>
+          {workouts.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>No workouts assigned. Assign a template from the Exercise Library.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {workouts.map((w) => (
+                <div key={w.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <b style={{ fontSize: 14 }}>{w.name}</b>
+                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{w.type} · {w.mode} · {w.items.length} exercises</span>
+                    <span style={{ flex: 1 }} />
+                    {canCoach && <form action={removeWorkout}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="client_id" value={params.id} /><button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form>}
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <tbody>
+                      {w.items.map((it, i) => (
+                        <tr key={i} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
+                          <td style={{ padding: "5px 0", fontWeight: 600 }}>{it.exercise}</td>
+                          <td style={{ padding: "5px 0", color: "var(--muted)" }}>{it.sets ?? ""} × {it.reps ?? ""}{it.rest ? ` · rest ${it.rest}` : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

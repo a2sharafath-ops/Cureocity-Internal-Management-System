@@ -5,6 +5,7 @@ import { canSee } from "@/lib/roles";
 import { toggleExercise } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ExerciseForm, TemplateForm } from "@/components/ExerciseForms";
+import AssignWorkout from "@/components/AssignWorkout";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,14 @@ export default async function ExlibPage() {
   if (!me || !canSee(me.role, "/exlib")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: exData }, { data: tplData }] = await Promise.all([
+  const [{ data: exData }, { data: tplData }, { data: clientData }] = await Promise.all([
     supabase.from("exercises").select("id, name, mode, type, active").order("type").order("name"),
     supabase.from("workout_templates").select("id, name, mode, type, items").order("created_at", { ascending: false }),
+    supabase.from("clients").select("id, name").order("name"),
   ]);
   const exercises = (exData ?? []) as Ex[];
   const templates = (tplData ?? []) as unknown as Tpl[];
+  const clients = (clientData ?? []) as { id: string; name: string }[];
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const td: React.CSSProperties = { padding: "8px 14px", fontSize: 14 };
@@ -73,6 +76,8 @@ export default async function ExlibPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <b style={{ fontSize: 14 }}>{t.name}</b>{typeChip(t.type)}
                   <span style={{ color: "var(--muted)", fontSize: 12 }}>· {t.mode} · {t.items.length} exercises</span>
+                  <span style={{ flex: 1 }} />
+                  <AssignWorkout templateId={t.id} clients={clients} />
                 </div>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <tbody>

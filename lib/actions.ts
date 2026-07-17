@@ -837,6 +837,31 @@ export async function recordCheckin(formData: FormData) {
   revalidatePath("/access");
 }
 
+// ---- tablet intake (kiosk lead capture) ------------------------------------
+
+export async function createLeadIntake(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  const { data: last } = await supabase.from("leads").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
+  const num = ((last?.num as number | null) ?? 0) + 1;
+  await supabase.from("leads").insert({
+    num, name,
+    phone: String(formData.get("phone") ?? "").trim() || null,
+    source: String(formData.get("source") || "Walk-in"),
+    interest: String(formData.get("interest") || "") || null,
+    urgency: String(formData.get("urgency") || "") || null,
+    goals: String(formData.get("goals") || "") || null,
+    profession: String(formData.get("profession") || "") || null,
+    stage: "1-New Lead",
+  });
+  await logAudit(p, "Tablet intake — lead captured", name, null);
+  await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk"], { title: "New walk-in intake", body: name, href: "/leads", icon: "🖊" });
+  redirect("/intake?done=1");
+}
+
 // ---- in-app notifications --------------------------------------------------
 
 export async function markNotificationRead(formData: FormData) {
@@ -1001,6 +1026,34 @@ export async function toggleExercise(formData: FormData) {
   const supabase = createClient();
   await supabase.from("exercises").update({ active: String(formData.get("to") || "true") === "true" }).eq("id", String(formData.get("id")));
   revalidatePath("/exlib");
+}
+
+export async function assignWorkout(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const template_id = String(formData.get("template_id"));
+  if (!client_id || !template_id) return;
+  const supabase = createClient();
+  const { data: tpl } = await supabase.from("workout_templates").select("name, mode, type, items").eq("id", template_id).maybeSingle();
+  if (!tpl) return;
+  await supabase.from("client_workouts").insert({
+    client_id, name: tpl.name, mode: tpl.mode, type: tpl.type, items: tpl.items, assigned_by: p.name,
+  });
+  await logAudit(p, "Workout assigned", await clientName(supabase, client_id), tpl.name);
+  revalidatePath("/exlib");
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function removeWorkout(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  await supabase.from("client_workouts").delete().eq("id", id);
+  await logAudit(p, "Workout removed", null, null);
+  revalidatePath(`/clients/${client_id}`);
 }
 
 export async function addTemplate(formData: FormData) {
