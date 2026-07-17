@@ -1,3 +1,4 @@
+import WorkspaceTabs from "@/components/WorkspaceTabs";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -43,6 +44,7 @@ export default async function CareTeamPage() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <RealtimeRefresh tables={["consultations", "sessions", "orders", "blood_requests", "appointments", "meal_logs"]} />
+      <WorkspaceTabs active="careteam" />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Care Team Hub</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Every clinical workspace in one place — Doctor, Dietitian, Trainer &amp; Coach.</p>
 

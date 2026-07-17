@@ -1,3 +1,4 @@
+import WorkspaceTabs from "@/components/WorkspaceTabs";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -38,7 +39,8 @@ export default async function MealsPage() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["meal_logs"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Meal Monitoring</h1>
+      <WorkspaceTabs active="meals" />
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Dietitian · Meal Monitoring</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Today {todayLabel()} · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}
       </p>

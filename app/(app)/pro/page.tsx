@@ -1,3 +1,4 @@
+import WorkspaceTabs from "@/components/WorkspaceTabs";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
@@ -41,7 +42,8 @@ export default async function ProPage() {
   return (
     <div style={{ maxWidth: 900 }}>
       <RealtimeRefresh tables={["consultations"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>{persona ? `${persona.label} Workspace` : "Professional Workspace"}</h1>
+      <WorkspaceTabs active="pro" />
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>{persona ? `${persona.label} Consultations` : "Consultations"}</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         {disciplineKind ? `${disciplineKind} consultations` : "Consultations"} · {consults.length} total · {pending} to complete
         {persona && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600, marginLeft: 8 }}>Persona view</span>}
