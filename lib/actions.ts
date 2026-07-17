@@ -836,6 +836,60 @@ export async function recordCheckin(formData: FormData) {
   revalidatePath("/access");
 }
 
+// ---- operating expenses ----------------------------------------------------
+
+export async function addExpense(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const description = String(formData.get("description") ?? "").trim();
+  if (!description) return;
+  const supabase = createClient();
+  await supabase.from("expenses").insert({
+    description,
+    category: String(formData.get("category") || "Other"),
+    amount: Number(formData.get("amount")) || 0,
+    date: String(formData.get("date") || todayISO()),
+    created_by: p.name,
+  });
+  await logAudit(p, "Expense added", description, `₹${Number(formData.get("amount")) || 0}`);
+  revalidatePath("/expenses");
+}
+
+export async function deleteExpense(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("expenses").delete().eq("id", String(formData.get("id")));
+  await logAudit(p, "Expense removed", null, null);
+  revalidatePath("/expenses");
+}
+
+// ---- SOPs / knowledge base -------------------------------------------------
+
+export async function addSop(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return;
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return;
+  const supabase = createClient();
+  await supabase.from("sops").insert({
+    title, category: String(formData.get("category") || "Operations"),
+    content: String(formData.get("content") ?? "").trim() || null,
+    updated_by: p.name,
+  });
+  await logAudit(p, "SOP added", title, null);
+  revalidatePath("/kb");
+}
+
+export async function deleteSop(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("sops").delete().eq("id", String(formData.get("id")));
+  await logAudit(p, "SOP removed", null, null);
+  revalidatePath("/kb");
+}
+
 // ---- services catalogue ----------------------------------------------------
 
 export async function addService(formData: FormData) {

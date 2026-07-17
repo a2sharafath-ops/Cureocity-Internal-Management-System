@@ -57,8 +57,15 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: "People",
+    items: [
+      { href: "/kb", label: "SOP's", icon: "📖" },
+    ],
+  },
+  {
     title: "Finance",
     items: [
+      { href: "/expenses", label: "Expenses", icon: "🧾" },
       { href: "/billing", label: "Billing", icon: "💳" },
       { href: "/subscriptions", label: "Subscriptions", icon: "🔁" },
       { href: "/pos", label: "Passes & POS", icon: "🛒" },
