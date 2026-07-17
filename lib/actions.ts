@@ -1216,26 +1216,39 @@ export async function recordCheckin(formData: FormData) {
 
 // ---- tablet intake (kiosk lead capture) ------------------------------------
 
-export async function createLeadIntake(formData: FormData) {
+// Full tablet self-registration → a submission the front desk reviews & adds.
+export async function submitTabletIntake(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  const first = String(formData.get("first_name") ?? "").trim();
+  const phone = String(formData.get("phone") ?? "").trim();
+  if (!first) return;
+  const goals = formData.getAll("goals").map((g) => String(g)).filter(Boolean);
   const supabase = createClient();
-  const { data: last } = await supabase.from("leads").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
-  const num = ((last?.num as number | null) ?? 0) + 1;
-  await supabase.from("leads").insert({
-    num, name,
-    phone: String(formData.get("phone") ?? "").trim() || null,
-    source: String(formData.get("source") || "Walk-in"),
-    interest: String(formData.get("interest") || "") || null,
-    urgency: String(formData.get("urgency") || "") || null,
-    goals: String(formData.get("goals") || "") || null,
-    profession: String(formData.get("profession") || "") || null,
-    stage: "1-New Lead",
+  await supabase.from("tablet_submissions").insert({
+    first_name: first,
+    last_name: String(formData.get("last_name") ?? "").trim() || null,
+    phone: phone || null,
+    email: String(formData.get("email") ?? "").trim() || null,
+    dob: String(formData.get("dob") ?? "").trim() || null,
+    gender: String(formData.get("gender") ?? "") || null,
+    occupation: String(formData.get("occupation") ?? "").trim() || null,
+    emergency: String(formData.get("emergency") ?? "").trim() || null,
+    height: Number(formData.get("height")) || null,
+    weight: Number(formData.get("weight")) || null,
+    conditions: String(formData.get("conditions") ?? "").trim() || null,
+    goals,
+    street: String(formData.get("street") ?? "").trim() || null,
+    city: String(formData.get("city") ?? "").trim() || null,
+    state: String(formData.get("state") ?? "").trim() || null,
+    postal: String(formData.get("postal") ?? "").trim() || null,
+    ref_id: String(formData.get("ref_id") ?? "").trim() || null,
+    tnc: String(formData.get("tnc")) === "Agree",
+    consent: String(formData.get("consent")) === "Agree",
+    status: "pending",
   });
-  await logAudit(p, "Tablet intake — lead captured", name, null);
-  await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk"], { title: "New walk-in intake", body: name, href: "/leads", icon: "🖊" });
+  await logAudit(p, "Tablet intake submitted", `${first} ${String(formData.get("last_name") ?? "")}`.trim(), null);
+  await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk"], { title: "New tablet intake", body: first, href: "/clients", icon: "🖊" });
   redirect("/intake?done=1");
 }
 
@@ -2743,6 +2756,10 @@ export async function createClientRecord(formData: FormData) {
       });
     }
   }
+  // mark the tablet submission as added (clears the front-desk banner)
+  const subId = String(formData.get("sub_id") || "");
+  if (subId) await supabase.from("tablet_submissions").update({ status: "added" }).eq("id", subId);
+
   await logAudit(p, "Client created", c.name, code);
   revalidatePath("/clients");
   redirect("/clients");

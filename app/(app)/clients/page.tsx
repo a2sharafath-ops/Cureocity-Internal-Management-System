@@ -33,6 +33,9 @@ export default async function ClientsPage() {
     supabase.from("blueprints").select("client_id, generated"),
   ]);
 
+  const { data: subData } = await supabase.from("tablet_submissions").select("id, first_name, last_name, phone, created_at").eq("status", "pending").order("created_at", { ascending: false });
+  const submissions = (subData ?? []) as { id: string; first_name: string; last_name: string | null; phone: string | null; created_at: string }[];
+
   // Bulk journey signals → per-client onboarding milestones.
   const consultDone = new Map<string, Set<string>>();
   for (const r of (consultData ?? []) as { client_id: string; kind: string; status: string }[]) {
@@ -79,6 +82,14 @@ export default async function ClientsPage() {
         )}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>CRM Hub — searchable contacts list</p>
+
+      {writer && submissions.map((s) => (
+        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--teal-light)", border: "1px solid #99f6e4", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 12, fontSize: 14 }}>
+          <span>📥 <b>Tablet intake received:</b> {s.first_name} {s.last_name ?? ""}{s.phone ? ` · ${s.phone}` : ""} — synced to front desk</span>
+          <span style={{ flex: 1 }} />
+          <Link href={`/clients/new?sub=${s.id}`} style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Review &amp; Add Client</Link>
+        </div>
+      ))}
 
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>

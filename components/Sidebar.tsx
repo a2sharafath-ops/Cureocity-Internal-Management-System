@@ -20,7 +20,6 @@ const SECTIONS: NavSection[] = [
       { href: "/clients", label: "Clients", icon: "◉" },
       { href: "/appointments", label: "Appointment Calendar", icon: "📅" },
       { href: "/sessions", label: "Training Schedule", icon: "🏋" },
-      { href: "/classes", label: "Group Classes", icon: "🧘" },
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },
       { href: "/forms", label: "Forms & Consent", icon: "📝" },
       { href: "/followups", label: "Follow-ups", icon: "📞" },

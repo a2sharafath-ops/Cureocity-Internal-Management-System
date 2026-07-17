@@ -18,12 +18,13 @@ const input: React.CSSProperties = {
 };
 
 export default function ClientForm({
-  action, packages, client, submitLabel,
+  action, packages, client, submitLabel, subId,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   packages: Pkg[];
   client?: ClientData;
   submitLabel: string;
+  subId?: string;
 }) {
   const c = client ?? {};
   return (
@@ -35,6 +36,7 @@ export default function ClientForm({
       }}
     >
       {c.id && <input type="hidden" name="id" value={c.id} />}
+      {subId && <input type="hidden" name="sub_id" value={subId} />}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
