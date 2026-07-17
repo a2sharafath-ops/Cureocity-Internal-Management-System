@@ -3,74 +3,66 @@ import { createClient } from "@/lib/supabase/server";
 import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
 import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
-
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
 export const dynamic = "force-dynamic";
 
 type Raw = {
-  id: string;
-  code: string | null;
-  name: string;
-  phone: string | null;
-  used: number;
-  branch: string | null;
-  joined: string | null;
+  id: string; code: string | null; name: string; phone: string | null; email: string | null;
+  used: number; branch: string | null; joined: string | null; dob: string | null; owner: string | null; package_id: string | null;
   packages: { name: string; sessions: number; is_facility: boolean } | null;
+  staff: { name: string } | null;
 };
+
+function ageFromDob(dob: string | null): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
+}
 
 export default async function ClientsPage() {
   const supabase = createClient();
   const profile = await getProfile();
   const writer = canWrite(profile?.role ?? "");
-  const { data, error } = await supabase
-    .from("clients")
-    .select("id, code, name, phone, used, branch, joined, packages(name, sessions, is_facility)")
-    .order("code", { ascending: true });
 
-  const clients: ClientRow[] = ((data ?? []) as unknown as Raw[]).map((c) => ({
-    id: c.id,
-    code: c.code,
-    name: c.name,
-    phone: c.phone,
-    used: c.used,
-    branch: c.branch,
-    joined: c.joined,
-    package_name: c.packages?.name ?? null,
-    is_facility: c.packages?.is_facility ?? false,
-    package_sessions: c.packages?.sessions ?? 0,
-  }));
+  const [{ data, error }, { data: staffData }] = await Promise.all([
+    supabase.from("clients").select("id, code, name, phone, email, used, branch, joined, dob, owner, package_id, packages(name, sessions, is_facility), staff:pro_id(name)").order("code", { ascending: true }),
+    supabase.from("staff").select("id, name").order("name"),
+  ]);
+
+  const staff = (staffData ?? []) as { id: string; name: string }[];
+  const clients: ClientRow[] = ((data ?? []) as unknown as Raw[]).map((c) => {
+    const sessions = c.packages?.sessions ?? 0;
+    const facility = c.packages?.is_facility ?? false;
+    const status = facility ? "Active" : (sessions > 0 && c.used >= sessions ? "Completed" : "Active");
+    return {
+      id: c.id, code: c.code, name: c.name, phone: c.phone, email: c.email,
+      age: ageFromDob(c.dob), branch: c.branch, used: c.used,
+      package_name: c.packages?.name ?? null, is_facility: facility, package_sessions: sessions,
+      is_blueprint: c.package_id === "bp1" || (c.packages?.name ?? "").toLowerCase().includes("blueprint"),
+      status, coach: c.staff?.name ?? null, owner: c.owner ?? null,
+    };
+  });
 
   return (
-    <div style={{ maxWidth: 1000 }}>
+    <div style={{ maxWidth: 1120 }}>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
         <RealtimeRefresh tables={["clients"]} />
-      <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
+        <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
         <span style={{ flex: 1 }} />
         {writer && (
-          <Link
-            href="/clients/new"
-            style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
-          >
-            + New Client
-          </Link>
+          <Link href="/clients/new" style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>+ Onboard Client</Link>
         )}
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        CRM · live from Supabase
-      </p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>CRM Hub — searchable contacts list</p>
 
       {error ? (
-        <div
-          style={{
-            background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca",
-            borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14,
-          }}
-        >
+        <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load clients.</b> {error.message}
         </div>
       ) : (
-        <ClientsTable clients={clients} />
+        <ClientsTable clients={clients} staff={staff} writer={writer} />
       )}
     </div>
   );

@@ -2562,6 +2562,14 @@ export async function createClientRecord(formData: FormData) {
   redirect("/clients");
 }
 
+export async function setClientOwner(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("clients").update({ owner: String(formData.get("owner") || "") || null }).eq("id", String(formData.get("id")));
+  revalidatePath("/clients");
+}
+
 export async function updateClientRecord(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
