@@ -14,6 +14,7 @@ import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
+import { ivrConfig } from "@/lib/ivr/config";
 import crypto from "crypto";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 import { sendEmail } from "@/lib/email/send";
@@ -267,6 +268,109 @@ export async function updateLeadStage(formData: FormData) {
   const { data: lead } = await supabase.from("leads").select("name").eq("id", id).maybeSingle();
   await supabase.from("leads").update({ stage }).eq("id", id);
   await logAudit(p, "Lead stage changed", lead?.name, `→ ${stage}`);
+  revalidatePath("/leads");
+}
+
+const LEAD_FIELDS = ["name", "phone", "source", "campaign", "interest", "urgency", "history", "goals", "location", "budget", "profession", "fde"];
+
+export async function createLead(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  const { data: last } = await supabase.from("leads").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
+  const num = ((last?.num as number | null) ?? 0) + 1;
+  const row: Record<string, unknown> = { num, stage: "1-New Lead" };
+  for (const f of LEAD_FIELDS) row[f] = String(formData.get(f) ?? "").trim() || null;
+  row.name = name;
+  await supabase.from("leads").insert(row);
+  await logAudit(p, "Lead added", name, null);
+  revalidatePath("/leads");
+}
+
+export async function updateLead(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  const patch: Record<string, unknown> = {};
+  for (const f of LEAD_FIELDS) patch[f] = String(formData.get(f) ?? "").trim() || null;
+  await supabase.from("leads").update(patch).eq("id", id);
+  await logAudit(p, "Lead updated", String(formData.get("name") ?? ""), null);
+  revalidatePath("/leads");
+}
+
+// Convert a lead into a client on a chosen package — creates the client,
+// auto-schedules sessions, raises the package invoice, and lands on the client's
+// billing so payment can be collected.
+export async function convertLeadWithPackage(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const id = String(formData.get("id"));
+  const package_id = String(formData.get("package_id") || "") || null;
+  const joined = String(formData.get("joined") || todayISO());
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, phone").eq("id", id).maybeSingle();
+  if (!lead?.name) return;
+
+  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
+  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
+  const { data: inserted } = await supabase.from("clients").insert({
+    code, name: lead.name, phone: lead.phone ?? null, joined,
+    package_id, used: 0, verified: true, converted_from: id, pro_id: "d1",
+  }).select("id").single();
+
+  if (inserted && package_id) {
+    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
+    if (pkg && !pkg.is_facility && pkg.sessions > 0) {
+      await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
+      await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
+    }
+    if (pkg) {
+      const num = await nextInvoiceNum(supabase);
+      await supabase.from("invoices").insert({
+        num, client_id: inserted.id, description: `${pkg.name} package`, amount: pkg.price ?? 0,
+        status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+      });
+    }
+  }
+  await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
+  await logAudit(p, "Lead converted to client", lead.name, code);
+  if (inserted) redirect(`/clients/${inserted.id}?tab=timeline`);
+}
+
+export async function convertLeadToClient(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, phone").eq("id", id).maybeSingle();
+  if (!lead?.name) return;
+  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
+  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
+  const { data: inserted } = await supabase.from("clients").insert({
+    code, name: lead.name, phone: lead.phone ?? null, joined: todayISO(),
+    used: 0, verified: true, converted_from: id, pro_id: "d1",
+  }).select("id").single();
+  await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
+  await logAudit(p, "Lead converted to client", lead.name, code);
+  revalidatePath("/leads");
+  if (inserted) redirect(`/clients/${inserted.id}`);
+}
+
+// click-to-call via IVR provider (key-ready). Falls back to a tel: link in the UI.
+export async function initiateCall(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const phone = String(formData.get("phone") || "");
+  const cfg = ivrConfig();
+  if (cfg.configured) {
+    // Provider-specific bridge (Exotel/Knowlarity/Twilio) goes here using
+    // IVR_API_KEY + IVR_CALLER_ID + IVR_AGENT_NUMBER. Left inert until keys set.
+  }
+  await logAudit(p, cfg.configured ? "IVR call initiated" : "Call opened", phone, null);
   revalidatePath("/leads");
 }
 

@@ -120,21 +120,16 @@ export default async function DashboardPage() {
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["sessions", "appointments", "leads", "consultations", "invoices", "subscriptions"]} />
 
-      {/* action row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <div style={{ color: "var(--muted)", fontSize: 13 }}>{fullDate}</div>
+      {/* controls: tabs (left) + quick actions (right) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+        {pill("Overview", "/dashboard", true)}
+        {pill("Access & Check-in", "/access")}
+        {pill("Passes", "/passes")}
+        {pill("Store", "/pos")}
         <span style={{ flex: 1 }} />
-        <Link href="/messages" title="Communications" style={{ ...card, width: 36, height: 36, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 16 }}>💬</Link>
+        <span style={{ color: "var(--muted)", fontSize: 13, marginRight: 4 }}>{fullDate}</span>
         <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--teal-dark)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Book a slot</Link>
         <Link href="/leads" style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add Lead</Link>
-      </div>
-
-      {/* tabs */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {pill("📊 Overview", "/dashboard", true)}
-        {pill("🚪 Access & Check-in", "/access")}
-        {pill("🎟️ Passes", "/passes")}
-        {pill("🛒 Store", "/pos")}
       </div>
 
       {/* KPIs */}
