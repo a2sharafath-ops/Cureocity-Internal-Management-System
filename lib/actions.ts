@@ -9,6 +9,7 @@ import { getProfile } from "@/lib/auth";
 import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
+import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
 import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
@@ -83,7 +84,7 @@ export async function signOut() {
 
 export async function setPreviewRole(formData: FormData) {
   const me = await getProfile();
-  if (!me || me.role !== "Administrator") return; // only admins can preview
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return; // only admins can preview
   const role = String(formData.get("role") ?? "");
   const store = cookies();
 
@@ -132,14 +133,14 @@ export async function changePassword(_prev: PwState, formData: FormData): Promis
 }
 
 const ALLOWED_ROLES = [
-  "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
+  "Super Admin", "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
 ];
 
 export type InviteState = { error?: string; ok?: string };
 
 export async function inviteStaff(_prev: InviteState, formData: FormData): Promise<InviteState> {
   const me = await getProfile();
-  if (!me || me.role !== "Administrator") return { error: "Not authorized." };
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return { error: "Not authorized." };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
@@ -197,11 +198,11 @@ export async function createPortalLogin(_prev: InviteState, formData: FormData):
 
 export async function updateUserRole(formData: FormData) {
   const me = await getProfile();
-  if (!me || me.role !== "Administrator") return; // only admins manage roles
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return; // only admins manage roles
   const id = String(formData.get("id"));
   const role = String(formData.get("role"));
   if (!ALLOWED_ROLES.includes(role)) return;
-  if (id === me.id && role !== "Administrator") return; // don't let an admin demote themselves
+  if (id === me.id && role !== "Administrator" && role !== "Super Admin") return; // don't let an admin demote themselves
   const admin = createAdminClient();
   const { data: target } = await admin.from("profiles").select("email, role").eq("id", id).maybeSingle();
   await admin.from("profiles").update({ role }).eq("id", id);
@@ -390,6 +391,15 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
   const referrer_id = String(formData.get("referrer_id") || "") || null;
   const referral_code = String(formData.get("referral_code") ?? "").trim() || null;
 
+  // Membership-prerequisite rule: a brand-new client cannot convert straight
+  // onto a PT/Comprehensive package — they must hold a membership first.
+  if (package_id) {
+    const { data: pk0 } = await supabase.from("packages").select("is_facility").eq("id", package_id).maybeSingle();
+    if (pk0 && requiresMembership(packageCategory(package_id, pk0.is_facility))) {
+      return { ok: false, error: MEMBERSHIP_RULE_MSG };
+    }
+  }
+
   const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
   const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
   const { data: inserted } = await supabase.from("clients").insert({
@@ -398,7 +408,7 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
   }).select("id").single();
 
   if (inserted && package_id) {
-    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
+    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
     if (pkg && !pkg.is_facility && pkg.sessions > 0) {
       await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
       await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
@@ -410,6 +420,12 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
         num, client_id: inserted.id,
         description: `${pkg.name} package${discount > 0 ? ` (offer −₹${discount.toLocaleString("en-IN")})` : ""}`,
         amount, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+      });
+      await supabase.from("client_packages").insert({
+        client_id: inserted.id, package_id, package_name: pkg.name,
+        category: packageCategory(package_id, pkg.is_facility), start_date: joined,
+        end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
+        price: amount, status: "active", created_by: p.name,
       });
     }
   }
@@ -457,6 +473,52 @@ export async function initiateCall(formData: FormData) {
   }
   await logAudit(p, cfg.configured ? "IVR call initiated" : "Call opened", phone, null);
   revalidatePath("/leads");
+}
+
+// Add a package to an existing client. Enforces the membership-prerequisite rule:
+// PT / Comprehensive can only be sold if the client has an active membership
+// covering the chosen start date.
+export async function purchasePackage(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return { ok: false, error: "Not permitted" };
+  const client_id = String(formData.get("client_id") || "");
+  const package_id = String(formData.get("package_id") || "");
+  const start = String(formData.get("start_date") || todayISO());
+  const discount = Math.max(0, Number(formData.get("discount")) || 0);
+  if (!client_id || !package_id) return { ok: false, error: "Missing client or package" };
+
+  const supabase = createClient();
+  const { data: pkg } = await supabase.from("packages")
+    .select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
+  if (!pkg) return { ok: false, error: "Package not found" };
+
+  const cat = packageCategory(package_id, pkg.is_facility);
+  if (requiresMembership(cat)) {
+    const { data: existing } = await supabase.from("client_packages")
+      .select("category, start_date, end_date").eq("client_id", client_id).eq("status", "active");
+    if (!hasActiveMembership((existing ?? []) as { category: string; start_date: string | null; end_date: string | null }[], start)) {
+      return { ok: false, error: MEMBERSHIP_RULE_MSG };
+    }
+  }
+
+  const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
+  await supabase.from("client_packages").insert({
+    client_id, package_id, package_name: pkg.name, category: cat, start_date: start,
+    end_date: pkg.validity ? addDaysISO(start, pkg.validity) : null,
+    price: amount, status: "active", created_by: p.name,
+  });
+  const num = await nextInvoiceNum(supabase);
+  await supabase.from("invoices").insert({
+    num, client_id, description: `${pkg.name} package${discount > 0 ? ` (offer −₹${discount.toLocaleString("en-IN")})` : ""}`,
+    amount, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+  });
+  if (!pkg.is_facility && pkg.sessions > 0) {
+    await supabase.from("enrollments").insert({ client_id, trainer_id: "t0", hour: 9, session: "PT" });
+    await supabase.from("sessions").insert(buildSessions(client_id, "t0", 9, start, pkg.sessions));
+  }
+  await logAudit(p, "Package purchased", pkg.name, client_id);
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
 }
 
 // ---- consultations (professional workspace) --------------------------------

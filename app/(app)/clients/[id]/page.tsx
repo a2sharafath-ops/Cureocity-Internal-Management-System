@@ -13,6 +13,7 @@ import { currentStreak, last7Count } from "@/lib/habits";
 import { todayISO } from "@/lib/today";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
+import AddPackage from "@/components/AddPackage";
 import { getProfile } from "@/lib/auth";
 import { canWrite, canConsult, canBill } from "@/lib/roles";
 
@@ -113,17 +114,22 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
-  // owner / coach names, blueprint status, onboarding journey follow-ups
-  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }] = await Promise.all([
+  // owner / coach names, blueprint status, onboarding journey follow-ups, packages held
+  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }] = await Promise.all([
     supabase.from("staff").select("id, name"),
     supabase.from("blueprints").select("generated, generated_date, scores").eq("client_id", params.id).maybeSingle(),
     supabase.from("followups").select("label, due_date, status, kind").eq("client_id", params.id).order("due_date"),
+    supabase.from("client_packages").select("id, package_name, category, start_date, end_date, price, status").eq("client_id", params.id).order("start_date", { ascending: false }),
+    supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("price"),
   ]);
   const staffMap = new Map(((staffAll ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
   const ownerName = c0.owner ? (staffMap.get(String(c0.owner)) ?? null) : null;
   const coachName = c0.pro_id ? (staffMap.get(String(c0.pro_id)) ?? null) : null;
   const bp = (bpRow ?? null) as { generated: boolean; generated_date: string | null; scores: Record<string, number> | null } | null;
   const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
+  const clientPackages = (cpRows ?? []) as { id: string; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
+  const pkgList = (allPkgs ?? []) as { id: string; name: string; price: number; is_facility: boolean }[];
+  const activeMembership = clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
   const clientAge = ageOf(c0.dob);
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
@@ -218,13 +224,51 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Deals / Packages */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>Deals / Packages</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: invoices.length ? 12 : 0 }}>
-          <Stat label="Package" value={pkg?.name ?? "—"} />
-          <Stat label="Price" value={pkg ? `₹${Number(pkg.price ?? 0).toLocaleString("en-IN")}` : "—"} />
-          <Stat label="Joined" value={client.joined} />
-          <Stat label="Status" value={<span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>Active</span>} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700 }}>Deals / Packages</div>
+          <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
+            {activeMembership ? "✔ Active membership" : "No active membership"}
+          </span>
         </div>
+
+        {/* Packages held (membership + PT + …) */}
+        {clientPackages.length > 0 ? (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 12 }}>
+            <thead>
+              <tr style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase" }}>
+                <th style={{ textAlign: "left", padding: "4px 6px" }}>Package</th>
+                <th style={{ textAlign: "left", padding: "4px 6px" }}>Type</th>
+                <th style={{ textAlign: "left", padding: "4px 6px" }}>Valid</th>
+                <th style={{ textAlign: "left", padding: "4px 6px" }}>Price</th>
+                <th style={{ textAlign: "left", padding: "4px 6px" }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clientPackages.map((cp) => {
+                const live = cp.status === "active" && (!cp.end_date || cp.end_date >= todayISO());
+                return (
+                  <tr key={cp.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>{cp.package_name ?? "—"}</td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "#dbeafe" : "var(--teal-light)", color: cp.category === "membership" ? "#1e40af" : "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
+                    <td style={{ padding: "8px 6px", color: "var(--muted)" }}>{cp.start_date ?? "—"}{cp.end_date ? ` → ${cp.end_date}` : ""}</td>
+                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(cp.price ?? 0).toLocaleString("en-IN")}</td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: live ? "var(--green-bg)" : "#eef2f1", color: live ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{live ? "Active" : "Expired"}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 12 }}>
+            <Stat label="Package" value={pkg?.name ?? "—"} />
+            <Stat label="Price" value={pkg ? `₹${Number(pkg.price ?? 0).toLocaleString("en-IN")}` : "—"} />
+            <Stat label="Joined" value={client.joined} />
+            <Stat label="Status" value={<span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>Active</span>} />
+          </div>
+        )}
+
+        {canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
+
         {showBilling && invoices.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>
             <tbody>

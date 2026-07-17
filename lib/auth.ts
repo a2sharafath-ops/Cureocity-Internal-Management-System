@@ -34,7 +34,7 @@ export async function getViewRole(): Promise<{ real: string; effective: string; 
   const real = me?.role ?? "Staff";
   let preview: string | null = null;
   let profession: string | null = null;
-  if (real === "Administrator") {
+  if (real === "Administrator" || real === "Super Admin") {
     const c = cookies().get("preview_role")?.value;
     if (c) preview = c;
     const p = cookies().get("preview_profession")?.value;

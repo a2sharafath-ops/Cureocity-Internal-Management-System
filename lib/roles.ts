@@ -1,6 +1,7 @@
 // Role → permissions map (mirrors the prototype's RBAC, simplified).
 
 export type Role =
+  | "Super Admin"
   | "Administrator"
   | "Manager"
   | "Front Desk"
@@ -54,6 +55,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
 };
 
 export function canSee(role: string, href: string): boolean {
+  if (role === "Super Admin") return true;
   const rule = NAV_ACCESS[href];
   if (!rule) return true;
   if (rule === "all") return true;
@@ -62,80 +64,80 @@ export function canSee(role: string, href: string): boolean {
 
 // Who can create/edit clients and move leads.
 export function canWrite(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role);
 }
 
 // Who can reschedule / complete strength sessions (front desk + trainers).
 export function canManageSessions(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
 }
 
 // Who can activate/deactivate packages.
 export function canManagePackages(role: string): boolean {
-  return ["Administrator", "Manager"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role);
 }
 
 // Who can run consultations / write summaries.
 export function canConsult(role: string): boolean {
-  return ["Administrator", "Manager", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Health Professional"].includes(role);
 }
 
 // Who can drive the BluePrint flow (blood reports, generate).
 export function canManageBlueprint(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
 }
 
 // Who can manage invoices / billing.
 export function canBill(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }
 
 // Who can message clients.
 export function canMessage(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
 }
 
 // Who can schedule group classes / manage bookings.
 export function canClasses(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
 }
 
 // Who can book / manage calendar appointments.
 export function canAppointments(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
 }
 
 // Who can manage retention (at-risk, NPS, referrals).
 export function canRetention(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role);
 }
 
 // Who can sell passes / run the retail POS.
 export function canPos(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }
 
 // Who can view/edit the clinical EMR (PHI — clinicians only).
 export function canEmr(role: string): boolean {
-  return ["Administrator", "Manager", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Health Professional"].includes(role);
 }
 
 // Who can manage insurance & claims.
 export function canClaims(role: string): boolean {
-  return ["Administrator", "Manager", "Finance"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
 }
 
 // Who can access compliance & governance (consent, breach, retention).
 export function canCompliance(role: string): boolean {
-  return ["Administrator", "Manager"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role);
 }
 
 // Who can manage message templates & campaigns.
 export function canCampaigns(role: string): boolean {
-  return ["Administrator", "Manager", "Front Desk"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role);
 }
 
 // Who can manage HR (attendance, leave, payroll).
 export function canHr(role: string): boolean {
-  return ["Administrator", "Manager", "HR"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "HR"].includes(role);
 }

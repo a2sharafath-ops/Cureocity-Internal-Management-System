@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
-      <Sidebar role={role} canPersona={real === "Administrator"} />
+      <Sidebar role={role} canPersona={real === "Administrator" || real === "Super Admin"} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <header
           style={{
@@ -49,7 +49,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span style={{ flex: 1 }} />
           <Link href="/messages" title="Communications" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, width: 34, height: 34, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 16, marginRight: 8 }}>💬</Link>
           <NotificationBell items={notifs} unread={unread} />
-          {real === "Administrator" && <RolePreview preview={preview} profession={profession} />}
+          {(real === "Administrator" || real === "Super Admin") && <RolePreview preview={preview} profession={profession} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginLeft: 12 }}>
             <Link href="/account" title="My account" style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none", color: "inherit" }}>
               <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12 }}>

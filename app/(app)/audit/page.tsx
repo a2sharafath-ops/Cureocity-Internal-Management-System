@@ -31,7 +31,7 @@ function actionColor(a: string): string {
 
 export default async function AuditPage() {
   const me = await getProfile();
-  if (!me || me.role !== "Administrator") redirect("/dashboard");
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) redirect("/dashboard");
 
   const supabase = createClient();
   const { data, error } = await supabase

@@ -17,7 +17,7 @@ type ProfileRow = {
 export default async function UsersPage() {
   const me = await getProfile();
   // Admin-only page
-  if (!me || me.role !== "Administrator") redirect("/dashboard");
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) redirect("/dashboard");
 
   const supabase = createClient();
   const { data, error } = await supabase

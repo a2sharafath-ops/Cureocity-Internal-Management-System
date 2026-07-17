@@ -5,7 +5,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { inviteStaff, type InviteState } from "@/lib/actions";
 
 const ROLES = [
-  "Front Desk", "Health Professional", "Manager", "Finance", "HR", "Staff", "Administrator",
+  "Front Desk", "Health Professional", "Manager", "Finance", "HR", "Staff", "Administrator", "Super Admin",
 ];
 
 const input: React.CSSProperties = {
