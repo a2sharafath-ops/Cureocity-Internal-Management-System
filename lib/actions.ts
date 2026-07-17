@@ -581,6 +581,89 @@ export async function refundInvoice(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// ---- subscriptions / recurring billing -------------------------------------
+
+function addDays(iso: string, days: number) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export async function createSubscription(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const package_id = String(formData.get("package_id"));
+  const auto_renew = String(formData.get("auto_renew") ?? "true") === "true";
+  if (!client_id || !package_id) return;
+  const supabase = createClient();
+  const { data: pkg } = await supabase.from("packages").select("price, validity, name").eq("id", package_id).maybeSingle();
+  const interval = pkg?.validity ?? 30;
+  const start = todayISO();
+  await supabase.from("subscriptions").insert({
+    client_id, package_id, amount: pkg?.price ?? 0, interval_days: interval,
+    status: "active", auto_renew, start_date: start, renews_on: addDays(start, interval),
+  });
+  await logAudit(p, "Subscription created", pkg?.name ?? package_id, null);
+  revalidatePath("/subscriptions");
+}
+
+export async function setSubStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["active", "paused", "cancelled"].includes(status)) return;
+  const supabase = createClient();
+  await supabase.from("subscriptions").update({ status }).eq("id", id);
+  await logAudit(p, "Subscription " + status, null, null);
+  revalidatePath("/subscriptions");
+}
+
+export async function toggleAutoRenew(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const id = String(formData.get("id"));
+  const value = String(formData.get("value")) === "true";
+  const supabase = createClient();
+  await supabase.from("subscriptions").update({ auto_renew: !value }).eq("id", id);
+  revalidatePath("/subscriptions");
+}
+
+async function renewOne(supabase: ReturnType<typeof createClient>, sub: { id: string; client_id: string; package_id: string | null; amount: number; interval_days: number; renews_on: string | null }, actor: string) {
+  const num = await nextInvoiceNum(supabase);
+  const { data: pkg } = await supabase.from("packages").select("name").eq("id", sub.package_id ?? "").maybeSingle();
+  await supabase.from("invoices").insert({
+    num, client_id: sub.client_id, description: `${pkg?.name ?? "Subscription"} — renewal`,
+    amount: sub.amount, status: "Unpaid", issued_date: todayISO(), created_by: actor,
+  });
+  const base = sub.renews_on && sub.renews_on > todayISO() ? sub.renews_on : todayISO();
+  await supabase.from("subscriptions").update({ renews_on: addDays(base, sub.interval_days) }).eq("id", sub.id);
+}
+
+export async function renewNow(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  const { data: sub } = await supabase.from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on").eq("id", id).maybeSingle();
+  if (sub) { await renewOne(supabase, sub, p.name); await logAudit(p, "Subscription renewed (manual)", null, null); }
+  revalidatePath("/subscriptions");
+}
+
+export async function processDueRenewals() {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const supabase = createClient();
+  const { data: due } = await supabase
+    .from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on")
+    .eq("status", "active").eq("auto_renew", true).lte("renews_on", todayISO());
+  for (const sub of (due ?? [])) await renewOne(supabase, sub, p.name);
+  await logAudit(p, "Processed due renewals", null, `${(due ?? []).length} renewed`);
+  revalidatePath("/subscriptions");
+  revalidatePath("/billing");
+}
+
 // ---- measurements / InBody -------------------------------------------------
 
 export async function addMeasurement(formData: FormData) {
