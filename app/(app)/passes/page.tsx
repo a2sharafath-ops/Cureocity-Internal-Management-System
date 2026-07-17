@@ -42,6 +42,7 @@ export default async function PassesPage() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["passes"]} />
+      <Link href="/dashboard" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Gym Passes</h1>
         <span style={{ flex: 1 }} />

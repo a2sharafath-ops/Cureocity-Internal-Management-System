@@ -21,7 +21,6 @@ const SECTIONS: NavSection[] = [
       { href: "/appointments", label: "Appointment Calendar", icon: "📅" },
       { href: "/sessions", label: "Training Schedule", icon: "🏋" },
       { href: "/classes", label: "Group Classes", icon: "🧘" },
-      { href: "/access", label: "Access & Check-in", icon: "🚪" },
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },
       { href: "/forms", label: "Forms & Consent", icon: "📝" },
       { href: "/followups", label: "Follow-ups", icon: "📞" },
@@ -80,8 +79,6 @@ const SECTIONS: NavSection[] = [
       { href: "/expenses", label: "Expenses", icon: "🧾" },
       { href: "/billing", label: "Billing", icon: "💳" },
       { href: "/subscriptions", label: "Subscriptions", icon: "🔁" },
-      { href: "/passes", label: "Gym Passes", icon: "🎟" },
-      { href: "/pos", label: "Retail Store", icon: "🛒" },
       { href: "/claims", label: "Insurance", icon: "🏥" },
       { href: "/finsheets", label: "Finance Sheets", icon: "📑" },
       { href: "/reports", label: "Reports", icon: "📊" },
@@ -148,7 +145,6 @@ export default function Sidebar({ role = "Staff", canPersona = false }: { role?:
                     background: active ? "var(--sidebar-hover)" : "transparent",
                   }}
                 >
-                  <span style={{ width: 18, textAlign: "center", opacity: 0.9 }}>{item.icon}</span>
                   {item.label}
                 </Link>
               );
@@ -176,7 +172,6 @@ export default function Sidebar({ role = "Staff", canPersona = false }: { role?:
                       color: active ? "#fff" : "#cfe8e3", background: active ? "var(--sidebar-hover)" : "transparent",
                     }}
                   >
-                    <span style={{ width: 18, textAlign: "center", opacity: 0.9 }}>{p.icon}</span>
                     {p.label} Workspace
                   </button>
                 </form>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -41,6 +42,7 @@ export default async function StorePage() {
   return (
     <div style={{ maxWidth: 1120 }}>
       <RealtimeRefresh tables={["products", "sales"]} />
+      <Link href="/dashboard" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Retail Store</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Point-of-sale for supplements, merchandise &amp; accessories. Every sale posts a paid invoice into Billing.</p>
 
