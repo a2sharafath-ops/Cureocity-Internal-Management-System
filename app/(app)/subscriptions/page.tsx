@@ -103,7 +103,7 @@ export default async function SubscriptionsPage() {
       </div>
 
       <div style={{ marginTop: 12, color: "var(--muted)", fontSize: 12 }}>
-        Auto-renew generates an unpaid invoice on the renewal date. Click “Process due renewals” to run them now — or wire a daily Vercel Cron / Supabase pg_cron job to call it automatically.
+        Auto-renew generates an unpaid invoice on the renewal date. A daily Vercel Cron (3:00 UTC) processes these automatically once <code>CRON_SECRET</code> is set in your environment — the button above runs them on demand meanwhile.
       </div>
     </div>
   );

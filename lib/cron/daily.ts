@@ -1,0 +1,92 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { todayISO } from "@/lib/today";
+import { sendEmail } from "@/lib/email/send";
+import { tplAppointmentReminder } from "@/lib/email/templates";
+
+type Admin = ReturnType<typeof createAdminClient>;
+
+function addDays(iso: string, days: number) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtHour(h: number | null) {
+  if (h == null) return "";
+  const am = h < 12;
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return ` at ${hr}:00 ${am ? "AM" : "PM"}`;
+}
+
+async function nextInvoiceNum(supabase: Admin) {
+  const { data } = await supabase.from("invoices").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
+  return ((data?.num as number | null) ?? 0) + 1;
+}
+
+// Renew every active, auto-renewing subscription that is due today or earlier.
+async function processRenewals(supabase: Admin) {
+  const today = todayISO();
+  const { data: due } = await supabase
+    .from("subscriptions")
+    .select("id, client_id, package_id, amount, interval_days, renews_on")
+    .eq("status", "active").eq("auto_renew", true).lte("renews_on", today);
+
+  let renewed = 0;
+  for (const sub of (due ?? []) as { id: string; client_id: string; package_id: string | null; amount: number; interval_days: number; renews_on: string | null }[]) {
+    const num = await nextInvoiceNum(supabase);
+    const { data: pkg } = await supabase.from("packages").select("name").eq("id", sub.package_id ?? "").maybeSingle();
+    await supabase.from("invoices").insert({
+      num, client_id: sub.client_id, description: `${pkg?.name ?? "Subscription"} — renewal`,
+      amount: sub.amount, status: "Unpaid", issued_date: today, created_by: "auto-renewal",
+    });
+    const base = sub.renews_on && sub.renews_on > today ? sub.renews_on : today;
+    await supabase.from("subscriptions").update({ renews_on: addDays(base, sub.interval_days) }).eq("id", sub.id);
+    renewed++;
+  }
+  return renewed;
+}
+
+// Email a reminder for every session scheduled tomorrow (deduped per client/day).
+async function sendReminders(supabase: Admin) {
+  const tomorrow = addDays(todayISO(), 1);
+  const { data: sessions } = await supabase
+    .from("sessions")
+    .select("id, hour, client_id, clients(name, email)")
+    .eq("date", tomorrow).eq("status", "scheduled");
+
+  // avoid re-sending: emails already logged today with template 'reminder'
+  const { data: sentToday } = await supabase
+    .from("email_log").select("to_email").eq("template", "reminder").gte("created_at", todayISO());
+  const already = new Set(((sentToday ?? []) as { to_email: string }[]).map((r) => r.to_email));
+
+  let reminders = 0;
+  for (const s of (sessions ?? []) as unknown as { id: string; hour: number | null; client_id: string; clients: { name: string | null; email: string | null } | null }[]) {
+    const email = s.clients?.email;
+    if (!email || already.has(email)) continue;
+    const tpl = tplAppointmentReminder(s.clients?.name ?? "there", `tomorrow${fmtHour(s.hour)}`);
+    let result;
+    try { result = await sendEmail(email, tpl.subject, tpl.html); }
+    catch { result = { status: "failed" as const, error: "Unexpected" }; }
+    await supabase.from("email_log").insert({
+      to_email: email, client_id: s.client_id, template: "reminder", subject: tpl.subject,
+      status: result.status, provider: "resend",
+      provider_id: "providerId" in result ? result.providerId ?? null : null,
+      error: "error" in result ? result.error ?? null : null,
+      created_by: "cron",
+    });
+    already.add(email);
+    reminders++;
+  }
+  return reminders;
+}
+
+export async function runDaily() {
+  const supabase = createAdminClient();
+  const renewed = await processRenewals(supabase);
+  const reminders = await sendReminders(supabase);
+  await supabase.from("audit_log").insert({
+    actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
+    target: null, detail: `renewed ${renewed} · reminders ${reminders}`,
+  });
+  return { renewed, reminders, ranAt: new Date().toISOString() };
+}
