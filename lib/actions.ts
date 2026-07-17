@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 
@@ -421,6 +421,53 @@ export async function generateBlueprint(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// ---- billing / invoices ----------------------------------------------------
+
+async function nextInvoiceNum(supabase: ReturnType<typeof createClient>) {
+  const { data } = await supabase.from("invoices").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
+  return ((data?.num as number | null) ?? 0) + 1;
+}
+
+export async function createInvoice(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const client_id = String(formData.get("client_id")) || null;
+  const description = String(formData.get("description") ?? "").trim() || "Invoice";
+  const amount = Number(formData.get("amount")) || 0;
+  const method = String(formData.get("method") ?? "").trim() || null;
+  const supabase = createClient();
+  const num = await nextInvoiceNum(supabase);
+  await supabase.from("invoices").insert({
+    num, client_id, description, amount, method, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+  });
+  await logAudit(p, "Invoice created", description, `₹${amount}`);
+  revalidatePath("/billing");
+  if (client_id) revalidatePath(`/clients/${client_id}`);
+}
+
+export async function markInvoicePaid(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const id = String(formData.get("id"));
+  const method = String(formData.get("method") ?? "").trim() || "Cash";
+  const supabase = createClient();
+  await supabase.from("invoices").update({ status: "Paid", paid_date: todayISO(), method }).eq("id", id);
+  await logAudit(p, "Invoice marked paid", null, method);
+  revalidatePath("/billing");
+  revalidatePath("/", "layout");
+}
+
+export async function refundInvoice(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("invoices").update({ status: "Refunded" }).eq("id", id);
+  await logAudit(p, "Invoice refunded", null, null);
+  revalidatePath("/billing");
+  revalidatePath("/", "layout");
+}
+
 // ---- measurements / InBody -------------------------------------------------
 
 export async function addMeasurement(formData: FormData) {
@@ -548,13 +595,20 @@ export async function createClientRecord(formData: FormData) {
     .select("id")
     .single();
 
-  // auto-schedule sessions for PT / Comprehensive
-  if (inserted && c.package_id && c.joined) {
+  // auto-schedule sessions for PT / Comprehensive + create the package invoice
+  if (inserted && c.package_id) {
     const { data: pkg } = await supabase
-      .from("packages").select("sessions, is_facility").eq("id", c.package_id).maybeSingle();
-    if (pkg && !pkg.is_facility && pkg.sessions > 0) {
+      .from("packages").select("name, price, sessions, is_facility").eq("id", c.package_id).maybeSingle();
+    if (pkg && c.joined && !pkg.is_facility && pkg.sessions > 0) {
       await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
       await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, c.joined, pkg.sessions));
+    }
+    if (pkg) {
+      const num = await nextInvoiceNum(supabase);
+      await supabase.from("invoices").insert({
+        num, client_id: inserted.id, description: `${pkg.name} package`, amount: pkg.price ?? 0,
+        status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+      });
     }
   }
   await logAudit(p, "Client created", c.name, code);

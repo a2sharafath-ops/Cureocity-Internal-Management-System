@@ -20,6 +20,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/meals": ["Administrator", "Manager", "Health Professional"],
   "/blueprint": ["Administrator", "Manager", "Front Desk", "Health Professional"],
   "/packages": ["Administrator", "Manager", "Front Desk"],
+  "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/users": ["Administrator"],
   "/audit": ["Administrator"],
 };
@@ -54,4 +55,9 @@ export function canConsult(role: string): boolean {
 // Who can drive the BluePrint flow (blood reports, generate).
 export function canManageBlueprint(role: string): boolean {
   return ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+}
+
+// Who can manage invoices / billing.
+export function canBill(role: string): boolean {
+  return ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }

@@ -6,8 +6,10 @@ import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
+import InvoiceActions from "@/components/InvoiceActions";
+import InvoiceForm from "@/components/InvoiceForm";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult } from "@/lib/roles";
+import { canWrite, canConsult, canBill } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
@@ -65,6 +67,11 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   }));
 
   const canMeasure = canWrite(me?.role ?? "") || canConsult(me?.role ?? "");
+  const showBilling = canBill(me?.role ?? "");
+  const { data: invoiceRows } = showBilling
+    ? await supabase.from("invoices").select("id, num, description, amount, status, method, issued_date").eq("client_id", params.id).order("created_at", { ascending: false })
+    : { data: [] };
+  const invoices = (invoiceRows ?? []) as { id: string; num: number | null; description: string | null; amount: number; status: string; method: string | null; issued_date: string | null }[];
   const { data: measureRows } = await supabase
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: false }).limit(12);
   const measures = (measureRows ?? []) as { id: string; date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; resting_hr: number | null; recorded_by: string | null }[];
@@ -92,7 +99,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices"]} />
       <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
@@ -228,6 +235,36 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           ))
         )}
       </div>
+
+      {/* Billing */}
+      {showBilling && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>💳 Billing</div>
+            <span style={{ flex: 1 }} />
+            <InvoiceForm clientId={params.id} />
+          </div>
+          {invoices.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>No invoices for this client.</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <tbody>
+                {invoices.map((i) => (
+                  <tr key={i.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 6px", color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
+                    <td style={{ padding: "8px 6px" }}>{i.description}</td>
+                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
+                    <td style={{ padding: "8px 6px" }}>
+                      <span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span>
+                    </td>
+                    <td style={{ padding: "8px 6px", textAlign: "right" }}><InvoiceActions id={i.id} status={i.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>

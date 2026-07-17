@@ -60,6 +60,10 @@ export default async function PortalHome() {
     .eq("client_id", client.id).order("date", { ascending: false }).limit(1).maybeSingle();
   const m = latestM as { date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
 
+  const { data: invRows } = await supabase
+    .from("invoices").select("id, num, description, amount, status").eq("client_id", client.id).order("created_at", { ascending: false });
+  const invoices = (invRows ?? []) as { id: string; num: number | null; description: string | null; amount: number; status: string }[];
+
   const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
     const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
@@ -77,7 +81,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -200,6 +204,22 @@ export default async function PortalHome() {
               <MealSelfForm key={m.key} meal={m.key} label={m.label} icon={m.icon} log={mealMap.get(m.key) ?? null} />
             ))}
           </div>
+        </>
+      )}
+
+      {/* My invoices */}
+      {invoices.length > 0 && card(
+        <>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>💳 My invoices</div>
+          {invoices.map((i) => (
+            <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+              <span style={{ color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</span>
+              <span style={{ flex: 1 }}>{i.description}</span>
+              <b>₹{Number(i.amount).toLocaleString("en-IN")}</b>
+              <span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span>
+            </div>
+          ))}
+          <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)" }}>Pay unpaid invoices at the front desk. Online payment coming soon.</div>
         </>
       )}
 

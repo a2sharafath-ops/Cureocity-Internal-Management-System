@@ -14,6 +14,7 @@ const NAV = [
   { href: "/meals", label: "Meal Monitoring", icon: "🍽" },
   { href: "/blueprint", label: "BluePrint", icon: "🧬" },
   { href: "/packages", label: "Packages", icon: "▦" },
+  { href: "/billing", label: "Billing", icon: "💳" },
   { href: "/users", label: "Users & Roles", icon: "⚙" },
   { href: "/audit", label: "Audit Log", icon: "☰" },
 ];
