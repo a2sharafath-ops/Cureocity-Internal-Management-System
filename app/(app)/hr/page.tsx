@@ -6,6 +6,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { AttendanceButtons, LeaveForm, LeaveActions, PayrollRow } from "@/components/HrControls";
+import { OnboardingForm, OnboardingCard } from "@/components/OnboardingControls";
 
 export const dynamic = "force-dynamic";
 
@@ -15,19 +16,21 @@ type Staff = { id: string; name: string; role: string; department: string | null
 export default async function HrPage({ searchParams }: { searchParams: { tab?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/hr")) redirect("/dashboard");
-  const tab = ["attendance", "leave", "payroll"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
+  const tab = ["attendance", "leave", "payroll", "onboarding"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
 
   const today = todayISO();
   const month = today.slice(0, 7);
   const monthLabel = new Date(today + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
   const supabase = createClient();
-  const [{ data: staffData }, { data: attData }, { data: leaveData }, { data: payData }] = await Promise.all([
+  const [{ data: staffData }, { data: attData }, { data: leaveData }, { data: payData }, { data: obData }] = await Promise.all([
     supabase.from("staff").select("id, name, role, department").order("name"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("leaves").select("id, staff_id, from_date, to_date, type, reason, status, staff(name)").order("created_at", { ascending: false }).limit(60),
     supabase.from("payroll").select("id, staff_id, base, lop_days, net, status").eq("month", month),
+    supabase.from("onboarding").select("id, name, role, joining_date, steps, status").order("created_at", { ascending: false }),
   ]);
+  const onboarding = (obData ?? []) as unknown as { id: string; name: string; role: string | null; joining_date: string | null; steps: { label: string; done: boolean }[]; status: string }[];
   const staff = (staffData ?? []) as Staff[];
   const att = new Map(((attData ?? []) as { staff_id: string; status: string }[]).map((a) => [a.staff_id, a.status]));
   const leaves = (leaveData ?? []) as unknown as { id: string; staff_id: string; from_date: string; to_date: string; type: string; reason: string | null; status: string; staff: { name: string } | null }[];
@@ -59,6 +62,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
         <h1 style={{ fontSize: 20, margin: 0 }}>HR</h1>
         <span style={{ flex: 1 }} />
         {tab === "leave" && <LeaveForm staff={staff} />}
+        {tab === "onboarding" && <OnboardingForm />}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Attendance, leave &amp; payroll — all people operations.</p>
 
@@ -69,7 +73,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {tabLink("attendance", "Attendance")}{tabLink("leave", "Leave")}{tabLink("payroll", "Payroll")}
+        {tabLink("attendance", "Attendance")}{tabLink("leave", "Leave")}{tabLink("payroll", "Payroll")}{tabLink("onboarding", "Onboarding")}
       </div>
 
       {tab === "attendance" && (
@@ -106,6 +110,13 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
               {leaves.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No leave requests.</td></tr>}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === "onboarding" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
+          {onboarding.map((o) => <OnboardingCard key={o.id} id={o.id} name={o.name} role={o.role} joining={o.joining_date} steps={o.steps ?? []} status={o.status} />)}
+          {onboarding.length === 0 && <div style={{ ...box, padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13, gridColumn: "1 / -1" }}>No one onboarding. Click “+ New hire” to start a checklist.</div>}
         </div>
       )}
 

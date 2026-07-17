@@ -353,6 +353,38 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         {canMeasure && <MeasurementForm clientId={params.id} />}
       </div>
 
+      {/* Progress Photos */}
+      {(() => {
+        const photos = files.filter((f) => f.kind === "progress_photo" && f.url).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        if (photos.length === 0) return null;
+        const first = photos[0], latest = photos[photos.length - 1];
+        return (
+          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>📸 Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
+            {photos.length >= 2 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
+                  const p2 = ph as typeof first;
+                  return (
+                    <div key={label as string}>
+                      <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 4 }}>{label as string} · {p2.created_at.slice(0, 10)}</div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p2.url ?? ""} alt={label as string} style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)", aspectRatio: "3/4", objectFit: "cover" }} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {photos.map((ph) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={ph.id} src={ph.url ?? ""} alt={ph.created_at} title={ph.created_at.slice(0, 10)} style={{ width: 68, height: 90, borderRadius: 8, border: "1px solid var(--border)", objectFit: "cover" }} />
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Habits & streaks */}
       {(canCoach || habits.length > 0) && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>

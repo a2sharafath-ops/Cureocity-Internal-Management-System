@@ -862,6 +862,47 @@ export async function createLeadIntake(formData: FormData) {
   redirect("/intake?done=1");
 }
 
+// ---- HR onboarding ---------------------------------------------------------
+
+const DEFAULT_ONBOARDING_STEPS = ["Documents collected", "Offer letter shared", "System accounts created", "Attendance setup", "Orientation & SOP walkthrough"];
+
+export async function addOnboarding(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("onboarding").insert({
+    name, role: String(formData.get("role") ?? "").trim() || null,
+    joining_date: String(formData.get("joining_date") || "") || null,
+    steps: DEFAULT_ONBOARDING_STEPS.map((label) => ({ label, done: false })),
+    status: "in_progress", created_by: p.name,
+  });
+  await logAudit(p, "Onboarding started", name, null);
+  revalidatePath("/hr");
+}
+
+export async function toggleOnboardingStep(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id"));
+  const idx = Number(formData.get("idx"));
+  const supabase = createClient();
+  const { data } = await supabase.from("onboarding").select("steps").eq("id", id).maybeSingle();
+  const steps = ((data?.steps as { label: string; done: boolean }[] | null) ?? []).map((s, i) => i === idx ? { ...s, done: !s.done } : s);
+  const status = steps.length && steps.every((s) => s.done) ? "complete" : "in_progress";
+  await supabase.from("onboarding").update({ steps, status }).eq("id", id);
+  revalidatePath("/hr");
+}
+
+export async function removeOnboarding(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("onboarding").delete().eq("id", String(formData.get("id")));
+  revalidatePath("/hr");
+}
+
 // ---- in-app notifications --------------------------------------------------
 
 export async function markNotificationRead(formData: FormData) {
