@@ -16,6 +16,7 @@ const NAV = [
   { href: "/blueprint", label: "BluePrint", icon: "🧬" },
   { href: "/packages", label: "Packages", icon: "▦" },
   { href: "/billing", label: "Billing", icon: "💳" },
+  { href: "/reports", label: "Reports", icon: "📊" },
   { href: "/users", label: "Users & Roles", icon: "⚙" },
   { href: "/audit", label: "Audit Log", icon: "☰" },
 ];
