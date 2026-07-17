@@ -60,17 +60,23 @@ export default async function ReportsPage() {
   if (!me || !canSee(me.role, "/reports")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: invData }, { data: leadData }, { data: clientData }, sessTotal, sessDone] = await Promise.all([
+  const nowMs = Date.now();
+  const days30Ago = new Date(nowMs - 30 * 86400000).toISOString().slice(0, 10);
+  const [{ data: invData }, { data: leadData }, { data: clientData }, sessTotal, sessDone, { data: subData }, { data: recentSess }] = await Promise.all([
     supabase.from("invoices").select("amount, status, paid_date"),
     supabase.from("leads").select("stage"),
-    supabase.from("clients").select("package_id"),
+    supabase.from("clients").select("package_id, joined"),
     supabase.from("sessions").select("id", { count: "exact", head: true }),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("status", "completed"),
+    supabase.from("subscriptions").select("amount, interval_days, status").eq("status", "active"),
+    supabase.from("sessions").select("client_id").gte("date", days30Ago),
   ]);
 
   const invoices = (invData ?? []) as { amount: number; status: string; paid_date: string | null }[];
   const leads = (leadData ?? []) as { stage: string | null }[];
-  const clients = (clientData ?? []) as { package_id: string | null }[];
+  const clients = (clientData ?? []) as { package_id: string | null; joined: string | null }[];
+  const subs = (subData ?? []) as { amount: number; interval_days: number; status: string }[];
+  const activeClientIds = new Set(((recentSess ?? []) as { client_id: string }[]).map((s) => s.client_id));
 
   // revenue by month
   const months = lastMonths(6);
@@ -101,6 +107,26 @@ export default async function ReportsPage() {
   const completedSessions = sessDone.count ?? 0;
   const completionRate = totalSessions ? Math.round((completedSessions / totalSessions) * 100) : 0;
 
+  // LTV / ARPU / MRR / retention
+  const clientCount = clients.length || 1;
+  const ltv = totalPaid / clientCount;                          // avg realised revenue per client
+  const mrr = subs.reduce((s, x) => s + Number(x.amount) * (30 / (x.interval_days || 30)), 0);
+  const runRate = mrr * 12;                                     // annual run-rate from active subs
+  const activeCount = activeClientIds.size;
+  const retention = clients.length ? Math.round((Math.min(activeCount, clients.length) / clients.length) * 100) : 0;
+
+  // new members by join month (cohorts)
+  const newByMonth = new Map(months.map((m) => [m.key, 0]));
+  for (const c of clients) { const k = (c.joined ?? "").slice(0, 7); if (newByMonth.has(k)) newByMonth.set(k, (newByMonth.get(k) ?? 0) + 1); }
+  const cohortData = months.map((m) => ({ label: m.label, value: newByMonth.get(m.key) ?? 0 }));
+
+  // acquisition funnel: leads by stage → converted (active clients)
+  const funnelStages = ["1-New Lead", "2-Discovery", "3-Product Match", "4-Visit/Trial", "5-Close"];
+  const acqData = [
+    ...funnelStages.map((s) => ({ label: s.replace(/^\d-/, ""), value: stageCounts.get(s) ?? 0 })),
+    { label: "Converted (clients)", value: clients.length },
+  ];
+
   const kpi = (label: string, value: string, sub?: string) => (
     <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 16px", flex: 1, minWidth: 170 }}>
       <div style={{ color: "var(--muted)", fontSize: 12 }}>{label}</div>
@@ -115,11 +141,18 @@ export default async function ReportsPage() {
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Reports &amp; Analytics</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Live from your data</p>
 
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
         {kpi("Total revenue", money(totalPaid), "all paid invoices")}
         {kpi("Outstanding", money(outstanding), "unpaid")}
         {kpi("Active clients", String(clients.length))}
         {kpi("Session completion", `${completionRate}%`, `${completedSessions} of ${totalSessions}`)}
+      </div>
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+        {kpi("LTV / client", money(ltv), "realised revenue ÷ clients")}
+        {kpi("MRR", money(mrr), "from active subscriptions")}
+        {kpi("Annual run-rate", money(runRate), "MRR × 12")}
+        {kpi("30-day retention", `${retention}%`, `${activeCount} active of ${clients.length}`)}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -141,6 +174,16 @@ export default async function ReportsPage() {
             </div>
           </div>
         </Card>
+        <Card title="Acquisition funnel — leads → converted">
+          <Bars data={acqData} color="var(--teal)" />
+        </Card>
+        <Card title="New members by month (cohorts)">
+          <Bars data={cohortData} color="var(--purple)" />
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 18px", color: "var(--muted)", fontSize: 12 }}>
+        LTV is realised revenue per client to date. CAC (cost per acquisition) needs marketing-spend data — add an ad-spend source to compute LTV:CAC and payback period.
       </div>
     </div>
   );
