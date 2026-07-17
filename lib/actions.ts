@@ -11,6 +11,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { getPersona } from "@/lib/personas";
 import { buildFollowupRows } from "@/lib/followups";
+import { notifyRoles } from "@/lib/notify";
 import { paymentConfig } from "@/lib/payments/config";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 import { sendEmail } from "@/lib/email/send";
@@ -836,6 +837,35 @@ export async function recordCheckin(formData: FormData) {
   revalidatePath("/access");
 }
 
+// ---- in-app notifications --------------------------------------------------
+
+export async function markNotificationRead(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("notifications").update({ read: true }).eq("id", String(formData.get("id"))).eq("user_id", user.id);
+  revalidatePath("/", "layout");
+}
+
+export async function markAllNotificationsRead() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+  revalidatePath("/", "layout");
+}
+
+// mark one read, then go to its target
+export async function openNotification(formData: FormData) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const id = String(formData.get("id"));
+  const href = String(formData.get("href") || "");
+  if (user) await supabase.from("notifications").update({ read: true }).eq("id", id).eq("user_id", user.id);
+  revalidatePath("/", "layout");
+  if (href) redirect(href);
+}
+
 // ---- HR: attendance / leave / payroll --------------------------------------
 
 export async function markAttendance(formData: FormData) {
@@ -867,6 +897,7 @@ export async function addLeave(formData: FormData) {
     status: "pending",
   });
   await logAudit(p, "Leave requested", null, null);
+  await notifyRoles(supabase, ["Administrator", "Manager", "HR"], { title: "New leave request", body: `${from_date}${to_date !== from_date ? ` → ${to_date}` : ""}`, href: "/hr?tab=leave", icon: "🌴" });
   revalidatePath("/hr");
 }
 
@@ -1981,6 +2012,7 @@ export async function createReferral(formData: FormData) {
     created_by: p.name,
   });
   await logAudit(p, "Referral added", referred_name, null);
+  await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk"], { title: "New referral", body: referred_name, href: "/retention", icon: "🎁" });
   revalidatePath("/retention");
 }
 

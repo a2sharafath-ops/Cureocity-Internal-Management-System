@@ -3,6 +3,7 @@ import { todayISO } from "@/lib/today";
 import { sendEmail } from "@/lib/email/send";
 import { tplAppointmentReminder } from "@/lib/email/templates";
 import { buildFollowupRows } from "@/lib/followups";
+import { notifyRoles } from "@/lib/notify";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -126,6 +127,11 @@ export async function runDaily() {
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null, detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`,
+  });
+  await notifyRoles(supabase, ["Administrator", "Manager"], {
+    title: "Daily automation ran",
+    body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`,
+    href: "/followups", icon: "⚙️",
   });
   return { renewed, reminders, followups, ranAt: new Date().toISOString() };
 }
