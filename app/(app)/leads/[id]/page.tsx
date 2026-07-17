@@ -5,8 +5,8 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { leadScore, leadProduct, LS, TIER_STYLE } from "@/lib/leadscore";
-import { convertLeadWithPackage } from "@/lib/actions";
 import { LeadEditForm, CallCell, type Lead } from "@/components/LeadControls";
+import ConvertPanel from "@/components/ConvertPanel";
 import { ivrStatus } from "@/lib/ivr/config";
 
 export const dynamic = "force-dynamic";
@@ -22,15 +22,17 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   if (!me || !canSee(me.role, "/leads")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }] = await Promise.all([
+  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }] = await Promise.all([
     supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
+    supabase.from("clients").select("id, name").order("name"),
   ]);
   if (!leadRow) notFound();
   const lead = leadRow as Lead;
   const packages = (pkgRows ?? []) as { id: string; name: string; price: number; is_facility: boolean }[];
   const campaigns = [...new Set(((campRows ?? []) as { name: string }[]).map((c) => c.name))];
+  const clients = (clientRows ?? []) as { id: string; name: string }[];
   const ivr = ivrStatus();
 
   const { total, tier } = leadScore(lead);
@@ -87,22 +89,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       {/* convert — kept at the bottom */}
       <div style={{ ...box, background: "#f0fdf9" }}>
         <b style={{ fontSize: 15 }}>Convert to client</b>
-        <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 12px" }}>Pick a package — this creates the client, schedules sessions and raises the package invoice, then takes you to billing to collect payment.</p>
-        <form action={convertLeadWithPackage} style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-          <input type="hidden" name="id" value={lead.id} />
-          <div style={{ display: "grid", gap: 3 }}>
-            <label style={lblS}>Package</label>
-            <select name="package_id" required defaultValue="" style={{ ...input, minWidth: 260 }}>
-              <option value="" disabled>Select a package…</option>
-              {packages.map((p) => <option key={p.id} value={p.id}>{p.name} — {money(p.price)}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "grid", gap: 3 }}>
-            <label style={lblS}>Start date</label>
-            <input name="joined" type="date" defaultValue={todayISO()} style={input} />
-          </div>
-          <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Convert &amp; create invoice →</button>
-        </form>
+        <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 14px" }}>Pick a package &amp; offer, record referral, capture consent, and verify by OTP. On success the client, sessions and package invoice are created and you're taken to billing.</p>
+        <ConvertPanel leadId={lead.id} phone={lead.phone} packages={packages.map((p) => ({ id: p.id, name: p.name, price: p.price }))} clients={clients} />
       </div>
     </div>
   );

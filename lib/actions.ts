@@ -344,6 +344,88 @@ export async function convertLeadWithPackage(formData: FormData) {
   if (inserted) redirect(`/clients/${inserted.id}?tab=timeline`);
 }
 
+// Send a 6-digit OTP to the lead's phone for conversion consent. SMS isn't
+// wired, so the code is returned for the front desk to read to the client; once
+// an SMS provider is configured it would be texted instead.
+export async function sendLeadOtp(formData: FormData): Promise<{ ok: boolean; devCode?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { ok: false, error: "Not permitted" };
+  const phone = String(formData.get("phone") || "").trim();
+  if (!phone) return { ok: false, error: "No phone on this lead" };
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const supabase = createClient();
+  await supabase.from("verifications").insert({
+    phone, code, purpose: "lead_convert", expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
+  });
+  await logAudit(p, "Conversion OTP sent", phone, null);
+  // SMS provider not configured → hand the code back for manual entry.
+  return { ok: true, devCode: code };
+}
+
+// Verify OTP + consent, then convert the lead into a client on a package with an
+// optional offer/discount and referral attribution.
+export async function convertLeadVerified(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { ok: false, error: "Not permitted" };
+  const id = String(formData.get("id"));
+  const otp = String(formData.get("otp") || "").trim();
+  if (String(formData.get("tnc")) !== "on" || String(formData.get("consent")) !== "on") {
+    return { ok: false, error: "Terms & informed consent must be accepted" };
+  }
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, phone").eq("id", id).maybeSingle();
+  if (!lead?.name) return { ok: false, error: "Lead not found" };
+
+  // verify OTP
+  const { data: v } = await supabase.from("verifications")
+    .select("id, code, expires_at, verified").eq("phone", lead.phone ?? "").eq("purpose", "lead_convert")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (!v || v.code !== otp) return { ok: false, error: "Invalid OTP" };
+  if (new Date(v.expires_at).getTime() < Date.now()) return { ok: false, error: "OTP expired — resend" };
+  await supabase.from("verifications").update({ verified: true }).eq("id", v.id);
+
+  const package_id = String(formData.get("package_id") || "") || null;
+  const joined = String(formData.get("joined") || todayISO());
+  const discount = Math.max(0, Number(formData.get("discount")) || 0);
+  const referrer_id = String(formData.get("referrer_id") || "") || null;
+  const referral_code = String(formData.get("referral_code") ?? "").trim() || null;
+
+  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
+  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
+  const { data: inserted } = await supabase.from("clients").insert({
+    code, name: lead.name, phone: lead.phone ?? null, joined,
+    package_id, used: 0, verified: true, consent_tnc: true, consent_waiver: true, converted_from: id, pro_id: "d1",
+  }).select("id").single();
+
+  if (inserted && package_id) {
+    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
+    if (pkg && !pkg.is_facility && pkg.sessions > 0) {
+      await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
+      await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
+    }
+    if (pkg) {
+      const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
+      const num = await nextInvoiceNum(supabase);
+      await supabase.from("invoices").insert({
+        num, client_id: inserted.id,
+        description: `${pkg.name} package${discount > 0 ? ` (offer −₹${discount.toLocaleString("en-IN")})` : ""}`,
+        amount, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+      });
+    }
+  }
+  // record referral attribution
+  if (inserted && (referrer_id || referral_code)) {
+    await supabase.from("referrals").insert({
+      referrer_id, referred_name: lead.name, status: "joined",
+      note: referral_code ? `Code: ${referral_code}` : null, created_by: p.name,
+    });
+  }
+  await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
+  await logAudit(p, "Lead converted (verified)", lead.name, code);
+  if (inserted) redirect(`/clients/${inserted.id}?tab=timeline`);
+  return { ok: true };
+}
+
 export async function convertLeadToClient(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;

@@ -47,6 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         >
           <HeaderTitle />
           <span style={{ flex: 1 }} />
+          <Link href="/messages" title="Communications" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, width: 34, height: 34, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 16, marginRight: 8 }}>💬</Link>
           <NotificationBell items={notifs} unread={unread} />
           {real === "Administrator" && <RolePreview preview={preview} profession={profession} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginLeft: 12 }}>
