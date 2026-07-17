@@ -2649,6 +2649,73 @@ export async function recordNps(formData: FormData) {
   revalidatePath("/retention");
 }
 
+// Send a win-back offer to an at-risk client (logs a WhatsApp message).
+export async function winbackOffer(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const supabase = createClient();
+  await supabase.from("messages").insert({
+    client_id, sender: "staff", sender_name: p.name, channel: "WhatsApp",
+    body: "We miss you at Cureocity! Here's 15% off your next package this month — reply to claim. 💚",
+  });
+  await logAudit(p, "Win-back offer sent", null, null);
+  revalidatePath("/retention");
+  revalidatePath("/messages");
+}
+
+// Send an NPS survey to one client or all active clients (logs messages).
+export async function sendNpsSurvey(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const audience = String(formData.get("audience") || "all");
+  const channel = String(formData.get("channel") || "WhatsApp");
+  const supabase = createClient();
+  let ids: string[] = [];
+  if (audience === "all") {
+    const { data } = await supabase.from("clients").select("id");
+    ids = ((data ?? []) as { id: string }[]).map((c) => c.id);
+  } else ids = [audience];
+  if (ids.length) {
+    await supabase.from("messages").insert(ids.map((client_id) => ({
+      client_id, sender: "staff", sender_name: "System", channel,
+      body: "How likely are you to recommend Cureocity to a friend? Tap 0–10 to rate us 🙏",
+    })));
+  }
+  await logAudit(p, "NPS survey sent", `${ids.length} client(s)`, null);
+  revalidatePath("/retention");
+}
+
+export async function awardLoyalty(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const pts = Number(formData.get("points")) || 0;
+  if (!client_id || !pts) return;
+  const supabase = createClient();
+  const { data: cur } = await supabase.from("loyalty").select("points").eq("client_id", client_id).maybeSingle();
+  const next = Math.max(0, (cur?.points ?? 0) + pts);
+  await supabase.from("loyalty").upsert({ client_id, points: next, updated_by: p.name, updated_at: new Date().toISOString() });
+  await logAudit(p, `Loyalty ${pts >= 0 ? "+" : ""}${pts} pts`, null, null);
+  revalidatePath("/retention");
+}
+
+export async function redeemLoyalty(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canRetention(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const supabase = createClient();
+  const { data: cur } = await supabase.from("loyalty").select("points").eq("client_id", client_id).maybeSingle();
+  const have = cur?.points ?? 0;
+  if (have < 100) return;
+  const credit = Math.floor(have / 100) * 100;
+  await supabase.from("loyalty").update({ points: have - credit, updated_by: p.name, updated_at: new Date().toISOString() }).eq("client_id", client_id);
+  await supabase.from("messages").insert({ client_id, sender: "staff", sender_name: p.name, channel: "WhatsApp", body: `You redeemed ${credit} points for a ₹${credit.toLocaleString("en-IN")} credit on your account 🎉` });
+  await logAudit(p, `Loyalty redeemed ${credit} pts`, null, null);
+  revalidatePath("/retention");
+}
+
 export async function createReferral(formData: FormData) {
   const p = await getProfile();
   if (!p || !canRetention(p.role)) return;
