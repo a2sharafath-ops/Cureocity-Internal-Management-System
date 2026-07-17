@@ -301,7 +301,17 @@ export async function completeAssessment(formData: FormData) {
   if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
   const supabase = createClient();
-  await supabase.from("assessments").update({ status: "done" }).eq("id", id);
+  await supabase.from("assessments").update({ status: "done", scheduled_date: todayISO() }).eq("id", id);
+  revalidatePath("/sessions");
+}
+
+export async function toggleAssessmentShared(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return;
+  const id = String(formData.get("id"));
+  const shared = String(formData.get("shared")) === "true";
+  const supabase = createClient();
+  await supabase.from("assessments").update({ shared: !shared }).eq("id", id);
   revalidatePath("/sessions");
 }
 

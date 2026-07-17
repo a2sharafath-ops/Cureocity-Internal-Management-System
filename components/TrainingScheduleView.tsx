@@ -4,12 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   setTrainerSlot, assignTrainerSlot, unassignTrainerSlot,
-  createAssessment, markAssessmentBooked, completeAssessment, addRecoverySession, completeRecoverySession,
+  createAssessment, markAssessmentBooked, completeAssessment, toggleAssessmentShared, addRecoverySession, completeRecoverySession,
 } from "@/lib/actions";
 
 export type Trainer = { id: string; name: string; color: string };
 export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null };
-export type AssessmentRow = { id: string; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; trainerName: string | null };
+export type AssessmentRow = { id: string; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; shared?: boolean; trainerName: string | null };
+
+function assessLabel(kind: string) { return kind === "reassessment" ? "Fitness Reassessment" : "Fitness Assessment"; }
 export type RecoveryRow = { id: string; clientName: string | null; kind: string; date: string; hour: number | null; staffName: string | null; status: string };
 export type ClassRow = { id: string; title: string; trainerName: string | null; date: string; hour: number; capacity: number; booked: number };
 
@@ -30,6 +32,7 @@ export default function TrainingScheduleView({
 }) {
   const [tab, setTab] = useState<"slots" | "studio" | "recovery">("slots");
   const [assigning, setAssigning] = useState<{ trainer_id: string; hour: number } | null>(null);
+  const [manualAssign, setManualAssign] = useState(false);
   const [newAssess, setNewAssess] = useState(false);
   const [newRecovery, setNewRecovery] = useState(false);
 
@@ -48,12 +51,27 @@ export default function TrainingScheduleView({
     return <span style={{ background: bg, color: fg, borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 600 }}>{tag ?? "PT"}</span>;
   };
 
+  const countBadge = (n: number) => <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: 999, minWidth: 20, textAlign: "center", padding: "1px 7px", fontSize: 12, fontWeight: 700 }}>{n}</span>;
+
+  // Assessments-due status badge (Due today / Overdue / Upcoming / Booked).
+  const dueBadge = (a: AssessmentRow) => {
+    if (a.status === "booked") return <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Booked</span>;
+    if (a.due_date === today) return <span style={{ background: "var(--red-bg)", color: "#991b1b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Due today</span>;
+    if (a.due_date < today) return <span style={{ background: "var(--red-bg)", color: "#991b1b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Overdue</span>;
+    return <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Upcoming</span>;
+  };
+  const th: React.CSSProperties = { textAlign: "left", padding: "10px 14px", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".4px" };
+  const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13 };
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         {tabBtn("slots", "🏋", "Slots & Assessments")}
         {tabBtn("studio", "🧘", "Group Studio")}
         {tabBtn("recovery", "💆", "Recovery")}
+        <span style={{ flex: 1 }} />
+        {canWrite && <button type="button" onClick={() => { setTab("slots"); setNewAssess(true); }} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Assessment</button>}
+        {canWrite && <button type="button" onClick={() => { setTab("slots"); setManualAssign(true); }} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Assign client</button>}
       </div>
 
       {/* ================= SLOTS & ASSESSMENTS ================= */}
@@ -89,6 +107,19 @@ export default function TrainingScheduleView({
               <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
               <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
               <button type="button" onClick={() => setAssigning(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            </form>
+          )}
+
+          {/* manual assign (from + Assign client) — pick trainer + time + client */}
+          {manualAssign && (
+            <form action={assignTrainerSlot} onSubmit={() => setTimeout(() => setManualAssign(false), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <b style={{ fontSize: 13 }}>Assign client</b>
+              <select name="trainer_id" required defaultValue="" style={input}><option value="" disabled>Trainer…</option>{trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+              <select name="hour" defaultValue="9" style={input}>{hours.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
+              <select name="client_id" required defaultValue="" style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
+              <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
+              <button type="button" onClick={() => setManualAssign(false)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
             </form>
           )}
 
@@ -137,54 +168,80 @@ export default function TrainingScheduleView({
 
           {/* Assessments due */}
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <div style={{ fontWeight: 700 }}>📋 Assessments due</div>
+              {countBadge(assessments.length)}
               <span style={{ flex: 1 }} />
               {canWrite && <button type="button" onClick={() => setNewAssess((v) => !v)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{newAssess ? "Cancel" : "+ New Assessment"}</button>}
             </div>
-            <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>Fitness assessments &amp; re-assessments coming up per each client&apos;s service schedule — book them into the Appointment Calendar.</p>
+            <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 10px" }}>Fitness assessments &amp; re-assessments coming up per each client&apos;s service schedule — book them into the Appointment Calendar.</p>
             {newAssess && (
-              <form action={createAssessment} onSubmit={() => setTimeout(() => setNewAssess(false), 50)} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <form action={createAssessment} onSubmit={() => setTimeout(() => setNewAssess(false), 50)} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                 <select name="client_id" required defaultValue="" style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                 <select name="trainer_id" defaultValue="" style={input}><option value="">— trainer —</option>{trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-                <select name="kind" defaultValue="initial" style={input}><option value="initial">Initial Assessment</option><option value="reassessment">Re-assessment</option></select>
+                <select name="kind" defaultValue="initial" style={input}><option value="initial">Fitness Assessment</option><option value="reassessment">Fitness Reassessment</option></select>
                 <input type="date" name="due_date" defaultValue={today} style={input} />
                 <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
               </form>
             )}
-            {assessments.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No assessments due.</div> : assessments.map((a) => (
-              <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-                {tagChip(a.kind === "reassessment" ? "Re-assessment" : "Initial Assessment")}
-                <b>{a.clientName ?? "—"}</b>
-                <span style={{ color: "var(--muted)" }}>due {fmtDate(a.due_date)}{a.trainerName ? ` · ${a.trainerName}` : ""}</span>
-                <span style={{ flex: 1 }} />
-                {a.status === "booked" ? (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>booked</span>
-                    {canWrite && <form action={completeAssessment}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark done</button></form>}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <Link href="/appointments" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, textDecoration: "none", color: "var(--teal-dark)", fontWeight: 600 }}>Book →</Link>
-                    {canWrite && <form action={markAssessmentBooked}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark booked</button></form>}
-                  </div>
-                )}
-              </div>
-            ))}
+            <div style={{ overflow: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <thead><tr><th style={th}>Client</th><th style={th}>Assessment</th><th style={th}>Target date</th><th style={th}>Status</th><th style={th} /></tr></thead>
+                <tbody>
+                  {assessments.map((a) => (
+                    <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}</td>
+                      <td style={td}>{assessLabel(a.kind)}{a.trainerName ? <span style={{ color: "var(--muted)" }}> · {a.trainerName}</span> : ""}</td>
+                      <td style={td}>{fmtDate(a.due_date)}</td>
+                      <td style={td}>{dueBadge(a)}</td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        {a.status === "booked" ? (
+                          canWrite && <form action={completeAssessment}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark done</button></form>
+                        ) : (
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                            <Link href="/appointments" style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Book</Link>
+                            {canWrite && <form action={markAssessmentBooked}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark booked</button></form>}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {assessments.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)" }}>No assessments due.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Recent assessment records */}
           <div style={{ ...box, padding: "16px 18px", marginTop: 16 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>🗂 Recent assessment records</div>
-            {assessmentRecords.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No completed assessments yet.</div> : assessmentRecords.map((a) => (
-              <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-                {tagChip(a.kind === "reassessment" ? "Re-assessment" : "Initial Assessment")}
-                <b>{a.clientName ?? "—"}</b>
-                <span style={{ color: "var(--muted)" }}>{a.scheduled_date ? `done ${fmtDate(a.scheduled_date)}` : `due ${fmtDate(a.due_date)}`}{a.trainerName ? ` · ${a.trainerName}` : ""}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>completed</span>
-              </div>
-            ))}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ fontWeight: 700 }}>🗂 Recent assessment records</div>
+              {countBadge(assessmentRecords.length)}
+            </div>
+            <div style={{ overflow: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <thead><tr><th style={th}>Client</th><th style={th}>Assessment</th><th style={th}>Professional</th><th style={th}>Date</th><th style={th}>Visibility</th></tr></thead>
+                <tbody>
+                  {assessmentRecords.map((a) => (
+                    <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}</td>
+                      <td style={td}>{assessLabel(a.kind)}</td>
+                      <td style={td}>{a.trainerName ?? "—"}</td>
+                      <td style={td}>{a.scheduled_date ? fmtDate(a.scheduled_date) : fmtDate(a.due_date)}</td>
+                      <td style={td}>
+                        {canWrite ? (
+                          <form action={toggleAssessmentShared}>
+                            <input type="hidden" name="id" value={a.id} /><input type="hidden" name="shared" value={String(!!a.shared)} />
+                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "#166534" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "🔓 Shared" : "🔒 Private"}</button>
+                          </form>
+                        ) : <span style={{ color: "var(--muted)", fontSize: 12 }}>{a.shared ? "Shared" : "Private"}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  {assessmentRecords.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)" }}>No assessment records yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}
