@@ -1724,6 +1724,76 @@ export async function skipFollowup(formData: FormData) {
   revalidatePath("/followups");
 }
 
+// ---- follow-up queue pipeline (call → link → review → closed) --------------
+async function fuGuard() { const p = await getProfile(); return p && canWrite(p.role) ? p : null; }
+
+export async function fuSendQuestionnaire(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const token = "QT-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+  const supabase = createClient();
+  await supabase.from("followups").update({ stage: "LINK_SENT", token, no_answer: false }).eq("id", id);
+  await logAudit(p, "Follow-up questionnaire sent", null, token);
+  revalidatePath("/followups");
+}
+
+export async function fuSendReminder(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({ reminder_sent: true }).eq("id", id);
+  await logAudit(p, "Follow-up reminder sent", null, null);
+  revalidatePath("/followups");
+}
+
+export async function fuNoAnswer(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({ no_answer: true }).eq("id", id);
+  await logAudit(p, "Follow-up — no answer", null, null);
+  revalidatePath("/followups");
+}
+
+export async function fuBookInPerson(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({ stage: "BOOKED", status: "done", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Follow-up booked in-person", null, null);
+  revalidatePath("/followups");
+}
+
+export async function fuNoConsult(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({ stage: "NO_CONSULT", status: "skipped", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Follow-up — no consultation", null, null);
+  revalidatePath("/followups");
+}
+
+export async function fuMarkReceived(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  await supabase.from("followups").update({ stage: "PENDING_REVIEW" }).eq("id", id);
+  await logAudit(p, "Follow-up answers received", null, null);
+  revalidatePath("/followups");
+}
+
+export async function fuCompleteReview(formData: FormData) {
+  const p = await fuGuard(); if (!p) return;
+  const id = String(formData.get("id"));
+  const summary = String(formData.get("summary") ?? "").trim();
+  if (!summary) return;
+  const supabase = createClient();
+  await supabase.from("followups").update({ stage: "COMPLETED", status: "done", summary, done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Follow-up review completed", null, null);
+  revalidatePath("/followups");
+  revalidatePath("/dashboard");
+}
+
 export async function addFollowup(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;

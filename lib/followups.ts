@@ -13,7 +13,15 @@ function addDaysUTC(iso: string, days: number) {
 
 export type FollowupRow = {
   client_id: string; kind: string; label: string; due_date: string;
-  priority: string; created_by: string;
+  priority: string; created_by: string; category: string; day: number | null; mode: string; stage: string;
+};
+
+// Protocol day → discipline + label + default mode (mirrors the prototype care plan).
+const DAY_PROTOCOL: Record<number, { category: string; label: string; mode: string }> = {
+  2:  { category: "Fitness Services",     label: "Day 2 fitness check-in",  mode: "Offline" },
+  10: { category: "Diet Consultation",   label: "Day 10 diet follow-up",   mode: "Online" },
+  21: { category: "Diet Consultation",   label: "Day 21 diet review",      mode: "Offline" },
+  28: { category: "Doctor Consultation", label: "Day 28 doctor follow-up", mode: "Offline" },
 };
 
 export function buildFollowupRows(
@@ -25,9 +33,11 @@ export function buildFollowupRows(
   for (const c of clients) {
     if (!c.joined) continue;
     for (const off of ONBOARDING_OFFSETS) {
+      const p = DAY_PROTOCOL[off];
       rows.push({
-        client_id: c.id, kind: "onboarding", label: `Day ${off} check-in`,
+        client_id: c.id, kind: "onboarding", label: p.label,
         due_date: addDaysUTC(c.joined, off), priority: off === 2 ? "mandatory" : "normal", created_by: createdBy,
+        category: p.category, day: off, mode: p.mode, stage: "PENDING_CALL",
       });
     }
   }
@@ -36,6 +46,7 @@ export function buildFollowupRows(
     rows.push({
       client_id: s.client_id, kind: "renewal", label: `Renewal due (${s.renews_on})`,
       due_date: addDaysUTC(s.renews_on, -RENEWAL_LEAD_DAYS), priority: "mandatory", created_by: createdBy,
+      category: "Renewal", day: null, mode: "Online", stage: "PENDING_CALL",
     });
   }
   return rows;
