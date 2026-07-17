@@ -28,7 +28,7 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Clinical",
+    title: "Workspaces",
     items: [
       { href: "/careteam", label: "Care Team Hub", icon: "🧑‍⚕️" },
       { href: "/pro", label: "Consultations", icon: "🩺" },
