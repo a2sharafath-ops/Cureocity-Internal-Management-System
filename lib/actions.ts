@@ -1588,6 +1588,20 @@ export async function setTaskStatus(formData: FormData) {
   revalidatePath("/tasks");
 }
 
+// Nudge the team about a task (in-app notification to Admin/Manager + audit).
+export async function remindTask(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return;
+  const id = String(formData.get("id"));
+  const supabase = createClient();
+  const { data: t } = await supabase.from("tasks").select("title, staff:assignee_id(name)").eq("id", id).maybeSingle();
+  const title = (t as { title?: string } | null)?.title ?? "task";
+  const who = (t as { staff?: { name: string } | null } | null)?.staff?.name;
+  await notifyRoles(supabase, ["Administrator", "Manager"], { title: "Task reminder", body: `${title}${who ? ` · ${who}` : ""}`, href: "/tasks", icon: "⏰" });
+  await logAudit(p, "Task reminder sent", title, null);
+  revalidatePath("/tasks");
+}
+
 export async function deleteTask(formData: FormData) {
   const p = await getProfile();
   if (!p) return;
