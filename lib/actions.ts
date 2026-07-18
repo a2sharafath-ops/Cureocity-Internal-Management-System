@@ -3184,3 +3184,90 @@ export async function deleteResourceFile(formData: FormData) {
   await logAudit(p, "Resource deleted", f?.name ?? id, null);
   revalidatePath("/workspace");
 }
+
+// ---- workspace: diet charts + recipes --------------------------------------
+
+export async function addDietChart(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id") || "") || null;
+  if (!client_id) return;
+  const labels = formData.getAll("meal_label").map((v) => String(v).trim());
+  const details = formData.getAll("meal_detail").map((v) => String(v).trim());
+  const meals = labels.map((l, i) => [l, details[i] ?? ""]).filter(([l, d]) => l && d);
+  if (meals.length === 0) return;
+  const supabase = createClient();
+  const { count } = await supabase.from("diet_charts").select("id", { count: "exact", head: true }).eq("client_id", client_id);
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await supabase.from("diet_charts").insert({
+    client_id, version: (count ?? 0) + 1, status: "Draft",
+    calories: Number(formData.get("calories")) || null,
+    protein: String(formData.get("protein") || "").trim() || null,
+    notes: String(formData.get("notes") || "").trim() || null,
+    meals, by_name: p.name,
+  });
+  await logAudit(p, "Diet chart drafted", c?.name, `v${(count ?? 0) + 1}`);
+  revalidatePath("/workspace");
+}
+
+export async function publishDietChart(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("diet_charts").update({ status: "Published" }).eq("id", id);
+  await logAudit(p, "Diet chart published", id, null);
+  revalidatePath("/workspace");
+}
+
+export async function deleteDietChart(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("diet_charts").delete().eq("id", id);
+  await logAudit(p, "Diet chart deleted", id, null);
+  revalidatePath("/workspace");
+}
+
+export async function addRecipe(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("recipes").insert({
+    week: String(formData.get("week") || "").trim() || null,
+    name,
+    tags: String(formData.get("tags") || "").trim() || null,
+    kcal: Number(formData.get("kcal")) || null,
+    published: String(formData.get("published") || "") === "on",
+  });
+  await logAudit(p, "Recipe added", name, null);
+  revalidatePath("/workspace");
+}
+
+export async function toggleRecipe(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const published = String(formData.get("published") || "") === "true";
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("recipes").update({ published: !published }).eq("id", id);
+  await logAudit(p, published ? "Recipe unpublished" : "Recipe published", id, null);
+  revalidatePath("/workspace");
+}
+
+export async function deleteRecipe(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("recipes").delete().eq("id", id);
+  await logAudit(p, "Recipe deleted", id, null);
+  revalidatePath("/workspace");
+}

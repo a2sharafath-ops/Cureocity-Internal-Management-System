@@ -12,6 +12,8 @@ import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClient
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
+import DietCharts, { type DietChartRow } from "@/components/DietCharts";
+import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
@@ -96,6 +98,21 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     );
   }
 
+  // Dietitian tools.
+  let dietCharts: DietChartRow[] = [];
+  if (tab === "charts") {
+    const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, meals, by_name, created_at, clients(name)").order("created_at", { ascending: false });
+    dietCharts = ((dc ?? []) as unknown as (DietChartRow & { clients: { name: string } | null })[]).map((r) => ({
+      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
+      calories: r.calories, protein: r.protein, notes: r.notes, meals: (r.meals ?? []) as [string, string][], by_name: r.by_name, created_at: r.created_at,
+    }));
+  }
+  let recipes: RecipeRow[] = [];
+  if (tab === "recipes") {
+    const { data: rc } = await supabase.from("recipes").select("id, week, name, tags, kcal, published, created_at").order("created_at", { ascending: false });
+    recipes = (rc ?? []) as RecipeRow[];
+  }
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const fmtHour = (h: number | null) => {
     if (h == null) return "—";
@@ -109,7 +126,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes"]} />
 
       {/* Workspace chrome: role switcher */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -202,6 +219,12 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- RESOURCE LIBRARY ---- */}
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
+
+      {/* ---- DIET CHARTS (dietitian) ---- */}
+      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} />}
+
+      {/* ---- RECIPES (dietitian) ---- */}
+      {tab === "recipes" && <RecipeLibrary recipes={recipes} />}
 
       {/* ---- STUB TABS (later phases) ---- */}
       {stubDef && (

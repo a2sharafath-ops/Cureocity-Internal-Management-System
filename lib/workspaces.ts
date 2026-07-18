@@ -72,8 +72,8 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   doctor: withRoleTabs([]),
   diet: withRoleTabs([
     { key: "meals", label: "🍽️ Meal Follow-ups", href: "/meals" },
-    { key: "charts", label: "Diet Charts", note: "Diet-chart authoring — coming in a later phase." },
-    { key: "recipes", label: "Recipes", note: "Recipe library — coming in a later phase." },
+    { key: "charts", label: "Diet Charts", live: true },
+    { key: "recipes", label: "Recipes", live: true },
   ]),
   trainer: withRoleTabs([
     { key: "exlib", label: "Exercise Library", href: "/exlib" },
