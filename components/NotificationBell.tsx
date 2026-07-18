@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { openNotification, markAllNotificationsRead } from "@/lib/actions";
 
 type Notif = { id: string; title: string; body: string | null; href: string | null; icon: string | null; read: boolean; created_at: string };
@@ -57,6 +58,9 @@ export default function NotificationBell({ items, unread }: { items: Notif[]; un
                 </form>
               );
             })}
+            <Link href="/notifications" onClick={() => setOpen(false)} style={{ display: "block", textAlign: "center", padding: "11px 14px", borderTop: "1px solid var(--border)", color: "var(--teal-dark)", fontSize: 13, fontWeight: 600, textDecoration: "none", position: "sticky", bottom: 0, background: "var(--card)" }}>
+              See all notifications →
+            </Link>
           </div>
         </>
       )}

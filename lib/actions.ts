@@ -227,6 +227,34 @@ export async function setUserBranch(formData: FormData) {
   revalidatePath("/users");
 }
 
+// Rename a staff/user.
+export async function updateUserName(formData: FormData) {
+  const me = await getProfile();
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return;
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const admin = createAdminClient();
+  await admin.from("profiles").update({ name }).eq("id", id);
+  await logAudit(me, "Staff renamed", name, null);
+  revalidatePath("/users");
+  revalidatePath("/", "layout");
+}
+
+// Delete a staff login (removes the auth user + profile).
+export async function deleteStaff(formData: FormData) {
+  const me = await getProfile();
+  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return;
+  const id = String(formData.get("id"));
+  if (id === me.id) return; // can't delete yourself
+  const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("email").eq("id", id).maybeSingle();
+  try { await admin.auth.admin.deleteUser(id); } catch { /* not an auth user — fall through */ }
+  await admin.from("profiles").delete().eq("id", id);
+  await logAudit(me, "Staff deleted", target?.email ?? id, null);
+  revalidatePath("/users");
+}
+
 // ---- sessions --------------------------------------------------------------
 
 // ---- training schedule: trainer slots, assessments, recovery ---------------

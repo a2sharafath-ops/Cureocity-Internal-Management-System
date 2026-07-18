@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import UserRoleSelect from "@/components/UserRoleSelect";
 import UserBranchSelect from "@/components/UserBranchSelect";
+import UserNameEdit from "@/components/UserNameEdit";
+import DeleteStaffButton from "@/components/DeleteStaffButton";
 import AddStaffForm from "@/components/AddStaffForm";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,7 @@ export default async function UsersPage() {
   const { data, error } = await supabase
     .from("profiles")
     .select("id, email, name, role, branch, created_at")
+    .neq("role", "Client") // clients are not staff — keep them off the staff list
     .order("created_at", { ascending: true });
 
   const users = (data ?? []) as ProfileRow[];
@@ -51,18 +54,14 @@ export default async function UsersPage() {
                 <th style={{ padding: "12px 16px" }}>Email</th>
                 <th style={{ padding: "12px 16px" }}>Branch</th>
                 <th style={{ padding: "12px 16px" }}>Role</th>
+                <th style={{ padding: "12px 16px" }} />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
                 <tr key={u.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "12px 16px" }}>
-                    <b>{u.name ?? "—"}</b>
-                    {u.id === me.id && (
-                      <span style={{ marginLeft: 8, background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>
-                        you
-                      </span>
-                    )}
+                  <td style={{ padding: "8px 16px" }}>
+                    <UserNameEdit id={u.id} name={u.name} isYou={u.id === me.id} />
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{u.email ?? "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
@@ -71,11 +70,14 @@ export default async function UsersPage() {
                   <td style={{ padding: "12px 16px" }}>
                     <UserRoleSelect id={u.id} role={u.role} disabled={u.id === me.id} />
                   </td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                    {u.id !== me.id && <DeleteStaffButton id={u.id} name={u.name} />}
+                  </td>
                 </tr>
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={5} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
                     No users yet
                   </td>
                 </tr>
