@@ -18,11 +18,17 @@ type Lead = {
 
 export default async function LeadsPage() {
   const supabase = createClient();
-  const [{ data, error }, { data: campRows }] = await Promise.all([
+  const [{ data, error }, { data: campRows }, { data: clientRows }] = await Promise.all([
     supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde").order("num", { ascending: true }),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
+    supabase.from("clients").select("id, converted_from"),
   ]);
   const leads = (data ?? []) as Lead[];
+  // lead id -> client id, for leads that have converted into a client
+  const clientByLead = new Map<string, string>();
+  for (const c of (clientRows ?? []) as { id: string; converted_from: string | null }[]) {
+    if (c.converted_from) clientByLead.set(c.converted_from, c.id);
+  }
   const campaigns = [...new Set(((campRows ?? []) as { name: string }[]).map((c) => c.name))];
   const scored = leads
     .map((l) => ({ lead: l, ...leadScore(l), product: leadProduct(l) }))
@@ -78,7 +84,13 @@ export default async function LeadsPage() {
             <tbody>
               {scored.map(({ lead: l, total, tier, product }) => (
                 <tr key={l.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={td}><b>{l.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{l.phone ?? "—"}{l.source ? ` · ${l.source}` : ""}</div></td>
+                  <td style={td}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <b>{l.name}</b>
+                      {clientByLead.has(l.id) && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Client</span>}
+                    </div>
+                    <div style={{ color: "var(--muted)", fontSize: 12 }}>{l.phone ?? "—"}{l.source ? ` · ${l.source}` : ""}</div>
+                  </td>
                   <td style={{ ...td, color: "var(--muted)" }}>{l.interest ?? "—"}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
@@ -87,6 +99,7 @@ export default async function LeadsPage() {
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                       <CallCell phone={l.phone} ivrConfigured={ivr.configured} />
+                      {clientByLead.has(l.id) && <Link href={`/clients/${clientByLead.get(l.id)}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#166534", textDecoration: "none" }}>Client ↗</Link>}
                       <Link href={`/leads/${l.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--teal-dark)", textDecoration: "none" }}>Open →</Link>
                     </div>
                   </td>
