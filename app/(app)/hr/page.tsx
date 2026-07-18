@@ -65,7 +65,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
   const chip = (bg: string, c: string, t: string) => <Chip bg={bg} color={c}>{t}</Chip>;
   const deptChip = (d: string | null) => {
-    const m: Record<string, [string, string]> = { Management: ["#ede9fe", "#6d28d9"], Fitness: ["#dbeafe", "#1e40af"], Sales: ["#dbeafe", "#1e40af"], Marketing: ["#dbeafe", "#1e40af"], "Front Desk": ["#dbeafe", "#1e40af"], "Health Professional": ["#dcfce7", "#166534"] };
+    const m: Record<string, [string, string]> = { Management: ["#ede9fe", "#6d28d9"], Fitness: ["#dbeafe", "#1e40af"], Sales: ["#dbeafe", "#1e40af"], Marketing: ["#dbeafe", "#1e40af"], "Front Desk": ["#dbeafe", "#1e40af"], Clinical: ["#dcfce7", "#166534"] };
     const [bg, c] = m[d ?? ""] ?? ["#eef2f1", "#64748b"];
     return chip(bg, c, d ?? "—");
   };
