@@ -142,3 +142,33 @@ export function canCampaigns(role: string): boolean {
 export function canHr(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "HR"].includes(role);
 }
+
+// The assignable roles, in seniority order (for the Users & Roles cards).
+export const ROLE_LIST: Role[] = [
+  "Super Admin", "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
+];
+
+// How many nav areas a role can see — "all" if it sees everything.
+export function accessAreas(role: string): number | "all" {
+  const routes = Object.keys(NAV_ACCESS);
+  const seen = routes.filter((h) => canSee(role, h)).length;
+  return seen === routes.length ? "all" : seen;
+}
+
+// A friendly list of the capabilities a role holds (for the role cards).
+export function roleCapabilities(role: string): string[] {
+  const map: [boolean, string][] = [
+    [canWrite(role), "Clients & leads"],
+    [canBill(role), "Billing"],
+    [canConsult(role), "Consultations"],
+    [canEmr(role), "Clinical / EMR"],
+    [canManagePackages(role), "Packages"],
+    [canClaims(role), "Claims"],
+    [canCompliance(role), "Compliance"],
+    [canHr(role), "HR"],
+    [canPos(role), "POS"],
+    [canCampaigns(role), "Campaigns"],
+    [canRetention(role), "Retention"],
+  ];
+  return map.filter(([ok]) => ok).map(([, label]) => label);
+}
