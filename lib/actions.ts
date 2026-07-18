@@ -11,6 +11,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
+import { canWriteNutrition, ownsConsultKind } from "@/lib/discipline";
 import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { paymentConfig } from "@/lib/payments/config";
@@ -718,6 +719,7 @@ export async function createConsultation(formData: FormData) {
   const kind = String(formData.get("kind"));
   const notes = String(formData.get("notes") ?? "").trim() || null;
   if (!client_id || !kind) return;
+  if (!ownsConsultKind(p.role, kind)) return; // only the owning discipline
   const supabase = createClient();
   await supabase.from("consultations").insert({
     client_id, kind, notes, status: "scheduled", by_name: p.name, by_role: p.role,
@@ -734,6 +736,7 @@ export async function startConsult(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const kind = String(formData.get("kind"));
   if (!client_id || !kind) return;
+  if (!ownsConsultKind(p.role, kind)) return; // only the owning discipline
   const supabase = createClient();
   const { data: row } = await supabase.from("consultations").insert({
     client_id, kind, status: "scheduled", by_name: p.name, by_role: p.role, started_at: new Date().toISOString(),
@@ -752,6 +755,7 @@ export async function saveConsultSession(formData: FormData) {
   const kind = String(formData.get("kind"));
   const complete = String(formData.get("complete") || "") === "true";
   if (!id) return;
+  if (!ownsConsultKind(p.role, kind)) return; // only the owning discipline
   const { consultQ } = await import("@/lib/consult-questions");
   const questions = consultQ(kind).questions;
   const answers = questions.map((q, i) => [q, String(formData.get("a_" + i) ?? "").trim()]).filter(([, a]) => a);
@@ -773,6 +777,8 @@ export async function completeConsultation(formData: FormData) {
   const id = String(formData.get("id"));
   const summary = String(formData.get("summary") ?? "").trim() || null;
   const supabase = createClient();
+  const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
+  if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   await supabase.from("consultations").update({ status: "completed", summary }).eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
@@ -786,6 +792,8 @@ export async function toggleConsultFlag(formData: FormData) {
   const value = String(formData.get("value")) === "true";
   if (field !== "approved" && field !== "shared") return;
   const supabase = createClient();
+  const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
+  if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   await supabase.from("consultations").update({ [field]: !value }).eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
@@ -3231,7 +3239,7 @@ export async function deleteResourceFile(formData: FormData) {
 
 export async function addDietChart(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const client_id = String(formData.get("client_id") || "") || null;
   if (!client_id) return;
   const labels = formData.getAll("meal_label").map((v) => String(v).trim());
@@ -3254,7 +3262,7 @@ export async function addDietChart(formData: FormData) {
 
 export async function publishDietChart(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
   const supabase = createClient();
@@ -3265,7 +3273,7 @@ export async function publishDietChart(formData: FormData) {
 
 export async function deleteDietChart(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
   const supabase = createClient();
@@ -3276,7 +3284,7 @@ export async function deleteDietChart(formData: FormData) {
 
 export async function addRecipe(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
   const supabase = createClient();
@@ -3293,7 +3301,7 @@ export async function addRecipe(formData: FormData) {
 
 export async function toggleRecipe(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   const published = String(formData.get("published") || "") === "true";
   if (!id) return;
@@ -3305,7 +3313,7 @@ export async function toggleRecipe(formData: FormData) {
 
 export async function deleteRecipe(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
   const supabase = createClient();
