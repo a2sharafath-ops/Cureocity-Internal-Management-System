@@ -29,11 +29,7 @@ const SECTIONS: NavSection[] = [
     title: "Workspaces",
     items: [
       { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
-      { href: "/telehealth", label: "Telehealth", icon: "📹" },
-      { href: "/emr", label: "Patient Records", icon: "📋" },
-      { href: "/orders", label: "Orders & Labs", icon: "🧪" },
-      { href: "/blueprint", label: "BluePrint", icon: "🧬" },
-      { href: "/exlib", label: "Exercise Library", icon: "🏃" },
+      { href: "/careteam", label: "Care Team", icon: "🤝" },
     ],
   },
   {
@@ -120,9 +116,11 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
               </div>
             )}
             {section.items.map((item) => {
-              const WORKSPACE_ROUTES = ["/pro", "/trainer", "/meals", "/careteam"];
+              const WORKSPACE_ROUTES = ["/pro", "/trainer", "/meals", "/console"];
+              const CARETEAM_ROUTES = ["/emr", "/orders", "/blueprint", "/exlib", "/telehealth"];
               const active = pathname === item.href || pathname.startsWith(item.href + "/") ||
-                (item.href === "/workspace" && WORKSPACE_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/")));
+                (item.href === "/workspace" && WORKSPACE_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) ||
+                (item.href === "/careteam" && CARETEAM_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/")));
               return (
                 <Link
                   key={item.href}

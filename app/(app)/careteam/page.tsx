@@ -46,7 +46,7 @@ export default async function CareTeamPage() {
       <RealtimeRefresh tables={["consultations", "sessions", "orders", "blood_requests", "appointments", "meal_logs"]} />
       <WorkspaceTabs active="careteam" />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Care Team Hub</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Every clinical workspace in one place — Doctor, Dietitian, Trainer &amp; Coach.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Every clinical tool in one place — records, orders, blueprint, telehealth &amp; more.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
         {card("🩺", "Consultations", "Doctor · Coach · Psychologist", consultsPend.count ?? 0, "to complete", "/pro", "#e0f2f1")}
@@ -57,6 +57,7 @@ export default async function CareTeamPage() {
         {card("🧬", "BluePrint", "Blood reports & 9 scores", bloodPend.count ?? 0, "reports pending", "/blueprint", "#fee2e2")}
         {card("📅", "Appointments", "Consultations & assessments", apptsToday.count ?? 0, "today", "/appointments", "#dbeafe")}
         {card("🏃", "Exercise Library", "Templates & assignments", null, "workouts", "/exlib", "#e0f2f1")}
+        {card("📹", "Telehealth", "Video consultations", null, "video visits", "/telehealth", "#ede9fe")}
       </div>
     </div>
   );
