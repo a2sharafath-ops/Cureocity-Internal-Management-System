@@ -6,6 +6,7 @@ import NpsForm from "@/components/NpsForm";
 import ReferralForm from "@/components/ReferralForm";
 import ReferralActions from "@/components/ReferralActions";
 import SegTabs from "@/components/SegTabs";
+import StatCard from "@/components/StatCard";
 import { winbackOffer, sendNpsSurvey, awardLoyalty, redeemLoyalty } from "@/lib/actions";
 
 export type RiskRow = { id: string; name: string; packageName: string | null; score: number; tier: string; reasons: string[] };
@@ -35,11 +36,7 @@ export default function RetentionHub({
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13 };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
   const kpi = (label: string, value: string, sub: string, bg: string, color: string) => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1, minWidth: 150 }}>
-      <div style={{ display: "inline-flex", background: bg, color, borderRadius: 8, padding: "3px 8px", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
-      <div style={{ fontSize: 11, color: "var(--muted)" }}>{sub}</div>
-    </div>
+    <StatCard label={label} value={value} sub={sub} badge={{ bg, color }} />
   );
   const chip = (bg: string, c: string, t: string, extra?: React.CSSProperties) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, ...extra }}>{t}</span>;
   const tierChip = (t: string) => chip(t === "High" ? "var(--red-bg)" : t === "Medium" ? "var(--amber-bg)" : "var(--green-bg)", t === "High" ? "#991b1b" : t === "Medium" ? "#92400e" : "#166534", t);

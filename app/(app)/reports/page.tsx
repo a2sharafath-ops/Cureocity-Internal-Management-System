@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 
 export const dynamic = "force-dynamic";
 
@@ -128,11 +129,7 @@ export default async function ReportsPage() {
   ];
 
   const kpi = (label: string, value: string, sub?: string) => (
-    <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 16px", flex: 1, minWidth: 170 }}>
-      <div style={{ color: "var(--muted)", fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{value}</div>
-      {sub && <div style={{ color: "var(--muted)", fontSize: 12 }}>{sub}</div>}
-    </div>
+    <StatCard label={label} value={value} sub={sub} minWidth={170} />
   );
 
   return (

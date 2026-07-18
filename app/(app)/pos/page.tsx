@@ -6,6 +6,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { restockProduct } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 import PosCart from "@/components/PosCart";
 import ProductForm from "@/components/ProductForm";
 
@@ -35,9 +36,7 @@ export default async function StorePage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px" };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1 }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div></div>
-  );
+  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
 
   return (
     <div style={{ maxWidth: 1120 }}>

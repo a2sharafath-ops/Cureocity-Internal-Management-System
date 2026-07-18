@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 import { InsurerForm, PolicyForm, ClaimForm } from "@/components/ClaimsForms";
 import ClaimActions from "@/components/ClaimActions";
 
@@ -45,9 +46,7 @@ export default async function ClaimsPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1 }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div></div>
-  );
+  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
   const chipFor = (s: string): [string, string] => {
     const m: Record<string, [string, string]> = {
       draft: ["#eef2f1", "var(--muted)"], submitted: ["#e0f2f1", "var(--teal-dark)"], in_review: ["var(--amber-bg)", "#92400e"],

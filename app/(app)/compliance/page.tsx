@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { maskName } from "@/lib/phi";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 import PhiReveal from "@/components/PhiReveal";
 import IdentityForm from "@/components/IdentityForm";
 import { ConsentForm, BreachForm, RetentionForm, ConsentRevoke, BreachActions } from "@/components/GovernanceForms";
@@ -37,9 +38,7 @@ export default async function CompliancePage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1 }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 20, fontWeight: 700, color }}>{value}</div></div>
-  );
+  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
   const sevColor = (s: string) => s === "critical" ? "var(--red)" : s === "high" ? "#b45309" : s === "low" ? "var(--muted)" : "#92400e";
 
   return (

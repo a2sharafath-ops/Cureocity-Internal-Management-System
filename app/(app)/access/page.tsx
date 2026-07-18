@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 import CheckinForm from "@/components/CheckinForm";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +37,7 @@ export default async function AccessPage() {
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1 }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div></div>
-  );
+  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
 
   return (
     <div style={{ maxWidth: 1040 }}>

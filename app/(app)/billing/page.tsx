@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee, canBill } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import PayOnlineButton from "@/components/PayOnlineButton";
@@ -59,11 +60,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const kpi = (label: string, value: string, sub?: string) => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1, minWidth: 170 }}>
-      <div style={{ color: "var(--muted)", fontSize: 12 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{value}</div>
-      {sub && <div style={{ color: "var(--muted)", fontSize: 12 }}>{sub}</div>}
-    </div>
+    <StatCard label={label} value={value} sub={sub} minWidth={170} />
   );
   const statusChip = (s: string) => {
     const map: Record<string, [string, string]> = { Paid: ["var(--green-bg)", "#166534"], Unpaid: ["var(--amber-bg)", "#92400e"], Refunded: ["#eef2f1", "var(--muted)"] };

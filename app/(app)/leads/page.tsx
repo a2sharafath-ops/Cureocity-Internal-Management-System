@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import LeadStageSelect from "@/components/LeadStageSelect";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import StatCard from "@/components/StatCard";
 import { leadScore, leadProduct, TIER_STYLE, type Tier } from "@/lib/leadscore";
 import Link from "next/link";
 import { LeadForm, CallCell } from "@/components/LeadControls";
@@ -34,9 +35,7 @@ export default async function LeadsPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "12px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 14 };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => (
-    <div style={{ ...box, padding: "14px 16px", flex: 1, minWidth: 150 }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 22, fontWeight: 700, color }}>{value}</div></div>
-  );
+  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
 
   return (
     <div style={{ maxWidth: 1120 }}>
