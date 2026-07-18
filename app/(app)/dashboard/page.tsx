@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import { isClinician } from "@/lib/roles";
@@ -44,6 +45,9 @@ export default async function DashboardPage() {
   const role = effective === "Super Admin" ? "Administrator" : effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);
   const isPro = isClinician(role);
+
+  // Clinicians' home is their discipline workspace — no separate dashboard.
+  if (isPro) redirect("/workspace");
 
   const supabase = createClient();
   const monthStart = TODAY.slice(0, 7) + "-01";
