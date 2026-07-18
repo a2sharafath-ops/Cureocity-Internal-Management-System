@@ -42,7 +42,7 @@ const SECTIONS: NavSection[] = [
       { href: "/packages", label: "Packages", icon: "▦" },
       { href: "/services", label: "Services", icon: "≣" },
       { href: "/users", label: "Users & Roles", icon: "⚙" },
-      { href: "/notifications", label: "Notifications", icon: "✉" },
+      { href: "/notifications", label: "Email Log", icon: "✉" },
       { href: "/audit", label: "Audit Log", icon: "☰" },
     ],
   },

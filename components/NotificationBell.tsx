@@ -58,7 +58,7 @@ export default function NotificationBell({ items, unread }: { items: Notif[]; un
                 </form>
               );
             })}
-            <Link href="/notifications" onClick={() => setOpen(false)} style={{ display: "block", textAlign: "center", padding: "11px 14px", borderTop: "1px solid var(--border)", color: "var(--teal-dark)", fontSize: 13, fontWeight: 600, textDecoration: "none", position: "sticky", bottom: 0, background: "var(--card)" }}>
+            <Link href="/alerts" onClick={() => setOpen(false)} style={{ display: "block", textAlign: "center", padding: "11px 14px", borderTop: "1px solid var(--border)", color: "var(--teal-dark)", fontSize: 13, fontWeight: 600, textDecoration: "none", position: "sticky", bottom: 0, background: "var(--card)" }}>
               See all notifications →
             </Link>
           </div>
