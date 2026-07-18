@@ -9,6 +9,8 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SegTabs from "@/components/SegTabs";
 import StatCard from "@/components/StatCard";
 import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClients";
+import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
+import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
@@ -38,13 +40,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const today = todayISO();
   const isTrainer = roleKey === "trainer";
 
-  const [{ data: clientData }, { data: enrollData }, { count: pendingSummaries }, todayRes] = await Promise.all([
+  const [{ data: clientData }, { data: enrollData }, { count: pendingSummaries }, todayRes, { data: concernData }, { data: mdtData }] = await Promise.all([
     supabase.from("clients").select("id, name, code, package_id, pro_id, conditions, goals, packages(name)").order("name"),
     supabase.from("enrollments").select("client_id"),
     supabase.from("consultations").select("id", { count: "exact", head: true }).eq("kind", role.kind).eq("approved", false),
     isTrainer
       ? supabase.from("sessions").select("id, hour, status, clients(name)").eq("date", today).order("hour")
       : supabase.from("appointments").select("id, hour, type, title, status, clients(name)").eq("date", today).eq("status", "scheduled").order("hour"),
+    supabase.from("concerns").select("id, client_id, category, body, raised_by, status, created_at, clients(name)").in("role", [roleKey, "general"]).order("created_at", { ascending: false }),
+    supabase.from("mdt_notes").select("id, client_id, author, body, escalated, to_role, status, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
   ]);
 
   const allClients = (clientData ?? []) as unknown as ClientRow[];
@@ -57,6 +61,18 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   }));
 
   const todayList = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; clients: { name: string } | null }[];
+
+  type CJoin = { clients: { name: string } | null };
+  const concerns: ConcernRow[] = ((concernData ?? []) as unknown as (ConcernRow & CJoin)[]).map((r) => ({
+    id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null,
+    category: r.category, body: r.body, raised_by: r.raised_by, status: r.status, created_at: r.created_at,
+  }));
+  const mdtNotes: MdtRow[] = ((mdtData ?? []) as unknown as (MdtRow & CJoin)[]).map((r) => ({
+    id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null,
+    author: r.author, body: r.body, escalated: r.escalated, to_role: r.to_role, status: r.status, created_at: r.created_at,
+  }));
+  const openConcerns = concerns.filter((c) => c.status === "Open").length;
+  const clientOpts = allClients.map((c) => ({ id: c.id, name: c.name }));
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const fmtHour = (h: number | null) => {
@@ -71,7 +87,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes"]} />
 
       {/* Workspace chrome: role switcher */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -107,8 +123,8 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
             <StatCard label="My clients" value={scoped.length} />
             <StatCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length} />
             <StatCard label="Pending summaries" value={pendingSummaries ?? 0} color="#b45309" />
-            <StatCard label="Client concerns" value={0} />
-            <StatCard label="MDT updates" value={0} />
+            <StatCard label="Client concerns" value={openConcerns} color={openConcerns ? "#b45309" : undefined} />
+            <StatCard label="MDT updates" value={mdtNotes.length} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
@@ -155,6 +171,12 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MY CLIENTS ---- */}
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} />}
+
+      {/* ---- CONCERNS ---- */}
+      {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
+
+      {/* ---- MDT BOARD ---- */}
+      {tab === "board" && <MdtBoard notes={mdtNotes} clients={clientOpts} />}
 
       {/* ---- STUB TABS (later phases) ---- */}
       {stubDef && (

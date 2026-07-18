@@ -53,11 +53,11 @@ function commonTabs(): WsTab[] {
     { key: "appts", label: "📅 Appointments", href: "/appointments" },
     { key: "summaries", label: "📝 Summaries", href: "/pro" },
     { key: "bp", label: "🧬 Blueprint", href: "/blueprint" },
-    { key: "concerns", label: "⚠️ Concerns", note: "Client-raised concerns queue — coming in a later phase." },
+    { key: "concerns", label: "⚠️ Concerns", live: true },
     { key: "team", label: "Integrated Dashboard", href: "/careteam" },
     { key: "monitor", label: "Client Monitoring", note: "Deep client-monitoring view — coming in a later phase." },
     { key: "library", label: "Resource Library", note: "Role-scoped file library — coming in a later phase." },
-    { key: "board", label: "MDT", note: "Multidisciplinary team notes — coming in a later phase." },
+    { key: "board", label: "MDT", live: true },
   ];
 }
 

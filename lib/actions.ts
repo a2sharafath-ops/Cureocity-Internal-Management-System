@@ -3096,3 +3096,57 @@ export async function updateClientRecord(formData: FormData) {
   revalidatePath("/", "layout");
   redirect(`/clients/${id}`);
 }
+
+// ---- workspace: concerns queue + MDT board ---------------------------------
+
+export async function addConcern(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id") || "") || null;
+  const role = String(formData.get("role") || "general");
+  const category = String(formData.get("category") || "").trim() || null;
+  const body = String(formData.get("body") || "").trim();
+  if (!body) return;
+  const supabase = createClient();
+  await supabase.from("concerns").insert({ client_id, role, category, body, raised_by: p.name, status: "Open" });
+  await logAudit(p, "Concern raised", category ?? role, null);
+  revalidatePath("/workspace");
+}
+
+export async function resolveConcern(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("concerns").update({ status: "Resolved", resolved_by: p.name, resolved_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Concern resolved", id, null);
+  revalidatePath("/workspace");
+}
+
+export async function addMdtNote(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id") || "") || null;
+  const body = String(formData.get("body") || "").trim();
+  if (!body) return;
+  const escalated = String(formData.get("escalated") || "") === "on";
+  const to_role = escalated ? (String(formData.get("to_role") || "").trim() || null) : null;
+  const supabase = createClient();
+  await supabase.from("mdt_notes").insert({
+    client_id, author: p.name, body, escalated, to_role, status: escalated ? "Open" : null,
+  });
+  await logAudit(p, escalated ? "MDT escalation raised" : "MDT update added", to_role ?? null, null);
+  revalidatePath("/workspace");
+}
+
+export async function acknowledgeMdt(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("mdt_notes").update({ status: "Acknowledged" }).eq("id", id);
+  await logAudit(p, "MDT escalation acknowledged", id, null);
+  revalidatePath("/workspace");
+}
