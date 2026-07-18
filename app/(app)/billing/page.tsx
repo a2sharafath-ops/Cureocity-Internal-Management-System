@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canBill } from "@/lib/roles";
+import { canSee, canManageInvoices } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import StatCard from "@/components/StatCard";
@@ -50,7 +50,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   const unpaidInv = invoices.filter((i) => i.status === "Unpaid");
   const unpaid = unpaidInv.reduce((s, i) => s + Number(i.amount), 0);
   const refunded = invoices.filter((i) => i.status === "Refunded");
-  const editable = canBill(me.role);
+  const editable = canManageInvoices(me.role);
   const pay = paymentStatus();
 
   // dunning = unpaid, aged oldest-first

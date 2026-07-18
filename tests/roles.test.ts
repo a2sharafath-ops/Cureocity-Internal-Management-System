@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canSee, canBill, canEmr, canClaims, canCompliance, canAppointments, canPos, canConsult } from "@/lib/roles";
+import { canSee, canBill, canManageInvoices, canEmr, canClaims, canCompliance, canAppointments, canPos, canConsult } from "@/lib/roles";
 
 describe("canSee", () => {
   it("dashboard is visible to everyone", () => {
@@ -39,6 +39,13 @@ describe("permission helpers", () => {
     expect(canEmr("Manager")).toBe(true);
     expect(canEmr("Front Desk")).toBe(false);
     expect(canEmr("Finance")).toBe(false);
+  });
+
+  it("front desk can view billing but not manage invoices", () => {
+    expect(canBill("Front Desk")).toBe(true);
+    expect(canManageInvoices("Front Desk")).toBe(false);
+    expect(canManageInvoices("Finance")).toBe(true);
+    expect(canManageInvoices("Manager")).toBe(true);
   });
 
   it("canClaims excludes front desk", () => {

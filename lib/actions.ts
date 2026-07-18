@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -1044,7 +1044,7 @@ async function nextInvoiceNum(supabase: ReturnType<typeof createClient>) {
 
 export async function createInvoice(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canBill(p.role)) return;
+  if (!p || !canManageInvoices(p.role)) return;
   const client_id = String(formData.get("client_id")) || null;
   const description = String(formData.get("description") ?? "").trim() || "Invoice";
   const amount = Number(formData.get("amount")) || 0;
@@ -1066,7 +1066,7 @@ export async function createInvoice(formData: FormData) {
 
 export async function markInvoicePaid(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canBill(p.role)) return;
+  if (!p || !canManageInvoices(p.role)) return;
   const id = String(formData.get("id"));
   const method = String(formData.get("method") ?? "").trim() || "Cash";
   const supabase = createClient();
@@ -1078,7 +1078,7 @@ export async function markInvoicePaid(formData: FormData) {
 
 export async function refundInvoice(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canBill(p.role)) return;
+  if (!p || !canManageInvoices(p.role)) return;
   const id = String(formData.get("id"));
   const supabase = createClient();
   await supabase.from("invoices").update({ status: "Refunded" }).eq("id", id);

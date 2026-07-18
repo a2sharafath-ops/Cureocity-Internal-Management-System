@@ -15,7 +15,7 @@ import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter, Gauge } from "@/components/Meters";
@@ -84,6 +84,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
   const canMeasure = canWrite(me?.role ?? "") || canConsult(me?.role ?? "");
   const showBilling = canBill(me?.role ?? "");
+  const canInvoice = canManageInvoices(me?.role ?? "");
   const { data: invoiceRows } = showBilling
     ? await supabase.from("invoices").select("id, num, description, amount, status, method, issued_date").eq("client_id", params.id).order("created_at", { ascending: false })
     : { data: [] };
@@ -283,13 +284,13 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                   <td style={{ padding: "8px 6px" }}>{i.description}</td>
                   <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
                   <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
-                  <td style={{ padding: "8px 6px", textAlign: "right" }}><InvoiceActions id={i.id} status={i.status} /></td>
+                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{canInvoice && <InvoiceActions id={i.id} status={i.status} />}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-        {showBilling && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
+        {canInvoice && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
       </div>
 
       </>)}

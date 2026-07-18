@@ -103,9 +103,14 @@ export function canManageBlueprint(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
-// Who can manage invoices / billing.
+// Who can VIEW billing (page + client-card billing section). Front Desk included.
 export function canBill(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
+}
+
+// Who can CREATE / EDIT invoices (mark paid, refund). Front Desk is view-only.
+export function canManageInvoices(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
 }
 
 // Who can message clients.
