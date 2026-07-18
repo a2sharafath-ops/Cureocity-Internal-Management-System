@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { toggleConsultFlag, generateBlueprint } from "@/lib/actions";
+import { toggleConsultFlag, generateBlueprint, startConsult } from "@/lib/actions";
 
 export type ConsultSummary = {
   id: string;
@@ -29,11 +29,13 @@ export type ConsolidatedRow = {
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
 export default function SummariesPanel({
-  roleLabel, consults, consolidated,
+  roleLabel, roleKind, consults, consolidated, clients,
 }: {
   roleLabel: string;
+  roleKind: string;
   consults: ConsultSummary[];
   consolidated: ConsolidatedRow[];
+  clients: { id: string; name: string }[];
 }) {
   const [view, setView] = useState<"individual" | "consolidated">("individual");
   const pending = consults.filter((c) => !c.approved).length;
@@ -59,6 +61,18 @@ export default function SummariesPanel({
       </div>
 
       {view === "individual" ? (
+        <>
+        <form action={startConsult} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="kind" value={roleKind} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>▶ Start a {roleLabel} consultation</span>
+          <span style={{ flex: 1 }} />
+          <select name="client_id" required defaultValue="" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" }}>
+            <option value="" disabled>Select client…</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Open console →</button>
+        </form>
+
         <div style={{ ...box, overflow: "hidden" }}>
           <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)" }}>Approve your {roleLabel} consultation summaries. Approved summaries feed the client&apos;s Blueprint sign-off.</div>
           {consults.length ? consults.map((c) => (
@@ -72,6 +86,7 @@ export default function SummariesPanel({
                 </div>
                 <div style={{ fontSize: 13, marginTop: 3, color: c.summary ? "var(--ink)" : "var(--muted)" }}>{c.summary || "No summary written yet."}</div>
               </div>
+              <Link href={`/console/${c.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--ink)", whiteSpace: "nowrap" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
               <form action={toggleConsultFlag}>
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="field" value="approved" />
@@ -87,6 +102,7 @@ export default function SummariesPanel({
             </div>
           )) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {roleLabel} summaries yet.</div>}
         </div>
+        </>
       ) : (
         <div>
           <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Each professional approves their own summary. Once Doctor, Dietitian &amp; Trainer are all approved, sign off the consolidated summary — that generates the client&apos;s Blueprint.</div>

@@ -725,6 +725,46 @@ export async function createConsultation(formData: FormData) {
   revalidatePath("/pro");
 }
 
+// Start a live consultation and jump into the console.
+export async function startConsult(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const kind = String(formData.get("kind"));
+  if (!client_id || !kind) return;
+  const supabase = createClient();
+  const { data: row } = await supabase.from("consultations").insert({
+    client_id, kind, status: "scheduled", by_name: p.name, by_role: p.role, started_at: new Date().toISOString(),
+  }).select("id").maybeSingle();
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Consultation started", c?.name, kind);
+  if (row?.id) redirect(`/console/${row.id}`);
+  redirect("/workspace?tab=summaries");
+}
+
+// Save the console session — intake answers + scribe summary, optionally complete.
+export async function saveConsultSession(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const kind = String(formData.get("kind"));
+  const complete = String(formData.get("complete") || "") === "true";
+  if (!id) return;
+  const { consultQ } = await import("@/lib/consult-questions");
+  const questions = consultQ(kind).questions;
+  const answers = questions.map((q, i) => [q, String(formData.get("a_" + i) ?? "").trim()]).filter(([, a]) => a);
+  const summary = String(formData.get("summary") ?? "").trim() || null;
+  const duration = Number(formData.get("duration_min")) || null;
+  const supabase = createClient();
+  await supabase.from("consultations").update({
+    answers, summary, ...(complete ? { status: "completed" } : {}), ...(duration ? { duration_min: duration } : {}),
+  }).eq("id", id);
+  await logAudit(p, complete ? "Consultation completed" : "Consultation session saved", kind, null);
+  revalidatePath("/workspace");
+  if (complete) redirect("/workspace?tab=summaries");
+  revalidatePath(`/console/${id}`);
+}
+
 export async function completeConsultation(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;

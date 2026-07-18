@@ -236,7 +236,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
-      {tab === "summaries" && <SummariesPanel roleLabel={role.short} consults={consultSummaries} consolidated={consolidated} />}
+      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} />}
 
       {/* ---- CONCERNS ---- */}
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
