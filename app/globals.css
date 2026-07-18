@@ -60,3 +60,46 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* ---- Design-system control layer -------------------------------------------
+   Central polish that applies app-wide without editing per-component inline
+   styles: focus rings, control baselines, hover feedback, links, scrollbars. */
+
+::selection { background: var(--primary-100); color: var(--primary-700); }
+
+a { color: var(--teal-dark); }
+
+button { font-family: inherit; transition: filter 0.15s ease, background 0.15s ease, opacity 0.15s ease; }
+button:not(:disabled):hover { filter: brightness(0.97); }
+button:not(:disabled):active { filter: brightness(0.93); }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+input, select, textarea { font-family: inherit; font-size: 14px; color: var(--text); }
+input::placeholder, textarea::placeholder { color: #b6b6bd; }
+
+/* Brand focus ring on every interactive control */
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 1px;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--primary-400) !important; }
+
+/* Thin, neutral scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #d6d6db transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: #d6d6db; border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: #c2c2c9; }
+
+/* ---- Design-system utility classes (opt-in for new/updated components) ----- */
+.ds-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid transparent;
+  border-radius: var(--radius-pill); padding: 9px 18px; font-size: 14px; font-weight: 600;
+  cursor: pointer; line-height: 1; transition: filter .15s ease; }
+.ds-btn-primary { background: var(--ink); color: #fff; }
+.ds-btn-secondary { background: #fff; color: var(--ink); border-color: var(--border); }
+.ds-btn-tertiary { background: transparent; color: var(--teal-dark); padding: 9px 8px; }
+.ds-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ds-input { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+  font-size: 14px; background: #fff; }
+.ds-chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
+  padding: 3px 10px; font-size: 12px; font-weight: 600; background: #eef2f1; color: var(--muted); }
