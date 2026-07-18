@@ -11,6 +11,13 @@ type NavSection = { title: string | null; items: NavItem[] };
 // Front Desk → Clinical → Admin → Governance → Finance.
 const SECTIONS: NavSection[] = [
   {
+    title: "Workspaces",
+    items: [
+      { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
+      { href: "/careteam", label: "Care Team", icon: "🤝" },
+    ],
+  },
+  {
     title: "Front Desk",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "▚" },
@@ -23,13 +30,6 @@ const SECTIONS: NavSection[] = [
       { href: "/messages", label: "Communications", icon: "💬" },
       { href: "/retention", label: "Retention", icon: "💚" },
       { href: "/targets", label: "Sales Targets", icon: "🎯" },
-    ],
-  },
-  {
-    title: "Workspaces",
-    items: [
-      { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
-      { href: "/careteam", label: "Care Team", icon: "🤝" },
     ],
   },
   {
