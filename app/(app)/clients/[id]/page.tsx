@@ -18,6 +18,8 @@ import { getProfile } from "@/lib/auth";
 import { canWrite, canConsult, canBill } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { RingMeter, Gauge } from "@/components/Meters";
+import { BP_SCORES } from "@/lib/blueprint";
 
 export const dynamic = "force-dynamic";
 
@@ -454,15 +456,20 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <span style={{ flex: 1 }} />
           {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
         </div>
-        {bp?.scores && Object.keys(bp.scores).length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 12 }}>
-            {Object.entries(bp.scores).slice(0, 9).map(([k, v]) => (
-              <div key={k} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px" }}>
-                <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{k}</div><b style={{ fontSize: 14 }}>{v}</b>
+        {bp?.scores && Object.keys(bp.scores).length > 0 && (() => {
+          const vals = BP_SCORES.map((s) => bp!.scores![s.key]).filter((v): v is number => typeof v === "number");
+          const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+          return (
+            <div style={{ display: "flex", gap: 20, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+              <Gauge value={avg} size={168} unit="/ 100" label="Overall wellness" caption={`${vals.length} of ${BP_SCORES.length} scores`} />
+              <div style={{ flex: 1, minWidth: 260, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 14, justifyItems: "center" }}>
+                {BP_SCORES.filter((s) => typeof bp!.scores![s.key] === "number").map((s) => (
+                  <RingMeter key={s.key} value={Number(bp!.scores![s.key])} size={80} stroke={9} label={s.label} />
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Measurements / InBody */}
