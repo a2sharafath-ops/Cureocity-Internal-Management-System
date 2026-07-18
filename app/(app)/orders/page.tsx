@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { OrderActions } from "@/components/OrderActions";
+import SegTabs from "@/components/SegTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,6 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const tab = (key: string, label: string) => (
-    <Link href={`/orders?view=${key}`} style={{ padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, textDecoration: "none", background: view === key ? "var(--teal)" : "#fff", color: view === key ? "#fff" : "var(--muted)", border: "1px solid var(--border)" }}>{label}</Link>
-  );
-
   const stat = (rank: string) => rank === "stat" ? { color: "var(--red)", label: "STAT" } : rank === "urgent" ? { color: "#92400e", label: "URGENT" } : null;
 
   return (
@@ -34,7 +31,10 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Orders worklist</h1>
         <span style={{ flex: 1 }} />
-        {tab("open", "Open")}{tab("all", "All")}
+        <SegTabs active={view} size="sm" items={[
+          { key: "open", label: "Open", href: "/orders?view=open" },
+          { key: "all", label: "All", href: "/orders?view=all" },
+        ]} />
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Pending lab &amp; imaging orders across all patients. Collect samples, then enter results.</p>
 

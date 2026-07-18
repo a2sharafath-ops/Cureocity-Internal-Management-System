@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createAppointment } from "@/lib/actions";
 import AppointmentActions from "@/components/AppointmentActions";
+import SegTabs from "@/components/SegTabs";
 
 export type ViewAppt = {
   id: string; client_id: string; clientName: string | null; type: string | null; title: string | null;
@@ -54,10 +55,6 @@ export default function AppointmentsView({
   const records = sorted.filter((a) => a.status === "completed" || a.date < today);
   const counts = { scheduled: visible.filter((a) => a.status === "scheduled").length, completed: visible.filter((a) => a.status === "completed").length, no_show: visible.filter((a) => a.status === "no_show").length };
 
-  const tabBtn = (key: typeof tab, icon: string, label: string) => (
-    <button type="button" onClick={() => setTab(key)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 15px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{icon} {label}</button>
-  );
-
   return (
     <div>
       {/* header: title + New Booking */}
@@ -80,10 +77,12 @@ export default function AppointmentsView({
 
       {/* sub-view tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-        {tabBtn("calendar", "📅", "Calendar")}
-        {tabBtn("tracker", "⏳", "Tracker")}
-        {tabBtn("list", "📋", "List")}
-        {tabBtn("records", "🗂", "Records")}
+        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
+          { key: "calendar", label: "📅 Calendar" },
+          { key: "tracker", label: "⏳ Tracker" },
+          { key: "list", label: "📋 List" },
+          { key: "records", label: "🗂 Records" },
+        ]} />
       </div>
 
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>

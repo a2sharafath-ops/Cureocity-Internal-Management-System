@@ -19,6 +19,7 @@ import { canWrite, canConsult, canBill } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter, Gauge } from "@/components/Meters";
+import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
 
 export const dynamic = "force-dynamic";
@@ -189,10 +190,12 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {[["overview", "Overview"], ["timeline", "Service Timeline"], ["card", "Client Card"]].map(([key, label]) => (
-          <Link key={key} href={`/clients/${params.id}?tab=${key}`} style={{ padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{label}</Link>
-        ))}
+      <div style={{ marginBottom: 16 }}>
+        <SegTabs active={tab} items={[
+          { key: "overview", label: "Overview", href: `/clients/${params.id}?tab=overview` },
+          { key: "timeline", label: "Service Timeline", href: `/clients/${params.id}?tab=timeline` },
+          { key: "card", label: "Client Card", href: `/clients/${params.id}?tab=card` },
+        ]} />
       </div>
 
       {tab === "overview" && (<>

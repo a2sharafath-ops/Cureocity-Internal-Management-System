@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -7,6 +6,7 @@ import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { AttendanceButtons, LeaveForm, LeaveActions } from "@/components/HrControls";
 import { OnboardingForm, OnboardingCard } from "@/components/OnboardingControls";
+import SegTabs from "@/components/SegTabs";
 import {
   addHrUpdate, toggleMonthTask, generatePayslip, addCommission, fileStatutory,
   advanceCandidate, setPurchaseStatus, addOffboarding,
@@ -68,9 +68,6 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     const [bg, c] = m[d ?? ""] ?? ["#eef2f1", "#64748b"];
     return chip(bg, c, d ?? "—");
   };
-  const tabLink = (key: string, label: string) => (
-    <Link href={`/hr?tab=${key}`} style={{ padding: "8px 15px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{label}</Link>
-  );
   const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   const fmtDate = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
 
@@ -86,8 +83,14 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
         <LeaveForm staff={staff.map((s) => ({ id: s.id, name: s.name, role: s.role, department: s.department }))} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {tabLink("attendance", "👥 Team & Attendance")}{tabLink("leave", "🌴 Leave")}{tabLink("payroll", "💰 Payroll & Statutory")}{tabLink("recruit", "📋 Recruitment & Docs")}{tabLink("boarding", "🔄 On / Offboarding")}
+      <div style={{ marginBottom: 16 }}>
+        <SegTabs active={tab} items={[
+          { key: "attendance", label: "👥 Team & Attendance", href: "/hr?tab=attendance" },
+          { key: "leave", label: "🌴 Leave", href: "/hr?tab=leave" },
+          { key: "payroll", label: "💰 Payroll & Statutory", href: "/hr?tab=payroll" },
+          { key: "recruit", label: "📋 Recruitment & Docs", href: "/hr?tab=recruit" },
+          { key: "boarding", label: "🔄 On / Offboarding", href: "/hr?tab=boarding" },
+        ]} />
       </div>
 
       {/* ================= TEAM & ATTENDANCE ================= */}

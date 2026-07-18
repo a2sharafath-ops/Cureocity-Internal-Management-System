@@ -6,6 +6,7 @@ import {
   setTrainerSlot, assignTrainerSlot, unassignTrainerSlot,
   createAssessment, markAssessmentBooked, completeAssessment, toggleAssessmentShared, addRecoverySession, completeRecoverySession,
 } from "@/lib/actions";
+import SegTabs from "@/components/SegTabs";
 
 export type Trainer = { id: string; name: string; color: string };
 export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null };
@@ -42,9 +43,6 @@ export default function TrainingScheduleView({
   const available = slots.filter((s) => s.status === "available" && !s.client_id).length;
   const unavailable = total - assigned - available;
 
-  const tabBtn = (key: typeof tab, icon: string, label: string) => (
-    <button type="button" onClick={() => setTab(key)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 15px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{icon} {label}</button>
-  );
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const tagChip = (tag: string | null) => {
     const [bg, fg] = TAG_STYLE[tag ?? "PT"] ?? ["#eef2f1", "#64748b"];
@@ -66,9 +64,11 @@ export default function TrainingScheduleView({
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {tabBtn("slots", "🏋", "Slots & Assessments")}
-        {tabBtn("studio", "🧘", "Group Studio")}
-        {tabBtn("recovery", "💆", "Recovery")}
+        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
+          { key: "slots", label: "🏋 Slots & Assessments" },
+          { key: "studio", label: "🧘 Group Studio" },
+          { key: "recovery", label: "💆 Recovery" },
+        ]} />
         <span style={{ flex: 1 }} />
         {canWrite && <button type="button" onClick={() => { setTab("slots"); setNewAssess(true); }} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Assessment</button>}
         {canWrite && <button type="button" onClick={() => { setTab("slots"); setManualAssign(true); }} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Assign client</button>}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { sendMessageStaff, createTemplate, createCampaign, sendCampaignNow, archiveTemplate } from "@/lib/actions";
+import SegTabs from "@/components/SegTabs";
 
 export type CClient = { id: string; name: string; code: string | null; phone: string | null; color: string };
 export type CMsg = { id: string; client_id: string; sender: string; sender_name: string | null; body: string; read: boolean; channel: string; created_at: string };
@@ -44,13 +45,16 @@ export default function CommsHub({
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const chBadge = (ch: string) => { const [bg, c] = chColor[ch] ?? ["#eef2f1", "#64748b"]; return <span style={{ background: bg, color: c, borderRadius: 999, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{ch}</span>; };
-  const tabBtn = (k: typeof tab, label: string) => <button type="button" onClick={() => setTab(k)} style={{ padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === k ? "var(--teal)" : "#fff", color: tab === k ? "#fff" : "var(--muted)" }}>{label}</button>;
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
 
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {tabBtn("inbox", "💬 Inbox")}{tabBtn("templates", "📝 Templates")}{tabBtn("campaigns", "⚡ Campaigns")}
+        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
+          { key: "inbox", label: "💬 Inbox" },
+          { key: "templates", label: "📝 Templates" },
+          { key: "campaigns", label: "⚡ Campaigns" },
+        ]} />
         <span style={{ flex: 1 }} />
         {tab === "templates" && canCamp && <button type="button" onClick={() => setNewTemplate((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newTemplate ? "Cancel" : "+ New Template"}</button>}
         {tab === "campaigns" && canCamp && <button type="button" onClick={() => setNewCampaign((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newCampaign ? "Cancel" : "+ New Campaign"}</button>}

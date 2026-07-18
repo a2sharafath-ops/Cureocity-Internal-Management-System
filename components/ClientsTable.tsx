@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { setClientOwner } from "@/lib/actions";
 import { BRANCHES } from "@/lib/branches";
+import SegTabs from "@/components/SegTabs";
 
 export type ClientRow = {
   id: string; code: string | null; name: string; phone: string | null; email: string | null;
@@ -32,11 +33,6 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
 
   const th: React.CSSProperties = { padding: "12px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 14, verticalAlign: "middle" };
-  const tabBtn = (key: "all" | "blueprint", label: string, count: number) => (
-    <button type="button" onClick={() => setTab(key)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>
-      {label} <span style={{ background: tab === key ? "rgba(255,255,255,0.25)" : "#eef2f1", borderRadius: 999, padding: "0 7px", fontSize: 11 }}>{count}</span>
-    </button>
-  );
   const statusChip = (s: string) => {
     const on = s === "Active";
     return <span style={{ background: on ? "var(--green-bg)" : "#eef2f1", color: on ? "#166534" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>;
@@ -44,9 +40,11 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {tabBtn("all", "All Clients", clients.length)}
-        {tabBtn("blueprint", "🧬 Blueprint clients", bpCount)}
+      <div style={{ marginBottom: 14 }}>
+        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
+          { key: "all", label: "All Clients", count: clients.length },
+          { key: "blueprint", label: "🧬 Blueprint clients", count: bpCount },
+        ]} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>

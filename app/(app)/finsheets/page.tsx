@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -6,6 +5,7 @@ import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { PayableForm, EstimateForm, LedgerForm } from "@/components/FinanceForms";
 import { PayPayable, EstimateActions } from "@/components/FinanceActions";
+import SegTabs from "@/components/SegTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +44,6 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const bal = (rows: Ledger[]) => rows.reduce((s, r) => s + (r.direction === "in" ? Number(r.amount) : -Number(r.amount)), 0);
 
-  const tabLink = (key: string, label: string) => (
-    <Link href={`/finsheets?tab=${key}`} style={{ padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: tab === key ? "var(--teal)" : "#fff", color: tab === key ? "#fff" : "var(--muted)" }}>{label}</Link>
-  );
   const dirChip = (d: string) => <span style={{ color: d === "in" ? "#166534" : "var(--red)", fontWeight: 700, fontSize: 13 }}>{d === "in" ? "+" : "−"}</span>;
 
   const ledgerTable = (rows: (Ledger & { account: string })[], acct: "bank" | "cash") => (
@@ -87,7 +84,7 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Sales · Payables · Estimates · Bank payments · Cash statement</p>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>{TABS.map((t) => tabLink(t.key, t.label))}</div>
+      <div style={{ marginBottom: 16 }}><SegTabs active={tab} items={TABS.map((t) => ({ key: t.key, label: t.label, href: `/finsheets?tab=${t.key}` }))} /></div>
 
       {tab === "sales" && (
         <div style={{ ...box, overflow: "hidden" }}>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import NpsForm from "@/components/NpsForm";
 import ReferralForm from "@/components/ReferralForm";
 import ReferralActions from "@/components/ReferralActions";
+import SegTabs from "@/components/SegTabs";
 import { winbackOffer, sendNpsSurvey, awardLoyalty, redeemLoyalty } from "@/lib/actions";
 
 export type RiskRow = { id: string; name: string; packageName: string | null; score: number; tier: string; reasons: string[] };
@@ -33,9 +34,6 @@ export default function RetentionHub({
   const th: React.CSSProperties = { padding: "10px 14px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13 };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
-  const tabBtn = (k: typeof tab, label: string, n?: number) => (
-    <button type="button" onClick={() => setTab(k)} style={{ padding: "7px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === k ? "var(--teal)" : "#fff", color: tab === k ? "#fff" : "var(--muted)" }}>{label}{n ? <span style={{ background: tab === k ? "rgba(255,255,255,.25)" : "#eef2f1", borderRadius: 999, padding: "0 6px", marginLeft: 6, fontSize: 11 }}>{n}</span> : null}</button>
-  );
   const kpi = (label: string, value: string, sub: string, bg: string, color: string) => (
     <div style={{ ...box, padding: "14px 16px", flex: 1, minWidth: 150 }}>
       <div style={{ display: "inline-flex", background: bg, color, borderRadius: 8, padding: "3px 8px", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>{label}</div>
@@ -51,8 +49,12 @@ export default function RetentionHub({
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {tabBtn("risk", "⚠️ At-Risk", kpis.high)}{tabBtn("nps", "📊 NPS & Feedback")}{tabBtn("referrals", "🎁 Referrals & Loyalty")}
+      <div style={{ marginBottom: 16 }}>
+        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
+          { key: "risk", label: "⚠️ At-Risk", count: kpis.high || undefined },
+          { key: "nps", label: "📊 NPS & Feedback" },
+          { key: "referrals", label: "🎁 Referrals & Loyalty" },
+        ]} />
       </div>
 
       {/* ============ AT-RISK ============ */}

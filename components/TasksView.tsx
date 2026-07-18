@@ -3,6 +3,7 @@
 import { useState, Fragment } from "react";
 import Link from "next/link";
 import { setTaskStatus, remindTask, deleteTask } from "@/lib/actions";
+import SegTabs from "@/components/SegTabs";
 
 export type TaskRow = {
   id: string; title: string; type: string; priority: string; status: string;
@@ -59,16 +60,14 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 13, verticalAlign: "top" };
   const sel: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
   const prioColor = (p: string) => p === "High" ? "var(--red)" : p === "Medium" ? "#b45309" : "var(--muted)";
-  const tabBtn = (k: typeof tab, icon: string, label: string, n: number) => (
-    <button type="button" onClick={() => setTab(k)} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: tab === k ? "var(--teal)" : "#fff", color: tab === k ? "#fff" : "var(--muted)" }}>{icon} {label} <span style={{ background: tab === k ? "rgba(255,255,255,.25)" : "#eef2f1", borderRadius: 999, padding: "0 8px", fontSize: 11 }}>{n}</span></button>
-  );
-
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        {tabBtn("upcoming", "⏳", "Upcoming", counts.upcoming)}
-        {tabBtn("overdue", "⚠️", "Overdue", counts.overdue)}
-        {tabBtn("completed", "✅", "Completed", counts.completed)}
+        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
+          { key: "upcoming", label: "⏳ Upcoming", count: counts.upcoming },
+          { key: "overdue", label: "⚠️ Overdue", count: counts.overdue },
+          { key: "completed", label: "✅ Completed", count: counts.completed },
+        ]} />
         <span style={{ flex: 1 }} />
         <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--teal)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗓 Smart Timeline View</button>
       </div>
