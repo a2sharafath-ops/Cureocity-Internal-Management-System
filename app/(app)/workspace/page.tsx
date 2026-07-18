@@ -16,6 +16,7 @@ import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
+import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
@@ -136,6 +137,18 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       const bp = bpMap.get(c.id);
       return { client_id: c.id, name: c.name, code: c.code, doctor: approvedKind(c.id, "Doctor"), diet: approvedKind(c.id, "Diet"), trainer: approvedKind(c.id, "Trainer"), generated: bp?.generated ?? false, consolidated: bp?.consolidated ?? null };
     });
+  }
+
+  // Appointments board (role-scoped to this workspace's clients).
+  let apptRows: ApptRow[] = [];
+  if (tab === "appts") {
+    const scopedIds = scoped.map((c) => c.id);
+    const { data: ap } = scopedIds.length
+      ? await supabase.from("appointments").select("id, client_id, date, hour, type, title, status, clients(name)").in("client_id", scopedIds).order("date", { ascending: false }).limit(200)
+      : { data: [] as unknown[] };
+    apptRows = ((ap ?? []) as unknown as (ApptRow & { clients: { name: string } | null })[]).map((a) => ({
+      id: a.id, client_id: a.client_id, client_name: a.clients?.name ?? null, date: a.date, hour: a.hour, type: a.type, title: a.title, status: a.status,
+    }));
   }
 
   // Client Monitoring.
@@ -259,6 +272,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MY CLIENTS ---- */}
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} />}
+
+      {/* ---- APPOINTMENTS ---- */}
+      {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
       {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} />}
