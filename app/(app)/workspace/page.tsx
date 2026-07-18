@@ -15,13 +15,14 @@ import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary"
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
+import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
 
 export const dynamic = "force-dynamic";
 
-type ClientRow = WsClient & { packages: { name: string } | null };
+type ClientRow = WsClient & { used: number | null; packages: { name: string; sessions: number } | null };
 
 export default async function WorkspacePage({ searchParams }: { searchParams: { role?: string; tab?: string } }) {
   const me = await getProfile();
@@ -45,7 +46,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const isTrainer = roleKey === "trainer";
 
   const [{ data: clientData }, { data: enrollData }, { count: pendingSummaries }, todayRes, { data: concernData }, { data: mdtData }] = await Promise.all([
-    supabase.from("clients").select("id, name, code, package_id, pro_id, conditions, goals, packages(name)").order("name"),
+    supabase.from("clients").select("id, name, code, package_id, pro_id, conditions, goals, used, packages(name, sessions)").order("name"),
     supabase.from("enrollments").select("client_id"),
     supabase.from("consultations").select("id", { count: "exact", head: true }).eq("kind", role.kind).eq("approved", false),
     isTrainer
@@ -137,6 +138,30 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     });
   }
 
+  // Client Monitoring.
+  let monitorRows: MonitorRow[] = [];
+  if (tab === "monitor") {
+    const scopedIds = scoped.map((c) => c.id);
+    const { data: fu } = scopedIds.length
+      ? await supabase.from("followups").select("client_id, status").in("client_id", scopedIds).eq("status", "pending")
+      : { data: [] as { client_id: string; status: string }[] };
+    const fuCount = new Map<string, number>();
+    for (const f of (fu ?? []) as { client_id: string }[]) fuCount.set(f.client_id, (fuCount.get(f.client_id) ?? 0) + 1);
+    const conCount = new Map<string, number>();
+    for (const c of concerns) if (c.status === "Open" && c.client_id) conCount.set(c.client_id, (conCount.get(c.client_id) ?? 0) + 1);
+    const lastMdt = new Map<string, string>();
+    for (const m of mdtNotes) if (m.client_id && !lastMdt.has(m.client_id)) lastMdt.set(m.client_id, m.body);
+    monitorRows = scoped.map((c) => {
+      const cr = c as ClientRow;
+      return {
+        id: c.id, name: c.name, code: c.code, pkg: cr.packages?.name ?? c.package_id,
+        sessionsUsed: cr.used ?? 0, sessionsTotal: cr.packages?.sessions ?? 0,
+        openFollowups: fuCount.get(c.id) ?? 0, openConcerns: conCount.get(c.id) ?? 0,
+        conditions: c.conditions, goals: c.goals ?? [], lastMdt: lastMdt.get(c.id) ?? null,
+      };
+    });
+  }
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const fmtHour = (h: number | null) => {
     if (h == null) return "—";
@@ -150,7 +175,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes", "blueprints"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes", "blueprints", "followups"]} />
 
       {/* Workspace chrome: role switcher */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -243,6 +268,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MDT BOARD ---- */}
       {tab === "board" && <MdtBoard notes={mdtNotes} clients={clientOpts} />}
+
+      {/* ---- CLIENT MONITORING ---- */}
+      {tab === "monitor" && <ClientMonitoring role={roleKey} rows={monitorRows} />}
 
       {/* ---- RESOURCE LIBRARY ---- */}
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
