@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { BP_SCORES, band, type BpScores } from "@/lib/blueprint";
+import { BP_SCORES, type BpScores } from "@/lib/blueprint";
+import { RingMeter, Gauge } from "@/components/Meters";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
 import MealSelfForm from "@/components/MealSelfForm";
@@ -218,18 +219,20 @@ export default async function PortalHome() {
             <div style={{ fontSize: 13 }}>
               🧬 <b style={{ color: "#166534" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
               {bp.consolidated && <div style={{ marginTop: 6, color: "var(--muted)" }}>{bp.consolidated}</div>}
-              {bp.scores && (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                  {BP_SCORES.filter((s) => bp.scores && typeof bp.scores[s.key] === "number").map((s) => {
-                    const b = band(bp.scores![s.key]);
-                    return (
-                      <span key={s.key} style={{ background: b.bg, color: b.color, borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 600 }}>
-                        {s.label}: {bp.scores![s.key]} · {b.label}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
+              {bp.scores && (() => {
+                const vals = BP_SCORES.map((s) => bp.scores![s.key]).filter((v): v is number => typeof v === "number");
+                const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+                return (
+                  <div style={{ display: "flex", gap: 20, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+                    <Gauge value={avg} size={180} unit="/ 100" label="Overall wellness" caption="your Personal Health Blueprint" />
+                    <div style={{ flex: 1, minWidth: 240, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 14, justifyItems: "center" }}>
+                      {BP_SCORES.filter((s) => bp.scores && typeof bp.scores[s.key] === "number").map((s) => (
+                        <RingMeter key={s.key} value={Number(bp.scores![s.key])} size={78} stroke={9} label={s.label} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             <div style={{ fontSize: 13, color: "var(--muted)" }}>Your blueprint is being prepared.</div>

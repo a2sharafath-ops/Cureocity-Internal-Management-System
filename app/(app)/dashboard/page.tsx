@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
@@ -139,6 +140,12 @@ export default async function DashboardPage() {
         <Kpi icon="🗓" iconBg="#dbeafe" iconColor="#2563eb" label="Sessions Today" value={scheduledAppts.length + trainToday.length} sub={`${scheduledAppts.length} consult${scheduledAppts.length === 1 ? "" : "s"} (${assessToday} assessment${assessToday === 1 ? "" : "s"}) · ${trainToday.length} training`} href="/appointments" />
         <Kpi icon="🧾" iconBg="var(--green-bg)" iconColor="#166534" label={`Revenue — ${monthLabel}`} value={money(revenue)} sub={`this month · from ${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} href="/billing" />
         <Kpi icon="📦" iconBg="var(--amber-bg)" iconColor="#b45309" label="Client Renewals" value={renewC.count ?? 0} sub="package ending ≤30 days or low credits" href="/subscriptions" />
+        {sessions.length > 0 && (
+          <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, padding: "12px 18px", minWidth: 230 }}>
+            <RingMeter value={Math.round((checkedIn / sessions.length) * 100)} size={72} stroke={9} label="Check-in rate" />
+            <div style={{ fontSize: 12.5, color: "var(--muted)" }}><b style={{ color: "var(--ink)", fontSize: 15 }}>{checkedIn}/{sessions.length}</b><div>training clients<br />checked in today</div></div>
+          </div>
+        )}
       </div>
 
       {/* two-column body */}
