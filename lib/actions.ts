@@ -382,6 +382,40 @@ export async function togglePackageActive(formData: FormData) {
   revalidatePath("/packages");
 }
 
+// Create or edit a package (with per-branch pricing).
+export async function savePackage(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManagePackages(p.role)) return;
+  let id = String(formData.get("id") || "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const sessions = Number(formData.get("sessions")) || 0;
+  const validity = Number(formData.get("validity")) || 0;
+  const is_facility = String(formData.get("is_facility")) === "on";
+  const one_time = String(formData.get("one_time")) === "on";
+  const requires_slot = String(formData.get("requires_slot")) === "on";
+  const delivery_mode = String(formData.get("delivery_mode") || "Offline");
+  const tags = String(formData.get("tags") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  const priceKochi = Number(formData.get("price_kochi")) || 0;
+  const priceCalicut = Number(formData.get("price_calicut")) || priceKochi;
+  const base = priceKochi || priceCalicut;
+
+  const supabase = createClient();
+  const fields = { name, sessions, validity, price: base, is_facility, one_time, requires_slot, delivery_mode, tags };
+  if (id) {
+    await supabase.from("packages").update(fields).eq("id", id);
+  } else {
+    id = "pkg_" + Math.random().toString(36).slice(2, 8);
+    await supabase.from("packages").insert({ id, active: true, ...fields });
+  }
+  await supabase.from("package_prices").upsert([
+    { package_id: id, branch: "Kochi", price: priceKochi },
+    { package_id: id, branch: "Calicut", price: priceCalicut },
+  ]);
+  await logAudit(p, "Package saved", name, id);
+  revalidatePath("/packages");
+}
+
 // ---- leads -----------------------------------------------------------------
 
 export async function updateLeadStage(formData: FormData) {
