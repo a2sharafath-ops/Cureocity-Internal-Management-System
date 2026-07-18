@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
-      <Sidebar role={role} canPersona={real === "Administrator" || real === "Super Admin"} />
+      <Sidebar role={role} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <header
           style={{

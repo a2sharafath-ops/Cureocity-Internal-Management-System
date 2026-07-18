@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { canSee } from "@/lib/roles";
-import { setPreviewRole } from "@/lib/actions";
-import { PERSONAS } from "@/lib/personas";
 
 type NavItem = { href: string; label: string; icon: string };
 type NavSection = { title: string | null; items: NavItem[] };
@@ -80,7 +78,7 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-export default function Sidebar({ role = "Staff", canPersona = false }: { role?: string; canPersona?: boolean }) {
+export default function Sidebar({ role = "Staff" }: { role?: string }) {
   const pathname = usePathname();
 
   const sections = SECTIONS
@@ -148,33 +146,6 @@ export default function Sidebar({ role = "Staff", canPersona = false }: { role?:
           </div>
         ))}
 
-        {canPersona && (
-          <div style={{ marginTop: 14 }}>
-            <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "#6ea69d" }}>
-              View as…
-            </div>
-            {PERSONAS.map((p) => {
-              const active = pathname.startsWith(p.route);
-              return (
-                <form key={p.key} action={setPreviewRole}>
-                  <input type="hidden" name="role" value={p.key} />
-                  <button
-                    type="submit"
-                    title={`Enter the ${p.label} workspace`}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 11, width: "100%",
-                      padding: "9px 12px", borderRadius: 10, fontSize: 14, fontWeight: active ? 700 : 500,
-                      border: "none", cursor: "pointer", textAlign: "left",
-                      color: active ? "#fff" : "#cfe8e3", background: active ? "var(--sidebar-hover)" : "transparent",
-                    }}
-                  >
-                    {p.icon} {p.label}
-                  </button>
-                </form>
-              );
-            })}
-          </div>
-        )}
       </nav>
 
       <div style={{ position: "sticky", bottom: 0, marginTop: 20, paddingTop: 12, fontSize: 11, color: "#7fb3ab" }}>
