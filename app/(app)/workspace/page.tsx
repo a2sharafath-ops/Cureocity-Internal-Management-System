@@ -17,6 +17,7 @@ import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
+import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
@@ -151,6 +152,18 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     }));
   }
 
+  // Follow-ups board (coach) — role-scoped to this workspace's clients.
+  let fuRows: FuRow[] = [];
+  if (tab === "followups") {
+    const scopedIds = scoped.map((c) => c.id);
+    const { data: fu } = scopedIds.length
+      ? await supabase.from("followups").select("id, client_id, kind, label, due_date, priority, status, clients(name)").in("client_id", scopedIds).order("due_date").limit(200)
+      : { data: [] as unknown[] };
+    fuRows = ((fu ?? []) as unknown as (FuRow & { clients: { name: string } | null })[]).map((f) => ({
+      id: f.id, client_id: f.client_id, client_name: f.clients?.name ?? null, kind: f.kind, label: f.label, due_date: f.due_date, priority: f.priority, status: f.status,
+    }));
+  }
+
   // Client Monitoring.
   let monitorRows: MonitorRow[] = [];
   if (tab === "monitor") {
@@ -275,6 +288,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} />}
+
+      {/* ---- FOLLOW-UPS (coach) ---- */}
+      {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
       {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} />}

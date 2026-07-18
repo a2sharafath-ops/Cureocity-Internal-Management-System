@@ -79,7 +79,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
     { key: "exlib", label: "Exercise Library", href: "/exlib" },
   ]),
   coach: withRoleTabs([
-    { key: "followups", label: "Follow-ups", href: "/followups" },
+    { key: "followups", label: "Follow-ups", live: true },
   ]),
 };
 
