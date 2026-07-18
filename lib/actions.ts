@@ -1335,6 +1335,103 @@ export async function addOnboarding(formData: FormData) {
   revalidatePath("/hr");
 }
 
+const DEFAULT_OFFBOARDING_STEPS = ["Handover completed", "Assets returned", "Final settlement inputs", "Exit documents issued"];
+
+export async function addOffboarding(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("onboarding").insert({
+    name, role: String(formData.get("role") ?? "").trim() || null,
+    joining_date: String(formData.get("joining_date") || "") || null, kind: "offboarding",
+    steps: DEFAULT_OFFBOARDING_STEPS.map((label) => ({ label, done: false })),
+    status: "in_progress", created_by: p.name,
+  });
+  await logAudit(p, "Offboarding started", name, null);
+  revalidatePath("/hr");
+}
+
+// ---- HR suite: updates, month-end, payroll, commissions, statutory, hiring ---
+export async function addHrUpdate(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) return;
+  const supabase = createClient();
+  await supabase.from("hr_updates").insert({ author: p.name, body });
+  revalidatePath("/hr");
+}
+
+export async function toggleMonthTask(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  const supabase = createClient();
+  await supabase.from("hr_month_tasks").update({ status: status === "done" ? "pending" : "done" }).eq("id", id);
+  revalidatePath("/hr");
+}
+
+export async function generatePayslip(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const staff_id = String(formData.get("staff_id"));
+  const month = String(formData.get("month"));
+  const base = Number(formData.get("base")) || 0;
+  const lop_days = Number(formData.get("lop_days")) || 0;
+  const pf = Number(formData.get("pf")) || 1800;
+  const perDay = base / 30;
+  const net = Math.max(0, base - lop_days * perDay - pf);
+  const supabase = createClient();
+  await supabase.from("payroll").upsert({ staff_id, month, base, lop_days, pf, net, payslip: true }, { onConflict: "staff_id,month" });
+  await logAudit(p, "Payslip generated", null, month);
+  revalidatePath("/hr");
+}
+
+export async function addCommission(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const supabase = createClient();
+  await supabase.from("hr_commissions").insert({
+    name, kind: String(formData.get("kind") || "Commission"),
+    amount: Number(formData.get("amount")) || 0, tds: Number(formData.get("tds")) || 0,
+  });
+  revalidatePath("/hr");
+}
+
+export async function fileStatutory(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("hr_statutory").update({ status: "filed" }).eq("id", String(formData.get("id")));
+  await logAudit(p, "Statutory filed", null, null);
+  revalidatePath("/hr");
+}
+
+const CAND_STAGES = ["Screening", "Interview", "Offer sent", "Hired"];
+export async function advanceCandidate(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id"));
+  const stage = String(formData.get("stage"));
+  const next = CAND_STAGES[Math.min(CAND_STAGES.length - 1, CAND_STAGES.indexOf(stage) + 1)];
+  const supabase = createClient();
+  await supabase.from("hr_candidates").update({ stage: next }).eq("id", id);
+  revalidatePath("/hr");
+}
+
+export async function setPurchaseStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("hr_purchases").update({ status: String(formData.get("status")) }).eq("id", String(formData.get("id")));
+  revalidatePath("/hr");
+}
+
 export async function toggleOnboardingStep(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
