@@ -67,7 +67,7 @@ export default function AppointmentsView({
           <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Calendar · tracker · list · records — consultations, assessments &amp; follow-ups</p>
         </div>
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "" })} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
+        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "" })} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
       </div>
 
       {/* week nav */}
@@ -112,7 +112,7 @@ export default function AppointmentsView({
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time</label><select style={input} name="hour" defaultValue={String(booking.hour)}>{hours.map((h) => <option key={h} value={h}>{hourLabelFull(h)}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Duration</label><select style={input} name="duration_min" defaultValue="30"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Book</button>
+            <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Book</button>
             <button type="button" onClick={() => setBooking((b) => ({ ...b, open: false }))} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
         </form>

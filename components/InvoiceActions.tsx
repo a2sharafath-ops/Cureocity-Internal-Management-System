@@ -31,7 +31,7 @@ export default function InvoiceActions({ id, status }: { id: string; status: str
       <button type="submit" style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Confirm paid</button>
     </form>
   ) : (
-    <button type="button" onClick={() => setOpen(true)} style={{ border: "none", background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
+    <button type="button" onClick={() => setOpen(true)} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
       Mark paid
     </button>
   );

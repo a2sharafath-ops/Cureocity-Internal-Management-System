@@ -10,7 +10,7 @@ export default function SubForm({
 }: { clients: { id: string; name: string }[]; packages: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New subscription</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New subscription</button>;
   }
   return (
     <form action={createSubscription} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px", marginBottom: 16, display: "grid", gridTemplateColumns: "1.5fr 1.5fr auto auto", gap: 10, alignItems: "end" }}>
@@ -31,7 +31,7 @@ export default function SubForm({
       <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
         <input type="checkbox" name="auto_renew" value="true" defaultChecked /> Auto-renew
       </label>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
     </form>
   );
 }

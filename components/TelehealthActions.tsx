@@ -8,7 +8,7 @@ export default function TelehealthActions({ id, status, roomUrl }: { id: string;
   return (
     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
       {roomUrl && status !== "ended" && (
-        <a href={roomUrl} target="_blank" rel="noopener noreferrer" style={{ ...btn, borderColor: "var(--teal)", color: "#fff", background: "var(--teal)", textDecoration: "none" }}>▶ Join</a>
+        <a href={roomUrl} target="_blank" rel="noopener noreferrer" style={{ ...btn, borderColor: "var(--ink)", color: "#fff", background: "var(--ink)", textDecoration: "none" }}>▶ Join</a>
       )}
       {status === "scheduled" && (
         <form action={setTelehealthStatus}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="active" /><button type="submit" style={btn}>Start</button></form>

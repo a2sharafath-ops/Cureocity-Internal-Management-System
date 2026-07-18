@@ -104,7 +104,7 @@ export default function PackageCatalog({
         <select value={branch} onChange={(e) => setBranch(e.target.value)} style={{ ...inp, width: "auto" }}>{branches.map((b) => <option key={b}>{b}</option>)}</select>
         <span style={{ flex: 1 }} />
         {chip("#eef2f1", "var(--muted)", "Pick a duration inside each card")}
-        {canManage && <button type="button" onClick={() => setEditId("")} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Package</button>}
+        {canManage && <button type="button" onClick={() => setEditId("")} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Package</button>}
       </div>
 
       {editId != null && (
@@ -128,7 +128,7 @@ export default function PackageCatalog({
             <label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" name="one_time" defaultChecked={editing?.one_time} /> One-time purchase</label>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+            <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
             <button type="button" onClick={() => setEditId(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
         </form>

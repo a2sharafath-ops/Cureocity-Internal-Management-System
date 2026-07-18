@@ -130,7 +130,7 @@ export default async function DashboardPage() {
         <span style={{ flex: 1 }} />
         <span style={{ color: "var(--muted)", fontSize: 13, marginRight: 4 }}>{fullDate}</span>
         <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--teal-dark)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Book a slot</Link>
-        <Link href="/leads" style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add Lead</Link>
+        <Link href="/leads" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add Lead</Link>
       </div>
 
       {/* KPIs */}

@@ -17,7 +17,7 @@ export default function ProductForm() {
       <div style={{ display: "grid", gap: 3 }}><label style={{ fontSize: 11, color: "var(--muted)" }}>Category</label><input style={input} name="category" defaultValue="General" /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={{ fontSize: 11, color: "var(--muted)" }}>Price</label><input style={input} name="price" type="number" min={0} required /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={{ fontSize: 11, color: "var(--muted)" }}>Stock</label><input style={input} name="stock" type="number" min={0} defaultValue={0} /></div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
     </form>
   );
 }

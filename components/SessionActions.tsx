@@ -61,7 +61,7 @@ export default function SessionActions({
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
-          <button type="submit" style={{ border: "none", background: "var(--teal)", color: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
+          <button type="submit" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
             Save
           </button>
         </form>

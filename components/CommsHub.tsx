@@ -52,8 +52,8 @@ export default function CommsHub({
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         {tabBtn("inbox", "💬 Inbox")}{tabBtn("templates", "📝 Templates")}{tabBtn("campaigns", "⚡ Campaigns")}
         <span style={{ flex: 1 }} />
-        {tab === "templates" && canCamp && <button type="button" onClick={() => setNewTemplate((v) => !v)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newTemplate ? "Cancel" : "+ New Template"}</button>}
-        {tab === "campaigns" && canCamp && <button type="button" onClick={() => setNewCampaign((v) => !v)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newCampaign ? "Cancel" : "+ New Campaign"}</button>}
+        {tab === "templates" && canCamp && <button type="button" onClick={() => setNewTemplate((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newTemplate ? "Cancel" : "+ New Template"}</button>}
+        {tab === "campaigns" && canCamp && <button type="button" onClick={() => setNewCampaign((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newCampaign ? "Cancel" : "+ New Campaign"}</button>}
       </div>
 
       {/* ============ INBOX ============ */}
@@ -111,7 +111,7 @@ export default function CommsHub({
                       <option value="">Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                     <textarea name="body" value={composerText} onChange={(e) => setComposerText(e.target.value)} placeholder="Type a message…" required rows={2} style={{ ...inp, flex: 1, minWidth: 200, resize: "vertical" }} />
-                    <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Send</button>
+                    <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Send</button>
                   </form>
                 )}
               </>
@@ -132,7 +132,7 @@ export default function CommsHub({
               </div>
               <input name="subject" placeholder="Subject (for email)" required style={inp} />
               <textarea name="body" placeholder="Message body — use {name}, {code}…" required rows={3} style={{ ...inp, resize: "vertical" }} />
-              <div><button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save template</button></div>
+              <div><button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save template</button></div>
             </form>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
@@ -167,7 +167,7 @@ export default function CommsHub({
               <input name="name" placeholder="Campaign name" required style={inp} />
               <select name="template_id" required defaultValue="" style={inp}><option value="" disabled>Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
               <select name="audience" defaultValue="all" style={inp}>{["all", "members", "subscribers", "lapsed"].map((o) => <option key={o} value={o}>{o}</option>)}</select>
-              <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
+              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
             </form>
           )}
           <div style={{ ...box, padding: "6px 8px" }}>
@@ -179,7 +179,7 @@ export default function CommsHub({
                 </div>
                 <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{c.sent_count} sent</span>
                 <span style={{ background: c.status === "sent" ? "var(--green-bg)" : "var(--amber-bg)", color: c.status === "sent" ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>{c.status}</span>
-                {canCamp && c.status !== "sent" && <form action={sendCampaignNow}><input type="hidden" name="id" value={c.id} /><button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Send now</button></form>}
+                {canCamp && c.status !== "sent" && <form action={sendCampaignNow}><input type="hidden" name="id" value={c.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Send now</button></form>}
               </div>
             ))}
             {campaigns.length === 0 && <div style={{ padding: 18, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No campaigns yet.</div>}

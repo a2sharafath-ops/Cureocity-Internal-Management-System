@@ -23,7 +23,7 @@ export default function MealSelfForm({
           placeholder="Any question for your dietitian? (optional)"
           style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, padding: "7px 9px", marginTop: 6 }}
         />
-        <button type="submit" style={{ marginTop: 8, background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+        <button type="submit" style={{ marginTop: 8, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
           Save
         </button>
       </form>

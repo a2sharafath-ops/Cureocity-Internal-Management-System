@@ -31,7 +31,7 @@ export default function ReferralForm({ clients }: { clients: { id: string; name:
         <label style={{ fontSize: 11, color: "var(--muted)" }}>Email</label>
         <input style={input} name="referred_email" placeholder="Optional" />
       </div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
     </form>
   );
 }

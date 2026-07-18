@@ -24,7 +24,7 @@ export default function CheckinForm({ clients }: { clients: { id: string; name: 
         <label style={lbl}>Method</label>
         <select style={input} name="method" defaultValue="manual"><option value="manual">Manual</option><option value="card">Card</option><option value="biometric">Biometric</option><option value="qr">QR</option></select>
       </div>
-      <button type="submit" name="direction" value="in" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🚪 Check in</button>
+      <button type="submit" name="direction" value="in" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🚪 Check in</button>
       <button type="submit" name="direction" value="out" style={{ background: "#fff", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Check out</button>
     </form>
   );

@@ -40,7 +40,7 @@ export default async function FollowupsPage() {
         <span style={{ flex: 1 }} />
         {writer && (
           <form action={generateFollowups}>
-            <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>⚙️ Generate due</button>
+            <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>⚙️ Generate due</button>
           </form>
         )}
       </div>

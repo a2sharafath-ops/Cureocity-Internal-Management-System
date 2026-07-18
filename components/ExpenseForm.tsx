@@ -8,7 +8,7 @@ const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 
 export default function ExpenseForm() {
   const [open, setOpen] = useState(false);
-  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add expense</button>;
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add expense</button>;
   return (
     <form action={addExpense} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "2fr 1.2fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Description</label><input style={input} name="description" required /></div>
@@ -17,7 +17,7 @@ export default function ExpenseForm() {
       </div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Amount (₹)</label><input style={input} name="amount" type="number" min={0} required /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" /></div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
     </form>
   );
 }

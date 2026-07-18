@@ -71,7 +71,7 @@ export default function TrainingScheduleView({
         {tabBtn("recovery", "💆", "Recovery")}
         <span style={{ flex: 1 }} />
         {canWrite && <button type="button" onClick={() => { setTab("slots"); setNewAssess(true); }} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Assessment</button>}
-        {canWrite && <button type="button" onClick={() => { setTab("slots"); setManualAssign(true); }} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Assign client</button>}
+        {canWrite && <button type="button" onClick={() => { setTab("slots"); setManualAssign(true); }} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Assign client</button>}
       </div>
 
       {/* ================= SLOTS & ASSESSMENTS ================= */}
@@ -105,7 +105,7 @@ export default function TrainingScheduleView({
               <b style={{ fontSize: 13 }}>{trainers.find((t) => t.id === assigning.trainer_id)?.name} · {hourLabel(assigning.hour)}</b>
               <select name="client_id" required defaultValue="" style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
-              <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
+              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
               <button type="button" onClick={() => setAssigning(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
             </form>
           )}
@@ -118,7 +118,7 @@ export default function TrainingScheduleView({
               <select name="hour" defaultValue="9" style={input}>{hours.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
               <select name="client_id" required defaultValue="" style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
-              <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
+              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
               <button type="button" onClick={() => setManualAssign(false)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
             </form>
           )}
@@ -181,7 +181,7 @@ export default function TrainingScheduleView({
                 <select name="trainer_id" defaultValue="" style={input}><option value="">— trainer —</option>{trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
                 <select name="kind" defaultValue="initial" style={input}><option value="initial">Fitness Assessment</option><option value="reassessment">Fitness Reassessment</option></select>
                 <input type="date" name="due_date" defaultValue={today} style={input} />
-                <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+                <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
               </form>
             )}
             <div style={{ overflow: "auto" }}>
@@ -199,7 +199,7 @@ export default function TrainingScheduleView({
                           canWrite && <form action={completeAssessment}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark done</button></form>
                         ) : (
                           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                            <Link href="/appointments" style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Book</Link>
+                            <Link href="/appointments" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Book</Link>
                             {canWrite && <form action={markAssessmentBooked}><input type="hidden" name="id" value={a.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark booked</button></form>}
                           </div>
                         )}
@@ -252,7 +252,7 @@ export default function TrainingScheduleView({
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>🧘 Group Studio</div>
             <span style={{ flex: 1 }} />
-            <Link href="/classes" style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Manage classes →</Link>
+            <Link href="/classes" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Manage classes →</Link>
           </div>
           <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 10px" }}>Group classes &amp; studio bookings (yoga, HIIT, mobility). Full scheduling on the Group Classes page.</p>
           {classes.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No upcoming classes.</div> : (
@@ -290,7 +290,7 @@ export default function TrainingScheduleView({
               <select name="staff_id" defaultValue="" style={input}><option value="">— staff —</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
               <input type="date" name="date" defaultValue={today} style={input} />
               <select name="hour" defaultValue="10" style={input}>{hours.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
-              <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
             </form>
           )}
           {recovery.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No recovery sessions booked.</div> : recovery.map((r) => (

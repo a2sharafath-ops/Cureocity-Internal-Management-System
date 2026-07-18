@@ -61,11 +61,11 @@ export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string
 
 export function LeadForm({ campaigns }: { campaigns: string[] }) {
   const [open, setOpen] = useState(false);
-  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add lead</button>;
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add lead</button>;
   return (
     <form action={createLead} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 16, display: "grid", gap: 10, textAlign: "left" }}>
       <LeadFields campaigns={campaigns} />
-      <div><button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add lead</button></div>
+      <div><button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add lead</button></div>
     </form>
   );
 }
@@ -75,7 +75,7 @@ export function LeadEditForm({ lead, campaigns }: { lead: Lead; campaigns: strin
     <form action={updateLead} style={{ display: "grid", gap: 10 }}>
       <input type="hidden" name="id" value={lead.id} />
       <LeadFields lead={lead} campaigns={campaigns} />
-      <div><button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save changes</button></div>
+      <div><button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save changes</button></div>
     </form>
   );
 }

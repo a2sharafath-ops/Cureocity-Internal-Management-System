@@ -68,7 +68,7 @@ export default function LoginPage() {
           type="submit"
           disabled={loading}
           style={{
-            marginTop: 18, width: "100%", background: "var(--teal)", color: "#fff", border: "none",
+            marginTop: 18, width: "100%", background: "var(--ink)", color: "#fff", border: "none",
             borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 600, cursor: loading ? "default" : "pointer",
             opacity: loading ? 0.7 : 1,
           }}

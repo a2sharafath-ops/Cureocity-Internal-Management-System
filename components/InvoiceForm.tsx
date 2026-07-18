@@ -26,7 +26,7 @@ export default function InvoiceForm({ clientId }: { clientId?: string }) {
         <input style={input} type="number" step="1" name="amount" required />
       </div>
       <div style={{ display: "flex", gap: 6 }}>
-        <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
+        <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
         <button type="button" onClick={() => setOpen(false)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
       </div>
     </form>

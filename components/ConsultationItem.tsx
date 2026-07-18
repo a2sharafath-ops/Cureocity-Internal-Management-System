@@ -34,7 +34,7 @@ export default function ConsultationItem({ c }: { c: Consult }) {
         {c.shared && <span style={chip("var(--blue-bg)", "#1e40af")}>shared</span>}
         <span style={{ flex: 1 }} />
         {c.status !== "completed" ? (
-          <button type="button" onClick={() => setOpen((o) => !o)} style={{ border: "none", background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
+          <button type="button" onClick={() => setOpen((o) => !o)} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
             {open ? "Cancel" : "Complete & summarize"}
           </button>
         ) : (
@@ -73,7 +73,7 @@ export default function ConsultationItem({ c }: { c: Consult }) {
             placeholder="Consultation summary (findings, plan, recommendations)…"
             style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" }}
           />
-          <button type="submit" style={{ marginTop: 8, background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button type="submit" style={{ marginTop: 8, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Save & complete
           </button>
         </form>

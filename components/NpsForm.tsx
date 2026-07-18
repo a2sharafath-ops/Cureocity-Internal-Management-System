@@ -36,7 +36,7 @@ export default function NpsForm({ clients }: { clients: { id: string; name: stri
         <label style={{ fontSize: 11, color: "var(--muted)" }}>Comment</label>
         <input style={input} name="comment" placeholder="Optional" />
       </div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
     </form>
   );
 }

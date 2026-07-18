@@ -56,7 +56,7 @@ export default function BlueprintScores({
             </div>
           ))}
           <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>0–100, higher = healthier.</div>
-          <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Save scores
           </button>
         </form>

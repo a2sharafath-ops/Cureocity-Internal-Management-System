@@ -29,7 +29,7 @@ export default function MealStaffCell({
               <input type="hidden" name="client_id" value={clientId} />
               <input type="hidden" name="meal" value={meal} />
               <textarea name="review" rows={2} defaultValue={log?.review ?? ""} placeholder="Feedback / suggestion / motivation…" style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, padding: "5px 7px" }} />
-              <button type="submit" style={{ marginTop: 4, background: "var(--teal)", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer" }}>Save review</button>
+              <button type="submit" style={{ marginTop: 4, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer" }}>Save review</button>
             </form>
           )}
         </>
@@ -42,7 +42,7 @@ export default function MealStaffCell({
             <form action={nudgeMeal} style={{ display: "inline" }}>
               <input type="hidden" name="client_id" value={clientId} />
               <input type="hidden" name="meal" value={meal} />
-              <button type="submit" style={{ border: "none", background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>📩 Send reminder</button>
+              <button type="submit" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>📩 Send reminder</button>
             </form>
           )}
         </div>
@@ -58,7 +58,7 @@ export default function MealStaffCell({
               <input type="hidden" name="client_id" value={clientId} />
               <input type="hidden" name="meal" value={meal} />
               <textarea name="answer" rows={2} placeholder="Your answer…" style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, padding: "5px 7px" }} />
-              <button type="submit" style={{ marginTop: 4, background: "var(--teal)", color: "#fff", border: "none", borderRadius: 6, padding: "4px 9px", fontSize: 11, cursor: "pointer" }}>Send answer</button>
+              <button type="submit" style={{ marginTop: 4, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 6, padding: "4px 9px", fontSize: 11, cursor: "pointer" }}>Send answer</button>
             </form>
           ) : (
             <button type="button" onClick={() => setAns(true)} style={{ marginTop: 4, border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>💬 Answer</button>

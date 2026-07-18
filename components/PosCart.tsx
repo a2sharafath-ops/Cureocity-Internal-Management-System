@@ -108,7 +108,7 @@ export default function PosCart({ products, clients }: { products: Product[]; cl
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontWeight: 700, fontSize: 16 }}><span>Total</span><span>{money(total)}</span></div>
 
         <button type="button" onClick={checkout} disabled={pending || lines.length === 0}
-          style={{ width: "100%", marginTop: 12, background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: pending || lines.length === 0 ? "not-allowed" : "pointer", opacity: pending || lines.length === 0 ? 0.6 : 1 }}>
+          style={{ width: "100%", marginTop: 12, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: pending || lines.length === 0 ? "not-allowed" : "pointer", opacity: pending || lines.length === 0 ? 0.6 : 1 }}>
           {pending ? "Processing…" : `Charge ${money(total)}`}
         </button>
         {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.ok ? "var(--teal-dark)" : "var(--red)" }}>{msg.text}</div>}

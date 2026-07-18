@@ -76,7 +76,7 @@ export default function RetentionHub({
                     <td style={td}>{r.reasons.length ? r.reasons.map((x, i) => <span key={i} style={{ display: "inline-block", margin: "1px 2px 0 0" }}>{chip("#eef2f1", "var(--muted)", x, { fontSize: 10 })}</span>) : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {canAct && <div style={{ display: "flex", gap: 6 }}>
-                        <Link href="/messages" style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Reach out</Link>
+                        <Link href="/messages" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Reach out</Link>
                         <form action={winbackOffer}><input type="hidden" name="client_id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", color: "var(--teal-dark)" }}>Win-back offer</button></form>
                       </div>}
                     </td>
@@ -96,7 +96,7 @@ export default function RetentionHub({
             {canAct && <form action={sendNpsSurvey} style={{ display: "flex", gap: 6 }}>
               <select name="audience" defaultValue="all" style={inp}><option value="all">All active clients</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <select name="channel" defaultValue="WhatsApp" style={inp}><option>WhatsApp</option><option>Email</option><option>SMS</option></select>
-              <button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Send NPS survey</button>
+              <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Send NPS survey</button>
             </form>}
             {canAct && <NpsForm clients={clients} />}
           </div>
@@ -126,7 +126,7 @@ export default function RetentionHub({
               {npsList.filter((f) => f.score <= 6).map((f) => (
                 <div key={f.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                   <b>{f.clientName ?? "—"}</b><span style={{ color: "var(--muted)" }}>{f.comment ?? "—"}</span><span style={{ flex: 1 }} />
-                  {canAct && <Link href="/messages" style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Reach out</Link>}
+                  {canAct && <Link href="/messages" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Reach out</Link>}
                 </div>
               ))}
             </div>
@@ -176,7 +176,7 @@ export default function RetentionHub({
             <form action={awardLoyalty} onSubmit={() => setTimeout(() => setAward(false), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
               <select name="client_id" required defaultValue="" style={inp}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <input name="points" type="number" defaultValue={100} style={{ ...inp, width: 110 }} />
-              <button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Award</button>
+              <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Award</button>
             </form>
           )}
           <div style={{ ...box, overflow: "auto" }}>

@@ -18,7 +18,7 @@ export default function HabitForm({ clientId }: { clientId: string }) {
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Habit</label><input style={input} name="name" required placeholder="e.g. 10k steps" /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Cadence</label><select style={input} name="cadence" defaultValue="daily"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Target/wk</label><input style={input} name="target_per_week" type="number" min={1} max={7} defaultValue={7} /></div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add</button>
     </form>
   );
 }

@@ -42,7 +42,7 @@ export default function ConsultationForm({ clients }: { clients: { id: string; n
             <textarea name="notes" rows={2} style={input} placeholder="Reason / context…" />
           </div>
           <div style={{ gridColumn: "1 / -1" }}>
-            <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+            <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
               Create consultation
             </button>
           </div>

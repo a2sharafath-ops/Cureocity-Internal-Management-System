@@ -21,7 +21,7 @@ export default function MessageReply({ variant, clientId }: { variant: "staff" |
         placeholder="Type a message…"
         style={{ flex: 1, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, background: "#fff" }}
       />
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
         Send
       </button>
     </form>

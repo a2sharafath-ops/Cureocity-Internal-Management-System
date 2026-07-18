@@ -81,7 +81,7 @@ export default function ConvertPanel({
           </>
         )}
         <span style={{ flex: 1 }} />
-        <button type="submit" disabled={pending || !otpSent} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: pending || !otpSent ? "not-allowed" : "pointer", opacity: pending || !otpSent ? 0.6 : 1 }}>Verify &amp; convert →</button>
+        <button type="submit" disabled={pending || !otpSent} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: pending || !otpSent ? "not-allowed" : "pointer", opacity: pending || !otpSent ? 0.6 : 1 }}>Verify &amp; convert →</button>
       </div>
 
       {devCode && <div style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>SMS provider not configured — read this code to the client: <b style={{ letterSpacing: 2 }}>{devCode}</b></div>}

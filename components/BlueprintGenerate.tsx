@@ -18,7 +18,7 @@ export default function BlueprintGenerate({
 
   return (
     <div>
-      <button type="button" onClick={() => setOpen((o) => !o)} style={{ border: "none", background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
         {open ? "Cancel" : "Generate blueprint"}
       </button>
       {open && (

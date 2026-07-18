@@ -17,7 +17,7 @@ function SubmitButton() {
       type="submit"
       disabled={pending}
       style={{
-        marginTop: 18, background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10,
+        marginTop: 18, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10,
         padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: pending ? "default" : "pointer",
         opacity: pending ? 0.7 : 1,
       }}

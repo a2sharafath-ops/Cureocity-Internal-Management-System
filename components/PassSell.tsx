@@ -11,7 +11,7 @@ export default function PassSell({ passTypes, clients }: { passTypes: PassType[]
   const [open, setOpen] = useState(false);
   const [client, setClient] = useState("");
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Sell pass</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Sell pass</button>;
   }
   return (
     <form action={sellPass} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 14, display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr auto", gap: 10, alignItems: "end" }}>
@@ -36,7 +36,7 @@ export default function PassSell({ passTypes, clients }: { passTypes: PassType[]
         <label style={{ fontSize: 11, color: "var(--muted)" }}>Payment</label>
         <div style={{ display: "flex", gap: 8 }}>
           <select style={{ ...input, flex: 1 }} name="method" defaultValue="Cash"><option>Cash</option><option>Card</option><option>UPI</option><option>Bank</option></select>
-          <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sell</button>
+          <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Sell</button>
         </div>
       </div>
     </form>

@@ -12,7 +12,7 @@ function hourLabel(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 
 export default function AppointmentForm({ clients, staff, defaultDate }: { clients: { id: string; name: string }[]; staff: { id: string; name: string }[]; defaultDate: string }) {
   const [open, setOpen] = useState(false);
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Book appointment</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Book appointment</button>;
   }
   return (
     <form action={createAppointment} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
@@ -23,7 +23,7 @@ export default function AppointmentForm({ clients, staff, defaultDate }: { clien
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required defaultValue={defaultDate} /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time</label><select style={input} name="hour" defaultValue="10">{HOURS.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Duration</label><select style={input} name="duration_min" defaultValue="30"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Book</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Book</button>
     </form>
   );
 }

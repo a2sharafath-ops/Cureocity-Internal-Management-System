@@ -5,7 +5,7 @@ import { createForm, assignForm, submitFormResponse } from "@/lib/actions";
 
 const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
-const primary: React.CSSProperties = { background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
+const primary: React.CSSProperties = { background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
 type Field = { label: string; kind: string };
 const KINDS = ["text", "textarea", "yesno", "checkbox", "select"];
@@ -46,7 +46,7 @@ export function AssignForm({ formId, clients }: { formId: string; clients: { id:
     <form action={assignForm} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "flex", gap: 6, alignItems: "center" }}>
       <input type="hidden" name="form_id" value={formId} />
       <select name="client_id" required defaultValue="" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 12, background: "#fff" }}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-      <button type="submit" style={{ border: "1px solid var(--teal)", background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Assign</button>
+      <button type="submit" style={{ border: "1px solid var(--ink)", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Assign</button>
       <button type="button" onClick={() => setOpen(false)} style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>✕</button>
     </form>
   );

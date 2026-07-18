@@ -106,7 +106,7 @@ export default function ClientForm({
       <div style={{ marginTop: 18 }}>
         <button
           type="submit"
-          style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+          style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
         >
           {submitLabel}
         </button>

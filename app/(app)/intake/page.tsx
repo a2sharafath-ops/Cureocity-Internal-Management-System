@@ -33,7 +33,7 @@ export default async function IntakePage({ searchParams }: { searchParams: { don
           <div style={{ fontSize: 44, marginBottom: 8 }}>📨</div>
           <h2 style={{ fontSize: 20, margin: "0 0 6px" }}>Intake submitted</h2>
           <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 20px" }}>Your details have synced to the front desk. Registration is completed there with OTP verification.</p>
-          <Link href="/intake" style={{ background: "var(--teal)", color: "#fff", borderRadius: 10, padding: "12px 22px", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>+ New registration</Link>
+          <Link href="/intake" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "12px 22px", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>+ New registration</Link>
         </div>
       ) : (
         <form action={submitTabletIntake} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "22px 24px" }}>
@@ -104,7 +104,7 @@ export default async function IntakePage({ searchParams }: { searchParams: { don
             <label style={{ display: "flex", alignItems: "center", gap: 7, border: "1px solid var(--border)", borderRadius: 10, padding: "8px 14px", fontSize: 14, cursor: "pointer" }}><input type="radio" name="consent" value="Disagree" /> Disagree</label>
           </div>
 
-          <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 16, fontWeight: 700, cursor: "pointer", width: "100%", marginTop: 22 }}>Submit</button>
+          <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 16, fontWeight: 700, cursor: "pointer", width: "100%", marginTop: 22 }}>Submit</button>
           <p style={{ textAlign: "center", fontSize: 11.5, color: "var(--muted)", margin: "12px 0 0" }}>Your details sync securely to the front desk — registration is completed there with OTP verification.</p>
         </form>
       )}

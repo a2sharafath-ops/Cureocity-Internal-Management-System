@@ -50,7 +50,7 @@ export default function RxForm({ clientId, allergies, currentMeds }: { clientId:
   };
 
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New prescription</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New prescription</button>;
   }
 
   return (

@@ -112,7 +112,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
             <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}><b>💬 Daily Updates</b><span style={{ flex: 1 }} />{chip("#eef2f1", "var(--muted)", "internal coordination")}</div>
             <form action={addHrUpdate} style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               <input name="body" placeholder="Post an update…" required style={{ ...inp, flex: 1 }} />
-              <button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Post</button>
+              <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Post</button>
             </form>
             {updates.map((u) => (
               <div key={u.id} style={{ padding: "9px 0", borderTop: "1px solid var(--border)" }}>
@@ -215,7 +215,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                 <input name="name" placeholder="Staff" required style={{ ...inp, flex: 1, minWidth: 90 }} />
                 <input name="amount" type="number" placeholder="Amount" style={{ ...inp, width: 90 }} />
                 <input name="tds" type="number" placeholder="TDS" style={{ ...inp, width: 70 }} />
-                <button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add</button>
+                <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Add</button>
               </form>
             </div>
             <div style={{ ...box, padding: "16px 18px" }}>
@@ -225,7 +225,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                   <div><b>{s.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{s.due_note ?? ""}</div></div>
                   <span style={{ flex: 1 }} />
                   {chip(s.status === "filed" ? "var(--green-bg)" : s.status === "prepared" ? "#dbeafe" : "var(--amber-bg)", s.status === "filed" ? "#166534" : s.status === "prepared" ? "#1e40af" : "#92400e", s.status === "in_progress" ? "In progress" : s.status[0].toUpperCase() + s.status.slice(1))}
-                  {s.status !== "filed" && <form action={fileStatutory}><input type="hidden" name="id" value={s.id} /><button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Mark filed</button></form>}
+                  {s.status !== "filed" && <form action={fileStatutory}><input type="hidden" name="id" value={s.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Mark filed</button></form>}
                 </div>
               ))}
             </div>
@@ -290,7 +290,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
               <input name="name" placeholder="Name" required style={{ ...inp, flex: 1, minWidth: 90 }} />
               <input name="role" placeholder="Role" style={{ ...inp, width: 110 }} />
               <input name="joining_date" type="date" title="Last working day" style={inp} />
-              <button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Offboard</button>
+              <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Offboard</button>
             </form>
             <div style={{ display: "grid", gap: 14 }}>
               {offboarding.map((o) => <OnboardingCard key={o.id} id={o.id} name={o.name} role={o.role} joining={o.joining_date} steps={o.steps ?? []} status={o.status} />)}

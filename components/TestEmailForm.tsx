@@ -14,7 +14,7 @@ export default function TestEmailForm({ configured }: { configured: boolean }) {
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Template</label>
         <select style={input} name="template" defaultValue="welcome">{TEMPLATE_CHOICES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select>
       </div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
         {configured ? "Send test" : "Log (dry-run)"}
       </button>
     </form>

@@ -12,7 +12,7 @@ export default function BloodActions({ clientId, blood }: { clientId: string; bl
         <div style={{ marginBottom: 4 }}>
           <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>Request: not sent</span>
         </div>
-        <button type="submit" style={{ border: "none", background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
+        <button type="submit" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
           🩸 Send request
         </button>
       </form>

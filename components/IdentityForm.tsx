@@ -18,7 +18,7 @@ export default function IdentityForm({ clients }: { clients: { id: string; name:
       </div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>ABHA ID</label><input style={input} name="abha_id" defaultValue={sel?.abha_id ?? ""} placeholder="14-digit" /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>UHID</label><input style={input} name="uhid" defaultValue={sel?.uhid ?? ""} /></div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
     </form>
   );
 }

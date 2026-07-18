@@ -105,7 +105,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}>{c.branch ? <span style={{ background: "#dbeafe", color: "#2563eb", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.branch}</span> : "—"}</td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                      <Link href={`/clients/${c.id}`} style={{ background: "var(--teal)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Open 360°</Link>
+                      <Link href={`/clients/${c.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Open 360°</Link>
                       <Link href={`/clients/${c.id}?tab=card`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Quick</Link>
                     </div>
                   </td>

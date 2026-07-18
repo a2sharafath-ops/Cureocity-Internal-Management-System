@@ -27,7 +27,7 @@ export function WearableForm({ clientId }: { clientId: string }) {
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Rest HR</label><input style={input} name="resting_hr" type="number" min={0} /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Active (min)</label><input style={input} name="active_min" type="number" min={0} /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Calories</label><input style={input} name="calories" type="number" min={0} /></div>
-      <button type="submit" style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+      <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
     </form>
   );
 }
