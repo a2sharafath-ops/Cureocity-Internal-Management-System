@@ -39,6 +39,33 @@ export function roleFromPersonaKind(kind: string | null | undefined): WsRoleKey 
   }
 }
 
+// ---- cross-discipline visibility hierarchy ---------------------------------
+// Which discipline workspaces each login role may VIEW. Their own is editable;
+// any other allowed one is view-only. Doctor sits on top (sees everyone).
+// Dietitian & Trainer are the shared/open pair; Doctor/Psychologist/Health Coach
+// keep their notes private from each other.
+const WS_VISIBILITY: Record<string, WsRoleKey[]> = {
+  Doctor: ["doctor", "diet", "trainer", "coach", "psych"],
+  Dietitian: ["diet", "trainer"],
+  "Fitness Trainer": ["trainer", "diet"],
+  "Health Coach": ["coach", "diet", "trainer"],
+  Psychologist: ["psych", "diet", "trainer"],
+};
+const WS_OVERSIGHT = ["Administrator", "Super Admin", "Manager"];
+
+// The discipline workspaces this login role is allowed to open (ordered).
+export function visibleWorkspaces(loginRole: string): WsRoleKey[] {
+  if (WS_OVERSIGHT.includes(loginRole)) return WS_ROLES.map((r) => r.key);
+  return WS_VISIBILITY[loginRole] ?? [];
+}
+
+// Can this login role EDIT the given discipline workspace (vs view-only)?
+// Admins/managers edit anywhere; a clinician edits only their own discipline.
+export function canEditWorkspace(loginRole: string, key: WsRoleKey): boolean {
+  if (WS_OVERSIGHT.includes(loginRole)) return true;
+  return roleFromStaffRole(loginRole) === key;
+}
+
 // a professional's real login role (lib/roles) → their workspace role key
 export function roleFromStaffRole(role: string | null | undefined): WsRoleKey | null {
   switch (role) {

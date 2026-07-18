@@ -17,11 +17,12 @@ function initials(name: string) {
 }
 
 export default function WorkspaceClients({
-  role, color, clients,
+  role, color, clients, linkQuery = "",
 }: {
   role: "doctor" | "diet" | "trainer" | "coach" | "psych";
   color: string;
   clients: WsClientRow[];
+  linkQuery?: string;
 }) {
   const [sel, setSel] = useState<string | null>(clients[0]?.id ?? null);
   const c = clients.find((x) => x.id === sel) ?? null;
@@ -36,30 +37,31 @@ export default function WorkspaceClients({
   );
 
   const roleExtras = (r: WsClientRow) => {
+    const ro = !!linkQuery; // read-only: don't offer jump-into-edit deep links
     if (role === "diet") return (
       <>
         {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
         {kv("Conditions", r.conditions)}
-        {kv("Meal monitoring", <Link href="/meals" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open meal follow-ups →</Link>)}
+        {!ro && kv("Meal monitoring", <Link href="/meals" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open meal follow-ups →</Link>)}
       </>
     );
     if (role === "trainer") return (
       <>
         {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
-        {kv("Session board", <Link href="/trainer" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open trainer board →</Link>)}
+        {!ro && kv("Session board", <Link href="/trainer" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open trainer board →</Link>)}
       </>
     );
     if (role === "doctor") return (
       <>
         {kv("Conditions", r.conditions)}
-        {kv("Clinical record", <Link href={`/emr/${r.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open EMR chart →</Link>)}
+        {!ro && kv("Clinical record", <Link href={`/emr/${r.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open EMR chart →</Link>)}
       </>
     );
     return (
       <>
         {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
         {kv("Conditions", r.conditions)}
-        {kv("Blueprint", <Link href="/blueprint" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open BluePrint →</Link>)}
+        {!ro && kv("Blueprint", <Link href="/blueprint" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open BluePrint →</Link>)}
       </>
     );
   };
@@ -99,7 +101,7 @@ export default function WorkspaceClients({
               </div>
               <span style={{ flex: 1 }} />
               {c.conditions && chip("var(--amber-bg)", "#92400e", "⚠️ Condition")}
-              <Link href={`/clients/${c.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>📋 Open full client card</Link>
+              <Link href={`/clients/${c.id}${linkQuery}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>📋 Open full client card</Link>
             </div>
             <div style={{ marginTop: 10 }}>
               {kv("Package", c.pkg)}

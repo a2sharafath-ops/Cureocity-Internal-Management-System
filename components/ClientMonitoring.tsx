@@ -15,7 +15,7 @@ export type MonitorRow = {
   lastMdt: string | null;
 };
 
-export default function ClientMonitoring({ role, rows }: { role: "doctor" | "diet" | "trainer" | "coach" | "psych"; rows: MonitorRow[] }) {
+export default function ClientMonitoring({ role, rows, linkQuery = "" }: { role: "doctor" | "diet" | "trainer" | "coach" | "psych"; rows: MonitorRow[]; linkQuery?: string }) {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { textAlign: "left", padding: "10px 14px", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13, verticalAlign: "middle" };
@@ -69,7 +69,7 @@ export default function ClientMonitoring({ role, rows }: { role: "doctor" | "die
             {rows.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={td}>
-                  <Link href={`/clients/${r.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link>
+                  <Link href={`/clients/${r.id}${linkQuery}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link>
                   <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.code ?? "—"}</div>
                 </td>
                 <td style={td}>{r.pkg ? chip("var(--teal-light)", "var(--teal-dark)", r.pkg) : "—"}</td>

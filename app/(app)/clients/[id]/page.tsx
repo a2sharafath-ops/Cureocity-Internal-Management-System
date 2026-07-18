@@ -42,8 +42,10 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function ClientDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string } }) {
+export default async function ClientDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string; ro?: string } }) {
   const tab = ["overview", "timeline", "card"].includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
+  // Read-only view (reached from another discipline's workspace): hide all edits.
+  const ro = searchParams.ro === "1";
   const supabase = createClient();
 
   const { data: client } = await supabase
@@ -69,7 +71,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
 
   const me = await getProfile();
-  const showPortal = canWrite(me?.role ?? "");
+  const showPortal = !ro && canWrite(me?.role ?? "");
   const { data: portalProfile } = showPortal
     ? await supabase.from("profiles").select("email").eq("client_id", params.id).eq("role", "Client").maybeSingle()
     : { data: null };
@@ -82,9 +84,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
   }));
 
-  const canMeasure = canWrite(me?.role ?? "") || canConsult(me?.role ?? "");
+  const canMeasure = !ro && (canWrite(me?.role ?? "") || canConsult(me?.role ?? ""));
   const showBilling = canBill(me?.role ?? "");
-  const canInvoice = canManageInvoices(me?.role ?? "");
+  const canInvoice = !ro && canManageInvoices(me?.role ?? "");
   const { data: invoiceRows } = showBilling
     ? await supabase.from("invoices").select("id, num, description, amount, status, method, issued_date").eq("client_id", params.id).order("created_at", { ascending: false })
     : { data: [] };
@@ -93,7 +95,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: false }).limit(12);
   const measures = (measureRows ?? []) as { id: string; date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; resting_hr: number | null; recorded_by: string | null }[];
 
-  const canCoach = canConsult(me?.role ?? "");
+  const canCoach = !ro && canConsult(me?.role ?? "");
   const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
     supabase.from("habits").select("id, name, icon, cadence, target_per_week, active").eq("client_id", params.id).eq("active", true).order("created_at"),
     supabase.from("habit_logs").select("habit_id, date").eq("client_id", params.id).eq("done", true),
@@ -182,20 +184,22 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           </div>
         </div>
         <span style={{ flex: 1 }} />
-        <Link
-          href={`/clients/${params.id}/edit`}
-          style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
-        >
-          ✎ Edit
-        </Link>
+        {ro
+          ? <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>👁 Read-only</span>
+          : <Link
+              href={`/clients/${params.id}/edit`}
+              style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+            >
+              ✎ Edit
+            </Link>}
       </div>
 
       {/* Tabs */}
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} items={[
-          { key: "overview", label: "Overview", href: `/clients/${params.id}?tab=overview` },
-          { key: "timeline", label: "Service Timeline", href: `/clients/${params.id}?tab=timeline` },
-          { key: "card", label: "Client Card", href: `/clients/${params.id}?tab=card` },
+          { key: "overview", label: "Overview", href: `/clients/${params.id}?tab=overview${ro ? "&ro=1" : ""}` },
+          { key: "timeline", label: "Service Timeline", href: `/clients/${params.id}?tab=timeline${ro ? "&ro=1" : ""}` },
+          { key: "card", label: "Client Card", href: `/clients/${params.id}?tab=card${ro ? "&ro=1" : ""}` },
         ]} />
       </div>
 
@@ -273,7 +277,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           </div>
         )}
 
-        {canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
+        {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
 
         {showBilling && invoices.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>
@@ -679,6 +683,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>📎 Files &amp; documents</div>
         <FilesGrid files={files} />
+        {!ro && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Upload blood report (PDF/image)</div>
@@ -689,6 +694,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
           </div>
         </div>
+        )}
       </div>
 
       {/* Portal access (staff) */}

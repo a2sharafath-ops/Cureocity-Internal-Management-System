@@ -19,7 +19,8 @@ import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import {
-  WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients, type WsClient, type WsRoleKey,
+  WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
+  visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
 
 export const dynamic = "force-dynamic";
@@ -30,15 +31,25 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const me = await getProfile();
   if (!me || !canSee(me.role, "/workspace")) redirect("/dashboard");
 
-  // Resolve active role: ?role → persona → default.
+  // Resolve active role: ?role → own discipline → persona → default —
+  // constrained to the disciplines this login role is allowed to view.
   const { profession } = await getViewRole();
-  const roleKey: WsRoleKey =
+  const allowed = visibleWorkspaces(me.role);
+  let roleKey: WsRoleKey =
     (WS_ROLES.find((r) => r.key === searchParams.role)?.key)
     ?? roleFromStaffRole(me.role)
     ?? roleFromPersonaKind(getPersona(profession)?.kind)
     ?? "doctor";
+  if (!allowed.includes(roleKey)) roleKey = roleFromStaffRole(me.role) ?? allowed[0] ?? "doctor";
   const role = wsRole(roleKey);
-  const tabs = WS_TABS[roleKey];
+
+  // Viewing another discipline's workspace (clinician, not your own) is read-only.
+  const readOnly = !canEditWorkspace(me.role, roleKey);
+  const roQuery = readOnly ? "?ro=1" : "";
+
+  // Read-only cross-discipline view is limited to the client-detail tabs.
+  const RO_TABS = ["dash", "clients", "monitor"];
+  const tabs = readOnly ? WS_TABS[roleKey].filter((t) => RO_TABS.includes(t.key)) : WS_TABS[roleKey];
 
   // Resolve active tab — only in-workspace tabs (live or stub) are selectable here.
   const inWs = tabs.filter((t) => !t.href);
@@ -213,7 +224,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
         </div>
         <span style={{ flex: 1 }} />
         <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, flexWrap: "wrap" }}>
-          {WS_ROLES.map((r) => {
+          {WS_ROLES.filter((r) => allowed.includes(r.key)).map((r) => {
             const on = r.key === roleKey;
             return (
               <Link key={r.key} href={`/workspace?role=${r.key}`} style={{
@@ -225,6 +236,12 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
           })}
         </div>
       </div>
+
+      {readOnly && (
+        <div style={{ background: "var(--amber-bg)", color: "#92400e", border: "1px solid #fde68a", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
+          👁 Viewing the {role.short} workspace — read-only. You can review client details but can&apos;t edit another discipline&apos;s records.
+        </div>
+      )}
 
       {/* Tab bar */}
       <div style={{ marginBottom: 16 }}>
@@ -257,6 +274,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {!readOnly && (
               <div style={{ ...box, padding: "14px 16px" }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>⚡ Quick actions</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -269,12 +287,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                   {roleKey === "doctor" && <Link href="/emr" style={qa}>🩺 Patient records</Link>}
                 </div>
               </div>
+              )}
               <div style={{ ...box, padding: "14px 16px" }}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>My clients <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {scoped.length}</span></div>
                 {scoped.slice(0, 5).map((c) => (
                   <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13, borderTop: "1px solid var(--border)" }}>
                     <span>{c.name}</span>
-                    <Link href={`/clients/${c.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12 }}>Open →</Link>
+                    <Link href={`/clients/${c.id}${roQuery}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12 }}>Open →</Link>
                   </div>
                 ))}
                 <Link href={`/workspace?role=${roleKey}&tab=clients`} style={{ display: "inline-block", marginTop: 8, color: "var(--teal-dark)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>View all clients →</Link>
@@ -285,7 +304,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       )}
 
       {/* ---- MY CLIENTS ---- */}
-      {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} />}
+      {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} linkQuery={roQuery} />}
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} />}
@@ -303,7 +322,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "board" && <MdtBoard notes={mdtNotes} clients={clientOpts} />}
 
       {/* ---- CLIENT MONITORING ---- */}
-      {tab === "monitor" && <ClientMonitoring role={roleKey} rows={monitorRows} />}
+      {tab === "monitor" && <ClientMonitoring role={roleKey} rows={monitorRows} linkQuery={roQuery} />}
 
       {/* ---- RESOURCE LIBRARY ---- */}
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
