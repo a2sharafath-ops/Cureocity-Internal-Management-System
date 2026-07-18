@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { canSee } from "@/lib/roles";
+import { canSee, isClinician } from "@/lib/roles";
 
 type NavItem = { href: string; label: string; icon: string };
 type NavSection = { title: string | null; items: NavItem[] };
@@ -77,8 +77,14 @@ const SECTIONS: NavSection[] = [
 export default function Sidebar({ role = "Staff" }: { role?: string }) {
   const pathname = usePathname();
 
+  // Clinicians' home is My Workspace — /dashboard just redirects there, so hide
+  // the redundant Dashboard nav item for them.
+  const clin = isClinician(role);
   const sections = SECTIONS
-    .map((s) => ({ ...s, items: s.items.filter((item) => canSee(role, item.href)) }))
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((item) => canSee(role, item.href) && !(clin && item.href === "/dashboard")),
+    }))
     .filter((s) => s.items.length > 0);
 
   return (
