@@ -51,7 +51,7 @@ function commonTabs(): WsTab[] {
     { key: "dash", label: "Dashboard", live: true },
     { key: "clients", label: "My Clients", live: true },
     { key: "appts", label: "📅 Appointments", href: "/appointments" },
-    { key: "summaries", label: "📝 Summaries", href: "/pro" },
+    { key: "summaries", label: "📝 Summaries", live: true },
     { key: "bp", label: "🧬 Blueprint", href: "/blueprint" },
     { key: "concerns", label: "⚠️ Concerns", live: true },
     { key: "team", label: "Integrated Dashboard", href: "/careteam" },

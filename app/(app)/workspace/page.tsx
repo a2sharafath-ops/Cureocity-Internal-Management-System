@@ -14,6 +14,7 @@ import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
+import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
@@ -113,6 +114,29 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     recipes = (rc ?? []) as RecipeRow[];
   }
 
+  // Summaries + consolidated Blueprint sign-off.
+  let consultSummaries: ConsultSummary[] = [];
+  let consolidated: ConsolidatedRow[] = [];
+  if (tab === "summaries") {
+    const bpClients = allClients.filter((c) => c.package_id === "bp1");
+    const bpIds = bpClients.map((c) => c.id);
+    const [{ data: cs }, bpConsultRes, bpRes] = await Promise.all([
+      supabase.from("consultations").select("id, client_id, summary, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),
+      bpIds.length ? supabase.from("consultations").select("client_id, kind, approved").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; kind: string; approved: boolean }[] }),
+      bpIds.length ? supabase.from("blueprints").select("client_id, generated, consolidated").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; generated: boolean; consolidated: string | null }[] }),
+    ]);
+    consultSummaries = ((cs ?? []) as unknown as (ConsultSummary & { clients: { name: string } | null })[]).map((r) => ({
+      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, summary: r.summary, status: r.status, approved: r.approved, shared: r.shared, created_at: r.created_at,
+    }));
+    const bpConsults = (bpConsultRes.data ?? []) as { client_id: string; kind: string; approved: boolean }[];
+    const bpMap = new Map(((bpRes.data ?? []) as { client_id: string; generated: boolean; consolidated: string | null }[]).map((b) => [b.client_id, b]));
+    const approvedKind = (cid: string, kind: string) => bpConsults.some((x) => x.client_id === cid && x.kind === kind && x.approved);
+    consolidated = bpClients.map((c) => {
+      const bp = bpMap.get(c.id);
+      return { client_id: c.id, name: c.name, code: c.code, doctor: approvedKind(c.id, "Doctor"), diet: approvedKind(c.id, "Diet"), trainer: approvedKind(c.id, "Trainer"), generated: bp?.generated ?? false, consolidated: bp?.consolidated ?? null };
+    });
+  }
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const fmtHour = (h: number | null) => {
     if (h == null) return "—";
@@ -126,7 +150,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes", "blueprints"]} />
 
       {/* Workspace chrome: role switcher */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -210,6 +234,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MY CLIENTS ---- */}
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} />}
+
+      {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
+      {tab === "summaries" && <SummariesPanel roleLabel={role.short} consults={consultSummaries} consolidated={consolidated} />}
 
       {/* ---- CONCERNS ---- */}
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
