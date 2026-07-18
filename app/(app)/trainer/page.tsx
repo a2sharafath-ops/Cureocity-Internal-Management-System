@@ -6,6 +6,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import SessionActions from "@/components/SessionActions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { RingMeter } from "@/components/Meters";
 
 import { todayISO, todayLabel } from "@/lib/today";
 
@@ -90,6 +91,12 @@ export default async function TrainerPage() {
         {kpi("Today — to check in", scheduledToday.length)}
         {kpi("Checked in today", doneToday.count ?? 0)}
         {kpi("Upcoming (next)", upcoming.length)}
+        {today.length > 0 && (
+          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "12px 18px", display: "flex", alignItems: "center", gap: 14, minWidth: 210 }}>
+            <RingMeter value={Math.round(((doneToday.count ?? 0) / today.length) * 100)} size={68} stroke={9} label="Check-in rate" />
+            <div style={{ fontSize: 12, color: "var(--muted)" }}><b style={{ color: "var(--ink)", fontSize: 15 }}>{doneToday.count ?? 0}/{today.length}</b><br />sessions checked in today</div>
+          </div>
+        )}
       </div>
 
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", marginBottom: 18 }}>
