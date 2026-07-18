@@ -90,7 +90,8 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
       style={{
         width: 232,
         background: "var(--sidebar)",
-        color: "#cfe8e3",
+        color: "var(--muted)",
+        borderRight: "1px solid var(--sidebar-border)",
         minHeight: "100vh",
         padding: "18px 12px 64px",
         position: "sticky",
@@ -101,20 +102,20 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 10px 18px" }}>
         <div
           style={{
-            width: 32, height: 32, borderRadius: 9, background: "#fff",
-            color: "var(--sidebar)", display: "grid", placeItems: "center", fontWeight: 800,
+            width: 32, height: 32, borderRadius: 9, background: "var(--teal)",
+            color: "#fff", display: "grid", placeItems: "center", fontWeight: 800,
           }}
         >
           ✚
         </div>
-        <b style={{ color: "#fff", fontSize: 16 }}>Cureocity</b>
+        <b style={{ color: "var(--ink)", fontSize: 16 }}>Cureocity</b>
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {sections.map((section, si) => (
           <div key={section.title ?? "top"} style={{ marginTop: si === 0 ? 0 : 14 }}>
             {section.title && (
-              <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "#6ea69d" }}>
+              <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "#a9a9b0" }}>
                 {section.title}
               </div>
             )}
@@ -135,8 +136,8 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
                     fontSize: 14,
                     fontWeight: active ? 700 : 500,
                     textDecoration: "none",
-                    color: active ? "#fff" : "#cfe8e3",
-                    background: active ? "var(--sidebar-hover)" : "transparent",
+                    color: active ? "#fff" : "#4a4a52",
+                    background: active ? "var(--teal)" : "transparent",
                   }}
                 >
                   {item.label}
@@ -148,7 +149,7 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
 
       </nav>
 
-      <div style={{ position: "sticky", bottom: 0, marginTop: 20, paddingTop: 12, fontSize: 11, color: "#7fb3ab" }}>
+      <div style={{ position: "sticky", bottom: 0, marginTop: 20, paddingTop: 12, fontSize: 11, color: "#b4b4bb" }}>
         Cureocity Internal · v0.1
       </div>
     </aside>

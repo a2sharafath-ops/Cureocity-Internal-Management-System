@@ -1,31 +1,51 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --teal: #0d9488;
-  --teal-dark: #0f766e;
-  --teal-light: #ccfbf1;
-  --sidebar: #0c2b28;
-  --sidebar-hover: #123f3a;
-  --bg: #f4f7f6;
+  /* ---- Cureocity design system (Client App V3) --------------------------- */
+  /* Primary — red/coral brand scale */
+  --primary-50: #fff1f1;
+  --primary-100: #ffe0e0;
+  --primary-200: #ffc7c7;
+  --primary-300: #ff9d9d;
+  --primary-400: #fb6a6f;
+  --primary-500: #f0384a;   /* brand */
+  --primary-600: #d92137;
+  --primary-700: #b6182c;
+  --ink: #17171b;           /* Text / near-black for primary buttons */
+
+  /* Brand accent aliases (kept as --teal-* so the whole app shifts centrally) */
+  --teal: #f0384a;
+  --teal-dark: #c42e3b;
+  --teal-light: #ffe4e6;
+
+  /* Shell — light sidebar per the design system */
+  --sidebar: #ffffff;
+  --sidebar-hover: #fff1f2;
+  --sidebar-border: #ececef;
+
+  --bg: #f6f7f9;
   --card: #ffffff;
-  --border: #e3e9e7;
-  --text: #152523;
-  --muted: #64748b;
+  --border: #ececef;
+  --text: #17171b;
+  --muted: #8a8a90;
+
   --amber: #f59e0b;
   --amber-bg: #fef3c7;
   --green: #16a34a;
   --green-bg: #dcfce7;
-  --red: #dc2626;
+  --red: #ef4444;
   --red-bg: #fee2e2;
   --blue: #2563eb;
   --blue-bg: #dbeafe;
   --purple: #7c3aed;
   --purple-bg: #ede9fe;
+
   --radius: 14px;
-  --shadow: 0 1px 3px rgba(16, 42, 38, 0.07), 0 4px 14px rgba(16, 42, 38, 0.05);
+  --radius-pill: 999px;
+  --shadow: 0 1px 2px rgba(20, 20, 25, 0.05), 0 6px 20px rgba(20, 20, 25, 0.06);
 }
 
 html,
@@ -34,7 +54,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * {
