@@ -4,7 +4,7 @@
 //   • href  — bridges to an existing standalone page until embedded
 //   • stub  — a module slated for a later phase (Concerns, MDT, etc.)
 
-export type WsRoleKey = "doctor" | "diet" | "trainer" | "coach";
+export type WsRoleKey = "doctor" | "diet" | "trainer" | "coach" | "psych";
 
 export type WsRole = {
   key: WsRoleKey;
@@ -20,6 +20,7 @@ export const WS_ROLES: WsRole[] = [
   { key: "diet",    label: "Dietitian Workspace",      short: "Dietitian", kind: "Diet",    icon: "🍽", color: "#16a34a" },
   { key: "trainer", label: "Fitness Trainer Workspace", short: "Trainer",  kind: "Trainer", icon: "🎽", color: "#7c3aed" },
   { key: "coach",   label: "Health Coach Workspace",   short: "Coach",     kind: "Coach",   icon: "🌿", color: "#0d9488" },
+  { key: "psych",   label: "Psychology Workspace",     short: "Psychologist", kind: "Psychologist", icon: "💬", color: "#db2777" },
 ];
 
 export function wsRole(key: string | null | undefined): WsRole {
@@ -33,6 +34,19 @@ export function roleFromPersonaKind(kind: string | null | undefined): WsRoleKey 
     case "Trainer": return "trainer";
     case "Coach": return "coach";
     case "Doctor": return "doctor";
+    case "Psychologist": return "psych";
+    default: return null;
+  }
+}
+
+// a professional's real login role (lib/roles) → their workspace role key
+export function roleFromStaffRole(role: string | null | undefined): WsRoleKey | null {
+  switch (role) {
+    case "Doctor": return "doctor";
+    case "Dietitian": return "diet";
+    case "Fitness Trainer": return "trainer";
+    case "Health Coach": return "coach";
+    case "Psychologist": return "psych";
     default: return null;
   }
 }
@@ -70,6 +84,7 @@ function withRoleTabs(extra: WsTab[]): WsTab[] {
 
 export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   doctor: withRoleTabs([]),
+  psych: withRoleTabs([]),
   diet: withRoleTabs([
     { key: "meals", label: "🍽️ Meal Follow-ups", href: "/meals" },
     { key: "charts", label: "Diet Charts", live: true },
@@ -101,6 +116,7 @@ const hasCondition = (c: WsClient) => {
   return t.length > 0 && t !== "none" && t !== "-";
 };
 const COACH_GOALS = ["healthy living", "regulate mood disorders", "manage health condition", "mental wellbeing"];
+const PSYCH_GOALS = ["regulate mood disorders", "mental wellbeing", "manage stress", "sleep", "anxiety"];
 
 // Which clients belong in a given role's workspace.
 export function scopeClients(role: WsRoleKey, clients: WsClient[], trainingClientIds: Set<string>): WsClient[] {
@@ -114,6 +130,10 @@ export function scopeClients(role: WsRoleKey, clients: WsClient[], trainingClien
     case "coach":
       return clients.filter(
         (c) => isBluePrint(c.package_id) || (c.goals ?? []).some((g) => COACH_GOALS.includes(g.toLowerCase())),
+      );
+    case "psych":
+      return clients.filter(
+        (c) => isBluePrint(c.package_id) || (c.goals ?? []).some((g) => PSYCH_GOALS.some((p) => g.toLowerCase().includes(p))),
       );
     default:
       return clients;

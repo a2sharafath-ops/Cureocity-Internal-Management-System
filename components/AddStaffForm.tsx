@@ -6,7 +6,8 @@ import { inviteStaff, type InviteState } from "@/lib/actions";
 import { BRANCHES } from "@/lib/branches";
 
 const ROLES = [
-  "Front Desk", "Health Professional", "Manager", "Finance", "HR", "Staff", "Administrator", "Super Admin",
+  "Front Desk", "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist",
+  "Manager", "Finance", "HR", "Staff", "Administrator", "Super Admin",
 ];
 
 const input: React.CSSProperties = {

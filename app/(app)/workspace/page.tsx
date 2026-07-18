@@ -19,7 +19,7 @@ import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import {
-  WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
+  WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const { profession } = await getViewRole();
   const roleKey: WsRoleKey =
     (WS_ROLES.find((r) => r.key === searchParams.role)?.key)
+    ?? roleFromStaffRole(me.role)
     ?? roleFromPersonaKind(getPersona(profession)?.kind)
     ?? "doctor";
   const role = wsRole(roleKey);

@@ -19,7 +19,7 @@ function initials(name: string) {
 export default function WorkspaceClients({
   role, color, clients,
 }: {
-  role: "doctor" | "diet" | "trainer" | "coach";
+  role: "doctor" | "diet" | "trainer" | "coach" | "psych";
   color: string;
   clients: WsClientRow[];
 }) {

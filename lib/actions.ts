@@ -91,7 +91,7 @@ export async function setPreviewRole(formData: FormData) {
   // Professional persona → step into that professional's workspace
   const persona = getPersona(role);
   if (persona) {
-    store.set("preview_role", "Health Professional", { path: "/", sameSite: "lax" });
+    store.set("preview_role", persona.key, { path: "/", sameSite: "lax" });
     store.set("preview_profession", persona.key, { path: "/", sameSite: "lax" });
     revalidatePath("/", "layout");
     redirect(persona.route);
@@ -133,7 +133,9 @@ export async function changePassword(_prev: PwState, formData: FormData): Promis
 }
 
 const ALLOWED_ROLES = [
-  "Super Admin", "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
+  "Super Admin", "Administrator", "Manager", "Front Desk",
+  "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist",
+  "Finance", "HR", "Staff",
 ];
 
 export type InviteState = { error?: string; ok?: string };

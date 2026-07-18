@@ -1,35 +1,50 @@
 // Role → permissions map (mirrors the prototype's RBAC, simplified).
 
+// The five clinical discipline roles. Each has its own login and its own
+// discipline workspace, but they share the same clinician permission set
+// (what used to be the single "Health Professional" role).
+export const CLINICIAN_ROLES = ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"] as const;
+
 export type Role =
   | "Super Admin"
   | "Administrator"
   | "Manager"
   | "Front Desk"
-  | "Health Professional"
+  | "Doctor"
+  | "Dietitian"
+  | "Fitness Trainer"
+  | "Health Coach"
+  | "Psychologist"
   | "Finance"
   | "HR"
   | "Staff";
 
+export function isClinician(role: string): boolean {
+  return (CLINICIAN_ROLES as readonly string[]).includes(role);
+}
+
+const CLIN = [...CLINICIAN_ROLES] as Role[];
+
 // Which nav items each role can see. "all" = every role.
 export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/dashboard": "all",
-  "/clients": ["Administrator", "Manager", "Front Desk", "Health Professional"],
+  "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/leads": ["Administrator", "Manager", "Front Desk"],
-  "/messages": ["Administrator", "Manager", "Front Desk", "Health Professional"],
-  "/sessions": ["Administrator", "Manager", "Front Desk", "Health Professional"],
-  "/classes": ["Administrator", "Manager", "Front Desk", "Health Professional"],
-  "/appointments": ["Administrator", "Manager", "Front Desk", "Health Professional"],
+  "/messages": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/classes": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/appointments": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/followups": ["Administrator", "Manager", "Front Desk"],
   "/intake": ["Administrator", "Manager", "Front Desk"],
   "/access": ["Administrator", "Manager", "Front Desk"],
-  "/trainer": ["Administrator", "Manager", "Health Professional"],
-  "/workspace": ["Administrator", "Manager", "Health Professional"],
-  "/careteam": ["Administrator", "Manager", "Health Professional"],
-  "/telehealth": ["Administrator", "Manager", "Health Professional"],
-  "/forms": ["Administrator", "Manager", "Front Desk", "Health Professional"],
-  "/pro": ["Administrator", "Manager", "Health Professional"],
-  "/meals": ["Administrator", "Manager", "Health Professional"],
-  "/blueprint": ["Administrator", "Manager", "Health Professional"],
+  "/trainer": ["Administrator", "Manager", ...CLIN],
+  "/workspace": ["Administrator", "Manager", ...CLIN],
+  "/careteam": ["Administrator", "Manager", ...CLIN],
+  "/telehealth": ["Administrator", "Manager", ...CLIN],
+  "/forms": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/pro": ["Administrator", "Manager", ...CLIN],
+  "/meals": ["Administrator", "Manager", ...CLIN],
+  "/blueprint": ["Administrator", "Manager", ...CLIN],
   "/packages": ["Administrator", "Manager", "Front Desk"],
   "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/expenses": ["Administrator", "Manager", "Finance"],
@@ -42,15 +57,15 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/services": ["Administrator", "Manager"],
   "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/passes": ["Administrator", "Manager", "Front Desk", "Finance"],
-  "/emr": ["Administrator", "Manager", "Health Professional"],
-  "/orders": ["Administrator", "Manager", "Health Professional"],
+  "/emr": ["Administrator", "Manager", ...CLIN],
+  "/orders": ["Administrator", "Manager", ...CLIN],
   "/claims": ["Administrator", "Manager", "Finance"],
   "/reports": ["Administrator", "Manager", "Finance"],
   "/users": ["Administrator"],
   "/compliance": ["Administrator", "Manager"],
   "/tasks": "all",
   "/hr": ["Administrator", "Manager", "HR"],
-  "/exlib": ["Administrator", "Manager", "Health Professional"],
+  "/exlib": ["Administrator", "Manager", ...CLIN],
   "/notifications": ["Administrator", "Manager"],
   "/audit": ["Administrator"],
 };
@@ -68,9 +83,9 @@ export function canWrite(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role);
 }
 
-// Who can reschedule / complete strength sessions (front desk + trainers).
+// Who can reschedule / complete strength sessions (front desk + clinicians).
 export function canManageSessions(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
 // Who can activate/deactivate packages.
@@ -80,12 +95,12 @@ export function canManagePackages(role: string): boolean {
 
 // Who can run consultations / write summaries.
 export function canConsult(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role) || isClinician(role);
 }
 
 // Who can drive the BluePrint flow (blood reports, generate).
 export function canManageBlueprint(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
 // Who can manage invoices / billing.
@@ -95,17 +110,17 @@ export function canBill(role: string): boolean {
 
 // Who can message clients.
 export function canMessage(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
 // Who can schedule group classes / manage bookings.
 export function canClasses(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
 // Who can book / manage calendar appointments.
 export function canAppointments(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
 // Who can manage retention (at-risk, NPS, referrals).
@@ -120,7 +135,7 @@ export function canPos(role: string): boolean {
 
 // Who can view/edit the clinical EMR (PHI — clinicians only).
 export function canEmr(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Health Professional"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role) || isClinician(role);
 }
 
 // Who can manage insurance & claims.
@@ -145,7 +160,9 @@ export function canHr(role: string): boolean {
 
 // The assignable roles, in seniority order (for the Users & Roles cards).
 export const ROLE_LIST: Role[] = [
-  "Super Admin", "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
+  "Super Admin", "Administrator", "Manager", "Front Desk",
+  "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist",
+  "Finance", "HR", "Staff",
 ];
 
 // Short area labels for each nav route (mirrors the prototype's area codes).
@@ -182,7 +199,11 @@ export const ROLE_CAPS: Record<string, string[]> = {
   "Administrator":       ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
   "Manager":             ["refund", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
   "Front Desk":          [],
-  "Health Professional": ["phi"],
+  "Doctor":              ["phi"],
+  "Dietitian":           ["phi"],
+  "Fitness Trainer":     ["phi"],
+  "Health Coach":        ["phi"],
+  "Psychologist":        ["phi"],
   "Finance":             ["refund", "finance", "viewAudit", "insurance"],
   "HR":                  ["hr"],
   "Staff":               [],

@@ -3,7 +3,7 @@ import { canSee, canBill, canEmr, canClaims, canCompliance, canAppointments, can
 
 describe("canSee", () => {
   it("dashboard is visible to everyone", () => {
-    for (const r of ["Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff"]) {
+    for (const r of ["Administrator", "Manager", "Front Desk", "Doctor", "Dietitian", "Finance", "HR", "Staff"]) {
       expect(canSee(r, "/dashboard")).toBe(true);
     }
   });
@@ -16,7 +16,8 @@ describe("canSee", () => {
   });
 
   it("EMR is hidden from front desk (PHI)", () => {
-    expect(canSee("Health Professional", "/emr")).toBe(true);
+    expect(canSee("Doctor", "/emr")).toBe(true);
+    expect(canSee("Psychologist", "/emr")).toBe(true);
     expect(canSee("Front Desk", "/emr")).toBe(false);
   });
 
@@ -26,14 +27,15 @@ describe("canSee", () => {
 });
 
 describe("permission helpers", () => {
-  it("canBill includes Finance, excludes Health Professional", () => {
+  it("canBill includes Finance, excludes clinicians", () => {
     expect(canBill("Finance")).toBe(true);
     expect(canBill("Front Desk")).toBe(true);
-    expect(canBill("Health Professional")).toBe(false);
+    expect(canBill("Dietitian")).toBe(false);
   });
 
   it("canEmr is clinicians only", () => {
-    expect(canEmr("Health Professional")).toBe(true);
+    expect(canEmr("Doctor")).toBe(true);
+    expect(canEmr("Health Coach")).toBe(true);
     expect(canEmr("Manager")).toBe(true);
     expect(canEmr("Front Desk")).toBe(false);
     expect(canEmr("Finance")).toBe(false);
@@ -53,7 +55,7 @@ describe("permission helpers", () => {
   it("canAppointments and canPos and canConsult sanity", () => {
     expect(canAppointments("Front Desk")).toBe(true);
     expect(canPos("Finance")).toBe(true);
-    expect(canConsult("Health Professional")).toBe(true);
+    expect(canConsult("Psychologist")).toBe(true);
     expect(canConsult("Front Desk")).toBe(false);
   });
 });

@@ -10,12 +10,14 @@ export type Persona = {
   icon: string;
 };
 
+// Keys match the real discipline role names (lib/roles CLINICIAN_ROLES) so an
+// Administrator previewing a persona gets that discipline's role + workspace.
 export const PERSONAS: Persona[] = [
-  { key: "Doctor",       label: "Doctor",        route: "/pro",     kind: "Doctor",       icon: "🩺" },
-  { key: "Dietitian",    label: "Dietitian",     route: "/meals",   kind: "Diet",         icon: "🍽" },
-  { key: "Trainer",      label: "Trainer",       route: "/trainer", kind: "Trainer",      icon: "🎽" },
-  { key: "Health Coach", label: "Health Coach",  route: "/pro",     kind: "Coach",        icon: "🌿" },
-  { key: "Psychologist", label: "Psychologist",  route: "/pro",     kind: "Psychologist", icon: "🧠" },
+  { key: "Doctor",          label: "Doctor",         route: "/workspace?role=doctor",  kind: "Doctor",       icon: "🩺" },
+  { key: "Dietitian",       label: "Dietitian",      route: "/workspace?role=diet",    kind: "Diet",         icon: "🍽" },
+  { key: "Fitness Trainer", label: "Fitness Trainer", route: "/workspace?role=trainer", kind: "Trainer",     icon: "🎽" },
+  { key: "Health Coach",    label: "Health Coach",   route: "/workspace?role=coach",   kind: "Coach",        icon: "🌿" },
+  { key: "Psychologist",    label: "Psychologist",   route: "/workspace?role=psych",   kind: "Psychologist", icon: "🧠" },
 ];
 
 export function getPersona(key: string | null | undefined): Persona | null {

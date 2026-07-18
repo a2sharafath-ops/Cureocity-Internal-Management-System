@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
+import { isClinician } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
   // Super Admin sees exactly what an Administrator sees (unless previewing another role).
   const role = effective === "Super Admin" ? "Administrator" : effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);
-  const isPro = role === "Health Professional";
+  const isPro = isClinician(role);
 
   const supabase = createClient();
   const monthStart = TODAY.slice(0, 7) + "-01";
