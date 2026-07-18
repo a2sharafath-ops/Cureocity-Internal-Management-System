@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
+import { canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -1602,7 +1602,7 @@ export async function payPayroll(formData: FormData) {
 
 export async function addTask(formData: FormData) {
   const p = await getProfile();
-  if (!p) return; // any signed-in staff
+  if (!p || !canManageTasks(p.role)) return; // Admin / Manager / HR
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
   const supabase = createClient();
@@ -1825,7 +1825,7 @@ export async function deleteExpense(formData: FormData) {
 
 export async function addSop(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManagePackages(p.role)) return;
+  if (!p || !canManageSops(p.role)) return;
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
   const supabase = createClient();
@@ -1840,7 +1840,7 @@ export async function addSop(formData: FormData) {
 
 export async function deleteSop(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManagePackages(p.role)) return;
+  if (!p || !canManageSops(p.role)) return;
   const supabase = createClient();
   await supabase.from("sops").delete().eq("id", String(formData.get("id")));
   await logAudit(p, "SOP removed", null, null);
@@ -1851,7 +1851,7 @@ export async function deleteSop(formData: FormData) {
 
 export async function addService(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManagePackages(p.role)) return;
+  if (!p || !canManageServices(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const dayRaw = formData.get("day_offset");
@@ -1869,7 +1869,7 @@ export async function addService(formData: FormData) {
 
 export async function toggleService(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManagePackages(p.role)) return;
+  if (!p || !canManageServices(p.role)) return;
   const id = String(formData.get("id"));
   const to = String(formData.get("to") || "true") === "true";
   const supabase = createClient();
@@ -1882,7 +1882,7 @@ export async function toggleService(formData: FormData) {
 
 export async function setSalesTarget(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManagePackages(p.role)) return; // Admin / Manager
+  if (!p || !canSetTargets(p.role)) return; // Administrator only
   const month = String(formData.get("month") || todayISO().slice(0, 7));
   const supabase = createClient();
   await supabase.from("sales_targets").upsert({

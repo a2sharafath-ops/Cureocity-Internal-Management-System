@@ -88,9 +88,29 @@ export function canManageSessions(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
 }
 
-// Who can activate/deactivate packages.
+// Who can add / edit / deactivate packages. Administrator only.
 export function canManagePackages(role: string): boolean {
+  return role === "Super Admin" || role === "Administrator";
+}
+
+// Who can manage the services catalog. Admin + Manager.
+export function canManageServices(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager"].includes(role);
+}
+
+// Who can set monthly sales targets. Administrator only.
+export function canSetTargets(role: string): boolean {
+  return role === "Super Admin" || role === "Administrator";
+}
+
+// Who can add / delete SOPs (knowledge base). Admin + HR.
+export function canManageSops(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "HR"].includes(role);
+}
+
+// Who can create tasks. Admin + Manager + HR.
+export function canManageTasks(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager", "HR"].includes(role);
 }
 
 // Who can run consultations / write summaries.

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee } from "@/lib/roles";
+import { canSee, canManageTasks } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import TaskForm from "@/components/TaskForm";
@@ -41,7 +41,7 @@ export default async function TasksPage() {
           <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Work management — deliverables, tabs &amp; smart filters</p>
         </div>
         <span style={{ flex: 1 }} />
-        <TaskForm staff={staff} clients={clients} />
+        {canManageTasks(me.role) && <TaskForm staff={staff} clients={clients} />}
       </div>
 
       <TasksView tasks={tasks} today={todayISO()} staff={staffNames} types={types} />

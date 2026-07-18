@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canManagePackages } from "@/lib/roles";
+import { canSee, canManageSops } from "@/lib/roles";
 import { deleteSop } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SopForm from "@/components/SopForm";
@@ -13,7 +13,7 @@ type Sop = { id: string; title: string; category: string; content: string | null
 export default async function KbPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/kb")) redirect("/dashboard");
-  const canEdit = canManagePackages(me.role);
+  const canEdit = canManageSops(me.role);
 
   const supabase = createClient();
   const { data } = await supabase.from("sops").select("id, title, category, content, updated_by, updated_at").order("category").order("title");

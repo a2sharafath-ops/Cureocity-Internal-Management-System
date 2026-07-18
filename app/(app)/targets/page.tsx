@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canManagePackages } from "@/lib/roles";
+import { canSee, canSetTargets } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import TargetForm from "@/components/TargetForm";
@@ -13,7 +13,7 @@ const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 export default async function TargetsPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/targets")) redirect("/dashboard");
-  const canSet = canManagePackages(me.role);
+  const canSet = canSetTargets(me.role);
 
   const today = todayISO();
   const month = today.slice(0, 7);
