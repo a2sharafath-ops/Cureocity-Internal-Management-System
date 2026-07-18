@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { ROLE_LIST, accessAreas, roleCapabilities } from "@/lib/roles";
+import { ROLE_LIST, accessAreas, accessAreaList, roleCapabilities } from "@/lib/roles";
 import UserRoleSelect from "@/components/UserRoleSelect";
 import UserBranchSelect from "@/components/UserBranchSelect";
 import UserNameEdit from "@/components/UserNameEdit";
@@ -37,7 +37,7 @@ export default async function UsersPage() {
     <div style={{ maxWidth: 900 }}>
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Users &amp; Roles</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Manage staff access · {users.length} user{users.length === 1 ? "" : "s"} · Administrator only
+        Team access — roles, permissions and RBAC · {users.length} staff
       </p>
 
       <AddStaffForm />
@@ -101,7 +101,7 @@ export default async function UsersPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
         {ROLE_LIST.map((r) => {
           const count = users.filter((u) => u.role === r).length;
-          const a = accessAreas(r);
+          const areas = accessAreaList(r);
           const caps = roleCapabilities(r);
           return (
             <div key={r} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 16px" }}>
@@ -110,7 +110,7 @@ export default async function UsersPage() {
                 <span style={{ flex: 1 }} />
                 <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{count} user{count === 1 ? "" : "s"}</span>
               </div>
-              <div style={{ fontSize: 12.5, color: "var(--muted)" }}><b style={{ color: "var(--ink)" }}>Access:</b> {a === "all" ? "All areas" : `${a} areas`}</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}><b style={{ color: "var(--ink)" }}>Access:</b> {areas === "all" ? "All areas" : areas.join(", ")}</div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6 }}><b style={{ color: "var(--ink)" }}>Capabilities:</b> {caps.length ? caps.join(", ") : "—"}</div>
             </div>
           );

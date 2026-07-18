@@ -148,27 +148,43 @@ export const ROLE_LIST: Role[] = [
   "Super Admin", "Administrator", "Manager", "Front Desk", "Health Professional", "Finance", "HR", "Staff",
 ];
 
-// How many nav areas a role can see — "all" if it sees everything.
-export function accessAreas(role: string): number | "all" {
+// Short area labels for each nav route (mirrors the prototype's area codes).
+const AREA_LABEL: Record<string, string> = {
+  "/dashboard": "dash", "/leads": "crm", "/clients": "clients", "/appointments": "booking",
+  "/sessions": "training", "/followups": "followups", "/messages": "comms", "/retention": "retention",
+  "/targets": "targets", "/intake": "intake", "/access": "access", "/workspace": "workspace",
+  "/careteam": "careteam", "/telehealth": "telehealth", "/pro": "consults", "/meals": "meals",
+  "/blueprint": "blueprint", "/trainer": "trainer", "/emr": "emr", "/orders": "orders",
+  "/packages": "packages", "/services": "services", "/billing": "invoices", "/expenses": "expenses",
+  "/finsheets": "finsheets", "/subscriptions": "subscriptions", "/pos": "pos", "/passes": "passes",
+  "/claims": "insurance", "/reports": "reports", "/compliance": "governance", "/users": "users",
+  "/hr": "hr", "/exlib": "exlib", "/notifications": "notifications", "/audit": "audit",
+  "/kb": "kb", "/tasks": "tasks", "/classes": "classes", "/campaigns": "campaigns",
+};
+
+// The nav areas a role can see, as a label list — or "all".
+export function accessAreaList(role: string): string[] | "all" {
   const routes = Object.keys(NAV_ACCESS);
-  const seen = routes.filter((h) => canSee(role, h)).length;
-  return seen === routes.length ? "all" : seen;
+  const seen = routes.filter((h) => canSee(role, h));
+  if (seen.length === routes.length) return "all";
+  return Array.from(new Set(seen.map((h) => AREA_LABEL[h] ?? h.slice(1))));
 }
 
-// A friendly list of the capabilities a role holds (for the role cards).
-export function roleCapabilities(role: string): string[] {
-  const map: [boolean, string][] = [
-    [canWrite(role), "Clients & leads"],
-    [canBill(role), "Billing"],
-    [canConsult(role), "Consultations"],
-    [canEmr(role), "Clinical / EMR"],
-    [canManagePackages(role), "Packages"],
-    [canClaims(role), "Claims"],
-    [canCompliance(role), "Compliance"],
-    [canHr(role), "HR"],
-    [canPos(role), "POS"],
-    [canCampaigns(role), "Campaigns"],
-    [canRetention(role), "Retention"],
-  ];
-  return map.filter(([ok]) => ok).map(([, label]) => label);
+// How many nav areas a role can see — "all" if it sees everything.
+export function accessAreas(role: string): number | "all" {
+  const list = accessAreaList(role);
+  return list === "all" ? "all" : list.length;
 }
+
+// Capability flags per role (mirrors the prototype's RBAC capability set).
+export const ROLE_CAPS: Record<string, string[]> = {
+  "Super Admin":         ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
+  "Administrator":       ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
+  "Manager":             ["refund", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
+  "Front Desk":          [],
+  "Health Professional": ["phi"],
+  "Finance":             ["refund", "finance", "viewAudit", "insurance"],
+  "HR":                  ["hr"],
+  "Staff":               [],
+};
+export function roleCapabilities(role: string): string[] { return ROLE_CAPS[role] ?? []; }
