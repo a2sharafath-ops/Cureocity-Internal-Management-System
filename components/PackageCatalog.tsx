@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { savePackage, togglePackageActive } from "@/lib/actions";
+import Chip from "@/components/Chip";
 
 export type CatSvc = { name: string; category: string; slot: boolean };
 export type CatPkg = {
@@ -28,7 +29,7 @@ export default function PackageCatalog({
   for (const arr of lines.values()) arr.sort((a, b) => (a.weeks ?? 0) - (b.weeks ?? 0));
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const chip = (bg: string, c: string, t: string) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
+  const chip = (bg: string, c: string, t: string) => <Chip bg={bg} color={c} style={{ padding: "3px 9px" }}>{t}</Chip>;
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", width: "100%" };
 
   const card = (variants: CatPkg[]) => {

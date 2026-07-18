@@ -7,6 +7,7 @@ import ReferralForm from "@/components/ReferralForm";
 import ReferralActions from "@/components/ReferralActions";
 import SegTabs from "@/components/SegTabs";
 import StatCard from "@/components/StatCard";
+import Chip from "@/components/Chip";
 import { winbackOffer, sendNpsSurvey, awardLoyalty, redeemLoyalty } from "@/lib/actions";
 
 export type RiskRow = { id: string; name: string; packageName: string | null; score: number; tier: string; reasons: string[] };
@@ -38,7 +39,7 @@ export default function RetentionHub({
   const kpi = (label: string, value: string, sub: string, bg: string, color: string) => (
     <StatCard label={label} value={value} sub={sub} badge={{ bg, color }} />
   );
-  const chip = (bg: string, c: string, t: string, extra?: React.CSSProperties) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, ...extra }}>{t}</span>;
+  const chip = (bg: string, c: string, t: string, extra?: React.CSSProperties) => <Chip bg={bg} color={c} style={extra}>{t}</Chip>;
   const tierChip = (t: string) => chip(t === "High" ? "var(--red-bg)" : t === "Medium" ? "var(--amber-bg)" : "var(--green-bg)", t === "High" ? "#991b1b" : t === "Medium" ? "#92400e" : "#166534", t);
   const riskBar = (s: number) => { const col = s >= 60 ? "var(--red)" : s >= 30 ? "#d97706" : "#16a34a"; return <div style={{ background: "#eef2f1", borderRadius: 6, height: 8, width: 90, overflow: "hidden" }}><div style={{ width: `${Math.min(100, s)}%`, height: "100%", background: col }} /></div>; };
   const loyTierChip = (t: string) => chip(t === "Platinum" ? "#ede9fe" : t === "Gold" ? "var(--amber-bg)" : "#eef2f1", t === "Platinum" ? "#6d28d9" : t === "Gold" ? "#92400e" : "#64748b", t);

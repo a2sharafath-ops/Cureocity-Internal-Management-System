@@ -7,6 +7,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { AttendanceButtons, LeaveForm, LeaveActions } from "@/components/HrControls";
 import { OnboardingForm, OnboardingCard } from "@/components/OnboardingControls";
 import SegTabs from "@/components/SegTabs";
+import Chip from "@/components/Chip";
 import {
   addHrUpdate, toggleMonthTask, generatePayslip, addCommission, fileStatutory,
   advanceCandidate, setPurchaseStatus, addOffboarding,
@@ -62,7 +63,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "11px 16px", fontSize: 13 };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
-  const chip = (bg: string, c: string, t: string) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
+  const chip = (bg: string, c: string, t: string) => <Chip bg={bg} color={c}>{t}</Chip>;
   const deptChip = (d: string | null) => {
     const m: Record<string, [string, string]> = { Management: ["#ede9fe", "#6d28d9"], Fitness: ["#dbeafe", "#1e40af"], Sales: ["#dbeafe", "#1e40af"], Marketing: ["#dbeafe", "#1e40af"], "Front Desk": ["#dbeafe", "#1e40af"], "Health Professional": ["#dcfce7", "#166534"] };
     const [bg, c] = m[d ?? ""] ?? ["#eef2f1", "#64748b"];

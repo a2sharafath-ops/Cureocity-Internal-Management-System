@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   fuSendQuestionnaire, fuSendReminder, fuNoAnswer, fuBookInPerson, fuNoConsult, fuMarkReceived, fuCompleteReview,
 } from "@/lib/actions";
+import Chip from "@/components/Chip";
 
 export type FuRow = {
   id: string; clientId: string | null; clientName: string | null; label: string; category: string | null;
@@ -38,7 +39,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "9px 12px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "10px 12px", fontSize: 13, verticalAlign: "top" };
-  const chip = (bg: string, c: string, t: string) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
+  const chip = (bg: string, c: string, t: string) => <Chip bg={bg} color={c}>{t}</Chip>;
   const dueChip = (f: FuRow) => f.due_date < today ? chip("var(--red-bg)", "#991b1b", "Overdue") : f.due_date === today ? chip("var(--amber-bg)", "#92400e", "Today") : chip("#eef2f1", "var(--muted)", fmtDate(f.due_date));
   const modeChip = (m: string) => chip(m === "Online" ? "#dbeafe" : "#ede9fe", m === "Online" ? "#1e40af" : "#6d28d9", m);
   const btn = (bg: string, color = "#fff"): React.CSSProperties => ({ background: bg, color, border: bg === "#fff" ? "1px solid var(--border)" : "none", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" });
