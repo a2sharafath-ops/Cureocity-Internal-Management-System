@@ -3150,3 +3150,37 @@ export async function acknowledgeMdt(formData: FormData) {
   await logAudit(p, "MDT escalation acknowledged", id, null);
   revalidatePath("/workspace");
 }
+
+// ---- workspace: resource library -------------------------------------------
+
+export async function uploadResourceFile(_prev: UploadState, formData: FormData): Promise<UploadState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const role = String(formData.get("role") || "all");
+  const folder = String(formData.get("folder") || "").trim() || "General";
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file to upload." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
+  const supabase = createClient();
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${role}/${crypto.randomUUID()}-${safe}`;
+  const { error } = await supabase.storage.from("resources").upload(path, file, { contentType: file.type || undefined, upsert: false });
+  if (error) return { error: error.message };
+  await supabase.from("resource_files").insert({ role, folder, name: file.name, bucket: "resources", path, uploaded_by: me.name });
+  await logAudit(me, "Resource uploaded", `${role} · ${folder}`, file.name);
+  revalidatePath("/workspace");
+  return { ok: "Uploaded." };
+}
+
+export async function deleteResourceFile(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  const { data: f } = await supabase.from("resource_files").select("path, name").eq("id", id).maybeSingle();
+  if (f?.path) await supabase.storage.from("resources").remove([f.path]);
+  await supabase.from("resource_files").delete().eq("id", id);
+  await logAudit(p, "Resource deleted", f?.name ?? id, null);
+  revalidatePath("/workspace");
+}

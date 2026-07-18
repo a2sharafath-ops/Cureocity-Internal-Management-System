@@ -56,7 +56,7 @@ function commonTabs(): WsTab[] {
     { key: "concerns", label: "⚠️ Concerns", live: true },
     { key: "team", label: "Integrated Dashboard", href: "/careteam" },
     { key: "monitor", label: "Client Monitoring", note: "Deep client-monitoring view — coming in a later phase." },
-    { key: "library", label: "Resource Library", note: "Role-scoped file library — coming in a later phase." },
+    { key: "library", label: "Resource Library", live: true },
     { key: "board", label: "MDT", live: true },
   ];
 }

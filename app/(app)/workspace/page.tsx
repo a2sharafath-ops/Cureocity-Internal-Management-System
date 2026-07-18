@@ -11,6 +11,7 @@ import StatCard from "@/components/StatCard";
 import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClients";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
+import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, scopeClients, type WsClient, type WsRoleKey,
 } from "@/lib/workspaces";
@@ -74,6 +75,27 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const openConcerns = concerns.filter((c) => c.status === "Open").length;
   const clientOpts = allClients.map((c) => ({ id: c.id, name: c.name }));
 
+  // Resource library (only when that tab is active — needs per-file signed URLs).
+  let resources: ResourceRow[] = [];
+  if (tab === "library") {
+    const { data: rf } = await supabase
+      .from("resource_files")
+      .select("id, role, folder, name, path, uploaded_by, created_at")
+      .in("role", [roleKey, "all"])
+      .order("folder", { ascending: true })
+      .order("created_at", { ascending: false });
+    resources = await Promise.all(
+      ((rf ?? []) as { id: string; role: string; folder: string; name: string; path: string | null; uploaded_by: string | null; created_at: string }[]).map(async (f) => {
+        let url: string | null = null;
+        if (f.path) {
+          const { data: signed } = await supabase.storage.from("resources").createSignedUrl(f.path, 3600);
+          url = signed?.signedUrl ?? null;
+        }
+        return { id: f.id, role: f.role, folder: f.folder, name: f.name, url, uploaded_by: f.uploaded_by, created_at: f.created_at };
+      }),
+    );
+  }
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const fmtHour = (h: number | null) => {
     if (h == null) return "—";
@@ -87,7 +109,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files"]} />
 
       {/* Workspace chrome: role switcher */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -177,6 +199,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MDT BOARD ---- */}
       {tab === "board" && <MdtBoard notes={mdtNotes} clients={clientOpts} />}
+
+      {/* ---- RESOURCE LIBRARY ---- */}
+      {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
       {/* ---- STUB TABS (later phases) ---- */}
       {stubDef && (
