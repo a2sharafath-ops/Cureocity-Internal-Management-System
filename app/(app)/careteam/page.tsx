@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee } from "@/lib/roles";
+import { canSee, canEmr } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
@@ -15,14 +15,19 @@ export default async function CareTeamPage() {
 
   const today = todayISO();
   const supabase = createClient();
-  const [consultsPend, sessToday, ordersOpen, bloodPend, apptsToday, mealsToday] = await Promise.all([
-    supabase.from("consultations").select("id", { count: "exact", head: true }).neq("status", "completed"),
-    supabase.from("sessions").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "scheduled"),
-    supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["ordered", "collected"]),
-    supabase.from("blood_requests").select("client_id", { count: "exact", head: true }).eq("submitted", false),
-    supabase.from("appointments").select("id", { count: "exact", head: true }).eq("date", today).eq("status", "scheduled"),
-    supabase.from("meal_logs").select("id", { count: "exact", head: true }).eq("date", today),
-  ]);
+  // Counts come from a security-definer RPC so they stay whole-team accurate
+  // even though each discipline can only read its own slice of the data.
+  const { data: countRows } = await supabase.rpc("care_team_counts", { p_today: today });
+  const c0 = (Array.isArray(countRows) ? countRows[0] : countRows) as {
+    consults_pending: number; sessions_today: number; orders_open: number;
+    blood_pending: number; appts_today: number; meals_today: number;
+  } | undefined;
+  const consultsPend = { count: c0?.consults_pending ?? 0 };
+  const sessToday = { count: c0?.sessions_today ?? 0 };
+  const ordersOpen = { count: c0?.orders_open ?? 0 };
+  const bloodPend = { count: c0?.blood_pending ?? 0 };
+  const apptsToday = { count: c0?.appts_today ?? 0 };
+  const mealsToday = { count: c0?.meals_today ?? 0 };
 
   const card = (icon: string, title: string, sub: string, count: number | null, countLabel: string, href: string, color: string) => (
     <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
@@ -50,8 +55,8 @@ export default async function CareTeamPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
         {card("🩺", "Consultations", "Doctor · Coach · Psychologist", consultsPend.count ?? 0, "to complete", "/pro", "#e0f2f1")}
-        {card("📋", "Patient Records", "EMR — problems, meds, vitals", null, "open charts", "/emr", "#dbeafe")}
-        {card("🧪", "Orders & Labs", "Prescriptions & results", ordersOpen.count ?? 0, "open orders", "/orders", "#fef3c7")}
+        {canEmr(me.role) && card("📋", "Patient Records", "EMR — problems, meds, vitals", null, "open charts", "/emr", "#dbeafe")}
+        {canEmr(me.role) && card("🧪", "Orders & Labs", "Prescriptions & results", ordersOpen.count ?? 0, "open orders", "/orders", "#fef3c7")}
         {card("🍽", "Meal Monitoring", "Dietitian workspace", mealsToday.count ?? 0, "logs today", "/meals", "#e0f2f1")}
         {card("🎽", "Trainer", "Session board & check-ins", sessToday.count ?? 0, "sessions today", "/trainer", "#ede9fe")}
         {card("🧬", "BluePrint", "Blood reports & 9 scores", bloodPend.count ?? 0, "reports pending", "/blueprint", "#fee2e2")}

@@ -135,20 +135,24 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   if (tab === "summaries") {
     const bpClients = allClients.filter((c) => c.package_id === "bp1");
     const bpIds = bpClients.map((c) => c.id);
-    const [{ data: cs }, bpConsultRes, bpRes] = await Promise.all([
+    const [{ data: cs }, signoffRes, bpRes] = await Promise.all([
       supabase.from("consultations").select("id, client_id, summary, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),
-      bpIds.length ? supabase.from("consultations").select("client_id, kind, approved").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; kind: string; approved: boolean }[] }),
+      // booleans-only RPC — every discipline can see the 3-way sign-off status
+      supabase.rpc("blueprint_signoff"),
       bpIds.length ? supabase.from("blueprints").select("client_id, generated, consolidated").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; generated: boolean; consolidated: string | null }[] }),
     ]);
     consultSummaries = ((cs ?? []) as unknown as (ConsultSummary & { clients: { name: string } | null })[]).map((r) => ({
       id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, summary: r.summary, status: r.status, approved: r.approved, shared: r.shared, created_at: r.created_at,
     }));
-    const bpConsults = (bpConsultRes.data ?? []) as { client_id: string; kind: string; approved: boolean }[];
+    const signoff = new Map(
+      ((signoffRes.data ?? []) as { client_id: string; doctor: boolean; diet: boolean; trainer: boolean }[])
+        .map((s) => [s.client_id, s]),
+    );
     const bpMap = new Map(((bpRes.data ?? []) as { client_id: string; generated: boolean; consolidated: string | null }[]).map((b) => [b.client_id, b]));
-    const approvedKind = (cid: string, kind: string) => bpConsults.some((x) => x.client_id === cid && x.kind === kind && x.approved);
     consolidated = bpClients.map((c) => {
       const bp = bpMap.get(c.id);
-      return { client_id: c.id, name: c.name, code: c.code, doctor: approvedKind(c.id, "Doctor"), diet: approvedKind(c.id, "Diet"), trainer: approvedKind(c.id, "Trainer"), generated: bp?.generated ?? false, consolidated: bp?.consolidated ?? null };
+      const s = signoff.get(c.id);
+      return { client_id: c.id, name: c.name, code: c.code, doctor: s?.doctor ?? false, diet: s?.diet ?? false, trainer: s?.trainer ?? false, generated: bp?.generated ?? false, consolidated: bp?.consolidated ?? null };
     });
   }
 

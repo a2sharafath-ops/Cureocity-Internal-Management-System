@@ -17,7 +17,7 @@ describe("canSee", () => {
 
   it("EMR is hidden from front desk (PHI)", () => {
     expect(canSee("Doctor", "/emr")).toBe(true);
-    expect(canSee("Psychologist", "/emr")).toBe(true);
+    expect(canSee("Psychologist", "/emr")).toBe(false); // EMR is Doctor-owned
     expect(canSee("Front Desk", "/emr")).toBe(false);
   });
 
@@ -33,9 +33,10 @@ describe("permission helpers", () => {
     expect(canBill("Dietitian")).toBe(false);
   });
 
-  it("canEmr is clinicians only", () => {
+  it("canEmr is Doctor-owned (+admin/manager)", () => {
     expect(canEmr("Doctor")).toBe(true);
-    expect(canEmr("Health Coach")).toBe(true);
+    expect(canEmr("Health Coach")).toBe(false);
+    expect(canEmr("Fitness Trainer")).toBe(false);
     expect(canEmr("Manager")).toBe(true);
     expect(canEmr("Front Desk")).toBe(false);
     expect(canEmr("Finance")).toBe(false);

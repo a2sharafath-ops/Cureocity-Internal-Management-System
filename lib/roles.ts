@@ -57,8 +57,9 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/services": ["Administrator", "Manager"],
   "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/passes": ["Administrator", "Manager", "Front Desk", "Finance"],
-  "/emr": ["Administrator", "Manager", ...CLIN],
-  "/orders": ["Administrator", "Manager", ...CLIN],
+  // Medical records & orders are Doctor-owned (enforced by RLS in 0068).
+  "/emr": ["Administrator", "Manager", "Doctor"],
+  "/orders": ["Administrator", "Manager", "Doctor"],
   "/claims": ["Administrator", "Manager", "Finance"],
   "/reports": ["Administrator", "Manager", "Finance"],
   "/users": ["Administrator"],
@@ -158,9 +159,9 @@ export function canPos(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }
 
-// Who can view/edit the clinical EMR (PHI — clinicians only).
+// Who can view/edit the clinical EMR + orders. Doctor-owned (RLS 0067/0068).
 export function canEmr(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Doctor"].includes(role);
 }
 
 // Who can manage insurance & claims.

@@ -29,18 +29,24 @@ export default async function BlueprintPage() {
   const clients = (clientData ?? []) as { id: string; name: string; code: string | null }[];
 
   const ids = clients.map((c) => c.id);
-  const [{ data: bloodData }, { data: consultData }, { data: bpData }] = await Promise.all([
+  const [{ data: bloodData }, { data: signoffData }, { data: bpData }] = await Promise.all([
     ids.length ? supabase.from("blood_requests").select("*").in("client_id", ids) : Promise.resolve({ data: [] }),
-    ids.length ? supabase.from("consultations").select("client_id, kind, approved").in("client_id", ids) : Promise.resolve({ data: [] }),
+    // security-definer RPC: booleans only, so every discipline can see the
+    // 3-way sign-off status without reading other disciplines' summaries.
+    supabase.rpc("blueprint_signoff"),
     ids.length ? supabase.from("blueprints").select("*").in("client_id", ids) : Promise.resolve({ data: [] }),
   ]);
 
   const blood = new Map((bloodData ?? []).map((b: { client_id: string }) => [b.client_id, b]));
   const bps = new Map((bpData ?? []).map((b: { client_id: string }) => [b.client_id, b]));
-  const consults = (consultData ?? []) as { client_id: string; kind: string; approved: boolean }[];
+  const signoff = new Map(
+    ((signoffData ?? []) as { client_id: string; doctor: boolean; diet: boolean; trainer: boolean }[])
+      .map((s) => [s.client_id, s]),
+  );
 
   function approvedCount(cid: string) {
-    return REQUIRED.filter((k) => consults.some((c) => c.client_id === cid && c.kind === k && c.approved)).length;
+    const s = signoff.get(cid);
+    return s ? [s.doctor, s.diet, s.trainer].filter(Boolean).length : 0;
   }
 
   const canEditScores = canManageBlueprint(me.role);
