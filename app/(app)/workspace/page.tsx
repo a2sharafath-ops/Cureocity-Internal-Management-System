@@ -34,13 +34,18 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // Resolve active role: ?role → own discipline → persona → default —
   // constrained to the disciplines this login role is allowed to view.
   const { profession } = await getViewRole();
-  const allowed = visibleWorkspaces(me.role);
+  const persona = getPersona(profession);
+  // While an admin previews a discipline persona, the workspace behaves exactly
+  // as that clinician's would — one workspace, no switcher — so the preview is
+  // faithful. Real write permissions still follow the actual login role.
+  const visibilityRole = persona?.key ?? me.role;
+  const allowed = visibleWorkspaces(visibilityRole);
   let roleKey: WsRoleKey =
     (WS_ROLES.find((r) => r.key === searchParams.role)?.key)
-    ?? roleFromStaffRole(me.role)
-    ?? roleFromPersonaKind(getPersona(profession)?.kind)
+    ?? roleFromStaffRole(visibilityRole)
+    ?? roleFromPersonaKind(persona?.kind)
     ?? "doctor";
-  if (!allowed.includes(roleKey)) roleKey = roleFromStaffRole(me.role) ?? allowed[0] ?? "doctor";
+  if (!allowed.includes(roleKey)) roleKey = roleFromStaffRole(visibilityRole) ?? allowed[0] ?? "doctor";
   const role = wsRole(roleKey);
 
   // Viewing another discipline's workspace (clinician, not your own) is read-only.
