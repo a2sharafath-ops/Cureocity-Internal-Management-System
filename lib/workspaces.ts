@@ -47,11 +47,15 @@ export function roleFromPersonaKind(kind: string | null | undefined): WsRoleKey 
 // Only Admin/Manager/Super Admin can step through every discipline (oversight).
 const WS_OVERSIGHT = ["Administrator", "Super Admin", "Manager"];
 
-// The discipline workspaces this login role is allowed to open (ordered).
+// The discipline workspace this login role opens. Always at most ONE — nobody
+// (not even an admin) gets an in-workspace switcher. Admins move between
+// disciplines with the header "Enter as …" persona dropdown, which resolves to
+// that discipline here, so their view matches a real clinician's exactly.
 export function visibleWorkspaces(loginRole: string): WsRoleKey[] {
-  if (WS_OVERSIGHT.includes(loginRole)) return WS_ROLES.map((r) => r.key);
   const own = roleFromStaffRole(loginRole);
-  return own ? [own] : [];
+  if (own) return [own];
+  if (WS_OVERSIGHT.includes(loginRole)) return ["doctor"]; // default until a persona is chosen
+  return [];
 }
 
 // Can this login role EDIT the given discipline workspace (vs view-only)?

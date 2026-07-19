@@ -224,28 +224,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     <div style={{ maxWidth: 1160 }}>
       <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes", "blueprints", "followups"]} />
 
-      {/* Workspace chrome: role switcher */}
+      {/* Workspace chrome — one discipline only; switch via the header persona menu */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         <div style={{ width: 38, height: 38, borderRadius: 10, background: role.color, color: "#fff", display: "grid", placeItems: "center", fontSize: 20 }}>{role.icon}</div>
         <div>
           <h1 style={{ fontSize: 20, margin: 0 }}>{role.label}</h1>
           <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>Your clients, consultations, blueprint sign-off and role tools in one place</p>
         </div>
-        <span style={{ flex: 1 }} />
-        {allowed.length > 1 && (
-        <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, flexWrap: "wrap" }}>
-          {WS_ROLES.filter((r) => allowed.includes(r.key)).map((r) => {
-            const on = r.key === roleKey;
-            return (
-              <Link key={r.key} href={`/workspace?role=${r.key}`} style={{
-                display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 9, fontSize: 12.5, fontWeight: 600,
-                textDecoration: "none", background: on ? "var(--card)" : "transparent", color: on ? "var(--ink)" : "var(--muted)",
-                boxShadow: on ? "var(--shadow)" : "none",
-              }}>{r.icon} {r.short}</Link>
-            );
-          })}
-        </div>
-        )}
       </div>
 
       {readOnly && (
