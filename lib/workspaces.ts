@@ -39,24 +39,19 @@ export function roleFromPersonaKind(kind: string | null | undefined): WsRoleKey 
   }
 }
 
-// ---- cross-discipline visibility hierarchy ---------------------------------
-// Which discipline workspaces each login role may VIEW. Their own is editable;
-// any other allowed one is view-only. Doctor sits on top (sees everyone).
-// Dietitian & Trainer are the shared/open pair; Doctor/Psychologist/Health Coach
-// keep their notes private from each other.
-const WS_VISIBILITY: Record<string, WsRoleKey[]> = {
-  Doctor: ["doctor", "diet", "trainer", "coach", "psych"],
-  Dietitian: ["diet", "trainer"],
-  "Fitness Trainer": ["trainer", "diet"],
-  "Health Coach": ["coach", "diet", "trainer"],
-  Psychologist: ["psych", "diet", "trainer"],
-};
+// ---- workspace access ------------------------------------------------------
+// A clinician gets ONE workspace: their own. They never open another
+// discipline's dashboard. Cross-discipline access is limited to *client
+// details* they're permitted to see, which the database enforces via RLS
+// (can_read_ws / can_read_consult_kind in supabase/0068) — not via workspaces.
+// Only Admin/Manager/Super Admin can step through every discipline (oversight).
 const WS_OVERSIGHT = ["Administrator", "Super Admin", "Manager"];
 
 // The discipline workspaces this login role is allowed to open (ordered).
 export function visibleWorkspaces(loginRole: string): WsRoleKey[] {
   if (WS_OVERSIGHT.includes(loginRole)) return WS_ROLES.map((r) => r.key);
-  return WS_VISIBILITY[loginRole] ?? [];
+  const own = roleFromStaffRole(loginRole);
+  return own ? [own] : [];
 }
 
 // Can this login role EDIT the given discipline workspace (vs view-only)?

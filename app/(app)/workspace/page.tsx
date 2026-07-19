@@ -227,6 +227,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
           <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>Your clients, consultations, blueprint sign-off and role tools in one place</p>
         </div>
         <span style={{ flex: 1 }} />
+        {allowed.length > 1 && (
         <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, flexWrap: "wrap" }}>
           {WS_ROLES.filter((r) => allowed.includes(r.key)).map((r) => {
             const on = r.key === roleKey;
@@ -239,6 +240,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
             );
           })}
         </div>
+        )}
       </div>
 
       {readOnly && (
