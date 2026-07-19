@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import LeadStageSelect from "@/components/LeadStageSelect";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import StatCard from "@/components/StatCard";
+import SegTabs from "@/components/SegTabs";
 import { leadScore, leadProduct, TIER_STYLE, type Tier } from "@/lib/leadscore";
 import Link from "next/link";
 import { LeadForm, CallCell } from "@/components/LeadControls";
@@ -16,7 +17,21 @@ type Lead = {
   stage: string | null; fde: string | null;
 };
 
-export default async function LeadsPage() {
+// Which slice of the pipeline to show. The owner dashboard's Growth cards link
+// straight in with one of these, so a number on the dashboard lands on exactly
+// the rows behind it.
+const VIEWS = {
+  all: { label: "All leads", match: () => true },
+  open: { label: "In pipeline", match: (s: string) => !s.startsWith("5") && s !== "LOST" },
+  won: { label: "Converted", match: (s: string) => s.startsWith("5") },
+  lost: { label: "Lost", match: (s: string) => s === "LOST" },
+} as const;
+type ViewKey = keyof typeof VIEWS;
+
+export default async function LeadsPage({ searchParams }: { searchParams: { view?: string } }) {
+  const view = (Object.keys(VIEWS) as ViewKey[]).includes(searchParams.view as ViewKey)
+    ? (searchParams.view as ViewKey)
+    : "all";
   const supabase = createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }] = await Promise.all([
     supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde").order("num", { ascending: true }),
@@ -30,7 +45,9 @@ export default async function LeadsPage() {
     if (c.converted_from) clientByLead.set(c.converted_from, c.id);
   }
   const campaigns = [...new Set(((campRows ?? []) as { name: string }[]).map((c) => c.name))];
+  const viewCount = (k: ViewKey) => leads.filter((l) => VIEWS[k].match(l.stage ?? "")).length;
   const scored = leads
+    .filter((l) => VIEWS[view].match(l.stage ?? ""))
     .map((l) => ({ lead: l, ...leadScore(l), product: leadProduct(l) }))
     .sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
 
@@ -51,10 +68,19 @@ export default async function LeadsPage() {
         <span style={{ flex: 1 }} />
         <LeadForm campaigns={campaigns} />
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 12px" }}>
         Lead scoring — 7 signals, HOT / WARM / COOL / COLD tiers &amp; product match · {leads.length} lead{leads.length === 1 ? "" : "s"}
         {" · "}Call: {ivr.configured ? `IVR (${ivr.provider})` : "device dialer"}
       </p>
+
+      <div style={{ marginBottom: 16 }}>
+        <SegTabs
+          active={view}
+          items={(Object.keys(VIEWS) as ViewKey[]).map((k) => ({
+            key: k, label: VIEWS[k].label, count: viewCount(k), href: `/leads?view=${k}`,
+          }))}
+        />
+      </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
         {stat("🔥 HOT", String(tierCount("HOT")), "var(--red)")}

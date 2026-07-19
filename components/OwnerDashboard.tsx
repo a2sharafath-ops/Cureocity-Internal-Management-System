@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import StatCard from "@/components/StatCard";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import MetricCard from "@/components/MetricCard";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -187,13 +188,17 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
         {/* 3 — OPS PULSE + GROWTH */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ ...box, padding: "14px 16px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>📊 Today</div>
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{sessToday.length}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>sessions</div></div>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{apptsToday.length}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>appointments</div></div>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{present}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>staff present</div></div>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{clients.length}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>clients</div></div>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>📊 Today</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+              <MetricCard icon="🏋" value={sessToday.length} label="Sessions" href="/sessions"
+                sub={sessToday.length ? `${sessToday.filter((s) => s.status === "completed").length} completed` : "none scheduled"} />
+              <MetricCard icon="📅" value={apptsToday.length} label="Appointments" href="/appointments"
+                sub={apptsToday.length ? "scheduled today" : "none booked"} />
+              <MetricCard icon="👥" value={present} label="Staff present" href="/hr?tab=attendance"
+                sub={`of ${staff.length} on the team`} accent={present ? undefined : "var(--muted)"} />
+              <MetricCard icon="◉" value={clients.length} label="Clients" href="/clients"
+                sub={`${clients.filter((c) => c.package_id).length} with a package`} />
             </div>
           </div>
           <div style={{ ...box, padding: "14px 16px" }}>
@@ -217,15 +222,17 @@ export default async function OwnerDashboard({ name }: { name: string }) {
             }) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No trainers on record.</div>}
           </div>
 
-          <div style={{ ...box, padding: "14px 16px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>📈 Growth</div>
-            <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{leads.length}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>leads</div></div>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{openLeads}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>in pipeline</div></div>
-              <div><div style={{ fontSize: 20, fontWeight: 800 }}>{convRate}%</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>converted</div></div>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>📈 Growth</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+              <MetricCard icon="✦" value={leads.length} label="Leads" href="/leads?view=all"
+                sub="all time" />
+              <MetricCard icon="⏳" value={openLeads} label="In pipeline" href="/leads?view=open"
+                sub={openLeads ? "still working" : "nothing open"} accent={openLeads ? undefined : "var(--muted)"} />
+              <MetricCard icon="✓" value={`${convRate}%`} label="Converted" href="/leads?view=won"
+                sub={`${won} of ${leads.length} leads`} />
             </div>
             <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Link href="/leads" style={qa}>CRM & Leads</Link>
               <Link href="/targets" style={qa}>Sales Targets</Link>
               <Link href="/reports" style={qa}>Reports</Link>
             </div>
