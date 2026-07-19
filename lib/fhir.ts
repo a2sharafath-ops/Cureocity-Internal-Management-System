@@ -2,6 +2,8 @@
 // interoperability-friendly document. Not a certified FHIR server; it produces
 // a standards-shaped Bundle suitable for export / downstream ingestion.
 
+import { dobToISO } from "@/lib/dob";
+
 type Client = { id: string; name: string; gender: string | null; dob: string | null; phone: string | null; email: string | null };
 type Problem = { id: string; description: string; code: string | null; status: string; onset_date: string | null };
 type Allergy = { id: string; substance: string; reaction: string | null; severity: string };
@@ -32,7 +34,8 @@ export function buildFhirBundle(
       id: client.id,
       name: [{ use: "official", family, given }],
       gender: (client.gender ?? "unknown").toLowerCase(),
-      birthDate: client.dob ?? undefined,
+      // FHIR requires ISO YYYY-MM-DD; our DOB is stored as DD/MM/YYYY text
+      birthDate: dobToISO(client.dob) ?? undefined,
       telecom: [
         client.phone ? { system: "phone", value: client.phone } : null,
         client.email ? { system: "email", value: client.email } : null,

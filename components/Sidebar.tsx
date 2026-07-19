@@ -10,17 +10,25 @@ type NavSection = { title: string | null; items: NavItem[] };
 // Grouped to mirror the Cureocity "Care Management" prototype sidebar:
 // Front Desk → Clinical → Admin → Governance → Finance.
 const SECTIONS: NavSection[] = [
+  // Home stands alone at the top, with no section header: the Dashboard for
+  // admin/owner roles, My Workspace for clinicians (whose /dashboard redirects
+  // there anyway). The filter below drops whichever one doesn't apply.
   {
-    title: "Workspaces",
+    title: null,
     items: [
+      { href: "/dashboard", label: "Dashboard", icon: "▚" },
       { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
+    ],
+  },
+  {
+    title: "Clinical",
+    items: [
       { href: "/careteam", label: "Care Team", icon: "🤝" },
     ],
   },
   {
     title: "Front Desk",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: "▚" },
       { href: "/leads", label: "CRM & Leads", icon: "✦" },
       { href: "/clients", label: "Clients", icon: "◉" },
       { href: "/appointments", label: "Appointment Calendar", icon: "📅" },
@@ -77,9 +85,9 @@ const SECTIONS: NavSection[] = [
 export default function Sidebar({ role = "Staff" }: { role?: string }) {
   const pathname = usePathname();
 
-  // Clinicians' home is My Workspace — /dashboard just redirects there, so hide
-  // the redundant Dashboard nav item for them. A Super Admin has no caseload, so
-  // they get Care Team instead of a personal workspace.
+  // Exactly one home item survives the filter: clinicians' /dashboard redirects
+  // to My Workspace, so they only get the latter; a Super Admin has no caseload,
+  // so they only get the Dashboard.
   const clin = isClinician(role);
   const owner = role === "Super Admin";
   const sections = SECTIONS

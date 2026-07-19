@@ -13,6 +13,8 @@ import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, M
 import { getPersona } from "@/lib/personas";
 import { canWriteNutrition, ownsConsultKind } from "@/lib/discipline";
 import { buildFollowupRows } from "@/lib/followups";
+import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
+import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
 import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
@@ -165,13 +167,45 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
   if (error) return { error: error.message };
 
   const uid = data.user?.id;
+  const displayName = name || email.split("@")[0];
+  let staffId: string | null = null;
+
   if (uid) {
+    // A login alone can't be booked — appointments/sessions/HR all reference
+    // staff(id). Reuse an existing directory row for this person if there is
+    // one, otherwise create it, then link the two.
+    if (needsDirectoryRow(role)) {
+      const { data: existing } = await admin.from("staff").select("id, name");
+      const rows = (existing ?? []) as { id: string; name: string }[];
+      const match = rows.find((s) => namesMatch(s.name, displayName));
+
+      if (match) {
+        staffId = match.id;
+        // adopt the fuller of the two names so the directory and login agree
+        if (displayName.length > (match.name ?? "").length) {
+          await admin.from("staff").update({ name: displayName }).eq("id", match.id);
+        }
+        await admin.from("staff").update({ role, branch }).eq("id", match.id);
+      } else {
+        const d = directoryDefaults(role);
+        staffId = staffIdFor(displayName, email, rows.map((s) => s.id));
+        await admin.from("staff").insert({
+          id: staffId, name: displayName, role, branch,
+          designation: d.designation, department: d.department,
+          is_trainer: d.is_trainer, color: d.color,
+        });
+      }
+    }
+
     // the signup trigger creates a Front Desk profile; set the chosen name + role
-    await admin.from("profiles").upsert({ id: uid, email, name: name || email.split("@")[0], role, branch });
+    await admin.from("profiles").upsert({ id: uid, email, name: displayName, role, branch, staff_id: staffId });
   }
-  await logAudit(me, "Staff created", email, `role: ${role} · ${branch}`);
+
+  await logAudit(me, "Staff created", email, `role: ${role} · ${branch}${staffId ? ` · directory: ${staffId}` : ""}`);
   revalidatePath("/users");
-  return { ok: `Created ${email} as ${role}. Share the temporary password with them.` };
+  revalidatePath("/hr");
+  revalidatePath("/appointments");
+  return { ok: `Created ${email} as ${role}${staffId ? " and added them to the care-team directory" : ""}. Share the temporary password with them.` };
 }
 
 export async function createPortalLogin(_prev: InviteState, formData: FormData): Promise<InviteState> {
@@ -208,8 +242,11 @@ export async function updateUserRole(formData: FormData) {
   if (!ALLOWED_ROLES.includes(role)) return;
   if (id === me.id && role !== "Administrator" && role !== "Super Admin") return; // don't let an admin demote themselves
   const admin = createAdminClient();
-  const { data: target } = await admin.from("profiles").select("email, role").eq("id", id).maybeSingle();
+  const { data: target } = await admin.from("profiles").select("email, role, client_id, staff_id").eq("id", id).maybeSingle();
+  // a portal login belongs to a client record — it is never staff
+  if (target?.client_id) return;
   await admin.from("profiles").update({ role }).eq("id", id);
+  if (target?.staff_id) await admin.from("staff").update({ role }).eq("id", target.staff_id);
   await logAudit(me, "Role changed", target?.email ?? id, `${target?.role ?? "?"} → ${role}`);
   revalidatePath("/users");
   revalidatePath("/", "layout");
@@ -222,10 +259,11 @@ export async function setUserBranch(formData: FormData) {
   const id = String(formData.get("id"));
   const branch = String(formData.get("branch"));
   const admin = createAdminClient();
-  const { data: target } = await admin.from("profiles").select("email, name").eq("id", id).maybeSingle();
+  const { data: target } = await admin.from("profiles").select("email, name, staff_id").eq("id", id).maybeSingle();
   await admin.from("profiles").update({ branch }).eq("id", id);
-  // keep the matching care-team staff row (by name) in sync when there is one
-  if (target?.name) await admin.from("staff").update({ branch }).eq("name", target.name);
+  // keep the linked care-team staff row in sync (id first — names can drift)
+  if (target?.staff_id) await admin.from("staff").update({ branch }).eq("id", target.staff_id);
+  else if (target?.name) await admin.from("staff").update({ branch }).eq("name", target.name);
   await logAudit(me, "Branch changed", target?.email ?? id, branch);
   revalidatePath("/users");
 }
@@ -238,9 +276,14 @@ export async function updateUserName(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles").select("name, staff_id").eq("id", id).maybeSingle();
   await admin.from("profiles").update({ name }).eq("id", id);
-  await logAudit(me, "Staff renamed", name, null);
+  // rename the directory row too, so the login and the care team stay in step
+  if (target?.staff_id) await admin.from("staff").update({ name }).eq("id", target.staff_id);
+  else if (target?.name) await admin.from("staff").update({ name }).eq("name", target.name);
+  await logAudit(me, "Staff renamed", name, target?.name && target.name !== name ? `${target.name} → ${name}` : null);
   revalidatePath("/users");
+  revalidatePath("/hr");
   revalidatePath("/", "layout");
 }
 
@@ -575,6 +618,9 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
   await supabase.from("verifications").update({ verified: true }).eq("id", v.id);
 
   const package_id = String(formData.get("package_id") || "") || null;
+  // A client is someone who has bought something. Without this, conversion
+  // produced an empty shell with no package, no invoice and no journey.
+  if (!package_id) return { ok: false, error: "Choose a package — a lead can't be converted without one." };
   const joined = String(formData.get("joined") || todayISO());
   const discount = Math.max(0, Number(formData.get("discount")) || 0);
   const referrer_id = String(formData.get("referrer_id") || "") || null;
@@ -591,16 +637,27 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
 
   const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
   const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
+  // pro_id is left null here — the assignment engine fills it in below, once
+  // it knows the client's booking and the current rotation state.
   const { data: inserted } = await supabase.from("clients").insert({
     code, name: lead.name, phone: lead.phone ?? null, joined,
-    package_id, used: 0, verified: true, consent_tnc: true, consent_waiver: true, converted_from: id, pro_id: "d1",
+    package_id, used: 0, verified: true, consent_tnc: true, consent_waiver: true, converted_from: id,
   }).select("id").single();
 
   if (inserted && package_id) {
     const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
-    if (pkg && !pkg.is_facility && pkg.sessions > 0) {
-      await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
-      await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
+
+    // Assign the care team: doctor/dietitian/psychologist follow whoever the
+    // client was booked with; health coach and trainer come off the rotation.
+    const slotHour = Number(formData.get("slot_hour")) || 9;
+    const team = await assignCareTeam(supabase, inserted.id, {
+      slot: { date: joined, hour: slotHour }, actor: p.name,
+    });
+    const trainerId = team.find((t) => t.discipline === "trainer")?.staff_id ?? null;
+
+    if (pkg && !pkg.is_facility && pkg.sessions > 0 && trainerId) {
+      await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: trainerId, hour: slotHour, session: "PT" });
+      await supabase.from("sessions").insert(buildSessions(inserted.id, trainerId, slotHour, joined, pkg.sessions));
     }
     if (pkg) {
       const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
@@ -631,24 +688,10 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
   return { ok: true };
 }
 
-export async function convertLeadToClient(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canWrite(p.role)) return;
-  const id = String(formData.get("id"));
-  const supabase = createClient();
-  const { data: lead } = await supabase.from("leads").select("name, phone").eq("id", id).maybeSingle();
-  if (!lead?.name) return;
-  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
-  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
-  const { data: inserted } = await supabase.from("clients").insert({
-    code, name: lead.name, phone: lead.phone ?? null, joined: todayISO(),
-    used: 0, verified: true, converted_from: id, pro_id: "d1",
-  }).select("id").single();
-  await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
-  await logAudit(p, "Lead converted to client", lead.name, code);
-  revalidatePath("/leads");
-  if (inserted) redirect(`/clients/${inserted.id}`);
-}
+// NOTE: the old package-less quick-convert lived here. It created clients with
+// no package, no invoice and a hardcoded pro — which is how CUR-003 ended up as
+// an empty shell. Conversion now goes through convertLeadVerified, which
+// requires a package. Deliberately not reinstated.
 
 // click-to-call via IVR provider (key-ready). Falls back to a tel: link in the UI.
 export async function initiateCall(formData: FormData) {
@@ -2238,8 +2281,16 @@ export async function createAppointment(formData: FormData) {
     notes: String(formData.get("notes") ?? "").trim() || null,
     status: "scheduled", created_by: p.name,
   });
+  // An initial booking is what decides the client's doctor / dietitian /
+  // psychologist, so re-run the engine here. Existing assignments are kept,
+  // meaning only the first booking in each discipline sticks.
+  await assignCareTeam(supabase, client_id, {
+    slot: { date, hour: Number(formData.get("hour")) || 9 }, actor: p.name,
+  });
+
   await logAudit(p, "Appointment booked", await clientName(supabase, client_id), date);
   revalidatePath("/appointments");
+  revalidatePath("/clients");
 }
 
 export async function setAppointmentStatus(formData: FormData) {

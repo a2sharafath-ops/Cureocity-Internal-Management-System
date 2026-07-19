@@ -11,6 +11,7 @@ import { WearableForm, WearableConnect } from "@/components/WearableForm";
 import { archiveHabit, removeWorkout } from "@/lib/actions";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { todayISO } from "@/lib/today";
+import { ageFromDob } from "@/lib/dob";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
@@ -56,11 +57,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
   if (!client) notFound();
   const c0 = client as Record<string, unknown>;
-  const ageOf = (dob: unknown): number | null => {
-    if (!dob || typeof dob !== "string") return null;
-    const d = new Date(dob); if (Number.isNaN(d.getTime())) return null;
-    return Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
-  };
+  const ageOf = (dob: unknown): number | null =>
+    typeof dob === "string" ? ageFromDob(dob) : null;
 
   const [{ data: sessions }, { data: trainerData }, { data: consultData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),

@@ -65,7 +65,9 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
           <thead>
             <tr>
               <th style={th}>Name</th><th style={th}>Age</th><th style={th}>Package</th><th style={th}>Journey</th><th style={th}>Status</th>
-              <th style={th}>Health Coach</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
+              {/* pro_id is whichever care professional is assigned — trainer,
+                  doctor, dietitian — not specifically a health coach */}
+              <th style={th}>Assigned Pro</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
             </tr>
           </thead>
           <tbody>

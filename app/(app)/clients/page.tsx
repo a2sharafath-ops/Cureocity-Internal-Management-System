@@ -4,6 +4,7 @@ import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
 import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { ageFromDob } from "@/lib/dob";
 
 export const dynamic = "force-dynamic";
 
@@ -13,13 +14,6 @@ type Raw = {
   packages: { name: string; sessions: number; is_facility: boolean } | null;
   staff: { name: string } | null;
 };
-
-function ageFromDob(dob: string | null): number | null {
-  if (!dob) return null;
-  const d = new Date(dob);
-  if (Number.isNaN(d.getTime())) return null;
-  return Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
-}
 
 export default async function ClientsPage() {
   const supabase = createClient();

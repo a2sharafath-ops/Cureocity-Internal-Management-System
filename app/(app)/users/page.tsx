@@ -17,6 +17,7 @@ type ProfileRow = {
   role: string;
   branch: string | null;
   created_at: string;
+  staff_id: string | null;
 };
 
 export default async function UsersPage() {
@@ -27,8 +28,12 @@ export default async function UsersPage() {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, name, role, branch, created_at")
-    .neq("role", "Client") // clients are not staff — keep them off the staff list
+    .select("id, email, name, role, branch, created_at, staff_id")
+    // Clients are not staff. Filter on both signals: the role, and the link to a
+    // client record — a portal login stays off this list even if its role is
+    // ever mis-set.
+    .neq("role", "Client")
+    .is("client_id", null)
     .order("created_at", { ascending: true });
 
   const users = (data ?? []) as ProfileRow[];
@@ -64,6 +69,14 @@ export default async function UsersPage() {
                 <tr key={u.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "8px 16px" }}>
                     <UserNameEdit id={u.id} name={u.name} isYou={u.id === me.id} />
+                    {!u.staff_id && (
+                      <div
+                        title="This login isn't linked to a care-team directory row, so they can't be booked as a provider."
+                        style={{ marginTop: 3, fontSize: 11, color: "#b45309" }}
+                      >
+                        not in care-team directory
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{u.email ?? "—"}</td>
                   <td style={{ padding: "12px 16px" }}>

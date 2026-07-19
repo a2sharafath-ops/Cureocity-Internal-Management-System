@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { ageFromDob } from "@/lib/dob";
 import { ProblemForm, AllergyForm, MedicationForm, VitalsForm, EncounterForm } from "@/components/EmrForms";
 import { ProblemToggle, MedStop, AllergyDelete } from "@/components/EmrActions";
 import RxForm from "@/components/RxForm";
@@ -12,12 +13,7 @@ import { OrderActions, RxStatus } from "@/components/OrderActions";
 
 export const dynamic = "force-dynamic";
 
-function age(dob: string | null) {
-  if (!dob) return null;
-  const d = new Date(dob);
-  if (Number.isNaN(d.getTime())) return null;
-  return Math.floor((Date.now() - d.getTime()) / (365.25 * 86400000));
-}
+const age = (dob: string | null) => ageFromDob(dob);
 
 export default async function EmrChartPage({ params }: { params: { id: string } }) {
   const me = await getProfile();

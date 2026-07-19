@@ -5,11 +5,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import StatCard from "@/components/StatCard";
+import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-
-type Flag = { sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string };
 
 function addDays(iso: string, d: number) {
   const x = new Date(iso + "T00:00:00Z");
@@ -145,7 +144,6 @@ export default async function OwnerDashboard({ name }: { name: string }) {
 
   const order = { high: 0, med: 1, low: 2 };
   flags.sort((a, b) => order[a.sev] - order[b.sev]);
-  const sevStyle = { high: ["var(--red-bg)", "#991b1b", "Urgent"], med: ["var(--amber-bg)", "#92400e", "Soon"], low: ["#eef2f1", "var(--muted)", "Tidy"] } as const;
 
   // ---- ops pulse / growth ---------------------------------------------------
   const sessToday = sessions.filter((s) => s.date === today);
@@ -183,26 +181,8 @@ export default async function OwnerDashboard({ name }: { name: string }) {
         <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "#b45309" : undefined} minWidth={180} />
       </div>
 
-      {/* 2 — NEEDS ATTENTION */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase" }}>Needs your attention</span>
-        <span style={{ background: flags.length ? "var(--red-bg)" : "var(--green-bg)", color: flags.length ? "#991b1b" : "#166534", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{flags.length}</span>
-      </div>
-      <div style={{ ...box, overflow: "hidden", marginBottom: 20 }}>
-        {flags.length ? flags.map((f, i) => {
-          const [bg, col, lbl] = sevStyle[f.sev];
-          return (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderTop: i ? "1px solid var(--border)" : "none" }}>
-              <span style={{ background: bg, color: col, borderRadius: 999, padding: "2px 10px", fontSize: 10.5, fontWeight: 700, minWidth: 58, textAlign: "center" }}>{lbl}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <b style={{ fontSize: 13 }}>{f.title}</b>
-                <div style={{ color: "var(--muted)", fontSize: 12 }}>{f.detail}</div>
-              </div>
-              <Link href={f.href} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--teal-dark)", whiteSpace: "nowrap" }}>{f.cta} →</Link>
-            </div>
-          );
-        }) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Nothing needs attention — books are clean. 🎉</div>}
-      </div>
+      {/* 2 — NEEDS ATTENTION (collapsed to a health score until clicked) */}
+      <AttentionPanel flags={flags} />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
         {/* 3 — OPS PULSE + GROWTH */}
