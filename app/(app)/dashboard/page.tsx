@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import { isClinician } from "@/lib/roles";
+import OwnerDashboard from "@/components/OwnerDashboard";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
@@ -41,8 +42,12 @@ function Kpi({ icon, iconBg, iconColor, label, value, sub, href }: { icon: strin
 export default async function DashboardPage() {
   const me = await getProfile();
   const { effective } = await getViewRole();
-  // Super Admin sees exactly what an Administrator sees (unless previewing another role).
-  const role = effective === "Super Admin" ? "Administrator" : effective;
+
+  // Super Admin gets the owner view — money, exceptions, control. (Previewing
+  // another role drops them into that role's dashboard instead.)
+  if (effective === "Super Admin") return <OwnerDashboard name={me?.name ?? "there"} />;
+
+  const role = effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);
   const isPro = isClinician(role);
 

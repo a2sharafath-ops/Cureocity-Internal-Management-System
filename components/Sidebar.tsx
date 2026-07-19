@@ -78,12 +78,16 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
   const pathname = usePathname();
 
   // Clinicians' home is My Workspace — /dashboard just redirects there, so hide
-  // the redundant Dashboard nav item for them.
+  // the redundant Dashboard nav item for them. A Super Admin has no caseload, so
+  // they get Care Team instead of a personal workspace.
   const clin = isClinician(role);
+  const owner = role === "Super Admin";
   const sections = SECTIONS
     .map((s) => ({
       ...s,
-      items: s.items.filter((item) => canSee(role, item.href) && !(clin && item.href === "/dashboard")),
+      items: s.items.filter((item) => canSee(role, item.href)
+        && !(clin && item.href === "/dashboard")
+        && !(owner && item.href === "/workspace")),
     }))
     .filter((s) => s.items.length > 0);
 
