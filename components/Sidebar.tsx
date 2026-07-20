@@ -106,9 +106,10 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
     <aside
       style={{
         width: 232,
-        background: "var(--sidebar)",
-        color: "var(--muted)",
-        borderRight: "1px solid var(--sidebar-border)",
+        // Brand Panel gradient from the sign-in screen (Client App V3, 357:41357)
+        background: "linear-gradient(135deg, #8E0E15 0%, #D62430 55%, #FB404A 100%)",
+        color: "rgba(255,255,255,0.88)",
+        borderRight: "none",
         minHeight: "100vh",
         padding: "18px 12px 64px",
         position: "sticky",
@@ -116,23 +117,37 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
         flexShrink: 0,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 10px 18px" }}>
+      {/* Brand lockup — white tile + coral mark, wordmark, and the Ecosystem
+          descriptor. Matches the sign-in screen treatment. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "4px 10px 20px" }}>
         <div
           style={{
-            width: 32, height: 32, borderRadius: 9, background: "var(--teal)",
-            color: "#fff", display: "grid", placeItems: "center", fontWeight: 800,
+            width: 34, height: 34, borderRadius: 11, background: "#fff",
+            display: "grid", placeItems: "center", flexShrink: 0,
           }}
         >
-          ✚
+          <img src="/cureocity-mark.png" alt="" width={19} height={19} style={{ display: "block" }} />
         </div>
-        <b style={{ color: "var(--ink)", fontSize: 16 }}>Cureocity</b>
+        <div style={{ lineHeight: 1.05 }}>
+          <div style={{ color: "#fff", fontSize: 16, fontWeight: 700, letterSpacing: "-0.2px" }}>
+            Cureocity
+          </div>
+          <div
+            style={{
+              color: "rgba(255,255,255,0.72)", fontSize: 11, fontWeight: 300,
+              fontStyle: "italic", letterSpacing: "0.2px", marginTop: 2,
+            }}
+          >
+            Ecosystem
+          </div>
+        </div>
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {sections.map((section, si) => (
           <div key={section.title ?? "top"} style={{ marginTop: si === 0 ? 0 : 14 }}>
             {section.title && (
-              <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "#a9a9b0" }}>
+              <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
                 {section.title}
               </div>
             )}
@@ -157,8 +172,10 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
                     fontSize: 14,
                     fontWeight: active ? 700 : 500,
                     textDecoration: "none",
-                    color: active ? "#fff" : "#4a4a52",
-                    background: active ? "var(--teal)" : "transparent",
+                    // on the red gradient: active is a white chip, inactive is
+                    // translucent white so the gradient still reads through
+                    color: active ? "#A3121B" : "rgba(255,255,255,0.88)",
+                    background: active ? "#fff" : "transparent",
                   }}
                 >
                   {item.label}
@@ -170,7 +187,7 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
 
       </nav>
 
-      <div style={{ position: "sticky", bottom: 0, marginTop: 20, paddingTop: 12, fontSize: 11, color: "#b4b4bb" }}>
+      <div style={{ position: "sticky", bottom: 0, marginTop: 20, paddingTop: 12, fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
         {SCOPE ? `${SCOPE.label} · pilot` : "Cureocity Internal · v0.1"}
       </div>
     </aside>
