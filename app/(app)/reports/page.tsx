@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
-import StatCard from "@/components/StatCard";
+import MetricCard from "@/components/MetricCard";
 
 export const dynamic = "force-dynamic";
 
@@ -129,7 +129,7 @@ export default async function ReportsPage() {
   ];
 
   const kpi = (label: string, value: string, sub?: string) => (
-    <StatCard label={label} value={value} sub={sub} minWidth={170} />
+    <MetricCard label={label} value={value} sub={sub} minWidth={170} />
   );
 
   return (

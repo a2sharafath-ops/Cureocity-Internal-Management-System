@@ -7,7 +7,7 @@ import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SegTabs from "@/components/SegTabs";
-import StatCard from "@/components/StatCard";
+import MetricCard from "@/components/MetricCard";
 import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClients";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
@@ -248,11 +248,11 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "dash" && (
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-            <StatCard label="My clients" value={scoped.length} />
-            <StatCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length} />
-            <StatCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" />
-            <StatCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} />
-            <StatCard label="MDT updates" value={mdtNotes.length} />
+            <MetricCard label="My clients" value={scoped.length} />
+            <MetricCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length} />
+            <MetricCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" />
+            <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} />
+            <MetricCard label="MDT updates" value={mdtNotes.length} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>

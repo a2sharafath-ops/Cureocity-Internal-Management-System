@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
-import StatCard from "@/components/StatCard";
 import MetricCard from "@/components/MetricCard";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 
@@ -118,11 +117,11 @@ export default async function HrDashboard({ name }: { name: string }) {
       {/* 1 — HEADCOUNT */}
       <div style={sectionTitle}>Headcount</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <StatCard label="On the team" value={String(staff.length)} sub={`${depts.length} department${depts.length === 1 ? "" : "s"}`} minWidth={170} />
-        <StatCard label="Payroll this month" value={money(payrollValue)} sub={`${payPaid.length} of ${payThisMonth.length} paid`} minWidth={180} color={payThisMonth.length && payPaid.length < payThisMonth.length ? "var(--amber-text-soft)" : undefined} />
-        <StatCard label="Leave requests" value={String(pendingLeave.length)} sub="awaiting a decision" color={pendingLeave.length ? "var(--amber-text-soft)" : undefined} minWidth={170} />
-        <StatCard label="Joining / leaving" value={String(openOnboarding.length)} sub="in progress" minWidth={165} />
-        <StatCard label="Open roles" value={String(candidates.length)} sub="candidates in play" minWidth={165} />
+        <MetricCard label="On the team" value={String(staff.length)} sub={`${depts.length} department${depts.length === 1 ? "" : "s"}`} minWidth={170} />
+        <MetricCard label="Payroll this month" value={money(payrollValue)} sub={`${payPaid.length} of ${payThisMonth.length} paid`} minWidth={180} color={payThisMonth.length && payPaid.length < payThisMonth.length ? "var(--amber-text-soft)" : undefined} />
+        <MetricCard label="Leave requests" value={String(pendingLeave.length)} sub="awaiting a decision" color={pendingLeave.length ? "var(--amber-text-soft)" : undefined} minWidth={170} />
+        <MetricCard label="Joining / leaving" value={String(openOnboarding.length)} sub="in progress" minWidth={165} />
+        <MetricCard label="Open roles" value={String(candidates.length)} sub="candidates in play" minWidth={165} />
       </div>
 
       {/* 2 — NEEDS ATTENTION */}

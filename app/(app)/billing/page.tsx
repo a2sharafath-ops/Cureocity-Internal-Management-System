@@ -5,7 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee, canManageInvoices } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
-import StatCard from "@/components/StatCard";
+import MetricCard from "@/components/MetricCard";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import PayOnlineButton from "@/components/PayOnlineButton";
@@ -60,7 +60,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const kpi = (label: string, value: string, sub?: string) => (
-    <StatCard label={label} value={value} sub={sub} minWidth={170} />
+    <MetricCard label={label} value={value} sub={sub} minWidth={170} />
   );
   const statusChip = (s: string) => {
     const map: Record<string, [string, string]> = { Paid: ["var(--green-bg)", "var(--green-text)"], Unpaid: ["var(--amber-bg)", "var(--amber-text)"], Refunded: ["var(--neutral-bg)", "var(--muted)"] };
