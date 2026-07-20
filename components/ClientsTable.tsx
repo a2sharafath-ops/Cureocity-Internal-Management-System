@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import ClientQuickDrawer from "@/components/ClientQuickDrawer";
 import { setClientOwner } from "@/lib/actions";
 import { BRANCHES } from "@/lib/branches";
 import SegTabs from "@/components/SegTabs";
@@ -16,6 +17,7 @@ export type ClientRow = {
 
 export default function ClientsTable({ clients, staff, writer }: { clients: ClientRow[]; staff: { id: string; name: string }[]; writer: boolean }) {
   const [q, setQ] = useState("");
+  const [quickId, setQuickId] = useState<string | null>(null);
   const [tab, setTab] = useState<"all" | "blueprint">("all");
   const [status, setStatus] = useState("All");
   const [branch, setBranch] = useState("All");
@@ -106,7 +108,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Link href={`/clients/${c.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Open 360°</Link>
-                      <Link href={`/clients/${c.id}?tab=card`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Quick</Link>
+                      <button type="button" onClick={() => setQuickId(c.id)} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quick</button>
                     </div>
                   </td>
                 </tr>
@@ -118,6 +120,8 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
           </tbody>
         </table>
       </div>
+
+      {quickId && <ClientQuickDrawer clientId={quickId} onClose={() => setQuickId(null)} />}
     </div>
   );
 }
