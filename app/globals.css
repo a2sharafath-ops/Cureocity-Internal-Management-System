@@ -4,22 +4,47 @@
 @tailwind utilities;
 
 :root {
-  /* ---- Cureocity design system (Client App V3) --------------------------- */
-  /* Primary — red/coral brand scale */
-  --primary-50: #fff1f1;
-  --primary-100: #ffe0e0;
-  --primary-200: #ffc7c7;
-  --primary-300: #ff9d9d;
-  --primary-400: #fb6a6f;
-  --primary-500: #f0384a;   /* brand */
-  --primary-600: #d92137;
-  --primary-700: #b6182c;
-  --ink: #17171b;           /* Text / near-black for primary buttons */
+  /* ---- Cureocity brand ---------------------------------------------------
+     Keyed to the logo mark, sampled at #E95666 (a single flat fill — 100% of
+     the mark's opaque pixels). The ramp is that hue held constant (353°, 77%
+     saturation) with lightness stepped around it.
 
-  /* Brand accent aliases (kept as --teal-* so the whole app shifts centrally) */
-  --teal: #f0384a;
-  --teal-dark: #c42e3b;
-  --teal-light: #ffe4e6;
+     Three roles, and they are not interchangeable — the split exists because
+     of contrast, not taste:
+       --brand      the logo colour. Marks, meter arcs, decorative accents.
+                    White text on it is 3.5:1 — fails AA, so never a button.
+       --brand-fill interactive surfaces that carry white text (buttons,
+                    active nav). 4.7:1 — passes AA.
+       --brand-text links and labels on white or on a tint. 6.3:1.
+  */
+  --brand-50: #fceff0;
+  --brand-100: #fadde0;
+  --brand-200: #f6bdc3;
+  --brand-300: #f199a3;
+  --brand-400: #ec707e;
+  --brand-500: #e95666;   /* logo */
+  --brand-600: #e11f34;
+  --brand-700: #bf1426;
+  --brand-800: #950f1e;
+
+  --brand: var(--brand-500);
+  --brand-fill: var(--brand-600);
+  --brand-text: var(--brand-700);
+  --brand-tint: var(--brand-50);
+
+  --ink: #17171b;           /* near-black — primary buttons, headings */
+
+  /* Deprecated aliases. The app was built on --teal-* before the brand moved
+     to red; these keep older call sites working. Prefer --brand-* in new code
+     and delete this block once nothing references it. */
+  --teal: var(--brand-fill);
+  --teal-dark: var(--brand-text);
+  --teal-light: var(--brand-tint);
+
+  /* Superseded by --brand-*; retained for the one --primary-100 call site. */
+  --primary-100: var(--brand-100);
+  --primary-500: var(--brand-500);
+  --primary-700: var(--brand-700);
 
   /* Shell — light sidebar per the design system */
   --sidebar: #ffffff;
@@ -91,7 +116,7 @@ table, .tabular {
 
 ::selection { background: var(--primary-100); color: var(--primary-700); }
 
-a { color: var(--teal-dark); }
+a { color: var(--brand-text); }
 
 button { font-family: inherit; transition: filter 0.15s ease, background 0.15s ease, opacity 0.15s ease; }
 button:not(:disabled):hover { filter: brightness(0.97); }
@@ -121,7 +146,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary-400) !im
   cursor: pointer; line-height: 1; transition: filter .15s ease; }
 .ds-btn-primary { background: var(--ink); color: #fff; }
 .ds-btn-secondary { background: #fff; color: var(--ink); border-color: var(--border); }
-.ds-btn-tertiary { background: transparent; color: var(--teal-dark); padding: 9px 8px; }
+.ds-btn-tertiary { background: transparent; color: var(--brand-text); padding: 9px 8px; }
 .ds-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ds-input { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
   font-size: 14px; background: #fff; }

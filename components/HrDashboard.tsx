@@ -154,7 +154,7 @@ export default async function HrDashboard({ name }: { name: string }) {
               <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <span style={{ width: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</span>
                 <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: "var(--teal)" }} />
+                  <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-fill)" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 30, textAlign: "right" }}>{d.count}</span>
               </div>
@@ -172,7 +172,7 @@ export default async function HrDashboard({ name }: { name: string }) {
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Joining &amp; leaving</div>
             <span style={{ flex: 1 }} />
-            <Link href="/hr?tab=boarding" style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>All →</Link>
+            <Link href="/hr?tab=boarding" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>All →</Link>
           </div>
           {openOnboarding.length ? openOnboarding.map((o, i) => {
             const steps = o.steps ?? [];
@@ -181,11 +181,11 @@ export default async function HrDashboard({ name }: { name: string }) {
             return (
               <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <span style={{ width: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }}>{o.name}</span>
-                <span style={{ background: o.kind === "offboarding" ? "var(--amber-bg)" : "#e0f2f1", color: o.kind === "offboarding" ? "#92400e" : "var(--teal-dark)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>
+                <span style={{ background: o.kind === "offboarding" ? "var(--amber-bg)" : "#e0f2f1", color: o.kind === "offboarding" ? "#92400e" : "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>
                   {o.kind === "offboarding" ? "Leaving" : "Joining"}
                 </span>
                 <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: "var(--teal)" }} />
+                  <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-fill)" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 44, textAlign: "right" }}>{done}/{steps.length}</span>
               </div>

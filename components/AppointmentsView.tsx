@@ -27,7 +27,7 @@ export default function AppointmentsView({
   providers: Provider[]; clients: { id: string; name: string }[];
   weekLabel: string; prevHref: string; nextHref: string; isThisWeek: boolean;
 }) {
-  const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--teal-dark)", fontWeight: 600 };
+  const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records">("calendar");
   const [disc, setDisc] = useState("All");
   const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string }>({ open: false, date: today, hour: 10, provider: "" });
@@ -42,7 +42,7 @@ export default function AppointmentsView({
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const statusStyle = (s: string): React.CSSProperties => s === "completed" ? { opacity: 0.6 } : s === "no_show" ? { opacity: 0.6, textDecoration: "line-through" } : {};
-  const chip = (active: boolean): React.CSSProperties => ({ padding: "6px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: active ? "var(--teal)" : "#fff", color: active ? "#fff" : "var(--muted)" });
+  const chip = (active: boolean): React.CSSProperties => ({ padding: "6px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: active ? "var(--brand-fill)" : "#fff", color: active ? "#fff" : "var(--muted)" });
   const statusChip = (s: string) => {
     const m: Record<string, [string, string]> = { scheduled: ["#dbeafe", "#1e40af"], completed: ["var(--green-bg)", "#166534"], no_show: ["var(--red-bg)", "#991b1b"], cancelled: ["#eef2f1", "#64748b"] };
     const [bg, fg] = m[s] ?? ["#eef2f1", "#64748b"];
@@ -70,7 +70,7 @@ export default function AppointmentsView({
       {/* week nav */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "12px 0 14px", flexWrap: "wrap" }}>
         <Link href={prevHref} style={navBtn}>← Prev</Link>
-        <Link href="/appointments" style={{ ...navBtn, background: isThisWeek ? "var(--teal)" : "#fff", color: isThisWeek ? "#fff" : "var(--teal-dark)" }}>This week</Link>
+        <Link href="/appointments" style={{ ...navBtn, background: isThisWeek ? "var(--brand-fill)" : "#fff", color: isThisWeek ? "#fff" : "var(--brand-text)" }}>This week</Link>
         <Link href={nextHref} style={navBtn}>Next →</Link>
         <span style={{ color: "var(--muted)", fontSize: 14, fontWeight: 600 }}>{weekLabel}</span>
       </div>
@@ -126,7 +126,7 @@ export default function AppointmentsView({
                 {days.map((d) => (
                   <th key={d} style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", background: d === today ? "#e0f2f1" : "transparent" }}>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{dayName(d)}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: d === today ? "var(--teal-dark)" : "inherit" }}>{dayNum(d)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: d === today ? "var(--brand-text)" : "inherit" }}>{dayNum(d)}</div>
                   </th>
                 ))}
               </tr>
@@ -200,7 +200,7 @@ export default function AppointmentsView({
                 <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "10px 14px" }}>{fmtDate(a.date)}</td>
                   <td style={{ padding: "10px 14px" }}>{hourLabel(a.hour)}</td>
-                  <td style={{ padding: "10px 14px" }}>{a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{a.clientName}</Link> : "—"}</td>
+                  <td style={{ padding: "10px 14px" }}>{a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{a.clientName}</Link> : "—"}</td>
                   <td style={{ padding: "10px 14px" }}>{a.title ?? a.type ?? "—"}</td>
                   <td style={{ padding: "10px 14px" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: provColor(a.provider_id) }} />{a.providerName ?? "—"}</span></td>
                   <td style={{ padding: "10px 14px" }}>{statusChip(a.status)}</td>

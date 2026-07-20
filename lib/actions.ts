@@ -3547,6 +3547,7 @@ export async function getClientQuickView(clientId: string) {
   const [
     { data: client }, { data: pkgs }, { data: enrol }, { data: sessions },
     { data: invoices }, { data: appts }, { data: bp }, { data: blood },
+    { data: consults },
     { data: assessments }, { data: files }, { data: measures }, { data: assigns },
     { data: cpacks },
   ] = await Promise.all([
@@ -3558,6 +3559,7 @@ export async function getClientQuickView(clientId: string) {
     supabase.from("appointments").select("id, type, title, date, hour, status, staff(name)").eq("client_id", clientId).order("date", { ascending: false }).limit(8),
     supabase.from("blueprints").select("scores, generated, status").eq("client_id", clientId).maybeSingle(),
     supabase.from("blood_requests").select("submitted, requested_on").eq("client_id", clientId).maybeSingle(),
+    supabase.from("consultations").select("kind, approved, status").eq("client_id", clientId),
     supabase.from("assessments").select("id, kind, due_date, scheduled_date, status, staff(name)").eq("client_id", clientId).order("due_date", { ascending: false }).limit(6),
     supabase.from("files").select("id, name, kind, created_at").eq("client_id", clientId).order("created_at", { ascending: false }).limit(8),
     supabase.from("measurements").select("weight, bmi, body_fat, date").eq("client_id", clientId).order("date", { ascending: false }).limit(1),
@@ -3571,9 +3573,13 @@ export async function getClientQuickView(clientId: string) {
   const done = (sessions ?? []).filter((s: { status: string }) => s.status === "completed");
   const upcoming = (sessions ?? []).filter((s: { status: string; date: string }) => s.status === "scheduled" && s.date >= today);
 
+  const approved = (kind: string) =>
+    (consults ?? []).some((x: { kind: string; approved: boolean }) => x.kind === kind && x.approved);
+
   return {
     client,
     pkg,
+    signoff: { doctor: approved("Doctor"), diet: approved("Diet"), trainer: approved("Trainer") },
     enrolment: enrol ?? null,
     sessions: { total: (sessions ?? []).length, done: done.length, next: upcoming[0] ?? null },
     invoices: invoices ?? [],
@@ -3590,3 +3596,36 @@ export async function getClientQuickView(clientId: string) {
   };
 }
 export type ClientQuickView = NonNullable<Awaited<ReturnType<typeof getClientQuickView>>>;
+
+/**
+ * Pause or resume a client's package.
+ *
+ * Pausing stamps `frozen` with today. Resuming banks the elapsed days into
+ * `freeze_days` and clears `frozen`, so validity is extended by exactly the
+ * time the client was on hold — see lib/package-window.ts for the arithmetic.
+ */
+export async function togglePackageFreeze(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const id = String(formData.get("client_id"));
+  if (!id) return;
+
+  const supabase = createClient();
+  const { data: c } = await supabase
+    .from("clients").select("name, frozen, freeze_days").eq("id", id).maybeSingle();
+  if (!c) return;
+
+  const today = todayISO();
+  if (c.frozen) {
+    const banked = Number(c.freeze_days ?? 0)
+      + Math.max(0, Math.round((Date.parse(today) - Date.parse(c.frozen)) / 86400000));
+    await supabase.from("clients").update({ frozen: null, freeze_days: banked }).eq("id", id);
+    await logAudit(p, "Package resumed", c.name, `${banked} day${banked === 1 ? "" : "s"} banked`);
+  } else {
+    await supabase.from("clients").update({ frozen: today }).eq("id", id);
+    await logAudit(p, "Package paused", c.name, `from ${today}`);
+  }
+
+  revalidatePath("/clients");
+  revalidatePath(`/clients/${id}`);
+}

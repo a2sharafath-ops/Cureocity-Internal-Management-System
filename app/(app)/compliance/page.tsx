@@ -38,7 +38,7 @@ export default async function CompliancePage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
+  const stat = (label: string, value: string, color = "var(--brand-text)") => <StatCard label={label} value={value} color={color} />;
   const sevColor = (s: string) => s === "critical" ? "var(--red)" : s === "high" ? "#b45309" : s === "low" ? "var(--muted)" : "#92400e";
 
   return (
@@ -49,9 +49,9 @@ export default async function CompliancePage() {
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
         {stat("Active consents", String(activeConsents))}
-        {stat("Open incidents", String(openBreaches), openBreaches ? "var(--red)" : "var(--teal-dark)")}
+        {stat("Open incidents", String(openBreaches), openBreaches ? "var(--red)" : "var(--brand-text)")}
         {stat("Retention policies", String(retention.length))}
-        {stat("PHI masking", "On", "var(--teal-dark)")}
+        {stat("PHI masking", "On", "var(--brand-text)")}
       </div>
 
       {/* identity */}
@@ -65,7 +65,7 @@ export default async function CompliancePage() {
           <tbody>
             {identified.map((c) => (
               <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={td}><Link href={`/clients/${c.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{c.name}</Link></td>
+                <td style={td}><Link href={`/clients/${c.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{c.name}</Link></td>
                 <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{c.abha_id ?? "—"}</td>
                 <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{c.uhid ?? "—"}</td>
               </tr>
@@ -85,7 +85,7 @@ export default async function CompliancePage() {
           <tbody>
             {consents.map((c) => (
               <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={td}>{c.clients ? <Link href={`/clients/${c.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{c.clients.name}</Link> : "—"}</td>
+                <td style={td}>{c.clients ? <Link href={`/clients/${c.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{c.clients.name}</Link> : "—"}</td>
                 <td style={{ ...td, textTransform: "capitalize" }}>{c.type.replace("-", " ")}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{c.method}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{c.granted_date ?? "—"}</td>

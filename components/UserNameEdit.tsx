@@ -3,7 +3,7 @@
 import { updateUserName } from "@/lib/actions";
 
 export default function UserNameEdit({ id, name, isYou }: { id: string; name: string | null; isYou: boolean }) {
-  if (isYou) return <b>{name ?? "—"} <span style={{ marginLeft: 6, background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>you</span></b>;
+  if (isYou) return <b>{name ?? "—"} <span style={{ marginLeft: 6, background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>you</span></b>;
   return (
     <form action={updateUserName}>
       <input type="hidden" name="id" value={id} />

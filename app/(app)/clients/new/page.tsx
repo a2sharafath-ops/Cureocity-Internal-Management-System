@@ -28,7 +28,7 @@ export default async function NewClientPage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 700 }}>
-      <Link href="/clients" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none" }}>
+      <Link href="/clients" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>
         ← Clients
       </Link>
       <h1 style={{ fontSize: 20, margin: "10px 0 4px" }}>New Client</h1>

@@ -32,7 +32,7 @@ export default function FollowupsBoard({ rows, today }: { rows: FuRow[]; today: 
       padding: "7px 14px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none",
       background: view === k ? "var(--card)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)",
       boxShadow: view === k ? "var(--shadow)" : "none",
-    }}>{label} <span style={{ background: view === k ? "var(--teal-light)" : "#e7e7ea", color: view === k ? "var(--teal-dark)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
+    }}>{label} <span style={{ background: view === k ? "var(--brand-tint)" : "#e7e7ea", color: view === k ? "var(--brand-text)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
   );
 
   return (
@@ -68,7 +68,7 @@ export default function FollowupsBoard({ rows, today }: { rows: FuRow[]; today: 
               {r.status === "pending"
                 ? (isOverdue ? chip("var(--red-bg)", "#991b1b", "Overdue") : chip("var(--amber-bg)", "#92400e", "Due"))
                 : chip("var(--green-bg)", "#166534", r.status === "done" ? "Done" : "Skipped")}
-              {r.client_id && <Link href={`/clients/${r.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--teal-dark)" }}>Card</Link>}
+              {r.client_id && <Link href={`/clients/${r.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Card</Link>}
             </div>
           );
         }) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {view === "done" ? "completed" : "open"} follow-ups for your clients.</div>}

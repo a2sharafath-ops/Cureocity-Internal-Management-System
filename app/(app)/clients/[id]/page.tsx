@@ -161,14 +161,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <Link href="/clients" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none" }}>
+      <Link href="/clients" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>
         ← Clients
       </Link>
 
       <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "10px 0 18px" }}>
         <div
           style={{
-            width: 46, height: 46, borderRadius: "50%", background: "var(--teal)",
+            width: 46, height: 46, borderRadius: "50%", background: "var(--brand-fill)",
             color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 16,
           }}
         >
@@ -257,7 +257,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 return (
                   <tr key={cp.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 6px", fontWeight: 600 }}>{cp.package_name ?? "—"}</td>
-                    <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "#dbeafe" : "var(--teal-light)", color: cp.category === "membership" ? "#1e40af" : "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "#dbeafe" : "var(--brand-tint)", color: cp.category === "membership" ? "#1e40af" : "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
                     <td style={{ padding: "8px 6px", color: "var(--muted)" }}>{cp.start_date ?? "—"}{cp.end_date ? ` → ${cp.end_date}` : ""}</td>
                     <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(cp.price ?? 0).toLocaleString("en-IN")}</td>
                     <td style={{ padding: "8px 6px" }}><span style={{ background: live ? "var(--green-bg)" : "#eef2f1", color: live ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{live ? "Active" : "Expired"}</span></td>
@@ -311,7 +311,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <div style={{ flex: 1 }}>
                 <b style={{ fontSize: 13.5 }}>{m.label}</b>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.detail}</div>
-                <div style={{ fontSize: 11.5, color: "var(--teal-dark)", marginTop: 2 }}>🕐 {m.when}</div>
+                <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>🕐 {m.when}</div>
               </div>
             </div>
           ))}
@@ -408,7 +408,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           consults.map((cs) => (
             <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.kind}</span>
+                <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.kind}</span>
                 <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "#eef2f1", color: cs.status === "completed" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{cs.status}</span>
                 {cs.approved && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
                 {cs.shared && <span style={{ background: "var(--blue-bg)", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
@@ -427,7 +427,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{ fontWeight: 700 }}>🗂 Care records</div>
           <span style={{ flex: 1 }} />
-          {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Patient Records →</Link>}
+          {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Patient Records →</Link>}
         </div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
@@ -460,7 +460,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <div style={{ fontWeight: 700 }}>🧬 BluePrint</div>
           <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
           <span style={{ flex: 1 }} />
-          {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
+          {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
         </div>
         {bp?.scores && Object.keys(bp.scores).length > 0 && (() => {
           const vals = BP_SCORES.map((s) => bp!.scores![s.key]).filter((v): v is number => typeof v === "number");
@@ -577,7 +577,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                       <div style={{ color: "var(--muted)", fontSize: 12 }}>{h.cadence} · target {h.target_per_week}/wk</div>
                     </div>
                     <div style={{ textAlign: "right", minWidth: 88 }}>
-                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--teal-dark)" : "var(--muted)" }}>🔥 {streak}d streak</div>
+                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>🔥 {streak}d streak</div>
                       <div style={{ fontSize: 12, color: hit ? "#166534" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
                     </div>
                     {canCoach && (
@@ -619,7 +619,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                   <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 60 }}>
                     {(() => { const max = Math.max(1, ...stepTrend.map((r) => r.steps ?? 0)); return stepTrend.map((r, i) => (
                       <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                        <div title={`${r.steps ?? 0} steps`} style={{ width: "100%", background: "var(--teal)", borderRadius: "4px 4px 0 0", height: `${Math.round(((r.steps ?? 0) / max) * 48)}px`, minHeight: 2 }} />
+                        <div title={`${r.steps ?? 0} steps`} style={{ width: "100%", background: "var(--brand-fill)", borderRadius: "4px 4px 0 0", height: `${Math.round(((r.steps ?? 0) / max) * 48)}px`, minHeight: 2 }} />
                         <div style={{ fontSize: 9, color: "var(--muted)" }}>{r.date.slice(5)}</div>
                       </div>
                     )); })()}
@@ -646,7 +646,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>🏃 Assigned workouts</div>
             <span style={{ flex: 1 }} />
-            {canCoach && <Link href="/exlib" style={{ color: "var(--teal-dark)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
+            {canCoach && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
           </div>
           {workouts.length === 0 ? (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>No workouts assigned. Assign a template from the Exercise Library.</div>

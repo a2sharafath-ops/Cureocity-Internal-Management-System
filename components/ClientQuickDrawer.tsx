@@ -6,9 +6,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getClientQuickView, type ClientQuickView } from "@/lib/actions";
+import { getClientQuickView, togglePackageFreeze, type ClientQuickView } from "@/lib/actions";
 import { ageFromDob } from "@/lib/dob";
 import { band, BP_SCORES } from "@/lib/blueprint";
+import { packageWindow, blueprintSteps, blueprintProgress } from "@/lib/package-window";
+import { todayISO } from "@/lib/today";
 
 const money = (n: number) => "₹" + Math.round(Number(n || 0)).toLocaleString("en-IN");
 const hh = (h: number | null) => {
@@ -22,7 +24,7 @@ const GREY: Tone = { bg: "#eef2f1", color: "var(--muted)" };
 const GREEN: Tone = { bg: "var(--green-bg)", color: "#166534" };
 const RED: Tone = { bg: "var(--red-bg)", color: "#991b1b" };
 const AMBER: Tone = { bg: "var(--amber-bg)", color: "#92400e" };
-const TEAL: Tone = { bg: "#e0f2f1", color: "var(--teal-dark)" };
+const TEAL: Tone = { bg: "#e0f2f1", color: "var(--brand-text)" };
 const chip = (label: string, t: Tone) => (
   <span key={label} style={{ background: t.bg, color: t.color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{label}</span>
 );
@@ -85,6 +87,26 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
   const pct = credits ? Math.min(100, Math.round((used / credits) * 100)) : 0;
   const active = data?.clientPackages?.find((p) => p.status === "active");
 
+  const today = todayISO();
+  // Prefer the active client_packages row for the start date; fall back to the
+  // client's join date for older records that predate that table.
+  const win = packageWindow({
+    start: active?.start_date ?? c?.joined ?? null,
+    validity: pkg?.validity ?? null,
+    frozen: c?.frozen ?? null,
+    freezeDays: Number(c?.freeze_days ?? 0),
+  }, today);
+
+  const bpSteps = blueprintSteps({
+    bloodRequested: Boolean(data?.blood),
+    bloodSubmitted: Boolean(data?.blood?.submitted),
+    doctor: Boolean(data?.signoff?.doctor),
+    diet: Boolean(data?.signoff?.diet),
+    trainer: Boolean(data?.signoff?.trainer),
+    generated: Boolean(data?.blueprint?.generated),
+  });
+  const bpProgress = blueprintProgress(bpSteps);
+
   return (
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -113,7 +135,7 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
           <>
             {/* identity */}
             <div style={{ display: "flex", alignItems: "center", gap: 13, marginBottom: 12 }}>
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontSize: 17, fontWeight: 700 }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontSize: 17, fontWeight: 700 }}>
                 {String(c.name).split(" ").map((w: string) => w[0]).slice(0, 2).join("")}
               </div>
               <div style={{ minWidth: 0 }}>
@@ -143,7 +165,7 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
               <b style={{ fontSize: 13 }}>Session credits</b>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
                 <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: "var(--teal)" }} />
+                  <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-fill)" }} />
                 </div>
                 <b style={{ fontSize: 13, whiteSpace: "nowrap" }}>{used} / {credits || "—"}</b>
               </div>
@@ -151,8 +173,41 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
                 {data.assignments.length > 0 && (
                   <>Care team: {data.assignments.map((a) => rel(a.staff).name).filter(Boolean).join(", ")}<br /></>
                 )}
-                {pkg && <>Valid {pkg.validity} days{active?.end_date ? ` · ends ${active.end_date}` : ""}<br /></>}
                 {data.enrolment && <>Slot: <b style={{ color: "var(--ink)" }}>{hh(data.enrolment.hour)} with {rel(data.enrolment.staff).name ?? "—"}</b>{data.sessions.next ? ` · next ${data.sessions.next.date}` : ""}</>}
+              </div>
+
+              {/* package window — start, end, and what freezing did to it */}
+              <div style={{ marginTop: 12, paddingTop: 11, borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px" }}>Package</span>
+                  <b style={{ fontSize: 13 }}>{win.start ?? "—"} → {win.end ?? "—"}</b>
+                  {win.extendedBy > 0 && chip(`+${win.extendedBy}d frozen`, GREY)}
+                  {win.paused && chip(`Paused ${win.pausedFor}d`, AMBER)}
+                  {win.expired && chip("Expired", RED)}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                  {pkg ? `${pkg.validity} days validity` : "No package"}
+                  {win.daysLeft != null && !win.expired && ` · ${win.daysLeft} day${win.daysLeft === 1 ? "" : "s"} left${win.paused ? " (held)" : ""}`}
+                  {win.paused && ` · frozen since ${c.frozen}`}
+                </div>
+
+                {data.canWrite && pkg && (
+                  <form action={togglePackageFreeze} style={{ marginTop: 9 }}>
+                    <input type="hidden" name="client_id" value={clientId} />
+                    <button
+                      type="submit"
+                      onClick={() => setTimeout(onClose, 250)}
+                      style={{
+                        ...btn,
+                        background: win.paused ? "var(--brand-fill)" : "#fff",
+                        color: win.paused ? "#fff" : "var(--ink)",
+                        border: win.paused ? "none" : "1px solid var(--border)",
+                      }}
+                    >
+                      {win.paused ? "▶ Resume package" : "⏸ Pause / freeze package"}
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
 
@@ -162,9 +217,35 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <b style={{ fontSize: 13 }}>BluePrint</b>
                   <span style={{ flex: 1 }} />
-                  {chip(data.blueprint?.generated ? "Generated" : data.blood?.submitted ? "Blood in" : "Not started",
-                    data.blueprint?.generated ? GREEN : data.blood?.submitted ? AMBER : GREY)}
+                  {chip(`${bpProgress.done} of ${bpProgress.total}`,
+                    bpProgress.pct === 100 ? GREEN : bpProgress.done ? AMBER : GREY)}
                 </div>
+
+                {/* progress through the five gates */}
+                <div style={{ display: "flex", gap: 4, marginTop: 10 }}>
+                  {bpSteps.map((s) => (
+                    <span
+                      key={s.key}
+                      title={s.label}
+                      style={{
+                        flex: 1, height: 6, borderRadius: 3,
+                        background: s.done ? "var(--green)" : "#e2e8f0",
+                      }}
+                    />
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                  {bpSteps.map((s) => (
+                    <span key={s.key} style={{ fontSize: 11, color: s.done ? "#166534" : "var(--muted)" }}>
+                      {s.done ? "✓" : "○"} {s.label}
+                    </span>
+                  ))}
+                </div>
+                {bpProgress.next && (
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 7 }}>
+                    Next: <b style={{ color: "var(--ink)" }}>{bpProgress.next}</b>
+                  </div>
+                )}
                 {data.blueprint?.scores && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginTop: 10 }}>
                     {BP_SCORES.slice(0, 6).map((s) => {

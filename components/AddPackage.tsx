@@ -53,7 +53,7 @@ export default function AddPackage({ clientId, packages, hasMembership }: { clie
         </select>
         <label style={{ fontSize: 12, color: "var(--muted)" }}>Start <input type="date" value={start} onChange={(e) => setStart(e.target.value)} style={inp} /></label>
         <label style={{ fontSize: 12, color: "var(--muted)" }}>Offer ₹ <input type="number" min={0} value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="0" style={{ ...inp, width: 90 }} /></label>
-        <button onClick={submit} disabled={pending || blocked} style={{ background: blocked ? "#cbd5e1" : "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: blocked ? "not-allowed" : "pointer" }}>{pending ? "Adding…" : "Add"}</button>
+        <button onClick={submit} disabled={pending || blocked} style={{ background: blocked ? "#cbd5e1" : "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: blocked ? "not-allowed" : "pointer" }}>{pending ? "Adding…" : "Add"}</button>
         <button onClick={() => { setOpen(false); setErr(null); }} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>Cancel</button>
       </div>
       {blocked && <div style={{ marginTop: 8, fontSize: 12, color: "#92400e", background: "var(--amber-bg)", borderRadius: 8, padding: "7px 10px" }}>⚠ PT & Comprehensive packages require an active membership. Sell a facility membership first.</div>}

@@ -84,8 +84,8 @@ export function CallCell({ phone, ivrConfigured }: { phone: string | null; ivrCo
   const tel = (phone ?? "").replace(/[^\d+]/g, "");
   if (!tel) return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
   return ivrConfigured ? (
-    <form action={initiateCall}><input type="hidden" name="phone" value={tel} /><button type="submit" title="Click-to-call via IVR" style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>📞 Call</button></form>
+    <form action={initiateCall}><input type="hidden" name="phone" value={tel} /><button type="submit" title="Click-to-call via IVR" style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>📞 Call</button></form>
   ) : (
-    <a href={`tel:${tel}`} title="Open dialer" style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)", textDecoration: "none", display: "inline-block" }}>📞 Call</a>
+    <a href={`tel:${tel}`} title="Open dialer" style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)", textDecoration: "none", display: "inline-block" }}>📞 Call</a>
   );
 }

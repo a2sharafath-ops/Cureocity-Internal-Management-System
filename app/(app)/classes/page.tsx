@@ -58,7 +58,7 @@ export default async function ClassesPage() {
             <div key={c.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <b style={{ fontSize: 15 }}>{c.title}</b>
-                <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{c.rooms?.name ?? "—"}</span>
+                <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{c.rooms?.name ?? "—"}</span>
                 <span style={{ color: "var(--muted)", fontSize: 13 }}>{c.date} · {fmtHour(c.hour)} · {c.staff?.name ?? "—"}</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ background: full ? "var(--amber-bg)" : "#eef2f1", color: full ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bk.length} / {c.capacity} booked</span>

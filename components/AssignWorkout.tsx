@@ -6,7 +6,7 @@ import { assignWorkout } from "@/lib/actions";
 export default function AssignWorkout({ templateId, clients }: { templateId: string; clients: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Assign →</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Assign →</button>;
   }
   return (
     <form action={assignWorkout} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "flex", gap: 6, alignItems: "center" }}>

@@ -26,10 +26,10 @@ export default async function ThreadPage({ params }: { params: { id: string } })
     <div style={{ maxWidth: 720 }}>
       <RealtimeRefresh tables={["messages"]} />
       <MarkThreadRead clientId={params.id} />
-      <Link href="/messages" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none" }}>← Messages</Link>
+      <Link href="/messages" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>← Messages</Link>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0 16px" }}>
-        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700 }}>
+        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700 }}>
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
         </div>
         <div>
@@ -37,7 +37,7 @@ export default async function ThreadPage({ params }: { params: { id: string } })
           <div style={{ color: "var(--muted)", fontSize: 12 }}>{client.code ?? ""}</div>
         </div>
         <span style={{ flex: 1 }} />
-        <Link href={`/clients/${client.id}`} style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none" }}>Open 360° →</Link>
+        <Link href={`/clients/${client.id}`} style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>Open 360° →</Link>
       </div>
 
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" }}>

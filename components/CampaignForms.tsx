@@ -6,7 +6,7 @@ import { createTemplate, createCampaign, sendCampaignNow } from "@/lib/actions";
 const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const primary: React.CSSProperties = { background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-const ghost: React.CSSProperties = { background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
+const ghost: React.CSSProperties = { background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 const panel: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginBottom: 14 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -46,7 +46,7 @@ export function SendCampaign({ id, configured }: { id: string; configured: boole
   return (
     <form action={sendCampaignNow}>
       <input type="hidden" name="id" value={id} />
-      <button type="submit" style={{ border: "1px solid var(--teal)", background: configured ? "var(--teal)" : "#fff", color: configured ? "#fff" : "var(--teal-dark)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+      <button type="submit" style={{ border: "1px solid var(--brand-fill)", background: configured ? "var(--brand-fill)" : "#fff", color: configured ? "#fff" : "var(--brand-text)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
         {configured ? "Send now" : "Send (dry-run)"}
       </button>
     </form>

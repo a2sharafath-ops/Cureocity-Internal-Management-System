@@ -46,10 +46,10 @@ export default async function ClaimsPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
+  const stat = (label: string, value: string, color = "var(--brand-text)") => <StatCard label={label} value={value} color={color} />;
   const chipFor = (s: string): [string, string] => {
     const m: Record<string, [string, string]> = {
-      draft: ["#eef2f1", "var(--muted)"], submitted: ["#e0f2f1", "var(--teal-dark)"], in_review: ["var(--amber-bg)", "#92400e"],
+      draft: ["#eef2f1", "var(--muted)"], submitted: ["#e0f2f1", "var(--brand-text)"], in_review: ["var(--amber-bg)", "#92400e"],
       approved: ["var(--green-bg)", "#166534"], rejected: ["#fee2e2", "var(--red)"], paid: ["#dcfce7", "#166534"],
     };
     return m[s] ?? ["#eef2f1", "var(--muted)"];
@@ -62,7 +62,7 @@ export default async function ClaimsPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Payers, patient policies and the claims pipeline from draft through settlement.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
-        {stat("Pending claims", String(pending.length), pending.length ? "#92400e" : "var(--teal-dark)")}
+        {stat("Pending claims", String(pending.length), pending.length ? "#92400e" : "var(--brand-text)")}
         {stat("Total claimed", money(totalClaimed))}
         {stat("Approved", money(totalApproved))}
         {stat("Settled / paid", money(paid))}
@@ -82,7 +82,7 @@ export default async function ClaimsPage() {
               return (
                 <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{c.claim_number ?? "—"}</td>
-                  <td style={td}>{c.clients ? <Link href={`/clients/${c.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{c.clients.name}</Link> : "—"}</td>
+                  <td style={td}>{c.clients ? <Link href={`/clients/${c.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{c.clients.name}</Link> : "—"}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.insurers?.name ?? "—"}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.service_desc ?? "—"}</td>
                   <td style={td}>{money(c.amount_claimed)}</td>
@@ -108,7 +108,7 @@ export default async function ClaimsPage() {
           <tbody>
             {policies.map((p) => (
               <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={td}>{p.clients ? <Link href={`/clients/${p.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{p.clients.name}</Link> : "—"}</td>
+                <td style={td}>{p.clients ? <Link href={`/clients/${p.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{p.clients.name}</Link> : "—"}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{p.insurers?.name ?? "—"}</td>
                 <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{p.policy_number ?? "—"}</td>
                 <td style={td}>{money(p.coverage_amount)}</td>

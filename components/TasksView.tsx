@@ -69,7 +69,7 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
           { key: "completed", label: "✅ Completed", count: counts.completed },
         ]} />
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--teal)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗓 Smart Timeline View</button>
+        <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗓 Smart Timeline View</button>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
@@ -86,7 +86,7 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
           {rows.map((t, i) => { const dr = daysRemaining(t.due_date, today); return (
             <div key={t.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
               <div style={{ width: 70, color: "var(--muted)", fontSize: 12, flexShrink: 0 }}>{fmt(t.due_date)}</div>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: dr.overdue ? "var(--red)" : "var(--teal)", marginTop: 3, flexShrink: 0 }} />
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: dr.overdue ? "var(--red)" : "var(--brand-fill)", marginTop: 3, flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <b style={{ fontSize: 13.5 }}>{t.title}</b>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}><span style={{ color: prioColor(t.priority), fontWeight: 700 }}>{t.priority}</span> · {t.type} · {t.assignee ?? "Unassigned"} · <span style={{ color: dr.overdue ? "var(--red)" : "var(--muted)" }}>{dr.text}</span></div>
@@ -106,7 +106,7 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
                     <td style={{ ...td, color: "var(--muted)" }}>{t.assignee ?? "Unassigned"}</td>
                     <td style={{ ...td, color: "var(--muted)" }}>{fmt(t.due_date)}</td>
                     <td style={{ ...td, color: dr.overdue ? "var(--red)" : "var(--muted)", fontWeight: dr.overdue ? 600 : 400 }}>{dr.text}</td>
-                    <td style={td}>{t.clientId ? <Link href={`/clients/${t.clientId}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{t.clientName}</Link> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                    <td style={td}>{t.clientId ? <Link href={`/clients/${t.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{t.clientName}</Link> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                     <td style={td}>
                       <form action={setTaskStatus}>
                         <input type="hidden" name="id" value={t.id} />

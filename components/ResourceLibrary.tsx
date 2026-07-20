@@ -27,7 +27,7 @@ const icon = (n: string) => {
 
 function SubmitBtn() {
   const { pending } = useFormStatus();
-  return <button type="submit" disabled={pending} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: pending ? "default" : "pointer", opacity: pending ? 0.7 : 1 }}>{pending ? "Uploading…" : "Upload"}</button>;
+  return <button type="submit" disabled={pending} style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: pending ? "default" : "pointer", opacity: pending ? 0.7 : 1 }}>{pending ? "Uploading…" : "Upload"}</button>;
 }
 
 export default function ResourceLibrary({ role, roleLabel, files }: { role: string; roleLabel: string; files: ResourceRow[] }) {
@@ -78,7 +78,7 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
                   </div>
                   {f.role === "all" && <span style={{ background: "#ede9fe", color: "#6d28d9", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
                   {f.url ? (
-                    <a href={f.url} target="_blank" rel="noreferrer" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--teal-dark)" }}>Download</a>
+                    <a href={f.url} target="_blank" rel="noreferrer" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Download</a>
                   ) : <span style={{ color: "var(--muted)", fontSize: 11 }}>sample</span>}
                   <form action={deleteResourceFile}>
                     <input type="hidden" name="id" value={f.id} />

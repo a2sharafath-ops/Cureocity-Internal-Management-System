@@ -49,7 +49,7 @@ export default async function TargetsPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1, background: "#eef2f1", borderRadius: 8, height: 14, overflow: "hidden" }}>
-            <div style={{ width: `${pct}%`, height: "100%", background: hit ? "#16a34a" : "var(--teal)" }} />
+            <div style={{ width: `${pct}%`, height: "100%", background: hit ? "#16a34a" : "var(--brand-fill)" }} />
           </div>
           <b style={{ fontSize: 13, whiteSpace: "nowrap" }}>{fmt(val)} / {tgt > 0 ? fmt(tgt) : "—"} · {pct}%</b>
         </div>

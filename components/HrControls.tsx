@@ -47,7 +47,7 @@ export function LeaveForm({ staff }: { staff: { id: string; name: string }[] }) 
 export function LeaveActions({ id }: { id: string }) {
   return (
     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-      <form action={setLeaveStatus}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="approved" /><button type="submit" style={{ ...chip, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>Approve</button></form>
+      <form action={setLeaveStatus}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="approved" /><button type="submit" style={{ ...chip, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Approve</button></form>
       <form action={setLeaveStatus}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="rejected" /><button type="submit" style={{ ...chip, color: "var(--red)" }}>Reject</button></form>
     </div>
   );
@@ -63,7 +63,7 @@ export function PayrollRow({ staffId, month, base, lopDays, id, status }: { staf
         <button type="submit" style={chip}>Save</button>
       </form>
       {id && status !== "paid" && (
-        <form action={payPayroll}><input type="hidden" name="id" value={id} /><button type="submit" style={{ ...chip, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>Mark paid</button></form>
+        <form action={payPayroll}><input type="hidden" name="id" value={id} /><button type="submit" style={{ ...chip, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Mark paid</button></form>
       )}
       {status === "paid" && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>paid</span>}
     </div>

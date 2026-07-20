@@ -36,7 +36,7 @@ export default async function AlertsPage() {
         <span style={{ flex: 1 }} />
         {unread > 0 && (
           <form action={markAllNotificationsRead}>
-            <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--teal-dark)" }}>Mark all read</button>
+            <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)" }}>Mark all read</button>
           </form>
         )}
       </div>
@@ -55,7 +55,7 @@ export default async function AlertsPage() {
                 {n.body && <div style={{ fontSize: 13, color: "var(--muted)" }}>{n.body}</div>}
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{ago(n.created_at)}</div>
               </div>
-              {!n.read && <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--teal)", marginTop: 6 }} />}
+              {!n.read && <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--brand-fill)", marginTop: 6 }} />}
             </button>
           </form>
         ))}

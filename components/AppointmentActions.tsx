@@ -19,7 +19,7 @@ export default function AppointmentActions({ id, status }: { id: string; status:
   );
   return (
     <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-      {act("completed", "✓", "var(--teal-dark)")}
+      {act("completed", "✓", "var(--brand-text)")}
       {act("no_show", "No-show", "#92400e")}
       {act("cancelled", "Cancel", "var(--red)")}
     </div>

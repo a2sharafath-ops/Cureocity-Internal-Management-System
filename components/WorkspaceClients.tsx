@@ -42,26 +42,26 @@ export default function WorkspaceClients({
       <>
         {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
         {kv("Conditions", r.conditions)}
-        {!ro && kv("Meal monitoring", <Link href="/meals" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open meal follow-ups →</Link>)}
+        {!ro && kv("Meal monitoring", <Link href="/meals" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open meal follow-ups →</Link>)}
       </>
     );
     if (role === "trainer") return (
       <>
         {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
-        {!ro && kv("Session board", <Link href="/trainer" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open trainer board →</Link>)}
+        {!ro && kv("Session board", <Link href="/trainer" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open trainer board →</Link>)}
       </>
     );
     if (role === "doctor") return (
       <>
         {kv("Conditions", r.conditions)}
-        {!ro && kv("Clinical record", <Link href={`/emr/${r.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open EMR chart →</Link>)}
+        {!ro && kv("Clinical record", <Link href={`/emr/${r.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open EMR chart →</Link>)}
       </>
     );
     return (
       <>
         {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
         {kv("Conditions", r.conditions)}
-        {!ro && kv("Blueprint", <Link href="/blueprint" style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>Open BluePrint →</Link>)}
+        {!ro && kv("Blueprint", <Link href="/blueprint" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open BluePrint →</Link>)}
       </>
     );
   };

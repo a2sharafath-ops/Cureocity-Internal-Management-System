@@ -70,14 +70,14 @@ export default function RetentionHub({
               <tbody>
                 {risk.map((r) => (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={td}><Link href={`/clients/${r.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link><div style={{ fontSize: 11, color: "var(--muted)" }}>{r.packageName ?? "—"}</div></td>
+                    <td style={td}><Link href={`/clients/${r.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link><div style={{ fontSize: 11, color: "var(--muted)" }}>{r.packageName ?? "—"}</div></td>
                     <td style={td}><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{riskBar(r.score)}<span style={{ fontSize: 11, color: "var(--muted)" }}>{r.score}/100</span></div></td>
                     <td style={td}>{tierChip(r.tier)}</td>
                     <td style={td}>{r.reasons.length ? r.reasons.map((x, i) => <span key={i} style={{ display: "inline-block", margin: "1px 2px 0 0" }}>{chip("#eef2f1", "var(--muted)", x, { fontSize: 10 })}</span>) : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {canAct && <div style={{ display: "flex", gap: 6 }}>
                         <Link href="/messages" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Reach out</Link>
-                        <form action={winbackOffer}><input type="hidden" name="client_id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", color: "var(--teal-dark)" }}>Win-back offer</button></form>
+                        <form action={winbackOffer}><input type="hidden" name="client_id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", color: "var(--brand-text)" }}>Win-back offer</button></form>
                       </div>}
                     </td>
                   </tr>

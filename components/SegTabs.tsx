@@ -36,7 +36,7 @@ export default function SegTabs({
     transition: "background .15s, color .15s",
   });
   const badge = (on: boolean): React.CSSProperties => ({
-    background: on ? "var(--teal-light)" : "#e7e7ea", color: on ? "var(--teal-dark)" : "var(--muted)",
+    background: on ? "var(--brand-tint)" : "#e7e7ea", color: on ? "var(--brand-text)" : "var(--muted)",
     borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700, minWidth: 18, textAlign: "center",
   });
 

@@ -39,7 +39,7 @@ export type CardData = {
 };
 
 const KIND = {
-  insight: { label: "Insight", bg: "#e0f2f1", color: "var(--teal-dark)" },
+  insight: { label: "Insight", bg: "#e0f2f1", color: "var(--brand-text)" },
   action: { label: "Action", bg: "var(--amber-bg)", color: "#92400e" },
   concern: { label: "Concern", bg: "var(--red-bg)", color: "#991b1b" },
 } as const;
@@ -96,7 +96,7 @@ export default function WhiteboardCard({ card, staff, locked }: {
             {openActions} action{openActions === 1 ? "" : "s"}
           </span>
         )}
-        <Link href={`/clients/${card.clientId}`} style={{ ...btn, textDecoration: "none", color: "var(--teal-dark)", whiteSpace: "nowrap" }}>360° →</Link>
+        <Link href={`/clients/${card.clientId}`} style={{ ...btn, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>360° →</Link>
       </div>
 
       {open && (
@@ -215,7 +215,7 @@ export default function WhiteboardCard({ card, staff, locked }: {
                 <input type="hidden" name="id" value={card.id} />
                 <input name="headline" defaultValue={card.headline ?? ""} placeholder="One-line takeaway for the record" style={input} />
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button type="submit" name="status" value="discussed" style={{ ...btn, background: "var(--teal)", color: "#fff", border: "none" }}>Mark discussed</button>
+                  <button type="submit" name="status" value="discussed" style={{ ...btn, background: "var(--brand-fill)", color: "#fff", border: "none" }}>Mark discussed</button>
                   <button type="submit" name="status" value="deferred" style={btn}>Defer</button>
                   <span style={{ flex: 1 }} />
                 </div>

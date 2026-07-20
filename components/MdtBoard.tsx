@@ -51,14 +51,14 @@ export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients:
             </select>
           )}
           <textarea name="body" required placeholder="Update, observation or escalation reason…" rows={3} style={{ ...inp, resize: "vertical" }} />
-          <div><button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Post update</button></div>
+          <div><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Post update</button></div>
         </form>
       )}
 
       <div style={{ ...box, overflow: "hidden" }}>
         {notes.length ? notes.map((m) => (
           <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderTop: "1px solid var(--border)" }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: m.escalated ? "#ede9fe" : "var(--sidebar-hover)", color: m.escalated ? "#6d28d9" : "var(--teal-dark)", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>{m.escalated ? "⤴" : "🗒️"}</div>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: m.escalated ? "#ede9fe" : "var(--sidebar-hover)", color: m.escalated ? "#6d28d9" : "var(--brand-text)", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>{m.escalated ? "⤴" : "🗒️"}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <b style={{ fontSize: 13 }}>{m.author ?? "—"}</b>
@@ -68,7 +68,7 @@ export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients:
               </div>
               <div style={{ fontSize: 13, marginTop: 3 }}>{m.body}</div>
             </div>
-            {m.client_id && <Link href={`/clients/${m.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--teal-dark)", whiteSpace: "nowrap" }}>Card</Link>}
+            {m.client_id && <Link href={`/clients/${m.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Card</Link>}
             {m.escalated && m.status === "Open" ? (
               <form action={acknowledgeMdt}>
                 <input type="hidden" name="id" value={m.id} />

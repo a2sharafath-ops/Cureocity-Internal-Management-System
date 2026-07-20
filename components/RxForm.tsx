@@ -68,7 +68,7 @@ export default function RxForm({ clientId, allergies, currentMeds }: { clientId:
           <button type="button" onClick={() => removeLine(i)} disabled={lines.length === 1} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 13, cursor: lines.length === 1 ? "not-allowed" : "pointer", color: "var(--muted)" }}>✕</button>
         </div>
       ))}
-      <button type="button" onClick={addLine} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>+ Add drug</button>
+      <button type="button" onClick={addLine} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>+ Add drug</button>
 
       {flags.length > 0 && (
         <div style={{ background: severe ? "#fee2e2" : "var(--amber-bg)", border: `1px solid ${severe ? "#fecaca" : "#fde68a"}`, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
@@ -82,7 +82,7 @@ export default function RxForm({ clientId, allergies, currentMeds }: { clientId:
       <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes to pharmacist / patient (optional)" style={{ ...input, minHeight: 44, marginBottom: 10, resize: "vertical" }} />
 
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button type="button" onClick={() => submit("signed")} disabled={pending} style={{ background: severe ? "var(--red)" : "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: pending ? "not-allowed" : "pointer" }}>
+        <button type="button" onClick={() => submit("signed")} disabled={pending} style={{ background: severe ? "var(--red)" : "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: pending ? "not-allowed" : "pointer" }}>
           {pending ? "Saving…" : severe ? "Sign despite warnings" : "Prescribe & sign"}
         </button>
         <button type="button" onClick={() => submit("draft")} disabled={pending} style={{ background: "#fff", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Save draft</button>

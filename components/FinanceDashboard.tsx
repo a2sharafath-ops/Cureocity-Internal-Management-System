@@ -127,7 +127,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
         <StatCard label="Revenue this month" value={money(revenueMonth)} sub={revenuePrev ? `${revenueMonth >= revenuePrev ? "▲" : "▼"} vs ${money(revenuePrev)} last month` : `${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} minWidth={190} />
         <StatCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <StatCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} minWidth={170} />
-        <StatCard label="Net this month" value={money(netMonth)} sub="revenue − spend" color={netMonth < 0 ? "var(--red)" : "var(--teal-dark)"} minWidth={170} />
+        <StatCard label="Net this month" value={money(netMonth)} sub="revenue − spend" color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
         <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "#b45309" : undefined} minWidth={180} />
       </div>
 
@@ -157,7 +157,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
               <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <span style={{ width: 84 }}>{b.label}</span>
                 <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: b.min >= 31 ? "var(--red)" : b.min >= 8 ? "#f59e0b" : "var(--teal)" }} />
+                  <div style={{ width: `${pct}%`, height: "100%", background: b.min >= 31 ? "var(--red)" : b.min >= 8 ? "#f59e0b" : "var(--brand-fill)" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{money(b.amount)} · {b.count}</span>
               </div>
@@ -170,7 +170,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Recent invoices</div>
             <span style={{ flex: 1 }} />
-            <Link href="/billing" style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>Billing →</Link>
+            <Link href="/billing" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>Billing →</Link>
           </div>
           {invoices.length ? invoices.slice().sort((a, b) => (b.num ?? 0) - (a.num ?? 0)).slice(0, 8).map((i, n) => (
             <div key={i.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", borderTop: n ? "1px solid var(--border)" : "none", fontSize: 12.5 }}>

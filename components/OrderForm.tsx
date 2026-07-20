@@ -13,7 +13,7 @@ export default function OrderForm({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState("lab");
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Order test</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Order test</button>;
   }
   const list = category === "imaging" ? IMG : LAB;
   return (

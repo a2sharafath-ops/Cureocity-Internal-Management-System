@@ -196,7 +196,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                         <form action={generatePayslip}>
                           <input type="hidden" name="staff_id" value={s.id} /><input type="hidden" name="month" value={month} />
                           <input type="hidden" name="base" value={base || 85000} /><input type="hidden" name="lop_days" value={lop} /><input type="hidden" name="pf" value={pf} />
-                          <button style={{ border: "1px solid var(--border)", background: r?.payslip ? "var(--green-bg)" : "#fff", color: r?.payslip ? "#166534" : "var(--teal-dark)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r?.payslip ? "✓ Payslip" : "Generate payslip"}</button>
+                          <button style={{ border: "1px solid var(--border)", background: r?.payslip ? "var(--green-bg)" : "#fff", color: r?.payslip ? "#166534" : "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r?.payslip ? "✓ Payslip" : "Generate payslip"}</button>
                         </form>
                       </td>
                     </tr>
@@ -247,7 +247,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                 <div><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.role ?? ""}{c.source ? ` · via ${c.source}` : ""}</div></div>
                 <span style={{ flex: 1 }} />
                 {chip(c.stage === "Hired" ? "var(--green-bg)" : c.stage === "Offer sent" ? "#dbeafe" : "var(--amber-bg)", c.stage === "Hired" ? "#166534" : c.stage === "Offer sent" ? "#1e40af" : "#92400e", c.stage)}
-                {c.stage !== "Hired" && <form action={advanceCandidate}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="stage" value={c.stage} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--teal-dark)" }}>Advance →</button></form>}
+                {c.stage !== "Hired" && <form action={advanceCandidate}><input type="hidden" name="id" value={c.id} /><input type="hidden" name="stage" value={c.stage} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)" }}>Advance →</button></form>}
               </div>
             ))}
             {candidates.length === 0 && <div style={{ color: "var(--muted)", fontSize: 13 }}>No open roles.</div>}

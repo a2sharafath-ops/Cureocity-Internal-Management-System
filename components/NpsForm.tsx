@@ -8,7 +8,7 @@ const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var
 export default function NpsForm({ clients }: { clients: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Record feedback</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Record feedback</button>;
   }
   return (
     <form action={recordNps} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 14, display: "grid", gridTemplateColumns: "1.6fr auto auto 2fr auto", gap: 10, alignItems: "end" }}>

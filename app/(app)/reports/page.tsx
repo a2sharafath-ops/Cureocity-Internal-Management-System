@@ -154,7 +154,7 @@ export default async function ReportsPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <Card title="Revenue — last 6 months">
-          <Bars data={revenueData} color="var(--teal)" fmt={money} />
+          <Bars data={revenueData} color="var(--brand-fill)" fmt={money} />
         </Card>
         <Card title="Lead pipeline">
           <Bars data={funnelData} color="var(--purple)" />
@@ -164,15 +164,15 @@ export default async function ReportsPage() {
         </Card>
         <Card title="Session completion">
           <div style={{ textAlign: "center", padding: "10px 0" }}>
-            <div style={{ fontSize: 44, fontWeight: 800, color: "var(--teal-dark)" }}>{completionRate}%</div>
+            <div style={{ fontSize: 44, fontWeight: 800, color: "var(--brand-text)" }}>{completionRate}%</div>
             <div style={{ color: "var(--muted)", fontSize: 13 }}>{completedSessions} completed of {totalSessions} scheduled</div>
             <div style={{ marginTop: 12, background: "#eef2f1", borderRadius: 8, height: 12, overflow: "hidden" }}>
-              <div style={{ width: `${completionRate}%`, height: "100%", background: "var(--teal)" }} />
+              <div style={{ width: `${completionRate}%`, height: "100%", background: "var(--brand-fill)" }} />
             </div>
           </div>
         </Card>
         <Card title="Acquisition funnel — leads → converted">
-          <Bars data={acqData} color="var(--teal)" />
+          <Bars data={acqData} color="var(--brand-fill)" />
         </Card>
         <Card title="New members by month (cohorts)">
           <Bars data={cohortData} color="var(--purple)" />

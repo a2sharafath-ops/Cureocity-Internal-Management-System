@@ -51,7 +51,7 @@ export default async function TrainerPage() {
 
   const card = (s: Sess) => (
     <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderTop: "1px solid var(--border)" }}>
-      <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13 }}>
+      <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13 }}>
         {s.clients ? initials(s.clients.name) : "?"}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -109,7 +109,7 @@ export default async function TrainerPage() {
                 <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "10px 16px" }}>
                     {s.clients ? (
-                      <Link href={`/clients/${s.clients.id}`} style={{ color: "var(--teal-dark)", fontWeight: 600, textDecoration: "none" }}>{s.clients.name}</Link>
+                      <Link href={`/clients/${s.clients.id}`} style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>{s.clients.name}</Link>
                     ) : "—"}
                   </td>
                   <td style={{ padding: "10px 16px", color: "var(--muted)" }}>#{s.seq}</td>

@@ -9,7 +9,7 @@ const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 export default function HabitForm({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Assign habit</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Assign habit</button>;
   }
   return (
     <form action={createHabit} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "grid", gridTemplateColumns: "0.5fr 2fr 1fr 1fr auto", gap: 8, alignItems: "end", marginTop: 10 }}>

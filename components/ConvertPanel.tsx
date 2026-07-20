@@ -73,7 +73,7 @@ export default function ConvertPanel({
       {/* OTP */}
       <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 12 }}>
         {!otpSent ? (
-          <button type="button" onClick={send} disabled={pending || !phone} style={{ border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: pending || !phone ? "not-allowed" : "pointer" }}>{pending ? "Sending…" : `Send OTP to ${masked || "phone"}`}</button>
+          <button type="button" onClick={send} disabled={pending || !phone} style={{ border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: pending || !phone ? "not-allowed" : "pointer" }}>{pending ? "Sending…" : `Send OTP to ${masked || "phone"}`}</button>
         ) : (
           <>
             <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Enter OTP</label><input name="otp" inputMode="numeric" required style={{ ...input, width: 120, letterSpacing: 3 }} placeholder="6-digit" /></div>
@@ -85,7 +85,7 @@ export default function ConvertPanel({
       </div>
 
       {devCode && <div style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>SMS provider not configured — read this code to the client: <b style={{ letterSpacing: 2 }}>{devCode}</b></div>}
-      {msg && <div style={{ fontSize: 13, color: msg.ok ? "var(--teal-dark)" : "var(--red)" }}>{msg.text}</div>}
+      {msg && <div style={{ fontSize: 13, color: msg.ok ? "var(--brand-text)" : "var(--red)" }}>{msg.text}</div>}
     </form>
   );
 }

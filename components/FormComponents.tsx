@@ -31,7 +31,7 @@ export function FormBuilder() {
         </div>
       ))}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" onClick={() => setFields((fs) => [...fs, { label: "", kind: "text" }])} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add field</button>
+        <button type="button" onClick={() => setFields((fs) => [...fs, { label: "", kind: "text" }])} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add field</button>
         <span style={{ flex: 1 }} />
         <button type="submit" style={primary}>Save form</button>
       </div>
@@ -41,7 +41,7 @@ export function FormBuilder() {
 
 export function AssignForm({ formId, clients }: { formId: string; clients: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
-  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Assign →</button>;
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Assign →</button>;
   return (
     <form action={assignForm} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "flex", gap: 6, alignItems: "center" }}>
       <input type="hidden" name="form_id" value={formId} />
@@ -55,7 +55,7 @@ export function AssignForm({ formId, clients }: { formId: string; clients: { id:
 export function FormFill({ responseId, name, type, fields }: { responseId: string; name: string; type: string; fields: Field[] }) {
   const [open, setOpen] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Fill</button>;
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Fill</button>;
   const set = (label: string, v: string) => setAnswers((a) => ({ ...a, [label]: v }));
   return (
     <form action={submitFormResponse} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginTop: 8, display: "grid", gap: 10, textAlign: "left" }}>

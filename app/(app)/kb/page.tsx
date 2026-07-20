@@ -20,7 +20,7 @@ export default async function KbPage() {
   const sops = (data ?? []) as Sop[];
 
   const catColor: Record<string, [string, string]> = {
-    Operations: ["#e0f2f1", "var(--teal-dark)"], Clinical: ["#dbeafe", "#2563eb"],
+    Operations: ["#e0f2f1", "var(--brand-text)"], Clinical: ["#dbeafe", "#2563eb"],
     Compliance: ["var(--amber-bg)", "#b45309"], HR: ["#ede9fe", "#6d28d9"],
   };
 

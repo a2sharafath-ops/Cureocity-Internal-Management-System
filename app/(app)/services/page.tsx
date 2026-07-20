@@ -47,7 +47,7 @@ export default async function ServicesPage() {
                     <td style={{ ...td, textAlign: "right" }}>
                       <form action={toggleService}>
                         <input type="hidden" name="id" value={s.id} /><input type="hidden" name="to" value={String(!s.active)} />
-                        <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, cursor: "pointer", color: s.active ? "var(--muted)" : "var(--teal-dark)" }}>{s.active ? "Deactivate" : "Activate"}</button>
+                        <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, cursor: "pointer", color: s.active ? "var(--muted)" : "var(--brand-text)" }}>{s.active ? "Deactivate" : "Activate"}</button>
                       </form>
                     </td>
                   </tr>

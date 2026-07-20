@@ -45,7 +45,7 @@ export default function MetricCard({
           </div>
         )}
       </div>
-      <span style={{ color: "var(--teal-dark)", fontSize: 15, fontWeight: 700 }}>→</span>
+      <span style={{ color: "var(--brand-text)", fontSize: 15, fontWeight: 700 }}>→</span>
     </Link>
   );
 }
