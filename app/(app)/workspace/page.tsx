@@ -234,7 +234,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       </div>
 
       {readOnly && (
-        <div style={{ background: "var(--amber-bg)", color: "#92400e", border: "1px solid #fde68a", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
+        <div style={{ background: "var(--amber-bg)", color: "var(--amber-text)", border: "1px solid #fde68a", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
           👁 Viewing the {role.short} workspace — read-only. You can review client details but can&apos;t edit another discipline&apos;s records.
         </div>
       )}
@@ -250,8 +250,8 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
             <StatCard label="My clients" value={scoped.length} />
             <StatCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length} />
-            <StatCard label="Pending summaries" value={pendingSummaries ?? 0} color="#b45309" />
-            <StatCard label="Client concerns" value={openConcerns} color={openConcerns ? "#b45309" : undefined} />
+            <StatCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" />
+            <StatCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} />
             <StatCard label="MDT updates" value={mdtNotes.length} />
           </div>
 

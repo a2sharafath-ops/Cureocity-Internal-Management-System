@@ -56,9 +56,9 @@ export default async function EmrIndexPage({ searchParams }: { searchParams: { q
               <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
                 <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{c.code ?? "—"}</td>
-                <td style={td}>{pill(pC.get(c.id) ?? 0, "#166534", "var(--green-bg)")}</td>
-                <td style={td}>{pill(aC.get(c.id) ?? 0, "var(--red)", "#fee2e2")}</td>
-                <td style={td}>{pill(mC.get(c.id) ?? 0, "var(--brand-text)", "#e0f2f1")}</td>
+                <td style={td}>{pill(pC.get(c.id) ?? 0, "var(--green-text)", "var(--green-bg)")}</td>
+                <td style={td}>{pill(aC.get(c.id) ?? 0, "var(--red)", "var(--red-bg)")}</td>
+                <td style={td}>{pill(mC.get(c.id) ?? 0, "var(--brand-text)", "var(--brand-tint)")}</td>
                 <td style={{ ...td, textAlign: "right" }}><Link href={`/emr/${c.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open chart →</Link></td>
               </tr>
             ))}

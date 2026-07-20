@@ -119,8 +119,8 @@ export default async function HrDashboard({ name }: { name: string }) {
       <div style={sectionTitle}>Headcount</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <StatCard label="On the team" value={String(staff.length)} sub={`${depts.length} department${depts.length === 1 ? "" : "s"}`} minWidth={170} />
-        <StatCard label="Payroll this month" value={money(payrollValue)} sub={`${payPaid.length} of ${payThisMonth.length} paid`} minWidth={180} color={payThisMonth.length && payPaid.length < payThisMonth.length ? "#b45309" : undefined} />
-        <StatCard label="Leave requests" value={String(pendingLeave.length)} sub="awaiting a decision" color={pendingLeave.length ? "#b45309" : undefined} minWidth={170} />
+        <StatCard label="Payroll this month" value={money(payrollValue)} sub={`${payPaid.length} of ${payThisMonth.length} paid`} minWidth={180} color={payThisMonth.length && payPaid.length < payThisMonth.length ? "var(--amber-text-soft)" : undefined} />
+        <StatCard label="Leave requests" value={String(pendingLeave.length)} sub="awaiting a decision" color={pendingLeave.length ? "var(--amber-text-soft)" : undefined} minWidth={170} />
         <StatCard label="Joining / leaving" value={String(openOnboarding.length)} sub="in progress" minWidth={165} />
         <StatCard label="Open roles" value={String(candidates.length)} sub="candidates in play" minWidth={165} />
       </div>
@@ -153,7 +153,7 @@ export default async function HrDashboard({ name }: { name: string }) {
             return (
               <div key={d.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <span style={{ width: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.name}</span>
-                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
                   <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-fill)" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 30, textAlign: "right" }}>{d.count}</span>
@@ -181,10 +181,10 @@ export default async function HrDashboard({ name }: { name: string }) {
             return (
               <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <span style={{ width: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: 600 }}>{o.name}</span>
-                <span style={{ background: o.kind === "offboarding" ? "var(--amber-bg)" : "#e0f2f1", color: o.kind === "offboarding" ? "#92400e" : "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>
+                <span style={{ background: o.kind === "offboarding" ? "var(--amber-bg)" : "var(--brand-tint)", color: o.kind === "offboarding" ? "var(--amber-text)" : "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>
                   {o.kind === "offboarding" ? "Leaving" : "Joining"}
                 </span>
-                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
                   <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-fill)" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 44, textAlign: "right" }}>{done}/{steps.length}</span>
@@ -199,7 +199,7 @@ export default async function HrDashboard({ name }: { name: string }) {
                 <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                   <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
                   <span style={{ color: "var(--muted)" }}>{c.role ?? "—"}</span>
-                  <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 600 }}>{c.stage ?? "applied"}</span>
+                  <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 600 }}>{c.stage ?? "applied"}</span>
                 </div>
               ))}
             </>

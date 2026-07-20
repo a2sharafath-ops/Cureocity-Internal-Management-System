@@ -33,8 +33,8 @@ export default function FileUploadForm({
       <input type="hidden" name="kind" value={kind} />
       <input type="file" name="file" accept={accept} required style={{ fontSize: 13 }} />
       <SubmitBtn label={label} />
-      {state.error && <span style={{ color: "#991b1b", fontSize: 12 }}>{state.error}</span>}
-      {state.ok && <span style={{ color: "#166534", fontSize: 12 }}>{state.ok}</span>}
+      {state.error && <span style={{ color: "var(--red-text)", fontSize: 12 }}>{state.error}</span>}
+      {state.ok && <span style={{ color: "var(--green-text)", fontSize: 12 }}>{state.ok}</span>}
     </form>
   );
 }

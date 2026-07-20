@@ -65,7 +65,7 @@ export default async function PackagesPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Bundled service packages with branch pricing</p>
 
       {pkgR.error ? (
-        <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load packages.</b> {pkgR.error.message}
         </div>
       ) : (

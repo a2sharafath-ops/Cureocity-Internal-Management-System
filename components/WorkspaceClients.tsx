@@ -78,7 +78,7 @@ export default function WorkspaceClients({
           {clients.map((x) => (
             <button key={x.id} type="button" onClick={() => setSel(x.id)} style={{
               display: "flex", alignItems: "center", gap: 10, padding: "8px 8px", borderRadius: 10, cursor: "pointer",
-              border: "none", textAlign: "left", background: x.id === sel ? "var(--sidebar-hover)" : "transparent",
+              border: "none", textAlign: "left", background: x.id === sel ? "var(--brand-tint)" : "transparent",
             }}>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{initials(x.name)}</div>
               <div style={{ minWidth: 0 }}>
@@ -100,7 +100,7 @@ export default function WorkspaceClients({
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{[c.code, c.pkg].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <span style={{ flex: 1 }} />
-              {c.conditions && chip("var(--amber-bg)", "#92400e", "⚠️ Condition")}
+              {c.conditions && chip("var(--amber-bg)", "var(--amber-text)", "⚠️ Condition")}
               <Link href={`/clients/${c.id}${linkQuery}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>📋 Open full client card</Link>
             </div>
             <div style={{ marginTop: 10 }}>

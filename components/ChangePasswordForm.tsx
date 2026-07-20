@@ -54,12 +54,12 @@ export default function ChangePasswordForm() {
       <input style={input} type="password" name="confirm" required minLength={6} autoComplete="new-password" />
 
       {state.error && (
-        <div style={{ marginTop: 14, background: "var(--red-bg)", color: "#991b1b", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
+        <div style={{ marginTop: 14, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
           {state.error}
         </div>
       )}
       {state.ok && (
-        <div style={{ marginTop: 14, background: "var(--green-bg)", color: "#166534", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
+        <div style={{ marginTop: 14, background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
           {state.ok}
         </div>
       )}

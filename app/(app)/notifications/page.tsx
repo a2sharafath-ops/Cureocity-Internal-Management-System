@@ -21,8 +21,8 @@ export default async function NotificationsPage() {
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const chip = (s: string): [string, string] => {
-    const m: Record<string, [string, string]> = { sent: ["var(--green-bg)", "#166534"], failed: ["#fee2e2", "var(--red)"], skipped: ["#eef2f1", "var(--muted)"], queued: ["var(--amber-bg)", "#92400e"] };
-    return m[s] ?? ["#eef2f1", "var(--muted)"];
+    const m: Record<string, [string, string]> = { sent: ["var(--green-bg)", "var(--green-text)"], failed: ["var(--red-bg)", "var(--red)"], skipped: ["var(--neutral-bg)", "var(--muted)"], queued: ["var(--amber-bg)", "var(--amber-text)"] };
+    return m[s] ?? ["var(--neutral-bg)", "var(--muted)"];
   };
 
   return (
@@ -31,10 +31,10 @@ export default async function NotificationsPage() {
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Email notifications</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Transactional email for invoices, receipts, reminders and reports. Every attempt is logged below.</p>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, background: email.configured ? "var(--green-bg)" : "#eef2f1", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 18, fontSize: 13 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: email.configured ? "var(--green-bg)" : "var(--neutral-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 18, fontSize: 13 }}>
         <span style={{ fontWeight: 600 }}>Provider ({email.provider}):</span>
         {email.configured
-          ? <span style={{ color: "#166534" }}>● Live — sending from <code>{email.from}</code>.</span>
+          ? <span style={{ color: "var(--green-text)" }}>● Live — sending from <code>{email.from}</code>.</span>
           : <span style={{ color: "var(--muted)" }}>○ Not configured. Add <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> to your environment to start sending. Until then, sends are logged as <b>skipped</b> (dry-run).</span>}
       </div>
 

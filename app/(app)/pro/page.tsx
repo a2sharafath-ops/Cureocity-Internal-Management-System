@@ -46,7 +46,7 @@ export default async function ProPage() {
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>{persona ? `${persona.label} Consultations` : "Consultations"}</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         {disciplineKind ? `${disciplineKind} consultations` : "Consultations"} · {consults.length} total · {pending} to complete
-        {persona && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600, marginLeft: 8 }}>Persona view</span>}
+        {persona && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600, marginLeft: 8 }}>Persona view</span>}
       </p>
 
       {canEdit && <ConsultationForm clients={clients} />}

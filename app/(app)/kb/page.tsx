@@ -20,8 +20,8 @@ export default async function KbPage() {
   const sops = (data ?? []) as Sop[];
 
   const catColor: Record<string, [string, string]> = {
-    Operations: ["#e0f2f1", "var(--brand-text)"], Clinical: ["#dbeafe", "#2563eb"],
-    Compliance: ["var(--amber-bg)", "#b45309"], HR: ["#ede9fe", "#6d28d9"],
+    Operations: ["var(--brand-tint)", "var(--brand-text)"], Clinical: ["var(--blue-bg)", "var(--blue)"],
+    Compliance: ["var(--amber-bg)", "var(--amber-text-soft)"], HR: ["var(--purple-bg)", "var(--purple-text)"],
   };
 
   return (
@@ -36,7 +36,7 @@ export default async function KbPage() {
 
       <div style={{ display: "grid", gap: 12 }}>
         {sops.map((s) => {
-          const [bg, c] = catColor[s.category] ?? ["#eef2f1", "var(--muted)"];
+          const [bg, c] = catColor[s.category] ?? ["var(--neutral-bg)", "var(--muted)"];
           return (
             <div key={s.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>

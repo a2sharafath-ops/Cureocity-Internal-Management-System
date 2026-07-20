@@ -86,7 +86,7 @@ export default async function ClientsPage() {
       ))}
 
       {error ? (
-        <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load clients.</b> {error.message}
         </div>
       ) : (

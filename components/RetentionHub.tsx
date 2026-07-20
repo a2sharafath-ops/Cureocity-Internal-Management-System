@@ -40,9 +40,9 @@ export default function RetentionHub({
     <StatCard label={label} value={value} sub={sub} badge={{ bg, color }} />
   );
   const chip = (bg: string, c: string, t: string, extra?: React.CSSProperties) => <Chip bg={bg} color={c} style={extra}>{t}</Chip>;
-  const tierChip = (t: string) => chip(t === "High" ? "var(--red-bg)" : t === "Medium" ? "var(--amber-bg)" : "var(--green-bg)", t === "High" ? "#991b1b" : t === "Medium" ? "#92400e" : "#166534", t);
-  const riskBar = (s: number) => { const col = s >= 60 ? "var(--red)" : s >= 30 ? "#d97706" : "#16a34a"; return <div style={{ background: "#eef2f1", borderRadius: 6, height: 8, width: 90, overflow: "hidden" }}><div style={{ width: `${Math.min(100, s)}%`, height: "100%", background: col }} /></div>; };
-  const loyTierChip = (t: string) => chip(t === "Platinum" ? "#ede9fe" : t === "Gold" ? "var(--amber-bg)" : "#eef2f1", t === "Platinum" ? "#6d28d9" : t === "Gold" ? "#92400e" : "#64748b", t);
+  const tierChip = (t: string) => chip(t === "High" ? "var(--red-bg)" : t === "Medium" ? "var(--amber-bg)" : "var(--green-bg)", t === "High" ? "var(--red-text)" : t === "Medium" ? "var(--amber-text)" : "var(--green-text)", t);
+  const riskBar = (s: number) => { const col = s >= 60 ? "var(--red)" : s >= 30 ? "#d97706" : "var(--green)"; return <div style={{ background: "var(--neutral-bg)", borderRadius: 6, height: 8, width: 90, overflow: "hidden" }}><div style={{ width: `${Math.min(100, s)}%`, height: "100%", background: col }} /></div>; };
+  const loyTierChip = (t: string) => chip(t === "Platinum" ? "var(--purple-bg)" : t === "Gold" ? "var(--amber-bg)" : "var(--neutral-bg)", t === "Platinum" ? "var(--purple-text)" : t === "Gold" ? "var(--amber-text)" : "#64748b", t);
   const pct = (n: number) => npsStats.total ? Math.round(n / npsStats.total * 100) : 0;
 
   return (
@@ -59,10 +59,10 @@ export default function RetentionHub({
       {tab === "risk" && (
         <>
           <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-            {kpi("High risk", String(kpis.high), "need attention now", "var(--red-bg)", "#991b1b")}
-            {kpi("Medium risk", String(kpis.medium), "watch list", "var(--amber-bg)", "#92400e")}
-            {kpi("Healthy", `${kpis.healthy}/${kpis.total}`, `${kpis.total ? Math.round(kpis.healthy / kpis.total * 100) : 0}% retained`, "var(--green-bg)", "#166534")}
-            {kpi("Revenue at risk", money(kpis.revenueAtRisk), "at-risk package value", "#dbeafe", "#1e40af")}
+            {kpi("High risk", String(kpis.high), "need attention now", "var(--red-bg)", "var(--red-text)")}
+            {kpi("Medium risk", String(kpis.medium), "watch list", "var(--amber-bg)", "var(--amber-text)")}
+            {kpi("Healthy", `${kpis.healthy}/${kpis.total}`, `${kpis.total ? Math.round(kpis.healthy / kpis.total * 100) : 0}% retained`, "var(--green-bg)", "var(--green-text)")}
+            {kpi("Revenue at risk", money(kpis.revenueAtRisk), "at-risk package value", "var(--blue-bg)", "var(--blue-text)")}
           </div>
           <div style={{ ...box, overflow: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
@@ -73,7 +73,7 @@ export default function RetentionHub({
                     <td style={td}><Link href={`/clients/${r.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link><div style={{ fontSize: 11, color: "var(--muted)" }}>{r.packageName ?? "—"}</div></td>
                     <td style={td}><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{riskBar(r.score)}<span style={{ fontSize: 11, color: "var(--muted)" }}>{r.score}/100</span></div></td>
                     <td style={td}>{tierChip(r.tier)}</td>
-                    <td style={td}>{r.reasons.length ? r.reasons.map((x, i) => <span key={i} style={{ display: "inline-block", margin: "1px 2px 0 0" }}>{chip("#eef2f1", "var(--muted)", x, { fontSize: 10 })}</span>) : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                    <td style={td}>{r.reasons.length ? r.reasons.map((x, i) => <span key={i} style={{ display: "inline-block", margin: "1px 2px 0 0" }}>{chip("var(--neutral-bg)", "var(--muted)", x, { fontSize: 10 })}</span>) : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {canAct && <div style={{ display: "flex", gap: 6 }}>
                         <Link href="/messages" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Reach out</Link>
@@ -104,16 +104,16 @@ export default function RetentionHub({
           <div style={{ ...box, padding: "16px 18px", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}><b>Net Promoter Score</b><span style={{ flex: 1 }} /><span style={{ color: "var(--muted)", fontSize: 12 }}>{npsStats.total} responses</span></div>
             <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 46, fontWeight: 800, color: npsStats.nps >= 50 ? "#16a34a" : npsStats.nps >= 0 ? "#d97706" : "var(--red)" }}>{npsStats.total ? npsStats.nps : "—"}</div>
+              <div style={{ fontSize: 46, fontWeight: 800, color: npsStats.nps >= 50 ? "var(--green)" : npsStats.nps >= 0 ? "#d97706" : "var(--red)" }}>{npsStats.total ? npsStats.nps : "—"}</div>
               <div style={{ flex: 1, minWidth: 220 }}>
-                <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", background: "#eef2f1" }}>
-                  <div style={{ width: `${pct(npsStats.promoters)}%`, background: "#16a34a" }} />
+                <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", background: "var(--neutral-bg)" }}>
+                  <div style={{ width: `${pct(npsStats.promoters)}%`, background: "var(--green)" }} />
                   <div style={{ width: `${pct(npsStats.passives)}%`, background: "#d97706" }} />
                   <div style={{ width: `${pct(npsStats.detractors)}%`, background: "var(--red)" }} />
                 </div>
                 <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 12, flexWrap: "wrap" }}>
-                  <span><b style={{ color: "#16a34a" }}>{npsStats.promoters}</b> Promoters ({pct(npsStats.promoters)}%)</span>
-                  <span><b style={{ color: "#92400e" }}>{npsStats.passives}</b> Passives ({pct(npsStats.passives)}%)</span>
+                  <span><b style={{ color: "var(--green)" }}>{npsStats.promoters}</b> Promoters ({pct(npsStats.promoters)}%)</span>
+                  <span><b style={{ color: "var(--amber-text)" }}>{npsStats.passives}</b> Passives ({pct(npsStats.passives)}%)</span>
                   <span><b style={{ color: "var(--red)" }}>{npsStats.detractors}</b> Detractors ({pct(npsStats.detractors)}%)</span>
                 </div>
               </div>
@@ -122,7 +122,7 @@ export default function RetentionHub({
 
           {npsList.filter((f) => f.score <= 6).length > 0 && (
             <div style={{ ...box, padding: "16px 18px", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><b>🚨 Detractors to follow up</b>{chip("var(--red-bg)", "#991b1b", String(npsList.filter((f) => f.score <= 6).length))}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><b>🚨 Detractors to follow up</b>{chip("var(--red-bg)", "var(--red-text)", String(npsList.filter((f) => f.score <= 6).length))}</div>
               {npsList.filter((f) => f.score <= 6).map((f) => (
                 <div key={f.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                   <b>{f.clientName ?? "—"}</b><span style={{ color: "var(--muted)" }}>{f.comment ?? "—"}</span><span style={{ flex: 1 }} />
@@ -136,7 +136,7 @@ export default function RetentionHub({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
               <thead><tr><th style={th}>Member</th><th style={th}>Score</th><th style={th}>Comment</th><th style={th}>Channel</th><th style={th}>When</th></tr></thead>
               <tbody>
-                {npsList.map((f) => { const s = f.score >= 9 ? ["var(--green-bg)", "#166534"] : f.score <= 6 ? ["var(--red-bg)", "#991b1b"] : ["var(--amber-bg)", "#92400e"];
+                {npsList.map((f) => { const s = f.score >= 9 ? ["var(--green-bg)", "var(--green-text)"] : f.score <= 6 ? ["var(--red-bg)", "var(--red-text)"] : ["var(--amber-bg)", "var(--amber-text)"];
                   return <tr key={f.id} style={{ borderTop: "1px solid var(--border)" }}><td style={{ ...td, fontWeight: 600 }}>{f.clientName ?? "—"}</td><td style={td}>{chip(s[0], s[1], `${f.score}/10`)}</td><td style={{ ...td, color: "var(--muted)" }}>{f.comment ?? "—"}</td><td style={{ ...td, color: "var(--muted)" }}>{f.channel}</td><td style={{ ...td, color: "var(--muted)" }}>{f.date}</td></tr>;
                 })}
                 {npsList.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 14px" }}>No feedback yet.</td></tr>}
@@ -150,9 +150,9 @@ export default function RetentionHub({
       {tab === "referrals" && (
         <>
           <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-            {kpi("Successful referrals", String(referrals.filter((r) => r.status === "rewarded" || r.status === "joined").length), `of ${referrals.length} logged`, "var(--green-bg)", "#166534")}
-            {kpi("Loyalty points live", loyalty.reduce((s, l) => s + l.points, 0).toLocaleString("en-IN"), `across ${loyalty.length} clients`, "#dbeafe", "#1e40af")}
-            {kpi("Tiers", `${loyalty.filter((l) => l.tier === "Platinum").length} Plat · ${loyalty.filter((l) => l.tier === "Gold").length} Gold · ${loyalty.filter((l) => l.tier === "Silver").length} Silver`, "member mix", "#ede9fe", "#6d28d9")}
+            {kpi("Successful referrals", String(referrals.filter((r) => r.status === "rewarded" || r.status === "joined").length), `of ${referrals.length} logged`, "var(--green-bg)", "var(--green-text)")}
+            {kpi("Loyalty points live", loyalty.reduce((s, l) => s + l.points, 0).toLocaleString("en-IN"), `across ${loyalty.length} clients`, "var(--blue-bg)", "var(--blue-text)")}
+            {kpi("Tiers", `${loyalty.filter((l) => l.tier === "Platinum").length} Plat · ${loyalty.filter((l) => l.tier === "Gold").length} Gold · ${loyalty.filter((l) => l.tier === "Silver").length} Silver`, "member mix", "var(--purple-bg)", "var(--purple-text)")}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px" }}><b>Referrals</b><span style={{ flex: 1 }} />{canAct && <ReferralForm clients={clients} />}</div>
@@ -160,7 +160,7 @@ export default function RetentionHub({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
               <thead><tr><th style={th}>Referee</th><th style={th}>Referrer</th><th style={th}>Contact</th><th style={th}>Status</th><th style={th}>Reward</th><th style={th} /></tr></thead>
               <tbody>
-                {referrals.map((r) => { const s = r.status === "rewarded" ? ["var(--green-bg)", "#166534"] : r.status === "joined" ? ["#dbeafe", "#1e40af"] : ["var(--amber-bg)", "#92400e"];
+                {referrals.map((r) => { const s = r.status === "rewarded" ? ["var(--green-bg)", "var(--green-text)"] : r.status === "joined" ? ["var(--blue-bg)", "var(--blue-text)"] : ["var(--amber-bg)", "var(--amber-text)"];
                   return <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}><td style={{ ...td, fontWeight: 600 }}>{r.referredName}</td><td style={{ ...td, color: "var(--muted)" }}>{r.referrerName ?? "—"}</td><td style={{ ...td, color: "var(--muted)" }}>{r.contact ?? "—"}</td><td style={td}>{chip(s[0], s[1], r.status)}</td><td style={td}>{r.reward ? money(r.reward) : "—"}</td><td style={{ ...td, textAlign: "right" }}><ReferralActions id={r.id} status={r.status} /></td></tr>;
                 })}
                 {referrals.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "20px 14px" }}>No referrals yet.</td></tr>}

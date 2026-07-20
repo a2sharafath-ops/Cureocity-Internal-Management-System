@@ -44,7 +44,7 @@ export function WearableConnect({ clientId, connected }: { clientId: string; con
             <input type="hidden" name="status" value={isOn ? "disconnected" : "connected"} />
             <button type="submit" style={{
               border: `1px solid ${isOn ? "var(--brand-fill)" : "var(--border)"}`,
-              background: isOn ? "#e0f2f1" : "#fff",
+              background: isOn ? "var(--brand-tint)" : "#fff",
               color: isOn ? "var(--brand-text)" : "var(--muted)",
               borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
             }}>

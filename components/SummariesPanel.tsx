@@ -50,7 +50,7 @@ export default function SummariesPanel({
   );
   const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
   const disc = (on: boolean, label: string) => (
-    <span style={{ background: on ? "var(--green-bg)" : "#eef2f1", color: on ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 10.5, fontWeight: 700 }}>{on ? "✓" : "○"} {label}</span>
+    <span style={{ background: on ? "var(--green-bg)" : "var(--neutral-bg)", color: on ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 10.5, fontWeight: 700 }}>{on ? "✓" : "○"} {label}</span>
   );
 
   return (
@@ -81,8 +81,8 @@ export default function SummariesPanel({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <b style={{ fontSize: 13 }}>{c.client_name ?? "—"}</b>
                   <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{fmt(c.created_at)} · {c.status}</span>
-                  {c.approved && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
-                  {c.shared && <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
+                  {c.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
+                  {c.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
                 </div>
                 <div style={{ fontSize: 13, marginTop: 3, color: c.summary ? "var(--ink)" : "var(--muted)" }}>{c.summary || "No summary written yet."}</div>
               </div>
@@ -117,10 +117,10 @@ export default function SummariesPanel({
                       <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>{disc(c.doctor, "Dr")}{disc(c.diet, "Diet")}{disc(c.trainer, "Trainer")}</div>
                     </div>
                     {c.generated
-                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>🧬 Blueprint generated — view</Link>
+                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>🧬 Blueprint generated — view</Link>
                       : count === 3
-                        ? <span style={{ color: "#166534", fontSize: 12, fontWeight: 600 }}>Ready to sign off ↓</span>
-                        : <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{count}/3 summaries approved</span>}
+                        ? <span style={{ color: "var(--green-text)", fontSize: 12, fontWeight: 600 }}>Ready to sign off ↓</span>
+                        : <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{count}/3 summaries approved</span>}
                   </div>
                   {!c.generated && count === 3 && (
                     <form action={generateBlueprint} style={{ marginTop: 10, display: "grid", gap: 8 }}>

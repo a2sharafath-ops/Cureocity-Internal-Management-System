@@ -53,7 +53,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
       <h2 style={{ fontSize: 15, margin: 0 }}>{title}</h2><span style={{ flex: 1 }} />{right}
     </div>
   );
-  const sevColor = (s: string) => s === "severe" ? "var(--red)" : s === "mild" ? "var(--muted)" : "#b45309";
+  const sevColor = (s: string) => s === "severe" ? "var(--red)" : s === "mild" ? "var(--muted)" : "var(--amber-text-soft)";
   const a = age(client.dob);
 
   return (
@@ -81,7 +81,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
 
       {/* allergy banner */}
       {allergies.length > 0 && (
-        <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", marginBottom: 18, color: "var(--red)", fontSize: 14 }}>
+        <div style={{ background: "var(--red-bg)", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", marginBottom: 18, color: "var(--red)", fontSize: 14 }}>
           <b>⚠ Allergies:</b> {allergies.map((al) => `${al.substance}${al.severity === "severe" ? " (severe)" : ""}`).join(", ")}
         </div>
       )}
@@ -97,7 +97,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
                 <td style={{ ...td, fontWeight: 600 }}>{p.description}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{p.code ?? "—"}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{p.onset_date ?? "—"}</td>
-                <td style={td}><span style={{ background: p.status === "active" ? "var(--green-bg)" : "#eef2f1", color: p.status === "active" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{p.status}</span></td>
+                <td style={td}><span style={{ background: p.status === "active" ? "var(--green-bg)" : "var(--neutral-bg)", color: p.status === "active" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{p.status}</span></td>
                 <td style={{ ...td, textAlign: "right" }}><ProblemToggle id={p.id} clientId={cid} status={p.status} /></td>
               </tr>
             ))}
@@ -137,7 +137,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
                 <td style={td}>{m.dose ?? "—"}</td>
                 <td style={td}>{m.frequency ?? "—"}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{m.route ?? "—"}</td>
-                <td style={td}><span style={{ background: m.status === "active" ? "var(--green-bg)" : "#eef2f1", color: m.status === "active" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{m.status}</span></td>
+                <td style={td}><span style={{ background: m.status === "active" ? "var(--green-bg)" : "var(--neutral-bg)", color: m.status === "active" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{m.status}</span></td>
                 <td style={{ ...td, textAlign: "right" }}>{m.status === "active" && <MedStop id={m.id} clientId={cid} />}</td>
               </tr>
             ))}
@@ -180,7 +180,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
             <div key={e.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 14 }}>{e.date}</b>
-                <span style={{ background: "#e0f2f1", color: "var(--brand-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{e.type}</span>
+                <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{e.type}</span>
                 {e.chief_complaint && <span style={{ color: "var(--muted)", fontSize: 13 }}>· {e.chief_complaint}</span>}
                 <span style={{ flex: 1 }} />
                 <span style={{ color: "var(--muted)", fontSize: 12 }}>{e.provider ?? ""}</span>
@@ -201,7 +201,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
         {prescriptions.length === 0 && <div style={{ color: "var(--muted)", fontSize: 14 }}>No prescriptions.</div>}
         <div style={{ display: "grid", gap: 10 }}>
           {prescriptions.map((r) => {
-            const chip = r.status === "signed" ? ["var(--green-bg)", "#166534"] : r.status === "dispensed" ? ["#e0f2f1", "var(--brand-text)"] : r.status === "cancelled" ? ["#fee2e2", "var(--red)"] : ["#eef2f1", "var(--muted)"];
+            const chip = r.status === "signed" ? ["var(--green-bg)", "var(--green-text)"] : r.status === "dispensed" ? ["var(--brand-tint)", "var(--brand-text)"] : r.status === "cancelled" ? ["var(--red-bg)", "var(--red)"] : ["var(--neutral-bg)", "var(--muted)"];
             return (
               <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -222,7 +222,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
                     ))}
                   </tbody>
                 </table>
-                {r.flags && <div style={{ marginTop: 8, background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>⚠ Flagged at signing: {r.flags}</div>}
+                {r.flags && <div style={{ marginTop: 8, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>⚠ Flagged at signing: {r.flags}</div>}
                 {r.notes && <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>{r.notes}</div>}
               </div>
             );
@@ -237,12 +237,12 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
           <thead><tr><th style={th}>Test</th><th style={th}>Type</th><th style={th}>Priority</th><th style={th}>Status</th><th style={th}>Result</th><th style={th} /></tr></thead>
           <tbody>
             {orders.map((o) => {
-              const chip = o.status === "resulted" ? ["var(--green-bg)", "#166534"] : o.status === "cancelled" ? ["#fee2e2", "var(--red)"] : o.status === "collected" ? ["var(--amber-bg)", "#92400e"] : ["#eef2f1", "var(--muted)"];
+              const chip = o.status === "resulted" ? ["var(--green-bg)", "var(--green-text)"] : o.status === "cancelled" ? ["var(--red-bg)", "var(--red)"] : o.status === "collected" ? ["var(--amber-bg)", "var(--amber-text)"] : ["var(--neutral-bg)", "var(--muted)"];
               return (
                 <tr key={o.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ ...td, fontWeight: 600 }}>{o.test}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{o.category}</td>
-                  <td style={td}>{o.priority !== "routine" ? <span style={{ color: o.priority === "stat" ? "var(--red)" : "#92400e", fontWeight: 600, textTransform: "uppercase", fontSize: 12 }}>{o.priority}</span> : <span style={{ color: "var(--muted)" }}>routine</span>}</td>
+                  <td style={td}>{o.priority !== "routine" ? <span style={{ color: o.priority === "stat" ? "var(--red)" : "var(--amber-text)", fontWeight: 600, textTransform: "uppercase", fontSize: 12 }}>{o.priority}</span> : <span style={{ color: "var(--muted)" }}>routine</span>}</td>
                   <td style={td}><span style={{ background: chip[0], color: chip[1], borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{o.status}</span></td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{o.result ? `${o.result}${o.result_date ? ` (${o.result_date})` : ""}` : "—"}</td>
                   <td style={{ ...td, textAlign: "right" }}><OrderActions id={o.id} clientId={cid} status={o.status} /></td>

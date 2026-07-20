@@ -56,8 +56,8 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
         <input name="folder" placeholder="Folder (e.g. Templates)" style={{ ...inp, width: 190 }} />
         <input type="file" name="file" required style={{ fontSize: 13 }} />
         <SubmitBtn />
-        {state.error && <span style={{ color: "#991b1b", fontSize: 12 }}>{state.error}</span>}
-        {state.ok && <span style={{ color: "#166534", fontSize: 12 }}>{state.ok}</span>}
+        {state.error && <span style={{ color: "var(--red-text)", fontSize: 12 }}>{state.error}</span>}
+        {state.ok && <span style={{ color: "var(--green-text)", fontSize: 12 }}>{state.ok}</span>}
       </form>
 
       {files.length === 0 ? (
@@ -76,13 +76,13 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
                     <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
                     <div style={{ fontSize: 11, color: "var(--muted)" }}>{f.uploaded_by ?? "—"} · {new Date(f.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
                   </div>
-                  {f.role === "all" && <span style={{ background: "#ede9fe", color: "#6d28d9", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
+                  {f.role === "all" && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
                   {f.url ? (
                     <a href={f.url} target="_blank" rel="noreferrer" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Download</a>
                   ) : <span style={{ color: "var(--muted)", fontSize: 11 }}>sample</span>}
                   <form action={deleteResourceFile}>
                     <input type="hidden" name="id" value={f.id} />
-                    <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "#991b1b" }} title="Delete">✕</button>
+                    <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "var(--red-text)" }} title="Delete">✕</button>
                   </form>
                 </div>
               ))}

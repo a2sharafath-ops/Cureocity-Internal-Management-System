@@ -49,10 +49,10 @@ export default async function ClaimsPage() {
   const stat = (label: string, value: string, color = "var(--brand-text)") => <StatCard label={label} value={value} color={color} />;
   const chipFor = (s: string): [string, string] => {
     const m: Record<string, [string, string]> = {
-      draft: ["#eef2f1", "var(--muted)"], submitted: ["#e0f2f1", "var(--brand-text)"], in_review: ["var(--amber-bg)", "#92400e"],
-      approved: ["var(--green-bg)", "#166534"], rejected: ["#fee2e2", "var(--red)"], paid: ["#dcfce7", "#166534"],
+      draft: ["var(--neutral-bg)", "var(--muted)"], submitted: ["var(--brand-tint)", "var(--brand-text)"], in_review: ["var(--amber-bg)", "var(--amber-text)"],
+      approved: ["var(--green-bg)", "var(--green-text)"], rejected: ["var(--red-bg)", "var(--red)"], paid: ["var(--green-bg)", "var(--green-text)"],
     };
-    return m[s] ?? ["#eef2f1", "var(--muted)"];
+    return m[s] ?? ["var(--neutral-bg)", "var(--muted)"];
   };
 
   return (
@@ -62,7 +62,7 @@ export default async function ClaimsPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Payers, patient policies and the claims pipeline from draft through settlement.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
-        {stat("Pending claims", String(pending.length), pending.length ? "#92400e" : "var(--brand-text)")}
+        {stat("Pending claims", String(pending.length), pending.length ? "var(--amber-text)" : "var(--brand-text)")}
         {stat("Total claimed", money(totalClaimed))}
         {stat("Approved", money(totalApproved))}
         {stat("Settled / paid", money(paid))}
@@ -113,7 +113,7 @@ export default async function ClaimsPage() {
                 <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{p.policy_number ?? "—"}</td>
                 <td style={td}>{money(p.coverage_amount)}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{p.valid_to ?? "—"}</td>
-                <td style={td}><span style={{ background: p.status === "active" ? "var(--green-bg)" : "#eef2f1", color: p.status === "active" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{p.status}</span></td>
+                <td style={td}><span style={{ background: p.status === "active" ? "var(--green-bg)" : "var(--neutral-bg)", color: p.status === "active" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{p.status}</span></td>
               </tr>
             ))}
             {policies.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No policies recorded.</td></tr>}

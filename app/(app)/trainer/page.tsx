@@ -65,7 +65,7 @@ export default async function TrainerPage() {
         </div>
       </div>
       {s.status === "completed" ? (
-        <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>✓ Checked in</span>
+        <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>✓ Checked in</span>
       ) : (
         <SessionActions id={s.id} clientId={s.clients?.id ?? ""} date={s.date} hour={s.hour} trainerId={s.trainer_id} status={s.status} trainers={trainers} />
       )}

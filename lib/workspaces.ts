@@ -17,9 +17,9 @@ export type WsRole = {
 
 export const WS_ROLES: WsRole[] = [
   { key: "doctor",  label: "Doctor Workspace",         short: "Doctor",    kind: "Doctor",  icon: "🩺", color: "#0ea5e9" },
-  { key: "diet",    label: "Dietitian Workspace",      short: "Dietitian", kind: "Diet",    icon: "🍽", color: "#16a34a" },
-  { key: "trainer", label: "Fitness Trainer Workspace", short: "Trainer",  kind: "Trainer", icon: "🎽", color: "#7c3aed" },
-  { key: "coach",   label: "Health Coach Workspace",   short: "Coach",     kind: "Coach",   icon: "🌿", color: "#0d9488" },
+  { key: "diet",    label: "Dietitian Workspace",      short: "Dietitian", kind: "Diet",    icon: "🍽", color: "var(--green)" },
+  { key: "trainer", label: "Fitness Trainer Workspace", short: "Trainer",  kind: "Trainer", icon: "🎽", color: "var(--purple)" },
+  { key: "coach",   label: "Health Coach Workspace",   short: "Coach",     kind: "Coach",   icon: "🌿", color: "#e11f34" },
   { key: "psych",   label: "Psychology Workspace",     short: "Psychologist", kind: "Psychologist", icon: "💬", color: "#db2777" },
 ];
 

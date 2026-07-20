@@ -12,14 +12,14 @@ export default function MealStaffCell({
   const logged = !!log?.description;
 
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: logged ? "#f8fbfa" : "#fff" }}>
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: logged ? "var(--surface)" : "#fff" }}>
       <div style={{ fontSize: 13, fontWeight: 600 }}>{icon} {label}</div>
 
       {logged ? (
         <>
           <div style={{ fontSize: 13, marginTop: 4 }}>{log!.description}</div>
           {log?.review ? (
-            <div style={{ fontSize: 12, color: "#166534", marginTop: 4 }}>✔ {log.review}</div>
+            <div style={{ fontSize: 12, color: "var(--green-text)", marginTop: 4 }}>✔ {log.review}</div>
           ) : null}
           <button type="button" onClick={() => setRev((o) => !o)} style={{ marginTop: 6, border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>
             {rev ? "Cancel" : log?.review ? "Edit review" : "Add review"}
@@ -37,7 +37,7 @@ export default function MealStaffCell({
         <div style={{ marginTop: 6 }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>Not logged yet. </span>
           {log?.nudged ? (
-            <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 8px", fontSize: 11 }}>Reminder sent</span>
+            <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11 }}>Reminder sent</span>
           ) : (
             <form action={nudgeMeal} style={{ display: "inline" }}>
               <input type="hidden" name="client_id" value={clientId} />
@@ -50,9 +50,9 @@ export default function MealStaffCell({
 
       {log?.doubt && (
         <div style={{ marginTop: 8, background: "var(--amber-bg)", borderRadius: 8, padding: "6px 8px" }}>
-          <div style={{ fontSize: 12, color: "#92400e" }}>❓ {log.doubt}</div>
+          <div style={{ fontSize: 12, color: "var(--amber-text)" }}>❓ {log.doubt}</div>
           {log.doubt_answer ? (
-            <div style={{ fontSize: 12, color: "#166534", marginTop: 3 }}>↳ {log.doubt_answer}</div>
+            <div style={{ fontSize: 12, color: "var(--green-text)", marginTop: 3 }}>↳ {log.doubt_answer}</div>
           ) : ans ? (
             <form action={answerMealDoubt} onSubmit={() => setTimeout(() => setAns(false), 50)} style={{ marginTop: 4 }}>
               <input type="hidden" name="client_id" value={clientId} />

@@ -170,7 +170,7 @@ export default async function WhiteboardPage() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>
                 {new Date(today + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}
-                {session.status === "closed" && <span style={{ marginLeft: 8, background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>Closed</span>}
+                {session.status === "closed" && <span style={{ marginLeft: 8, background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>Closed</span>}
               </div>
               <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
                 {branch}{session.facilitator ? ` · led by ${session.facilitator}` : ""} · {progress.total} client{progress.total === 1 ? "" : "s"} on the board

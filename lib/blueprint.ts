@@ -23,10 +23,10 @@ export const BP_SCORES = [
 export type BpScores = Record<string, number>;
 
 export function band(v: number | null | undefined): { label: string; bg: string; color: string } {
-  if (v == null || Number.isNaN(v)) return { label: "—", bg: "#eef2f1", color: "var(--muted)" };
-  if (v >= 70) return { label: "Good", bg: "var(--green-bg)", color: "#166534" };
-  if (v >= 40) return { label: "Moderate", bg: "var(--amber-bg)", color: "#92400e" };
-  return { label: "Needs attention", bg: "var(--red-bg)", color: "#991b1b" };
+  if (v == null || Number.isNaN(v)) return { label: "—", bg: "var(--neutral-bg)", color: "var(--muted)" };
+  if (v >= 70) return { label: "Good", bg: "var(--green-bg)", color: "var(--green-text)" };
+  if (v >= 40) return { label: "Moderate", bg: "var(--amber-bg)", color: "var(--amber-text)" };
+  return { label: "Needs attention", bg: "var(--red-bg)", color: "var(--red-text)" };
 }
 
 export function scoresFilled(scores: BpScores | null | undefined): number {

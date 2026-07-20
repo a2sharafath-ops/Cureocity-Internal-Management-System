@@ -44,12 +44,12 @@ export default async function TargetsPage() {
           <b style={{ fontSize: 14 }}>{title}</b>
           <span style={{ flex: 1 }} />
           {tgt > 0 && (hit
-            ? <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>🎉 Target hit</span>
-            : <span style={{ background: "var(--amber-bg)", color: "#b45309", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{fmt(tgt - val)} to go</span>)}
+            ? <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>🎉 Target hit</span>
+            : <span style={{ background: "var(--amber-bg)", color: "var(--amber-text-soft)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{fmt(tgt - val)} to go</span>)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ flex: 1, background: "#eef2f1", borderRadius: 8, height: 14, overflow: "hidden" }}>
-            <div style={{ width: `${pct}%`, height: "100%", background: hit ? "#16a34a" : "var(--brand-fill)" }} />
+          <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 8, height: 14, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: hit ? "var(--green)" : "var(--brand-fill)" }} />
           </div>
           <b style={{ fontSize: 13, whiteSpace: "nowrap" }}>{fmt(val)} / {tgt > 0 ? fmt(tgt) : "—"} · {pct}%</b>
         </div>
@@ -73,7 +73,7 @@ export default async function TargetsPage() {
       </p>
 
       {noTarget && (
-        <div style={{ background: "#eef2f1", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "var(--muted)" }}>
+        <div style={{ background: "var(--neutral-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 16, fontSize: 13, color: "var(--muted)" }}>
           No targets set for {monthLabel} yet.{canSet ? " Click “Set targets” to add this month's goals." : " Ask an Administrator to set this month's goals."}
         </div>
       )}

@@ -5,7 +5,7 @@ const money = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN");
 
 function shell(title: string, body: string) {
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:520px;margin:0 auto;color:#0f172a">
-    <div style="background:#0f766e;color:#fff;padding:18px 22px;border-radius:12px 12px 0 0">
+    <div style="background:#e11f34;color:#fff;padding:18px 22px;border-radius:12px 12px 0 0">
       <div style="font-size:18px;font-weight:700">✚ Cureocity</div>
     </div>
     <div style="border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:22px">

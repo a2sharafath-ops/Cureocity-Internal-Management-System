@@ -29,7 +29,7 @@ export default async function FormsPage() {
   const completed = responses.filter((r) => r.status === "completed");
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const typeChip = (t: string) => <span style={{ background: t === "consent" ? "var(--amber-bg)" : "#e0f2f1", color: t === "consent" ? "#b45309" : "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
+  const typeChip = (t: string) => <span style={{ background: t === "consent" ? "var(--amber-bg)" : "var(--brand-tint)", color: t === "consent" ? "var(--amber-text-soft)" : "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
 
   return (
     <div style={{ maxWidth: 1000 }}>

@@ -24,7 +24,7 @@ export default function MessageThread({ messages, viewer }: { messages: Msg[]; v
             <div
               style={{
                 maxWidth: "72%",
-                background: mine ? "var(--brand-fill)" : "#eef2f1",
+                background: mine ? "var(--brand-fill)" : "var(--neutral-bg)",
                 color: mine ? "#fff" : "var(--ink)",
                 borderRadius: 12,
                 padding: "8px 12px",

@@ -46,7 +46,7 @@ function Bars({ data, color, fmt }: { data: { label: string; value: number }[]; 
       {data.map((d) => (
         <div key={d.label} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
           <span style={{ width: 120, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.label}</span>
-          <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 20, overflow: "hidden" }}>
+          <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 20, overflow: "hidden" }}>
             <div style={{ width: `${(d.value / max) * 100}%`, height: "100%", background: color, borderRadius: 6, minWidth: d.value > 0 ? 2 : 0 }} />
           </div>
           <span style={{ width: 90, textAlign: "right", fontWeight: 600 }}>{fmt ? fmt(d.value) : d.value}</span>
@@ -166,7 +166,7 @@ export default async function ReportsPage() {
           <div style={{ textAlign: "center", padding: "10px 0" }}>
             <div style={{ fontSize: 44, fontWeight: 800, color: "var(--brand-text)" }}>{completionRate}%</div>
             <div style={{ color: "var(--muted)", fontSize: 13 }}>{completedSessions} completed of {totalSessions} scheduled</div>
-            <div style={{ marginTop: 12, background: "#eef2f1", borderRadius: 8, height: 12, overflow: "hidden" }}>
+            <div style={{ marginTop: 12, background: "var(--neutral-bg)", borderRadius: 8, height: 12, overflow: "hidden" }}>
               <div style={{ width: `${completionRate}%`, height: "100%", background: "var(--brand-fill)" }} />
             </div>
           </div>

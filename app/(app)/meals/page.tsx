@@ -61,8 +61,8 @@ export default async function MealsPage() {
                 <Link href={`/clients/${c.id}`} style={{ fontWeight: 700, fontSize: 15, color: "var(--ink)", textDecoration: "none" }}>{c.name}</Link>
                 <span style={{ flex: 1 }} />
                 {pending > 0
-                  ? <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{pending} to action</span>
-                  : <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>All caught up</span>}
+                  ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{pending} to action</span>
+                  : <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>All caught up</span>}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
                 {MEALS.map((m) => (

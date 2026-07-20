@@ -10,9 +10,9 @@ import { RingMeter } from "@/components/Meters";
 export type Flag = { sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string };
 
 const SEV = {
-  high: { bg: "var(--red-bg)", col: "#991b1b", label: "Urgent", weight: 10 },
-  med: { bg: "var(--amber-bg)", col: "#92400e", label: "Soon", weight: 4 },
-  low: { bg: "#eef2f1", col: "var(--muted)", label: "Tidy", weight: 1.5 },
+  high: { bg: "var(--red-bg)", col: "var(--red-text)", label: "Urgent", weight: 10 },
+  med: { bg: "var(--amber-bg)", col: "var(--amber-text)", label: "Soon", weight: 4 },
+  low: { bg: "var(--neutral-bg)", col: "var(--muted)", label: "Tidy", weight: 1.5 },
 } as const;
 
 /** 100 = clean books. Each open item costs points by severity. */
@@ -48,7 +48,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
         </span>
         <span style={{
           background: flags.length ? "var(--red-bg)" : "var(--green-bg)",
-          color: flags.length ? "#991b1b" : "#166534",
+          color: flags.length ? "var(--red-text)" : "var(--green-text)",
           borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700,
         }}>{flags.length}</span>
       </div>

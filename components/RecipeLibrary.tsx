@@ -60,13 +60,13 @@ export default function RecipeLibrary({ recipes }: { recipes: RecipeRow[] }) {
                     <b style={{ fontSize: 13 }}>{r.name}</b>
                     <div style={{ color: "var(--muted)", fontSize: 12 }}>{[r.tags, r.kcal ? `${r.kcal} kcal` : null].filter(Boolean).join(" · ") || "—"}</div>
                   </div>
-                  <span style={{ background: r.published ? "var(--green-bg)" : "#eef2f1", color: r.published ? "#166534" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{r.published ? "Published" : "Draft"}</span>
+                  <span style={{ background: r.published ? "var(--green-bg)" : "var(--neutral-bg)", color: r.published ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{r.published ? "Published" : "Draft"}</span>
                   <form action={toggleRecipe}>
                     <input type="hidden" name="id" value={r.id} />
                     <input type="hidden" name="published" value={String(r.published)} />
                     <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>{r.published ? "Unpublish" : "Publish"}</button>
                   </form>
-                  <form action={deleteRecipe}><input type="hidden" name="id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "#991b1b" }} title="Delete">✕</button></form>
+                  <form action={deleteRecipe}><input type="hidden" name="id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "var(--red-text)" }} title="Delete">✕</button></form>
                 </div>
               ))}
             </div>

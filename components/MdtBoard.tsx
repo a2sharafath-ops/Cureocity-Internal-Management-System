@@ -58,12 +58,12 @@ export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients:
       <div style={{ ...box, overflow: "hidden" }}>
         {notes.length ? notes.map((m) => (
           <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderTop: "1px solid var(--border)" }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: m.escalated ? "#ede9fe" : "var(--sidebar-hover)", color: m.escalated ? "#6d28d9" : "var(--brand-text)", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>{m.escalated ? "⤴" : "🗒️"}</div>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: m.escalated ? "var(--purple-bg)" : "var(--brand-tint)", color: m.escalated ? "var(--purple-text)" : "var(--brand-text)", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>{m.escalated ? "⤴" : "🗒️"}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <b style={{ fontSize: 13 }}>{m.author ?? "—"}</b>
                 {m.client_name && <span style={{ color: "var(--muted)", fontSize: 12 }}>· {m.client_name}</span>}
-                {m.escalated && <span style={{ background: "#ede9fe", color: "#6d28d9", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>→ {ROLE_LABEL[m.to_role ?? ""] ?? m.to_role}</span>}
+                {m.escalated && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>→ {ROLE_LABEL[m.to_role ?? ""] ?? m.to_role}</span>}
                 <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{fmt(m.created_at)}</span>
               </div>
               <div style={{ fontSize: 13, marginTop: 3 }}>{m.body}</div>
@@ -74,7 +74,7 @@ export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients:
                 <input type="hidden" name="id" value={m.id} />
                 <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Acknowledge</button>
               </form>
-            ) : m.escalated ? <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>✓ {m.status}</span> : null}
+            ) : m.escalated ? <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>✓ {m.status}</span> : null}
           </div>
         )) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No MDT updates yet.</div>}
       </div>

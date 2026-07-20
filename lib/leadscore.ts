@@ -42,8 +42,8 @@ export function leadProduct(l: LeadSignals): string {
 }
 
 export const TIER_STYLE: Record<Tier, { bg: string; color: string }> = {
-  HOT: { bg: "#fee2e2", color: "var(--red)" },
-  WARM: { bg: "var(--amber-bg)", color: "#b45309" },
-  COOL: { bg: "#dbeafe", color: "#2563eb" },
-  COLD: { bg: "#eef2f1", color: "var(--muted)" },
+  HOT: { bg: "var(--red-bg)", color: "var(--red)" },
+  WARM: { bg: "var(--amber-bg)", color: "var(--amber-text-soft)" },
+  COOL: { bg: "var(--blue-bg)", color: "var(--blue)" },
+  COLD: { bg: "var(--neutral-bg)", color: "var(--muted)" },
 };

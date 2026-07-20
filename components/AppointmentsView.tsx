@@ -34,7 +34,7 @@ export default function AppointmentsView({
 
   const provMap = new Map(providers.map((p) => [p.id, p]));
   const provDisc = (pid: string | null) => (pid ? provMap.get(pid)?.discipline ?? null : null);
-  const provColor = (pid: string | null) => (pid ? provMap.get(pid)?.color ?? "#0f766e" : "#0f766e");
+  const provColor = (pid: string | null) => (pid ? provMap.get(pid)?.color ?? "#e11f34" : "#e11f34");
 
   const visible = appts.filter((a) => a.status !== "cancelled" && (disc === "All" || provDisc(a.provider_id) === disc));
   const cells = new Map<string, ViewAppt[]>();
@@ -44,8 +44,8 @@ export default function AppointmentsView({
   const statusStyle = (s: string): React.CSSProperties => s === "completed" ? { opacity: 0.6 } : s === "no_show" ? { opacity: 0.6, textDecoration: "line-through" } : {};
   const chip = (active: boolean): React.CSSProperties => ({ padding: "6px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: active ? "var(--brand-fill)" : "#fff", color: active ? "#fff" : "var(--muted)" });
   const statusChip = (s: string) => {
-    const m: Record<string, [string, string]> = { scheduled: ["#dbeafe", "#1e40af"], completed: ["var(--green-bg)", "#166534"], no_show: ["var(--red-bg)", "#991b1b"], cancelled: ["#eef2f1", "#64748b"] };
-    const [bg, fg] = m[s] ?? ["#eef2f1", "#64748b"];
+    const m: Record<string, [string, string]> = { scheduled: ["var(--blue-bg)", "var(--blue-text)"], completed: ["var(--green-bg)", "var(--green-text)"], no_show: ["var(--red-bg)", "var(--red-text)"], cancelled: ["var(--neutral-bg)", "#64748b"] };
+    const [bg, fg] = m[s] ?? ["var(--neutral-bg)", "#64748b"];
     return <span style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{s.replace("_", " ")}</span>;
   };
 
@@ -124,7 +124,7 @@ export default function AppointmentsView({
               <tr>
                 <th style={{ width: 56, padding: "8px 6px", borderBottom: "1px solid var(--border)" }} />
                 {days.map((d) => (
-                  <th key={d} style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", background: d === today ? "#e0f2f1" : "transparent" }}>
+                  <th key={d} style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", background: d === today ? "var(--brand-tint)" : "transparent" }}>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{dayName(d)}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: d === today ? "var(--brand-text)" : "inherit" }}>{dayNum(d)}</div>
                   </th>
@@ -164,7 +164,7 @@ export default function AppointmentsView({
       {tab === "tracker" && (
         <div>
           <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-            {([["Scheduled", counts.scheduled, "#1e40af"], ["Completed", counts.completed, "#166534"], ["No-shows", counts.no_show, "#991b1b"]] as const).map(([k, v, c]) => (
+            {([["Scheduled", counts.scheduled, "var(--blue-text)"], ["Completed", counts.completed, "var(--green-text)"], ["No-shows", counts.no_show, "var(--red-text)"]] as const).map(([k, v, c]) => (
               <div key={k} style={{ ...box, padding: "14px 18px", minWidth: 130 }}>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{k}</div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: c }}>{v}</div>

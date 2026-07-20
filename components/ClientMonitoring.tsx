@@ -26,14 +26,14 @@ export default function ClientMonitoring({ role, rows, linkQuery = "" }: { role:
   const focusCell = (r: MonitorRow) => {
     if (role === "doctor") {
       const has = r.conditions && r.conditions.trim().toLowerCase() !== "none";
-      return has ? chip("var(--amber-bg)", "#92400e", r.conditions!.length > 26 ? r.conditions!.slice(0, 26) + "…" : r.conditions!) : <span style={{ color: "var(--muted)" }}>—</span>;
+      return has ? chip("var(--amber-bg)", "var(--amber-text)", r.conditions!.length > 26 ? r.conditions!.slice(0, 26) + "…" : r.conditions!) : <span style={{ color: "var(--muted)" }}>—</span>;
     }
     if (role === "trainer") {
       if (!r.sessionsTotal) return <span style={{ color: "var(--muted)" }}>—</span>;
       const pct = Math.min(100, Math.round((r.sessionsUsed / r.sessionsTotal) * 100));
       return (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ background: "#eef2f1", borderRadius: 6, height: 8, width: 80, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: pct >= 80 ? "#16a34a" : "var(--brand-fill)" }} /></div>
+          <div style={{ background: "var(--neutral-bg)", borderRadius: 6, height: 8, width: 80, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: pct >= 80 ? "var(--green)" : "var(--brand-fill)" }} /></div>
           <span style={{ fontSize: 11, color: "var(--muted)" }}>{r.sessionsUsed}/{r.sessionsTotal}</span>
         </div>
       );
@@ -50,8 +50,8 @@ export default function ClientMonitoring({ role, rows, linkQuery = "" }: { role:
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        {chip("#eef2f1", "var(--muted)", `${rows.length} clients`)}
-        {chip(atRisk ? "var(--amber-bg)" : "var(--green-bg)", atRisk ? "#92400e" : "#166534", `${atRisk} need attention`)}
+        {chip("var(--neutral-bg)", "var(--muted)", `${rows.length} clients`)}
+        {chip(atRisk ? "var(--amber-bg)" : "var(--green-bg)", atRisk ? "var(--amber-text)" : "var(--green-text)", `${atRisk} need attention`)}
       </div>
       <div style={{ ...box, overflow: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
@@ -74,8 +74,8 @@ export default function ClientMonitoring({ role, rows, linkQuery = "" }: { role:
                 </td>
                 <td style={td}>{r.pkg ? chip("var(--brand-tint)", "var(--brand-text)", r.pkg) : "—"}</td>
                 <td style={td}>{focusCell(r)}</td>
-                <td style={td}>{r.openFollowups ? chip("var(--amber-bg)", "#92400e", `${r.openFollowups} open`) : chip("var(--green-bg)", "#166534", "Clear")}</td>
-                <td style={td}>{r.openConcerns ? chip("var(--red-bg)", "#991b1b", `${r.openConcerns} open`) : chip("#eef2f1", "var(--muted)", "None")}</td>
+                <td style={td}>{r.openFollowups ? chip("var(--amber-bg)", "var(--amber-text)", `${r.openFollowups} open`) : chip("var(--green-bg)", "var(--green-text)", "Clear")}</td>
+                <td style={td}>{r.openConcerns ? chip("var(--red-bg)", "var(--red-text)", `${r.openConcerns} open`) : chip("var(--neutral-bg)", "var(--muted)", "None")}</td>
                 <td style={{ ...td, color: "var(--muted)", maxWidth: 220 }}>{r.lastMdt ? (r.lastMdt.length > 60 ? r.lastMdt.slice(0, 60) + "…" : r.lastMdt) : "—"}</td>
               </tr>
             ))}

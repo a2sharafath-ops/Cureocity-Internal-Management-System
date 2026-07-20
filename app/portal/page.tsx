@@ -173,7 +173,7 @@ export default async function PortalHome() {
                 <span style={{ width: 28, color: "var(--muted)" }}>#{s.seq}</span>
                 <span style={{ width: 120 }}>{s.date === TODAY ? "Today" : s.date}</span>
                 <span style={{ width: 90 }}>{fmtHour(s.hour)}</span>
-                <span style={{ color: s.status === "completed" ? "#166534" : "var(--muted)" }}>{s.status}</span>
+                <span style={{ color: s.status === "completed" ? "var(--green-text)" : "var(--muted)" }}>{s.status}</span>
               </div>
             ))}
           </div>
@@ -203,10 +203,10 @@ export default async function PortalHome() {
             <div style={{ fontSize: 13, marginBottom: 10 }}>
               🩸 Blood report:{" "}
               {blood.submitted ? (
-                <b style={{ color: "#166534" }}>received ✓{blood.submitted_date ? ` (${blood.submitted_date})` : ""}</b>
+                <b style={{ color: "var(--green-text)" }}>received ✓{blood.submitted_date ? ` (${blood.submitted_date})` : ""}</b>
               ) : (
                 <>
-                  <b style={{ color: "#92400e" }}>requested — upload your report</b>
+                  <b style={{ color: "var(--amber-text)" }}>requested — upload your report</b>
                   <div style={{ marginTop: 8 }}>
                     <FileUploadForm variant="portal" kind="blood_report" label="Upload blood report" accept=".pdf,image/*" />
                     <div style={{ marginTop: 4, fontSize: 11, color: "var(--muted)" }}>PDF or photo · max 10 MB.</div>
@@ -217,7 +217,7 @@ export default async function PortalHome() {
           )}
           {bp?.generated ? (
             <div style={{ fontSize: 13 }}>
-              🧬 <b style={{ color: "#166534" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
+              🧬 <b style={{ color: "var(--green-text)" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
               {bp.consolidated && <div style={{ marginTop: 6, color: "var(--muted)" }}>{bp.consolidated}</div>}
               {bp.scores && (() => {
                 const vals = BP_SCORES.map((s) => bp.scores![s.key]).filter((v): v is number => typeof v === "number");
@@ -352,7 +352,7 @@ export default async function PortalHome() {
         <>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>🩺 My health record</div>
           {myAllergies.length > 0 && (
-            <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", marginBottom: 10, color: "var(--red)", fontSize: 13 }}>
+            <div style={{ background: "var(--red-bg)", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", marginBottom: 10, color: "var(--red)", fontSize: 13 }}>
               <b>Allergies:</b> {myAllergies.map((a) => `${a.substance}${a.severity === "severe" ? " (severe)" : ""}`).join(", ")}
             </div>
           )}
@@ -391,7 +391,7 @@ export default async function PortalHome() {
               <span style={{ color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</span>
               <span style={{ flex: 1 }}>{i.description}</span>
               <b>₹{Number(i.amount).toLocaleString("en-IN")}</b>
-              <span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span>
+              <span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "var(--neutral-bg)", color: i.status === "Paid" ? "var(--green-text)" : i.status === "Unpaid" ? "var(--amber-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span>
             </div>
           ))}
           <div style={{ marginTop: 8, fontSize: 11, color: "var(--muted)" }}>Pay unpaid invoices at the front desk. Online payment coming soon.</div>

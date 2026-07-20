@@ -39,8 +39,8 @@ export default async function SubscriptionsPage() {
   const dueCount = active.filter((s) => s.auto_renew && (s.renews_on ?? "") <= today).length;
 
   const statusChip = (s: string) => {
-    const map: Record<string, [string, string]> = { active: ["var(--green-bg)", "#166534"], paused: ["var(--amber-bg)", "#92400e"], cancelled: ["#eef2f1", "var(--muted)"] };
-    const [bg, color] = map[s] ?? ["#eef2f1", "var(--muted)"];
+    const map: Record<string, [string, string]> = { active: ["var(--green-bg)", "var(--green-text)"], paused: ["var(--amber-bg)", "var(--amber-text)"], cancelled: ["var(--neutral-bg)", "var(--muted)"] };
+    const [bg, color] = map[s] ?? ["var(--neutral-bg)", "var(--muted)"];
     return <span style={{ background: bg, color, borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>;
   };
 
@@ -87,7 +87,7 @@ export default async function SubscriptionsPage() {
                   <td style={{ padding: "12px 16px" }}>{s.packages?.name ?? "—"}<div style={{ color: "var(--muted)", fontSize: 11 }}>every {s.interval_days} days</div></td>
                   <td style={{ padding: "12px 16px", fontWeight: 600 }}>{money(s.amount)}</td>
                   <td style={{ padding: "12px 16px" }}>
-                    {s.renews_on ?? "—"} {due && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 600 }}>due</span>}
+                    {s.renews_on ?? "—"} {due && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 600 }}>due</span>}
                     {!s.auto_renew && s.status === "active" && <div style={{ color: "var(--muted)", fontSize: 11 }}>auto-renew off</div>}
                   </td>
                   <td style={{ padding: "12px 16px" }}>{statusChip(s.status)}</td>

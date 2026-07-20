@@ -35,7 +35,7 @@ export default function PortalLoginForm({
   return (
     <div>
       {state.ok ? (
-        <div style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>{state.ok}</div>
+        <div style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>{state.ok}</div>
       ) : !open ? (
         <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, cursor: "pointer" }}>
           + Create portal login
@@ -52,7 +52,7 @@ export default function PortalLoginForm({
             <input style={input} name="password" required minLength={6} placeholder="min 6 characters" />
           </div>
           {state.error && (
-            <div style={{ gridColumn: "1 / -1", background: "var(--red-bg)", color: "#991b1b", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>{state.error}</div>
+            <div style={{ gridColumn: "1 / -1", background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>{state.error}</div>
           )}
           <div style={{ gridColumn: "1 / -1" }}><SubmitButton /></div>
         </form>

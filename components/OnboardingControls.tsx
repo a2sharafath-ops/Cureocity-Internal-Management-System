@@ -27,7 +27,7 @@ export function OnboardingCard({ id, name, role, joining, steps, status }: { id:
         <b style={{ fontSize: 15 }}>{name}</b>
         <span style={{ color: "var(--muted)", fontSize: 12 }}>{role ?? ""}{joining ? ` · joins ${joining}` : ""}</span>
         <span style={{ flex: 1 }} />
-        <span style={{ background: status === "complete" ? "var(--green-bg)" : "var(--amber-bg)", color: status === "complete" ? "#166534" : "#b45309", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{doneCount}/{steps.length}</span>
+        <span style={{ background: status === "complete" ? "var(--green-bg)" : "var(--amber-bg)", color: status === "complete" ? "var(--green-text)" : "var(--amber-text-soft)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{doneCount}/{steps.length}</span>
         <form action={removeOnboarding}><input type="hidden" name="id" value={id} /><button type="submit" title="Remove" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form>
       </div>
       <div style={{ display: "grid", gap: 6 }}>

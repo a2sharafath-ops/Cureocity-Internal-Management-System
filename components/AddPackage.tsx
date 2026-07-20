@@ -56,8 +56,8 @@ export default function AddPackage({ clientId, packages, hasMembership }: { clie
         <button onClick={submit} disabled={pending || blocked} style={{ background: blocked ? "#cbd5e1" : "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: blocked ? "not-allowed" : "pointer" }}>{pending ? "Adding…" : "Add"}</button>
         <button onClick={() => { setOpen(false); setErr(null); }} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>Cancel</button>
       </div>
-      {blocked && <div style={{ marginTop: 8, fontSize: 12, color: "#92400e", background: "var(--amber-bg)", borderRadius: 8, padding: "7px 10px" }}>⚠ PT & Comprehensive packages require an active membership. Sell a facility membership first.</div>}
-      {err && !blocked && <div style={{ marginTop: 8, fontSize: 12, color: "#991b1b" }}>{err}</div>}
+      {blocked && <div style={{ marginTop: 8, fontSize: 12, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "7px 10px" }}>⚠ PT & Comprehensive packages require an active membership. Sell a facility membership first.</div>}
+      {err && !blocked && <div style={{ marginTop: 8, fontSize: 12, color: "var(--red-text)" }}>{err}</div>}
     </div>
   );
 }

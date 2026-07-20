@@ -52,16 +52,16 @@ export default async function CareTeamPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Every clinical tool in one place — records, orders, blueprint, telehealth &amp; more.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-        {card("🧠", "Whiteboard", "Daily team meeting", null, "clients on the board", "/whiteboard", "#ede9fe")}
-        {card("🩺", "Consultations", "Doctor · Coach · Psychologist", consultsPend.count ?? 0, "to complete", "/pro", "#e0f2f1")}
-        {canEmr(me.role) && card("📋", "Patient Records", "EMR — problems, meds, vitals", null, "open charts", "/emr", "#dbeafe")}
-        {canEmr(me.role) && card("🧪", "Orders & Labs", "Prescriptions & results", ordersOpen.count ?? 0, "open orders", "/orders", "#fef3c7")}
-        {card("🍽", "Meal Monitoring", "Dietitian workspace", mealsToday.count ?? 0, "logs today", "/meals", "#e0f2f1")}
-        {card("🎽", "Trainer", "Session board & check-ins", sessToday.count ?? 0, "sessions today", "/trainer", "#ede9fe")}
-        {card("🧬", "BluePrint", "Blood reports & 9 scores", bloodPend.count ?? 0, "reports pending", "/blueprint", "#fee2e2")}
-        {card("📅", "Appointments", "Consultations & assessments", apptsToday.count ?? 0, "today", "/appointments", "#dbeafe")}
-        {card("🏃", "Exercise Library", "Templates & assignments", null, "workouts", "/exlib", "#e0f2f1")}
-        {card("📹", "Telehealth", "Video consultations", null, "video visits", "/telehealth", "#ede9fe")}
+        {card("🧠", "Whiteboard", "Daily team meeting", null, "clients on the board", "/whiteboard", "var(--purple-bg)")}
+        {card("🩺", "Consultations", "Doctor · Coach · Psychologist", consultsPend.count ?? 0, "to complete", "/pro", "var(--brand-tint)")}
+        {canEmr(me.role) && card("📋", "Patient Records", "EMR — problems, meds, vitals", null, "open charts", "/emr", "var(--blue-bg)")}
+        {canEmr(me.role) && card("🧪", "Orders & Labs", "Prescriptions & results", ordersOpen.count ?? 0, "open orders", "/orders", "var(--amber-bg)")}
+        {card("🍽", "Meal Monitoring", "Dietitian workspace", mealsToday.count ?? 0, "logs today", "/meals", "var(--brand-tint)")}
+        {card("🎽", "Trainer", "Session board & check-ins", sessToday.count ?? 0, "sessions today", "/trainer", "var(--purple-bg)")}
+        {card("🧬", "BluePrint", "Blood reports & 9 scores", bloodPend.count ?? 0, "reports pending", "/blueprint", "var(--red-bg)")}
+        {card("📅", "Appointments", "Consultations & assessments", apptsToday.count ?? 0, "today", "/appointments", "var(--blue-bg)")}
+        {card("🏃", "Exercise Library", "Templates & assignments", null, "workouts", "/exlib", "var(--brand-tint)")}
+        {card("📹", "Telehealth", "Video consultations", null, "video visits", "/telehealth", "var(--purple-bg)")}
       </div>
     </div>
   );

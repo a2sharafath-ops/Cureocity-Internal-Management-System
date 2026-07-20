@@ -15,10 +15,10 @@ export type ApptRow = {
 };
 
 const STATUS: Record<string, [string, string, string]> = {
-  scheduled: ["#eef2f1", "var(--muted)", "Scheduled"],
-  completed: ["var(--green-bg)", "#166534", "Completed"],
-  cancelled: ["var(--red-bg)", "#991b1b", "Cancelled"],
-  no_show: ["var(--amber-bg)", "#92400e", "No-show"],
+  scheduled: ["var(--neutral-bg)", "var(--muted)", "Scheduled"],
+  completed: ["var(--green-bg)", "var(--green-text)", "Completed"],
+  cancelled: ["var(--red-bg)", "var(--red-text)", "Cancelled"],
+  no_show: ["var(--amber-bg)", "var(--amber-text)", "No-show"],
 };
 
 function fmtHour(h: number | null) {

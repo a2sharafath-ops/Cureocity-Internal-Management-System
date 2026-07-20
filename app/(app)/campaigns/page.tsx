@@ -35,7 +35,7 @@ export default async function CampaignsPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Reusable templates and one-click audience sends. Delivery uses your email provider — every send is logged in Notifications.</p>
 
       {!email.configured && (
-        <div style={{ background: "#eef2f1", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 13, color: "var(--muted)" }}>
+        <div style={{ background: "var(--neutral-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 18, fontSize: 13, color: "var(--muted)" }}>
           Email provider not configured — sends run as <b>dry-runs</b> (recipients resolved and logged, nothing delivered) until <code>RESEND_API_KEY</code> is set.
         </div>
       )}
@@ -54,7 +54,7 @@ export default async function CampaignsPage() {
                 <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{c.message_templates?.name ?? "—"}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{AUDIENCE_LABEL[c.audience] ?? c.audience}</td>
-                <td style={td}><span style={{ background: c.status === "sent" ? "var(--green-bg)" : "#eef2f1", color: c.status === "sent" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{c.status}</span></td>
+                <td style={td}><span style={{ background: c.status === "sent" ? "var(--green-bg)" : "var(--neutral-bg)", color: c.status === "sent" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{c.status}</span></td>
                 <td style={td}>{c.status === "sent" ? `${c.sent_count}${c.sent_at ? ` · ${c.sent_at.slice(0, 10)}` : ""}` : "—"}</td>
                 <td style={{ ...td, textAlign: "right" }}>{c.status !== "sent" && <SendCampaign id={c.id} configured={email.configured} />}</td>
               </tr>

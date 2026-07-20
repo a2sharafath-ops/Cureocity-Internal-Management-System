@@ -59,7 +59,7 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
   const th: React.CSSProperties = { padding: "11px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 13, verticalAlign: "top" };
   const sel: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
-  const prioColor = (p: string) => p === "High" ? "var(--red)" : p === "Medium" ? "#b45309" : "var(--muted)";
+  const prioColor = (p: string) => p === "High" ? "var(--red)" : p === "Medium" ? "var(--amber-text-soft)" : "var(--muted)";
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>

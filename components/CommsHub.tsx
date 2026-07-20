@@ -11,7 +11,7 @@ export type CTemplate = { id: string; name: string; category: string; subject: s
 export type CCampaign = { id: string; name: string; audience: string; status: string; sent_count: number; templateName: string | null };
 
 const CHANNELS = ["WhatsApp", "Email", "SMS"];
-const chColor: Record<string, [string, string]> = { WhatsApp: ["#dcfce7", "#166534"], Email: ["#dbeafe", "#1e40af"], SMS: ["#ede9fe", "#6d28d9"] };
+const chColor: Record<string, [string, string]> = { WhatsApp: ["var(--green-bg)", "var(--green-text)"], Email: ["var(--blue-bg)", "var(--blue-text)"], SMS: ["var(--purple-bg)", "var(--purple-text)"] };
 function initials(n: string) { return n.split(" ").map((x) => x[0]).slice(0, 2).join("").toUpperCase(); }
 function when(iso: string) { return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); }
 function fillVars(body: string, c: CClient) { return body.replace(/\{name\}/g, c.name.split(" ")[0]).replace(/\{code\}/g, c.code ?? ""); }
@@ -44,7 +44,7 @@ export default function CommsHub({
   const thread = activeId ? (byClient.get(activeId) ?? []) : [];
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const chBadge = (ch: string) => { const [bg, c] = chColor[ch] ?? ["#eef2f1", "#64748b"]; return <span style={{ background: bg, color: c, borderRadius: 999, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{ch}</span>; };
+  const chBadge = (ch: string) => { const [bg, c] = chColor[ch] ?? ["var(--neutral-bg)", "#64748b"]; return <span style={{ background: bg, color: c, borderRadius: 999, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{ch}</span>; };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
 
   return (
@@ -65,7 +65,7 @@ export default function CommsHub({
         <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
           <div style={{ ...box, padding: 10 }}>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-              {["All", ...CHANNELS].map((ch) => <button key={ch} type="button" onClick={() => setChFilter(ch)} style={{ border: "none", cursor: "pointer", background: chFilter === ch ? "var(--brand-fill)" : "#eef2f1", color: chFilter === ch ? "#fff" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{ch}</button>)}
+              {["All", ...CHANNELS].map((ch) => <button key={ch} type="button" onClick={() => setChFilter(ch)} style={{ border: "none", cursor: "pointer", background: chFilter === ch ? "var(--brand-fill)" : "var(--neutral-bg)", color: chFilter === ch ? "#fff" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{ch}</button>)}
             </div>
             <div style={{ maxHeight: 520, overflow: "auto" }}>
               {convs.map(({ c, last, unread }) => (
@@ -143,7 +143,7 @@ export default function CommsHub({
             {templates.map((t) => (
               <div key={t.id} style={{ ...box, padding: "14px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}><b style={{ fontSize: 14 }}>{t.name}</b><span style={{ flex: 1 }} />{chBadge(t.channel)}</div>
-                <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{t.category}</span>
+                <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{t.category}</span>
                 <p style={{ fontSize: 12.5, color: "var(--muted)", whiteSpace: "pre-wrap", lineHeight: 1.5, margin: "10px 0 8px" }}>{t.body}</p>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button type="button" onClick={() => { setTab("inbox"); if (activeClient) setComposerText(fillVars(t.body, activeClient)); setComposerCh(t.channel); }} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Use</button>
@@ -181,8 +181,8 @@ export default function CommsHub({
                   <b>{c.name}</b>
                   <div style={{ color: "var(--muted)", fontSize: 12 }}>Audience: {c.audience} · Template: {c.templateName ?? "—"}</div>
                 </div>
-                <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{c.sent_count} sent</span>
-                <span style={{ background: c.status === "sent" ? "var(--green-bg)" : "var(--amber-bg)", color: c.status === "sent" ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>{c.status}</span>
+                <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{c.sent_count} sent</span>
+                <span style={{ background: c.status === "sent" ? "var(--green-bg)" : "var(--amber-bg)", color: c.status === "sent" ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>{c.status}</span>
                 {canCamp && c.status !== "sent" && <form action={sendCampaignNow}><input type="hidden" name="id" value={c.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Send now</button></form>}
               </div>
             ))}

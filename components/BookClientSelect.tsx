@@ -5,7 +5,7 @@ import { bookClientStaff } from "@/lib/actions";
 export default function BookClientSelect({
   classId, clients, disabled,
 }: { classId: string; clients: { id: string; name: string }[]; disabled: boolean }) {
-  if (disabled) return <span style={{ background: "var(--red-bg)", color: "#991b1b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Full</span>;
+  if (disabled) return <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Full</span>;
   return (
     <form action={bookClientStaff} style={{ display: "inline-flex", gap: 6 }}>
       <input type="hidden" name="class_id" value={classId} />

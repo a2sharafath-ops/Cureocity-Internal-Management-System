@@ -44,7 +44,7 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const bal = (rows: Ledger[]) => rows.reduce((s, r) => s + (r.direction === "in" ? Number(r.amount) : -Number(r.amount)), 0);
 
-  const dirChip = (d: string) => <span style={{ color: d === "in" ? "#166534" : "var(--red)", fontWeight: 700, fontSize: 13 }}>{d === "in" ? "+" : "−"}</span>;
+  const dirChip = (d: string) => <span style={{ color: d === "in" ? "var(--green-text)" : "var(--red)", fontWeight: 700, fontSize: 13 }}>{d === "in" ? "+" : "−"}</span>;
 
   const ledgerTable = (rows: (Ledger & { account: string })[], acct: "bank" | "cash") => (
     <>
@@ -118,7 +118,7 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
                   <td style={{ ...td, color: "var(--muted)" }}>{r.item ?? "—"}</td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{r.due_date ?? "—"}</td>
                   <td style={{ ...td, fontWeight: 600 }}>{money(r.amount)}</td>
-                  <td style={td}><span style={{ background: r.status === "Paid" ? "var(--green-bg)" : "var(--amber-bg)", color: r.status === "Paid" ? "#166534" : "#b45309", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{r.status}</span></td>
+                  <td style={td}><span style={{ background: r.status === "Paid" ? "var(--green-bg)" : "var(--amber-bg)", color: r.status === "Paid" ? "var(--green-text)" : "var(--amber-text-soft)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{r.status}</span></td>
                   <td style={{ ...td, textAlign: "right" }}>{r.status !== "Paid" && <PayPayable id={r.id} />}</td>
                 </tr>
               ))}
@@ -134,8 +134,8 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
             <thead><tr><th style={th}>Prospect</th><th style={th}>Item</th><th style={th}>Date</th><th style={th}>Amount</th><th style={th}>Status</th><th style={th} /></tr></thead>
             <tbody>
               {estimates.map((r) => {
-                const chip: Record<string, [string, string]> = { Accepted: ["var(--green-bg)", "#166534"], Sent: ["#dbeafe", "#2563eb"], Draft: ["#eef2f1", "var(--muted)"], Expired: ["#fee2e2", "var(--red)"] };
-                const [bg, c] = chip[r.status] ?? ["#eef2f1", "var(--muted)"];
+                const chip: Record<string, [string, string]> = { Accepted: ["var(--green-bg)", "var(--green-text)"], Sent: ["var(--blue-bg)", "var(--blue)"], Draft: ["var(--neutral-bg)", "var(--muted)"], Expired: ["var(--red-bg)", "var(--red)"] };
+                const [bg, c] = chip[r.status] ?? ["var(--neutral-bg)", "var(--muted)"];
                 return (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ ...td, fontWeight: 600 }}>{r.lead_name}</td>

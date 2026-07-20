@@ -63,8 +63,8 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
     <StatCard label={label} value={value} sub={sub} minWidth={170} />
   );
   const statusChip = (s: string) => {
-    const map: Record<string, [string, string]> = { Paid: ["var(--green-bg)", "#166534"], Unpaid: ["var(--amber-bg)", "#92400e"], Refunded: ["#eef2f1", "var(--muted)"] };
-    const [bg, color] = map[s] ?? ["#eef2f1", "var(--muted)"];
+    const map: Record<string, [string, string]> = { Paid: ["var(--green-bg)", "var(--green-text)"], Unpaid: ["var(--amber-bg)", "var(--amber-text)"], Refunded: ["var(--neutral-bg)", "var(--muted)"] };
+    const [bg, color] = map[s] ?? ["var(--neutral-bg)", "var(--muted)"];
     return <span style={{ background: bg, color, borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>;
   };
   const th: React.CSSProperties = { padding: "12px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
@@ -88,7 +88,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
                 <td style={{ ...td, color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
                 <td style={td}>{i.clients ? <Link href={`/clients/${i.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{i.clients.name}</Link> : "—"}</td>
                 <td style={td}>{i.description}<div style={{ color: "var(--muted)", fontSize: 11 }}>{i.issued_date ?? ""}{i.method ? ` · ${i.method}` : ""}</div></td>
-                {mode === "dunning" && <td style={{ ...td, fontWeight: 600, color: od >= 30 ? "var(--red)" : od >= 15 ? "#b45309" : "var(--muted)" }}>{od > 0 ? `${od}d` : "—"}</td>}
+                {mode === "dunning" && <td style={{ ...td, fontWeight: 600, color: od >= 30 ? "var(--red)" : od >= 15 ? "var(--amber-text-soft)" : "var(--muted)" }}>{od > 0 ? `${od}d` : "—"}</td>}
                 <td style={{ ...td, fontWeight: 600 }}>{money(i.amount)}</td>
                 <td style={td}>{statusChip(i.status)}</td>
                 {editable && <td style={{ ...td, textAlign: "right" }}>
@@ -133,16 +133,16 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
       </div>
 
       {editable && tab === "invoices" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, background: pay.configured ? "var(--green-bg)" : "#eef2f1", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: pay.configured ? "var(--green-bg)" : "var(--neutral-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
           <span style={{ fontWeight: 600 }}>Online payments:</span>
           {pay.configured
-            ? <span style={{ color: "#166534" }}>● Live via {pay.provider} — unpaid invoices show a “Pay online” button.</span>
+            ? <span style={{ color: "var(--green-text)" }}>● Live via {pay.provider} — unpaid invoices show a “Pay online” button.</span>
             : <span style={{ color: "var(--muted)" }}>○ Not configured. Add <code>PAYMENT_PROVIDER</code> + gateway keys to enable one-click collection (webhook: <code>/api/payments/webhook</code>).</span>}
         </div>
       )}
 
       {error ? (
-        <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load invoices.</b> {error.message}
         </div>
       ) : tab === "refunds" ? (

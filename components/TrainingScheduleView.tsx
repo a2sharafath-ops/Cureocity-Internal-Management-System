@@ -18,7 +18,7 @@ export type ClassRow = { id: string; title: string; trainerName: string | null; 
 
 const TAGS = ["PT", "Initial Assessment", "Re-assessment"];
 const TAG_STYLE: Record<string, [string, string]> = {
-  "PT": ["#ede9fe", "#6d28d9"], "Initial Assessment": ["#fef3c7", "#92400e"], "Re-assessment": ["#dbeafe", "#1e40af"],
+  "PT": ["var(--purple-bg)", "var(--purple-text)"], "Initial Assessment": ["var(--amber-bg)", "var(--amber-text)"], "Re-assessment": ["var(--blue-bg)", "var(--blue-text)"],
 };
 function hourLabel(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${am ? "AM" : "PM"}`; }
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
@@ -45,18 +45,18 @@ export default function TrainingScheduleView({
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const tagChip = (tag: string | null) => {
-    const [bg, fg] = TAG_STYLE[tag ?? "PT"] ?? ["#eef2f1", "#64748b"];
+    const [bg, fg] = TAG_STYLE[tag ?? "PT"] ?? ["var(--neutral-bg)", "#64748b"];
     return <span style={{ background: bg, color: fg, borderRadius: 999, padding: "1px 7px", fontSize: 10, fontWeight: 600 }}>{tag ?? "PT"}</span>;
   };
 
-  const countBadge = (n: number) => <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: 999, minWidth: 20, textAlign: "center", padding: "1px 7px", fontSize: 12, fontWeight: 700 }}>{n}</span>;
+  const countBadge = (n: number) => <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, minWidth: 20, textAlign: "center", padding: "1px 7px", fontSize: 12, fontWeight: 700 }}>{n}</span>;
 
   // Assessments-due status badge (Due today / Overdue / Upcoming / Booked).
   const dueBadge = (a: AssessmentRow) => {
-    if (a.status === "booked") return <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Booked</span>;
-    if (a.due_date === today) return <span style={{ background: "var(--red-bg)", color: "#991b1b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Due today</span>;
-    if (a.due_date < today) return <span style={{ background: "var(--red-bg)", color: "#991b1b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Overdue</span>;
-    return <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Upcoming</span>;
+    if (a.status === "booked") return <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Booked</span>;
+    if (a.due_date === today) return <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Due today</span>;
+    if (a.due_date < today) return <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Overdue</span>;
+    return <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Upcoming</span>;
   };
   const th: React.CSSProperties = { textAlign: "left", padding: "10px 14px", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".4px" };
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13 };
@@ -91,8 +91,8 @@ export default function TrainingScheduleView({
             {TAGS.map((t) => <span key={t}>{tagChip(t)}</span>)}
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            <span style={{ background: "#eef2f1", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{assigned} assigned</span>
-            <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{available} available</span>
+            <span style={{ background: "var(--neutral-bg)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{assigned} assigned</span>
+            <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{available} available</span>
             <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{unavailable} unavailable</span>
             <span style={{ color: "var(--muted)", fontSize: 12, alignSelf: "center" }}>Name + tag = assigned · dashed + Assign = available · grey = unavailable</span>
           </div>
@@ -232,7 +232,7 @@ export default function TrainingScheduleView({
                         {canWrite ? (
                           <form action={toggleAssessmentShared}>
                             <input type="hidden" name="id" value={a.id} /><input type="hidden" name="shared" value={String(!!a.shared)} />
-                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "#166534" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "🔓 Shared" : "🔒 Private"}</button>
+                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "🔓 Shared" : "🔒 Private"}</button>
                           </form>
                         ) : <span style={{ color: "var(--muted)", fontSize: 12 }}>{a.shared ? "Shared" : "Private"}</span>}
                       </td>
@@ -265,7 +265,7 @@ export default function TrainingScheduleView({
                     <td style={{ padding: "8px 6px", color: "var(--muted)" }}>{c.trainerName ?? "—"}</td>
                     <td style={{ padding: "8px 6px" }}>{fmtDate(c.date)}</td>
                     <td style={{ padding: "8px 6px" }}>{hourLabel(c.hour)}</td>
-                    <td style={{ padding: "8px 6px" }}><span style={{ color: c.booked >= c.capacity ? "#991b1b" : "var(--muted)" }}>{c.booked}/{c.capacity}</span></td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ color: c.booked >= c.capacity ? "var(--red-text)" : "var(--muted)" }}>{c.booked}/{c.capacity}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -295,11 +295,11 @@ export default function TrainingScheduleView({
           )}
           {recovery.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No recovery sessions booked.</div> : recovery.map((r) => (
             <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-              <span style={{ background: "#e0f2f1", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{r.kind}</span>
+              <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{r.kind}</span>
               <b>{r.clientName ?? "—"}</b>
               <span style={{ color: "var(--muted)" }}>{fmtDate(r.date)}{r.hour != null ? ` · ${hourLabel(r.hour)}` : ""}{r.staffName ? ` · ${r.staffName}` : ""}</span>
               <span style={{ flex: 1 }} />
-              {r.status === "completed" ? <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>completed</span> : (canWrite && <form action={completeRecoverySession}><input type="hidden" name="id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark done</button></form>)}
+              {r.status === "completed" ? <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>completed</span> : (canWrite && <form action={completeRecoverySession}><input type="hidden" name="id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Mark done</button></form>)}
             </div>
           ))}
         </div>

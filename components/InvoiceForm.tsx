@@ -15,7 +15,7 @@ export default function InvoiceForm({ clientId }: { clientId?: string }) {
     );
   }
   return (
-    <form action={createInvoice} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "#f8fbfa", border: "1px solid var(--border)", borderRadius: 10, padding: 14, display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, alignItems: "end" }}>
+    <form action={createInvoice} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, alignItems: "end" }}>
       {clientId && <input type="hidden" name="client_id" value={clientId} />}
       <div>
         <label style={{ fontSize: 11, color: "var(--muted)" }}>Description</label>

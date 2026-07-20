@@ -40,11 +40,11 @@ export default function ConcernsPanel({ concerns }: { concerns: ConcernRow[] }) 
       <div style={{ ...box, overflow: "hidden" }}>
         {list.length ? list.map((c) => (
           <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderTop: "1px solid var(--border)" }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--amber-bg)", color: "#92400e", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>⚠️</div>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--amber-bg)", color: "var(--amber-text)", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>⚠️</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <b style={{ fontSize: 13 }}>{c.client_name ?? "—"}</b>
-                {c.category && <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 600 }}>{c.category}</span>}
+                {c.category && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 600 }}>{c.category}</span>}
                 <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{fmt(c.created_at)} · raised by {c.raised_by ?? "Client"}</span>
               </div>
               <div style={{ fontSize: 13, marginTop: 3 }}>{c.body}</div>
@@ -55,7 +55,7 @@ export default function ConcernsPanel({ concerns }: { concerns: ConcernRow[] }) 
                 <input type="hidden" name="id" value={c.id} />
                 <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Resolve</button>
               </form>
-            ) : <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>✓ Resolved</span>}
+            ) : <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>✓ Resolved</span>}
           </div>
         )) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {view} concerns.</div>}
       </div>

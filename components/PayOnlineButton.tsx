@@ -49,7 +49,7 @@ export default function PayOnlineButton({ invoiceId, configured }: { invoiceId: 
         amount: res.amount ?? 0, currency: res.currency ?? "INR",
         name: "Cureocity", description: res.description ?? "Invoice payment",
         order_id: res.orderId ?? "",
-        theme: { color: "#0f766e" },
+        theme: { color: "#e11f34" },
         handler: (r) => {
           const cf = new FormData();
           cf.set("id", invoiceId);

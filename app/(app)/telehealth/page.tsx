@@ -30,8 +30,8 @@ export default async function TelehealthPage() {
   const th2: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const chip = (s: string) => {
-    const m: Record<string, [string, string]> = { scheduled: ["#dbeafe", "#2563eb"], active: ["var(--green-bg)", "#166534"], ended: ["#eef2f1", "var(--muted)"] };
-    const [bg, c] = m[s] ?? ["#eef2f1", "var(--muted)"];
+    const m: Record<string, [string, string]> = { scheduled: ["var(--blue-bg)", "var(--blue)"], active: ["var(--green-bg)", "var(--green-text)"], ended: ["var(--neutral-bg)", "var(--muted)"] };
+    const [bg, c] = m[s] ?? ["var(--neutral-bg)", "var(--muted)"];
     return <span style={{ background: bg, color: c, borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>;
   };
 
@@ -46,10 +46,10 @@ export default async function TelehealthPage() {
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 14px" }}>Video consultations — create a room, share the link, and start.</p>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, background: th.secure ? "var(--green-bg)" : "#eef2f1", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: th.secure ? "var(--green-bg)" : "var(--neutral-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
         <span style={{ fontWeight: 600 }}>Provider:</span>
         {th.secure
-          ? <span style={{ color: "#166534" }}>● {th.provider} — private, provider-hosted rooms.</span>
+          ? <span style={{ color: "var(--green-text)" }}>● {th.provider} — private, provider-hosted rooms.</span>
           : <span style={{ color: "var(--muted)" }}>○ Using public Jitsi rooms (work immediately, no key). For private/recorded sessions set <code>TELEHEALTH_PROVIDER</code> + <code>TELEHEALTH_API_KEY</code>.</span>}
       </div>
 

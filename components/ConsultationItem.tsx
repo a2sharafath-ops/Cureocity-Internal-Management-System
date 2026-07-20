@@ -28,10 +28,10 @@ export default function ConsultationItem({ c }: { c: Consult }) {
         <b style={{ fontSize: 14 }}>{c.clientName ?? "Client"}</b>
         <span style={chip("var(--brand-tint)", "var(--brand-text)")}>{c.kind}</span>
         {c.status === "completed"
-          ? <span style={chip("var(--green-bg)", "#166534")}>completed</span>
-          : <span style={chip("#eef2f1", "var(--muted)")}>scheduled</span>}
-        {c.approved && <span style={chip("var(--green-bg)", "#166534")}>✔ approved</span>}
-        {c.shared && <span style={chip("var(--blue-bg)", "#1e40af")}>shared</span>}
+          ? <span style={chip("var(--green-bg)", "var(--green-text)")}>completed</span>
+          : <span style={chip("var(--neutral-bg)", "var(--muted)")}>scheduled</span>}
+        {c.approved && <span style={chip("var(--green-bg)", "var(--green-text)")}>✔ approved</span>}
+        {c.shared && <span style={chip("var(--blue-bg)", "var(--blue-text)")}>shared</span>}
         <span style={{ flex: 1 }} />
         {c.status !== "completed" ? (
           <button type="button" onClick={() => setOpen((o) => !o)} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
@@ -60,7 +60,7 @@ export default function ConsultationItem({ c }: { c: Consult }) {
       </div>
 
       {c.summary && (
-        <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink)", background: "#f8fbfa", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
+        <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
           {c.summary}
         </div>
       )}

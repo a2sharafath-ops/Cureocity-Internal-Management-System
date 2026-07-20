@@ -37,7 +37,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 14, verticalAlign: "middle" };
   const statusChip = (s: string) => {
     const on = s === "Active";
-    return <span style={{ background: on ? "var(--green-bg)" : "#eef2f1", color: on ? "#166534" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>;
+    return <span style={{ background: on ? "var(--green-bg)" : "var(--neutral-bg)", color: on ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{s}</span>;
   };
 
   return (
@@ -59,7 +59,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
           {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
         <span style={{ flex: 1 }} />
-        <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>{rows.length} client{rows.length === 1 ? "" : "s"}</span>
+        <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "4px 10px", fontSize: 12 }}>{rows.length} client{rows.length === 1 ? "" : "s"}</span>
       </div>
 
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "auto" }}>
@@ -86,7 +86,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}>
                     <div style={{ display: "flex", gap: 3 }} title={c.journey.steps.map((s) => `${s.done ? "✓" : "○"} ${s.label}`).join("   ")}>
                       {c.journey.steps.map((s, i) => (
-                        <span key={i} style={{ width: 18, height: 6, borderRadius: 3, background: s.done ? "#16a34a" : "#e2e8f0" }} />
+                        <span key={i} style={{ width: 18, height: 6, borderRadius: 3, background: s.done ? "var(--green)" : "#e2e8f0" }} />
                       ))}
                     </div>
                     <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{c.journey.done}/{c.journey.total} · {c.journey.stage}</div>
@@ -104,7 +104,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                       </form>
                     ) : (staff.find((s) => s.id === c.owner)?.name ?? "—")}
                   </td>
-                  <td style={td}>{c.branch ? <span style={{ background: "#dbeafe", color: "#2563eb", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.branch}</span> : "—"}</td>
+                  <td style={td}>{c.branch ? <span style={{ background: "var(--blue-bg)", color: "var(--blue)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.branch}</span> : "—"}</td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Link href={`/clients/${c.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Open 360°</Link>

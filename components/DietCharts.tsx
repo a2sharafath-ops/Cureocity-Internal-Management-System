@@ -49,7 +49,7 @@ export default function DietCharts({ charts, clients }: { charts: DietChartRow[]
             <div key={i} style={{ display: "grid", gridTemplateColumns: "150px 1fr 30px", gap: 8 }}>
               <input name="meal_label" value={row[0]} onChange={(e) => setRow(i, 0, e.target.value)} placeholder="Meal" style={inp} />
               <input name="meal_detail" value={row[1]} onChange={(e) => setRow(i, 1, e.target.value)} placeholder="What to eat…" style={inp} />
-              <button type="button" onClick={() => setRows((r) => r.filter((_, k) => k !== i))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, cursor: "pointer", color: "#991b1b" }}>✕</button>
+              <button type="button" onClick={() => setRows((r) => r.filter((_, k) => k !== i))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, cursor: "pointer", color: "var(--red-text)" }}>✕</button>
             </div>
           ))}
           <button type="button" onClick={() => setRows((r) => [...r, ["", ""]])} style={{ alignSelf: "start", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Add meal row</button>
@@ -70,12 +70,12 @@ export default function DietCharts({ charts, clients }: { charts: DietChartRow[]
                 <b style={{ fontSize: 13 }}>{dc.client_name ?? "—"} <span style={{ color: "var(--muted)", fontWeight: 500 }}>· v{dc.version}</span></b>
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{dc.calories ? `${dc.calories} kcal` : "—"}{dc.protein ? ` · ${dc.protein} protein` : ""} · {new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</div>
               </div>
-              <span style={{ background: dc.status === "Published" ? "var(--green-bg)" : "var(--amber-bg)", color: dc.status === "Published" ? "#166534" : "#92400e", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{dc.status}</span>
+              <span style={{ background: dc.status === "Published" ? "var(--green-bg)" : "var(--amber-bg)", color: dc.status === "Published" ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{dc.status}</span>
               <button type="button" onClick={() => setExpanded((e) => (e === dc.id ? null : dc.id))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expanded === dc.id ? "Hide" : "View"}</button>
               {dc.status === "Draft" && (
                 <form action={publishDietChart}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Publish</button></form>
               )}
-              <form action={deleteDietChart}><input type="hidden" name="id" value={dc.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "#991b1b" }} title="Delete">✕</button></form>
+              <form action={deleteDietChart}><input type="hidden" name="id" value={dc.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "var(--red-text)" }} title="Delete">✕</button></form>
             </div>
             {expanded === dc.id && (
               <div style={{ padding: "0 16px 14px 16px" }}>

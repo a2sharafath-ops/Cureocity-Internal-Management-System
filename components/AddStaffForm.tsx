@@ -91,12 +91,12 @@ export default function AddStaffForm() {
           </div>
 
           {state.error && (
-            <div style={{ marginTop: 12, background: "var(--red-bg)", color: "#991b1b", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
+            <div style={{ marginTop: 12, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
               {state.error}
             </div>
           )}
           {state.ok && (
-            <div style={{ marginTop: 12, background: "var(--green-bg)", color: "#166534", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
+            <div style={{ marginTop: 12, background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
               {state.ok}
             </div>
           )}

@@ -128,7 +128,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
         <StatCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <StatCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} minWidth={170} />
         <StatCard label="Net this month" value={money(netMonth)} sub="revenue − spend" color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
-        <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "#b45309" : undefined} minWidth={180} />
+        <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
@@ -156,8 +156,8 @@ export default async function FinanceDashboard({ name }: { name: string }) {
             return (
               <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", fontSize: 12.5, borderTop: i ? "1px solid var(--border)" : "none" }}>
                 <span style={{ width: 84 }}>{b.label}</span>
-                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: b.min >= 31 ? "var(--red)" : b.min >= 8 ? "#f59e0b" : "var(--brand-fill)" }} />
+                <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: b.min >= 31 ? "var(--red)" : b.min >= 8 ? "var(--amber)" : "var(--brand-fill)" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{money(b.amount)} · {b.count}</span>
               </div>
@@ -179,7 +179,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
               <span style={{ fontWeight: 600 }}>{money(Number(i.amount))}</span>
               <span style={{
                 background: i.status === "Paid" ? "var(--green-bg)" : "var(--red-bg)",
-                color: i.status === "Paid" ? "#166534" : "#991b1b",
+                color: i.status === "Paid" ? "var(--green-text)" : "var(--red-text)",
                 borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700, minWidth: 48, textAlign: "center",
               }}>{i.status}</span>
             </div>
