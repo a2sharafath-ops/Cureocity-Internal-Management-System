@@ -34,7 +34,7 @@ export function OnboardingCard({ id, name, role, joining, steps, status }: { id:
         {steps.map((s, i) => (
           <form key={i} action={toggleOnboardingStep} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input type="hidden" name="id" value={id} /><input type="hidden" name="idx" value={i} />
-            <button type="submit" style={{ width: 22, height: 22, borderRadius: 6, cursor: "pointer", border: s.done ? "none" : "1px solid var(--border)", background: s.done ? "var(--teal)" : "#fff", color: "#fff", fontSize: 13, lineHeight: 1 }}>{s.done ? "✓" : ""}</button>
+            <button type="submit" style={{ width: 22, height: 22, borderRadius: 6, cursor: "pointer", border: s.done ? "none" : "1px solid var(--border)", background: s.done ? "var(--brand-fill)" : "#fff", color: "#fff", fontSize: 13, lineHeight: 1 }}>{s.done ? "✓" : ""}</button>
             <span style={{ fontSize: 13, textDecoration: s.done ? "line-through" : "none", color: s.done ? "var(--muted)" : "inherit" }}>{s.label}</span>
           </form>
         ))}

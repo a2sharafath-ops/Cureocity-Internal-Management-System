@@ -80,7 +80,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.code ?? "—"}{c.phone ? ` · ${c.phone}` : ""}</div></td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.age != null ? `${c.age} yrs` : "—"}</td>
                   <td style={td}>
-                    <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>
+                    <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>
                     <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : left != null ? `${left} of ${c.package_sessions} credits left` : "—"}</div>
                   </td>
                   <td style={td}>
@@ -108,7 +108,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <Link href={`/clients/${c.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Open 360°</Link>
-                      <button type="button" onClick={() => setQuickId(c.id)} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quick</button>
+                      <button type="button" onClick={() => setQuickId(c.id)} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Quick</button>
                     </div>
                   </td>
                 </tr>

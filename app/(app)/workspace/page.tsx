@@ -289,10 +289,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                 {scoped.slice(0, 5).map((c) => (
                   <div key={c.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: 13, borderTop: "1px solid var(--border)" }}>
                     <span>{c.name}</span>
-                    <Link href={`/clients/${c.id}${roQuery}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12 }}>Open →</Link>
+                    <Link href={`/clients/${c.id}${roQuery}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12 }}>Open →</Link>
                   </div>
                 ))}
-                <Link href={`/workspace?role=${roleKey}&tab=clients`} style={{ display: "inline-block", marginTop: 8, color: "var(--teal-dark)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>View all clients →</Link>
+                <Link href={`/workspace?role=${roleKey}&tab=clients`} style={{ display: "inline-block", marginTop: 8, color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>View all clients →</Link>
               </div>
             </div>
           </div>

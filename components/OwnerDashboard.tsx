@@ -234,7 +234,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
               <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 12.5 }}>
                 <span style={{ width: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
                 <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: load ? "var(--teal)" : "transparent" }} />
+                  <div style={{ width: `${pct}%`, height: "100%", background: load ? "var(--brand-fill)" : "transparent" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{t.done} done · {t.upcoming} booked</span>
               </div>
@@ -246,7 +246,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Control &amp; governance</div>
             <span style={{ flex: 1 }} />
-            <Link href="/audit" style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>Full audit log →</Link>
+            <Link href="/audit" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>Full audit log →</Link>
           </div>
           {audit.length ? audit.map((a, i) => (
             <div key={i} style={{ display: "flex", gap: 8, padding: "7px 0", borderTop: i ? "1px solid var(--border)" : "none", fontSize: 12.5 }}>

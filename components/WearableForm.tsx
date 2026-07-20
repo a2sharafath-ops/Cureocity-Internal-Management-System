@@ -16,7 +16,7 @@ const PROVIDERS: { key: string; label: string }[] = [
 export function WearableForm({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false);
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add reading</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add reading</button>;
   }
   return (
     <form action={addWearableReading} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr) auto", gap: 8, alignItems: "end", marginTop: 10 }}>
@@ -43,9 +43,9 @@ export function WearableConnect({ clientId, connected }: { clientId: string; con
             <input type="hidden" name="provider" value={p.key} />
             <input type="hidden" name="status" value={isOn ? "disconnected" : "connected"} />
             <button type="submit" style={{
-              border: `1px solid ${isOn ? "var(--teal)" : "var(--border)"}`,
+              border: `1px solid ${isOn ? "var(--brand-fill)" : "var(--border)"}`,
               background: isOn ? "#e0f2f1" : "#fff",
-              color: isOn ? "var(--teal-dark)" : "var(--muted)",
+              color: isOn ? "var(--brand-text)" : "var(--muted)",
               borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
             }}>
               {isOn ? "● " : "○ "}{p.label}

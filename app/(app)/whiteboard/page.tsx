@@ -236,7 +236,7 @@ export default async function WhiteboardPage() {
       )}
 
       <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
-        Adjustments made here are a dated working record. The signed-off <Link href="/blueprint" style={{ color: "var(--teal-dark)" }}>BluePrint</Link> document is never overwritten.
+        Adjustments made here are a dated working record. The signed-off <Link href="/blueprint" style={{ color: "var(--brand-text)" }}>BluePrint</Link> document is never overwritten.
       </div>
     </div>
   );

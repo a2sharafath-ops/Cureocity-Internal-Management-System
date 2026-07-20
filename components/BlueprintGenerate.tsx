@@ -30,7 +30,7 @@ export default function BlueprintGenerate({
             style={{ width: 320, maxWidth: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" }}
           />
           <div>
-            <button type="submit" style={{ marginTop: 6, background: "var(--teal-dark)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            <button type="submit" style={{ marginTop: 6, background: "var(--brand-text)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 13px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
               Approve &amp; generate
             </button>
           </div>

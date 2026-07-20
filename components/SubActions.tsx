@@ -10,12 +10,12 @@ export default function SubActions({ id, status, autoRenew }: { id: string; stat
       <form action={toggleAutoRenew}>
         <input type="hidden" name="id" value={id} />
         <input type="hidden" name="value" value={String(autoRenew)} />
-        <button type="submit" style={{ ...btn, color: autoRenew ? "var(--teal-dark)" : "var(--muted)" }}>{autoRenew ? "Auto-renew: on" : "Auto-renew: off"}</button>
+        <button type="submit" style={{ ...btn, color: autoRenew ? "var(--brand-text)" : "var(--muted)" }}>{autoRenew ? "Auto-renew: on" : "Auto-renew: off"}</button>
       </form>
       {status !== "cancelled" && (
         <form action={renewNow}>
           <input type="hidden" name="id" value={id} />
-          <button type="submit" style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>Renew now</button>
+          <button type="submit" style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Renew now</button>
         </form>
       )}
       {status === "active" && (

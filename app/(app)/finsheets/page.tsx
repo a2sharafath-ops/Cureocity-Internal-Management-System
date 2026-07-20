@@ -49,7 +49,7 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
   const ledgerTable = (rows: (Ledger & { account: string })[], acct: "bank" | "cash") => (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={{ ...box, padding: "12px 16px" }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{acct === "bank" ? "Bank" : "Cash"} balance (from entries)</div><div style={{ fontSize: 20, fontWeight: 700, color: bal(rows) >= 0 ? "var(--teal-dark)" : "var(--red)" }}>{money(bal(rows))}</div></div>
+        <div style={{ ...box, padding: "12px 16px" }}><div style={{ fontSize: 12, color: "var(--muted)" }}>{acct === "bank" ? "Bank" : "Cash"} balance (from entries)</div><div style={{ fontSize: 20, fontWeight: 700, color: bal(rows) >= 0 ? "var(--brand-text)" : "var(--red)" }}>{money(bal(rows))}</div></div>
         <span style={{ flex: 1 }} />
         <LedgerForm account={acct} />
       </div>

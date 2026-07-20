@@ -69,7 +69,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>
-        🏋 Training sessions (strength / PT slots) — which client trains with which trainer — are managed on the <Link href="/sessions" style={{ color: "var(--teal-dark)", fontWeight: 600 }}>Training Schedule</Link> page.
+        🏋 Training sessions (strength / PT slots) — which client trains with which trainer — are managed on the <Link href="/sessions" style={{ color: "var(--brand-text)", fontWeight: 600 }}>Training Schedule</Link> page.
       </div>
     </div>
   );

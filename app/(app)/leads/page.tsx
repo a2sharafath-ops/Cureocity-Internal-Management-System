@@ -180,7 +180,7 @@ export default async function LeadsPage({
         {statLink("🔥 HOT", tierCount("HOT"), "HOT", "var(--red)")}
         {statLink("WARM", tierCount("WARM"), "WARM", "#b45309")}
         {statLink("COOL", tierCount("COOL"), "COOL", "#2563eb")}
-        {statLink("Converting (Visit/Close)", convertingCount, "converting", "var(--teal-dark)")}
+        {statLink("Converting (Visit/Close)", convertingCount, "converting", "var(--brand-text)")}
       </div>
 
       {(stageFilter || tierFilter) && (
@@ -190,7 +190,7 @@ export default async function LeadsPage({
             {stageFilter ? ` · ${STAGES.find((s) => s.key === stageFilter)?.label}` : ""}
             {tierFilter ? ` · ${tierFilter === "converting" ? "Converting" : tierFilter}` : ""}
           </span>
-          <Link href={href({ stage: null, tier: null })} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>
+          <Link href={href({ stage: null, tier: null })} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>
             Clear filters
           </Link>
         </div>
@@ -233,7 +233,7 @@ export default async function LeadsPage({
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                       <CallCell phone={l.phone} ivrConfigured={ivr.configured} />
                       {clientByLead.has(l.id) && <Link href={`/clients/${clientByLead.get(l.id)}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#166534", textDecoration: "none" }}>Client ↗</Link>}
-                      <Link href={`/leads/${l.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--teal-dark)", textDecoration: "none" }}>Open →</Link>
+                      <Link href={`/leads/${l.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", textDecoration: "none" }}>Open →</Link>
                     </div>
                   </td>
                 </tr>

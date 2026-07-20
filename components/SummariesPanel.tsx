@@ -46,7 +46,7 @@ export default function SummariesPanel({
       padding: "7px 14px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none",
       background: view === k ? "var(--card)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)",
       boxShadow: view === k ? "var(--shadow)" : "none",
-    }}>{label} <span style={{ background: view === k ? "var(--teal-light)" : "#e7e7ea", color: view === k ? "var(--teal-dark)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
+    }}>{label} <span style={{ background: view === k ? "var(--brand-tint)" : "#e7e7ea", color: view === k ? "var(--brand-text)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
   );
   const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
   const disc = (on: boolean, label: string) => (
@@ -97,7 +97,7 @@ export default function SummariesPanel({
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="field" value="shared" />
                 <input type="hidden" name="value" value={String(c.shared)} />
-                <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--teal-dark)", whiteSpace: "nowrap" }}>{c.shared ? "Unshare" : "Share"}</button>
+                <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>{c.shared ? "Unshare" : "Share"}</button>
               </form>
             </div>
           )) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {roleLabel} summaries yet.</div>}
@@ -128,7 +128,7 @@ export default function SummariesPanel({
                       <textarea name="consolidated" rows={2} defaultValue={c.consolidated ?? ""} placeholder="Consolidated summary across the three disciplines…" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", resize: "vertical" }} />
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🧬 Sign off &amp; generate Blueprint</button>
-                        <Link href="/blueprint" style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Enter health scores →</Link>
+                        <Link href="/blueprint" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Enter health scores →</Link>
                       </div>
                     </form>
                   )}

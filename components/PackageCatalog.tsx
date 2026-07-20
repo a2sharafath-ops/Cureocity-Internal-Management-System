@@ -44,7 +44,7 @@ export default function PackageCatalog({
 
     return (
       <div key={line} style={{ ...box, padding: 0, opacity: sel.active ? 1 : 0.55, overflow: "hidden" }}>
-        <div style={{ height: 5, background: "var(--teal)" }} />
+        <div style={{ height: 5, background: "var(--brand-fill)" }} />
         <div style={{ padding: "16px 18px" }}>
           <b style={{ fontSize: 15.5 }}>{sel.lineLabel}</b>
 
@@ -52,7 +52,7 @@ export default function PackageCatalog({
           {variants.length > 1 && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, margin: "10px 0" }}>
               {variants.map((v) => (
-                <button key={v.id} type="button" onClick={() => setDur((d) => ({ ...d, [line]: String(v.weeks) }))} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", background: v.id === sel.id ? "var(--teal)" : "#fff", color: v.id === sel.id ? "#fff" : "var(--muted)" }}>{v.weeks} Weeks</button>
+                <button key={v.id} type="button" onClick={() => setDur((d) => ({ ...d, [line]: String(v.weeks) }))} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "7px 0", fontSize: 13, fontWeight: 600, cursor: "pointer", background: v.id === sel.id ? "var(--brand-fill)" : "#fff", color: v.id === sel.id ? "#fff" : "var(--muted)" }}>{v.weeks} Weeks</button>
               ))}
             </div>
           )}
@@ -89,7 +89,7 @@ export default function PackageCatalog({
             {chip("#eef2f1", "var(--muted)", `${clients} client${clients === 1 ? "" : "s"}`)}
             <span style={{ flex: 1 }} />
             {canManage && <button type="button" onClick={() => setEditId(sel.id)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>}
-            {canManage && <form action={togglePackageActive}><input type="hidden" name="id" value={sel.id} /><input type="hidden" name="active" value={String(sel.active)} /><button style={{ border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: sel.active ? "var(--red-bg)" : "var(--teal)", color: sel.active ? "#991b1b" : "#fff" }}>{sel.active ? "Deactivate" : "Reactivate"}</button></form>}
+            {canManage && <form action={togglePackageActive}><input type="hidden" name="id" value={sel.id} /><input type="hidden" name="active" value={String(sel.active)} /><button style={{ border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: sel.active ? "var(--red-bg)" : "var(--brand-fill)", color: sel.active ? "#991b1b" : "#fff" }}>{sel.active ? "Deactivate" : "Reactivate"}</button></form>}
           </div>
         </div>
       </div>

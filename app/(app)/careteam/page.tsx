@@ -36,10 +36,10 @@ export default async function CareTeamPage() {
           <div><div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div><div style={{ color: "var(--muted)", fontSize: 12 }}>{sub}</div></div>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: (count ?? 0) > 0 ? "var(--teal-dark)" : "var(--muted)" }}>{count ?? 0}</span>
+          <span style={{ fontSize: 26, fontWeight: 800, color: (count ?? 0) > 0 ? "var(--brand-text)" : "var(--muted)" }}>{count ?? 0}</span>
           <span style={{ color: "var(--muted)", fontSize: 13 }}>{countLabel}</span>
           <span style={{ flex: 1 }} />
-          <span style={{ color: "var(--teal-dark)", fontSize: 13, fontWeight: 600 }}>Open →</span>
+          <span style={{ color: "var(--brand-text)", fontSize: 13, fontWeight: 600 }}>Open →</span>
         </div>
       </div>
     </Link>

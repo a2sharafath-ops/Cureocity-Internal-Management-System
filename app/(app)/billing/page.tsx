@@ -86,7 +86,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
             return (
               <tr key={i.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={{ ...td, color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
-                <td style={td}>{i.clients ? <Link href={`/clients/${i.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{i.clients.name}</Link> : "—"}</td>
+                <td style={td}>{i.clients ? <Link href={`/clients/${i.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{i.clients.name}</Link> : "—"}</td>
                 <td style={td}>{i.description}<div style={{ color: "var(--muted)", fontSize: 11 }}>{i.issued_date ?? ""}{i.method ? ` · ${i.method}` : ""}</div></td>
                 {mode === "dunning" && <td style={{ ...td, fontWeight: 600, color: od >= 30 ? "var(--red)" : od >= 15 ? "#b45309" : "var(--muted)" }}>{od > 0 ? `${od}d` : "—"}</td>}
                 <td style={{ ...td, fontWeight: 600 }}>{money(i.amount)}</td>
@@ -128,7 +128,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
         {TABS.map((t) => {
           const active = t.href ? false : tab === t.key;
           const href = t.href ?? `/billing?tab=${t.key}`;
-          return <Link key={t.key} href={href} style={{ padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: active ? "var(--teal)" : "#fff", color: active ? "#fff" : "var(--muted)" }}>{t.label}</Link>;
+          return <Link key={t.key} href={href} style={{ padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: active ? "var(--brand-fill)" : "#fff", color: active ? "#fff" : "var(--muted)" }}>{t.label}</Link>;
         })}
       </div>
 

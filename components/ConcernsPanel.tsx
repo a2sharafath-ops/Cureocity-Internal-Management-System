@@ -28,7 +28,7 @@ export default function ConcernsPanel({ concerns }: { concerns: ConcernRow[] }) 
       padding: "7px 14px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none",
       background: view === k ? "var(--card)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)",
       boxShadow: view === k ? "var(--shadow)" : "none",
-    }}>{label} <span style={{ background: view === k ? "var(--teal-light)" : "#e7e7ea", color: view === k ? "var(--teal-dark)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
+    }}>{label} <span style={{ background: view === k ? "var(--brand-tint)" : "#e7e7ea", color: view === k ? "var(--brand-text)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
   );
 
   return (
@@ -49,7 +49,7 @@ export default function ConcernsPanel({ concerns }: { concerns: ConcernRow[] }) 
               </div>
               <div style={{ fontSize: 13, marginTop: 3 }}>{c.body}</div>
             </div>
-            {c.client_id && <Link href={`/clients/${c.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--teal-dark)", whiteSpace: "nowrap" }}>Card</Link>}
+            {c.client_id && <Link href={`/clients/${c.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Card</Link>}
             {c.status === "Open" ? (
               <form action={resolveConcern}>
                 <input type="hidden" name="id" value={c.id} />

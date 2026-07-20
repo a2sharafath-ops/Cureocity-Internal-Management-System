@@ -12,7 +12,7 @@ export default function PackageToggle({ id, active }: { id: string; active: bool
         style={{
           border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
           padding: "5px 11px", fontSize: 12, cursor: "pointer",
-          color: active ? "var(--red)" : "var(--teal-dark)",
+          color: active ? "var(--red)" : "var(--brand-text)",
         }}
       >
         {active ? "Deactivate" : "Activate"}

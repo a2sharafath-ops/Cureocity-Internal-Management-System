@@ -33,7 +33,7 @@ export default function ConsoleView({
     <div style={{ maxWidth: 1120 }}>
       {/* Console chrome */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-        <Link href="/workspace?tab=summaries" style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← Workspace</Link>
+        <Link href="/workspace?tab=summaries" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← Workspace</Link>
         <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--ink)", color: "#fff", display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>
         <div>
           <h1 style={{ fontSize: 19, margin: 0 }}>{label}</h1>
@@ -87,7 +87,7 @@ export default function ConsoleView({
             </div>
           </div>
           <div style={{ ...box, padding: "12px 16px" }}>
-            <Link href={`/clients/${client.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>📋 Open full client card →</Link>
+            <Link href={`/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>📋 Open full client card →</Link>
           </div>
         </div>
       </form>

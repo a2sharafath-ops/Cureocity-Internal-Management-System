@@ -17,7 +17,7 @@ export default async function PortalLayout({ children }: { children: React.React
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <header style={{ background: "var(--ink)", color: "#fff", padding: "0 20px", height: 56, display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>✚</div>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>✚</div>
         <b>Cureocity</b>
         <span style={{ opacity: 0.7, fontSize: 13 }}>· My Portal</span>
         <span style={{ flex: 1 }} />

@@ -16,7 +16,7 @@ export type FuRow = {
 const STAGE_STYLE: Record<string, [string, string, string]> = {
   PENDING_CALL:   ["var(--amber-bg)", "#92400e", "To call"],
   LINK_SENT:      ["#dbeafe", "#1e40af", "Link sent"],
-  PENDING_REVIEW: ["#e0f2f1", "var(--teal-dark)", "To review"],
+  PENDING_REVIEW: ["#e0f2f1", "var(--brand-text)", "To review"],
   BOOKED:         ["var(--green-bg)", "#166534", "Booked"],
   NO_CONSULT:     ["#f1f5f9", "#64748b", "No consult"],
   COMPLETED:      ["var(--green-bg)", "#166534", "Completed"],
@@ -55,12 +55,12 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {f.mode === "Online"
             ? <>
-                <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("var(--teal)")}>Send questionnaire</button></form>
-                <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--teal-dark)")}>Book in-person</button></form>
+                <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("var(--brand-fill)")}>Send questionnaire</button></form>
+                <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book in-person</button></form>
               </>
             : <>
-                <form action={fuBookInPerson}>{hid(f)}<button style={btn("var(--teal)")}>Book in-person</button></form>
-                {canOnline && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--teal-dark)")}>Send questionnaire</button></form>}
+                <form action={fuBookInPerson}>{hid(f)}<button style={btn("var(--brand-fill)")}>Book in-person</button></form>
+                {canOnline && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Send questionnaire</button></form>}
               </>}
           {canOnline && <form action={fuNoAnswer}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>No answer</button></form>}
           <form action={fuNoConsult}>{hid(f)}<button style={btn("#fff", "#991b1b")}>No consult</button></form>
@@ -71,12 +71,12 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
       return (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {!f.reminder_sent && <form action={fuSendReminder}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>⏳ Reminder</button></form>}
-          <form action={fuMarkReceived}>{hid(f)}<button style={btn("var(--teal)")}>Mark received</button></form>
+          <form action={fuMarkReceived}>{hid(f)}<button style={btn("var(--brand-fill)")}>Mark received</button></form>
         </div>
       );
     }
     if (f.stage === "PENDING_REVIEW") {
-      return <button onClick={() => { setReview(review === f.id ? null : f.id); setSummary(""); }} style={btn("var(--teal)")}>Review + summary</button>;
+      return <button onClick={() => { setReview(review === f.id ? null : f.id); setSummary(""); }} style={btn("var(--brand-fill)")}>Review + summary</button>;
     }
     return null;
   };
@@ -90,13 +90,13 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
             const [sb, sc, st] = STAGE_STYLE[f.stage] ?? ["#eef2f1", "#64748b", f.stage];
             return (
               <tr key={f.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--teal-dark)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}</td>
                 <td style={td}>{f.label}{f.token && <div style={{ fontSize: 11, color: "var(--muted)" }}>token {f.token}</div>}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{f.category ?? "—"}</td>
                 <td style={td}>{f.day != null ? `Day ${f.day}` : "—"}</td>
                 <td style={td}>{dueChip(f)}</td>
                 <td style={td}>{modeChip(f.mode)}</td>
-                <td style={{ ...td, whiteSpace: "nowrap" }}>{chip(sb, sc, st)}{f.no_answer && <> {chip("var(--red-bg)", "#991b1b", "No answer")}</>}{f.reminder_sent && <> {chip("#e0f2f1", "var(--teal-dark)", "Reminded")}</>}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>{chip(sb, sc, st)}{f.no_answer && <> {chip("var(--red-bg)", "#991b1b", "No answer")}</>}{f.reminder_sent && <> {chip("#e0f2f1", "var(--brand-text)", "Reminded")}</>}</td>
                 {withActions && <td style={td}>
                   {actions(f)}
                   {review === f.id && (
@@ -104,8 +104,8 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
                       <input type="hidden" name="id" value={f.id} />
                       <textarea name="summary" value={summary} onChange={(e) => setSummary(e.target.value)} rows={5} placeholder="Write or generate the summary…" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12, resize: "vertical" }} />
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button type="button" onClick={() => setSummary(genSummary(f))} style={btn("#fff", "var(--teal-dark)")}>✨ Generate summary</button>
-                        <button type="submit" style={btn("var(--teal)")}>Mark complete</button>
+                        <button type="button" onClick={() => setSummary(genSummary(f))} style={btn("#fff", "var(--brand-text)")}>✨ Generate summary</button>
+                        <button type="submit" style={btn("var(--brand-fill)")}>Mark complete</button>
                       </div>
                     </form>
                   )}
@@ -136,14 +136,14 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
         <span style={{ flex: 1 }} />
         {chip("var(--amber-bg)", "#92400e", `${calls.length} to call`)}
         {chip("#dbeafe", "#1e40af", `${links.length} awaiting client`)}
-        {chip("#e0f2f1", "var(--teal-dark)", `${reviews.length} to review`)}
+        {chip("#e0f2f1", "var(--brand-text)", `${reviews.length} to review`)}
       </div>
 
       {sectionTitle("📞", "Clients to Call Today", calls.length, "#92400e", "var(--amber-bg)")}
       {table(calls, true, "No calls due 🎉")}
       {sectionTitle("🔗", "Links Sent — Awaiting Client", links.length, "#1e40af", "#dbeafe")}
       {table(links, true, "Nothing awaiting clients")}
-      {sectionTitle("📝", "Pending Consultant Review", reviews.length, "var(--teal-dark)", "#e0f2f1")}
+      {sectionTitle("📝", "Pending Consultant Review", reviews.length, "var(--brand-text)", "#e0f2f1")}
       {table(reviews, true, "Review queue clear")}
       {sectionTitle("✅", "Closed", closed.length, "#64748b", "#f1f5f9")}
       {table(closed, false, "Nothing closed yet")}

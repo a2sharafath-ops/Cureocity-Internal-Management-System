@@ -43,7 +43,7 @@ export default function RecipeLibrary({ recipes }: { recipes: RecipeRow[] }) {
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
             <input type="checkbox" name="published" /> Publish immediately (visible to clients)
           </label>
-          <div><button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add recipe</button></div>
+          <div><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add recipe</button></div>
         </form>
       )}
 
@@ -64,7 +64,7 @@ export default function RecipeLibrary({ recipes }: { recipes: RecipeRow[] }) {
                   <form action={toggleRecipe}>
                     <input type="hidden" name="id" value={r.id} />
                     <input type="hidden" name="published" value={String(r.published)} />
-                    <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--teal-dark)", whiteSpace: "nowrap" }}>{r.published ? "Unpublish" : "Publish"}</button>
+                    <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>{r.published ? "Unpublish" : "Publish"}</button>
                   </form>
                   <form action={deleteRecipe}><input type="hidden" name="id" value={r.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "#991b1b" }} title="Delete">✕</button></form>
                 </div>

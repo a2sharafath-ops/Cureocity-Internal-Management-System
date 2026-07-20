@@ -36,19 +36,19 @@ export default async function StorePage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px" };
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
+  const stat = (label: string, value: string, color = "var(--brand-text)") => <StatCard label={label} value={value} color={color} />;
 
   return (
     <div style={{ maxWidth: 1120 }}>
       <RealtimeRefresh tables={["products", "sales"]} />
-      <Link href="/dashboard" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
+      <Link href="/dashboard" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Retail Store</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Point-of-sale for supplements, merchandise &amp; accessories. Every sale posts a paid invoice into Billing.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
         {stat("Today's sales", money(todayRevenue))}
         {stat("Transactions today", String(sales.length))}
-        {stat("Low stock", String(lowStock), lowStock ? "var(--red)" : "var(--teal-dark)")}
+        {stat("Low stock", String(lowStock), lowStock ? "var(--red)" : "var(--brand-text)")}
       </div>
 
       {/* ---- Retail POS ---- */}

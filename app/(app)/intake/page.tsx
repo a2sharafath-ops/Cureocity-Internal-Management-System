@@ -21,9 +21,9 @@ export default async function IntakePage({ searchParams }: { searchParams: { don
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
       {/* kiosk header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>✚</div>
+        <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>✚</div>
         <b style={{ fontSize: 17 }}>Cureocity</b>
-        <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 600 }}>New Client Registration</span>
+        <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 600 }}>New Client Registration</span>
         <span style={{ flex: 1 }} />
         <Link href="/clients" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 13, textDecoration: "none", color: "var(--muted)" }}>✕ Front desk view</Link>
       </div>

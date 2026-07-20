@@ -29,7 +29,7 @@ export default async function FormsPage() {
   const completed = responses.filter((r) => r.status === "completed");
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const typeChip = (t: string) => <span style={{ background: t === "consent" ? "var(--amber-bg)" : "#e0f2f1", color: t === "consent" ? "#b45309" : "var(--teal-dark)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
+  const typeChip = (t: string) => <span style={{ background: t === "consent" ? "var(--amber-bg)" : "#e0f2f1", color: t === "consent" ? "#b45309" : "var(--brand-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
 
   return (
     <div style={{ maxWidth: 1000 }}>
@@ -65,7 +65,7 @@ export default async function FormsPage() {
           <div key={r.id} style={{ ...box, padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <b style={{ fontSize: 14 }}>{r.forms?.name ?? "Form"}</b>{r.forms && typeChip(r.forms.type)}
-              <span style={{ color: "var(--muted)", fontSize: 13 }}>· {r.clients ? <Link href={`/clients/${r.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none" }}>{r.clients.name}</Link> : "—"}</span>
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>· {r.clients ? <Link href={`/clients/${r.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{r.clients.name}</Link> : "—"}</span>
               <span style={{ flex: 1 }} />
               {r.forms && <FormFill responseId={r.id} name={r.forms.name} type={r.forms.type} fields={r.forms.fields} />}
             </div>

@@ -44,7 +44,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <Link href="/leads" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none" }}>← CRM &amp; Leads</Link>
+      <Link href="/leads" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>← CRM &amp; Leads</Link>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0 18px" }}>
         <div>
@@ -62,7 +62,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           <span style={{ fontSize: 22, fontWeight: 800 }}>{total ?? "—"}</span>
           {tier && <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 12px", fontSize: 12, fontWeight: 700 }}>{tier}</span>}
           <span style={{ flex: 1 }} />
-          <span style={{ color: "var(--muted)", fontSize: 13 }}>Best-fit: <b style={{ color: "var(--teal-dark)" }}>{product}</b></span>
+          <span style={{ color: "var(--muted)", fontSize: 13 }}>Best-fit: <b style={{ color: "var(--brand-text)" }}>{product}</b></span>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
           {SIGNALS.map((s) => {
@@ -70,7 +70,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
             const pts = val && LS[s.key] && LS[s.key][val] !== undefined ? LS[s.key][val] : 0;
             return (
               <div key={s.key as string} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={lblS}>{s.label}</span><b style={{ fontSize: 13, color: pts > 0 ? "var(--teal-dark)" : "var(--muted)" }}>+{pts}</b></div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={lblS}>{s.label}</span><b style={{ fontSize: 13, color: pts > 0 ? "var(--brand-text)" : "var(--muted)" }}>+{pts}</b></div>
                 <div style={{ fontSize: 12, marginTop: 2 }}>{val ?? "—"}</div>
               </div>
             );

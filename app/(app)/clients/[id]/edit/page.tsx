@@ -18,7 +18,7 @@ export default async function EditClientPage({ params }: { params: { id: string 
 
   return (
     <div style={{ maxWidth: 700 }}>
-      <Link href={`/clients/${params.id}`} style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none" }}>
+      <Link href={`/clients/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>
         ← Back to profile
       </Link>
       <h1 style={{ fontSize: 20, margin: "10px 0 18px" }}>Edit — {client.name}</h1>

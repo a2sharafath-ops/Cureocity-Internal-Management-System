@@ -11,7 +11,7 @@ export default function TaskActions({ id, status }: { id: string; status: string
       {NEXT[status] && status !== "done" && (
         <form action={setTaskStatus}>
           <input type="hidden" name="id" value={id} /><input type="hidden" name="status" value={NEXT[status]} />
-          <button type="submit" style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>→ {NEXT[status]}</button>
+          <button type="submit" style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>→ {NEXT[status]}</button>
         </form>
       )}
       {status !== "blocked" && status !== "done" && (

@@ -26,7 +26,7 @@ export default function ConsultationItem({ c }: { c: Consult }) {
     <div style={{ borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <b style={{ fontSize: 14 }}>{c.clientName ?? "Client"}</b>
-        <span style={chip("var(--teal-light)", "var(--teal-dark)")}>{c.kind}</span>
+        <span style={chip("var(--brand-tint)", "var(--brand-text)")}>{c.kind}</span>
         {c.status === "completed"
           ? <span style={chip("var(--green-bg)", "#166534")}>completed</span>
           : <span style={chip("#eef2f1", "var(--muted)")}>scheduled</span>}

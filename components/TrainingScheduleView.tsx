@@ -149,7 +149,7 @@ export default function TrainingScheduleView({
                             </div>
                           ) : openCell ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-                              <button type="button" disabled={!canWrite} onClick={() => setAssigning({ trainer_id: t.id, hour: h })} style={{ border: "1px dashed var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: canWrite ? "pointer" : "default" }}>+ Assign</button>
+                              <button type="button" disabled={!canWrite} onClick={() => setAssigning({ trainer_id: t.id, hour: h })} style={{ border: "1px dashed var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: canWrite ? "pointer" : "default" }}>+ Assign</button>
                               {canWrite && <form action={setTrainerSlot}><input type="hidden" name="trainer_id" value={t.id} /><input type="hidden" name="hour" value={h} /><input type="hidden" name="status" value="unavailable" /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>set unavailable</button></form>}
                             </div>
                           ) : (
@@ -295,7 +295,7 @@ export default function TrainingScheduleView({
           )}
           {recovery.length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No recovery sessions booked.</div> : recovery.map((r) => (
             <div key={r.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-              <span style={{ background: "#e0f2f1", color: "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{r.kind}</span>
+              <span style={{ background: "#e0f2f1", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{r.kind}</span>
               <b>{r.clientName ?? "—"}</b>
               <span style={{ color: "var(--muted)" }}>{fmtDate(r.date)}{r.hour != null ? ` · ${hourLabel(r.hour)}` : ""}{r.staffName ? ` · ${r.staffName}` : ""}</span>
               <span style={{ flex: 1 }} />

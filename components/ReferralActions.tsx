@@ -10,7 +10,7 @@ export default function ReferralActions({ id, status }: { id: string; status: st
       {status === "invited" && (
         <form action={setReferralStatus}>
           <input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="joined" />
-          <button type="submit" style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>Mark joined</button>
+          <button type="submit" style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Mark joined</button>
         </form>
       )}
       {status === "joined" && (

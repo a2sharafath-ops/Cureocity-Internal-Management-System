@@ -27,7 +27,7 @@ export function TemplateForm({ exercises }: { exercises: string[] }) {
   const [open, setOpen] = useState(false);
   const [lines, setLines] = useState<Line[]>([blank()]);
 
-  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Create template</button>;
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Create template</button>;
 
   const set = (i: number, patch: Partial<Line>) => setLines((ls) => ls.map((l, idx) => idx === i ? { ...l, ...patch } : l));
   const items = lines.filter((l) => l.exercise.trim());
@@ -51,7 +51,7 @@ export function TemplateForm({ exercises }: { exercises: string[] }) {
       ))}
       <datalist id="ex-list">{exercises.map((e) => <option key={e} value={e} />)}</datalist>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" onClick={() => setLines((ls) => [...ls, blank()])} style={{ background: "#fff", color: "var(--teal-dark)", border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add exercise</button>
+        <button type="button" onClick={() => setLines((ls) => [...ls, blank()])} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add exercise</button>
         <span style={{ flex: 1 }} />
         <button type="submit" style={primary}>Save template</button>
       </div>

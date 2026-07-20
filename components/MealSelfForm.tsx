@@ -28,7 +28,7 @@ export default function MealSelfForm({
         </button>
       </form>
       {log?.review && <div style={{ fontSize: 12, color: "#166534", marginTop: 8 }}>✔ Dietitian: {log.review}</div>}
-      {log?.doubt_answer && <div style={{ fontSize: 12, color: "var(--teal-dark)", marginTop: 4 }}>↳ Answer: {log.doubt_answer}</div>}
+      {log?.doubt_answer && <div style={{ fontSize: 12, color: "var(--brand-text)", marginTop: 4 }}>↳ Answer: {log.doubt_answer}</div>}
     </div>
   );
 }

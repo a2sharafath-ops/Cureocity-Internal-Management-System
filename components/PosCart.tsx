@@ -64,10 +64,10 @@ export default function PosCart({ products, clients }: { products: Product[]; cl
               <div style={{ fontSize: 11, color: "var(--muted)" }}>{p.category}</div>
               <div style={{ fontWeight: 600, fontSize: 14, margin: "2px 0 6px" }}>{p.name}</div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 700, color: "var(--teal-dark)" }}>{money(p.price)}</span>
+                <span style={{ fontWeight: 700, color: "var(--brand-text)" }}>{money(p.price)}</span>
                 <span style={{ fontSize: 11, color: out ? "var(--red)" : "var(--muted)" }}>{out ? "out" : `${p.stock} left`}</span>
               </div>
-              {inCart > 0 && <span style={{ position: "absolute", top: 8, right: 8, background: "var(--teal)", color: "#fff", borderRadius: 999, minWidth: 20, height: 20, fontSize: 12, display: "grid", placeItems: "center", padding: "0 5px" }}>{inCart}</span>}
+              {inCart > 0 && <span style={{ position: "absolute", top: 8, right: 8, background: "var(--brand-fill)", color: "#fff", borderRadius: 999, minWidth: 20, height: 20, fontSize: 12, display: "grid", placeItems: "center", padding: "0 5px" }}>{inCart}</span>}
             </button>
           );
         })}
@@ -111,7 +111,7 @@ export default function PosCart({ products, clients }: { products: Product[]; cl
           style={{ width: "100%", marginTop: 12, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "11px 0", fontSize: 14, fontWeight: 700, cursor: pending || lines.length === 0 ? "not-allowed" : "pointer", opacity: pending || lines.length === 0 ? 0.6 : 1 }}>
           {pending ? "Processing…" : `Charge ${money(total)}`}
         </button>
-        {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.ok ? "var(--teal-dark)" : "var(--red)" }}>{msg.text}</div>}
+        {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.ok ? "var(--brand-text)" : "var(--red)" }}>{msg.text}</div>}
       </div>
     </div>
   );

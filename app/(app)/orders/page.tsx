@@ -49,7 +49,7 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
               const chip = o.status === "resulted" ? ["var(--green-bg)", "#166534"] : o.status === "cancelled" ? ["#fee2e2", "var(--red)"] : o.status === "collected" ? ["var(--amber-bg)", "#92400e"] : ["#eef2f1", "var(--muted)"];
               return (
                 <tr key={o.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={td}>{o.clients ? <Link href={`/emr/${o.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{o.clients.name}</Link> : "—"}</td>
+                  <td style={td}>{o.clients ? <Link href={`/emr/${o.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{o.clients.name}</Link> : "—"}</td>
                   <td style={{ ...td, fontWeight: 600 }}>{o.test}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{o.category}</td>
                   <td style={td}>{s ? <span style={{ color: s.color, fontWeight: 700, fontSize: 12 }}>{s.label}</span> : <span style={{ color: "var(--muted)" }}>routine</span>}</td>

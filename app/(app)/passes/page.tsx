@@ -36,12 +36,12 @@ export default async function PassesPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px" };
-  const stat = (label: string, value: string) => <StatCard label={label} value={value} color="var(--teal-dark)" />;
+  const stat = (label: string, value: string) => <StatCard label={label} value={value} color="var(--brand-text)" />;
 
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["passes"]} />
-      <Link href="/dashboard" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
+      <Link href="/dashboard" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Gym Passes</h1>
         <span style={{ flex: 1 }} />
@@ -66,7 +66,7 @@ export default async function PassesPage() {
               return (
                 <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ ...td, fontWeight: 600 }}>{p.name ?? "Pass"}</td>
-                  <td style={td}>{p.clients ? <Link href={`/clients/${p.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none" }}>{p.clients.name}</Link> : (p.guest_name ?? "Guest")}</td>
+                  <td style={td}>{p.clients ? <Link href={`/clients/${p.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{p.clients.name}</Link> : (p.guest_name ?? "Guest")}</td>
                   <td style={td}>{p.entries_used}/{p.entries_total >= 999 ? "∞" : p.entries_total}</td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{p.valid_until ?? "—"}</td>
                   <td style={td}><span style={{ background: chip[0], color: chip[1], borderRadius: 999, padding: "2px 10px", fontWeight: 600, fontSize: 12 }}>{status}</span></td>
@@ -74,7 +74,7 @@ export default async function PassesPage() {
                     {status === "active" && (
                       <form action={usePass} style={{ textAlign: "right" }}>
                         <input type="hidden" name="id" value={p.id} />
-                        <button type="submit" style={{ border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Check in</button>
+                        <button type="submit" style={{ border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Check in</button>
                       </form>
                     )}
                   </td>

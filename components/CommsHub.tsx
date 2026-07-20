@@ -65,11 +65,11 @@ export default function CommsHub({
         <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
           <div style={{ ...box, padding: 10 }}>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-              {["All", ...CHANNELS].map((ch) => <button key={ch} type="button" onClick={() => setChFilter(ch)} style={{ border: "none", cursor: "pointer", background: chFilter === ch ? "var(--teal)" : "#eef2f1", color: chFilter === ch ? "#fff" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{ch}</button>)}
+              {["All", ...CHANNELS].map((ch) => <button key={ch} type="button" onClick={() => setChFilter(ch)} style={{ border: "none", cursor: "pointer", background: chFilter === ch ? "var(--brand-fill)" : "#eef2f1", color: chFilter === ch ? "#fff" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{ch}</button>)}
             </div>
             <div style={{ maxHeight: 520, overflow: "auto" }}>
               {convs.map(({ c, last, unread }) => (
-                <div key={c.id} onClick={() => setActive(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 8px", borderRadius: 10, cursor: "pointer", background: activeId === c.id ? "var(--teal-light)" : "transparent" }}>
+                <div key={c.id} onClick={() => setActive(c.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 8px", borderRadius: 10, cursor: "pointer", background: activeId === c.id ? "var(--brand-tint)" : "transparent" }}>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: c.color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{initials(c.name)}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <b style={{ fontSize: 13 }}>{c.name}</b>
@@ -93,13 +93,13 @@ export default function CommsHub({
                 <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
                   <div><b>{activeClient.name}</b> <span style={{ color: "var(--muted)", fontSize: 12 }}>· {activeClient.phone ?? "—"}</span></div>
                   <span style={{ flex: 1 }} />
-                  <Link href={`/clients/${activeClient.id}`} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, textDecoration: "none", color: "var(--teal-dark)", fontWeight: 600 }}>Open 360° →</Link>
+                  <Link href={`/clients/${activeClient.id}`} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 }}>Open 360° →</Link>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflow: "auto", padding: "8px 2px", background: "#f7f9f9", borderRadius: 10 }}>
                   {thread.map((m) => {
                     const out = m.sender === "staff";
                     return (
-                      <div key={m.id} style={{ alignSelf: out ? "flex-end" : "flex-start", maxWidth: "76%", background: out ? "var(--teal)" : "#fff", color: out ? "#fff" : "inherit", border: out ? "none" : "1px solid var(--border)", borderRadius: 12, padding: "8px 11px", fontSize: 13 }}>
+                      <div key={m.id} style={{ alignSelf: out ? "flex-end" : "flex-start", maxWidth: "76%", background: out ? "var(--brand-fill)" : "#fff", color: out ? "#fff" : "inherit", border: out ? "none" : "1px solid var(--border)", borderRadius: 12, padding: "8px 11px", fontSize: 13 }}>
                         {m.body}
                         <div style={{ fontSize: 10, opacity: 0.75, marginTop: 3 }}>{out && m.sender_name ? `${m.sender_name} · ` : ""}{m.channel} · {when(m.created_at)}</div>
                       </div>

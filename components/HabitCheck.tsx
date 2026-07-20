@@ -12,7 +12,7 @@ export default function HabitCheck({ habitId, doneToday }: { habitId: string; do
         style={{
           width: 30, height: 30, borderRadius: 8, cursor: "pointer",
           border: doneToday ? "none" : "1px solid var(--border)",
-          background: doneToday ? "var(--teal)" : "#fff",
+          background: doneToday ? "var(--brand-fill)" : "#fff",
           color: doneToday ? "#fff" : "var(--muted)", fontSize: 15, lineHeight: 1,
         }}>
         {doneToday ? "✓" : ""}

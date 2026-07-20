@@ -82,7 +82,7 @@ export default async function SubscriptionsPage() {
               return (
                 <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "12px 16px" }}>
-                    {s.clients ? <Link href={`/clients/${s.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{s.clients.name}</Link> : "—"}
+                    {s.clients ? <Link href={`/clients/${s.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{s.clients.name}</Link> : "—"}
                   </td>
                   <td style={{ padding: "12px 16px" }}>{s.packages?.name ?? "—"}<div style={{ color: "var(--muted)", fontSize: 11 }}>every {s.interval_days} days</div></td>
                   <td style={{ padding: "12px 16px", fontWeight: 600 }}>{money(s.amount)}</td>

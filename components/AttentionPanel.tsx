@@ -92,7 +92,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
           </div>
 
           {flags.length > 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--teal-dark)", whiteSpace: "nowrap" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--brand-text)", whiteSpace: "nowrap" }}>
               {open ? "Hide" : `Review ${flags.length}`}
               <span style={{ display: "inline-block", transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>⌄</span>
             </span>
@@ -113,7 +113,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
             <Link href={f.href} style={{
               border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
               padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none",
-              color: "var(--teal-dark)", whiteSpace: "nowrap",
+              color: "var(--brand-text)", whiteSpace: "nowrap",
             }}>{f.cta} →</Link>
           </div>
         ))}

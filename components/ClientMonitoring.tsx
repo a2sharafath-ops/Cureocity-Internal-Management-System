@@ -33,7 +33,7 @@ export default function ClientMonitoring({ role, rows, linkQuery = "" }: { role:
       const pct = Math.min(100, Math.round((r.sessionsUsed / r.sessionsTotal) * 100));
       return (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ background: "#eef2f1", borderRadius: 6, height: 8, width: 80, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: pct >= 80 ? "#16a34a" : "var(--teal)" }} /></div>
+          <div style={{ background: "#eef2f1", borderRadius: 6, height: 8, width: 80, overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: pct >= 80 ? "#16a34a" : "var(--brand-fill)" }} /></div>
           <span style={{ fontSize: 11, color: "var(--muted)" }}>{r.sessionsUsed}/{r.sessionsTotal}</span>
         </div>
       );
@@ -69,10 +69,10 @@ export default function ClientMonitoring({ role, rows, linkQuery = "" }: { role:
             {rows.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={td}>
-                  <Link href={`/clients/${r.id}${linkQuery}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link>
+                  <Link href={`/clients/${r.id}${linkQuery}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>{r.name}</Link>
                   <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.code ?? "—"}</div>
                 </td>
-                <td style={td}>{r.pkg ? chip("var(--teal-light)", "var(--teal-dark)", r.pkg) : "—"}</td>
+                <td style={td}>{r.pkg ? chip("var(--brand-tint)", "var(--brand-text)", r.pkg) : "—"}</td>
                 <td style={td}>{focusCell(r)}</td>
                 <td style={td}>{r.openFollowups ? chip("var(--amber-bg)", "#92400e", `${r.openFollowups} open`) : chip("var(--green-bg)", "#166534", "Clear")}</td>
                 <td style={td}>{r.openConcerns ? chip("var(--red-bg)", "#991b1b", `${r.openConcerns} open`) : chip("#eef2f1", "var(--muted)", "None")}</td>

@@ -37,12 +37,12 @@ export default async function AccessPage() {
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  const stat = (label: string, value: string, color = "var(--teal-dark)") => <StatCard label={label} value={value} color={color} />;
+  const stat = (label: string, value: string, color = "var(--brand-text)") => <StatCard label={label} value={value} color={color} />;
 
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["checkins"]} />
-      <Link href="/dashboard" style={{ color: "var(--teal-dark)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
+      <Link href="/dashboard" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Access &amp; Check-in</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Front-desk member entry — biometric · card · manual · QR. Today's activity.</p>
 
@@ -60,7 +60,7 @@ export default async function AccessPage() {
           {insideNow.length ? insideNow.map((e) => (
             <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderTop: "1px solid var(--border)" }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#16a34a" }} />
-              {e.clients ? <Link href={`/clients/${e.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontWeight: 600 }}>{e.clients.name}</Link> : (e.guest_name ?? "Guest")}
+              {e.clients ? <Link href={`/clients/${e.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{e.clients.name}</Link> : (e.guest_name ?? "Guest")}
               <span style={{ flex: 1 }} />
               <span style={{ color: "var(--muted)", fontSize: 12 }}>{time(e.at)}</span>
             </div>
@@ -75,7 +75,7 @@ export default async function AccessPage() {
               {events.map((e) => (
                 <tr key={e.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{time(e.at)}</td>
-                  <td style={td}>{e.clients ? <Link href={`/clients/${e.clients.id}`} style={{ color: "var(--teal-dark)", textDecoration: "none" }}>{e.clients.name}</Link> : (e.guest_name ?? "Guest")}</td>
+                  <td style={td}>{e.clients ? <Link href={`/clients/${e.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{e.clients.name}</Link> : (e.guest_name ?? "Guest")}</td>
                   <td style={td}><span style={{ background: e.direction === "in" ? "var(--green-bg)" : "#eef2f1", color: e.direction === "in" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.direction}</span></td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13, textTransform: "capitalize" }}>{e.method}</td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 12 }}>{e.by_name ?? "—"}</td>

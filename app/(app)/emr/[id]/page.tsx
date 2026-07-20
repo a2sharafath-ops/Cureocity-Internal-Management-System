@@ -75,8 +75,8 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
           )}
         </div>
         <span style={{ flex: 1 }} />
-        <a href={`/api/fhir/${cid}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600, border: "1px solid var(--teal)", borderRadius: 8, padding: "6px 12px", marginRight: 10 }}>⤓ Export FHIR</a>
-        <Link href={`/clients/${cid}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>360° profile →</Link>
+        <a href={`/api/fhir/${cid}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600, border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "6px 12px", marginRight: 10 }}>⤓ Export FHIR</a>
+        <Link href={`/clients/${cid}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>360° profile →</Link>
       </div>
 
       {/* allergy banner */}
@@ -180,7 +180,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
             <div key={e.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
                 <b style={{ fontSize: 14 }}>{e.date}</b>
-                <span style={{ background: "#e0f2f1", color: "var(--teal-dark)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{e.type}</span>
+                <span style={{ background: "#e0f2f1", color: "var(--brand-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{e.type}</span>
                 {e.chief_complaint && <span style={{ color: "var(--muted)", fontSize: 13 }}>· {e.chief_complaint}</span>}
                 <span style={{ flex: 1 }} />
                 <span style={{ color: "var(--muted)", fontSize: 12 }}>{e.provider ?? ""}</span>
@@ -201,7 +201,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
         {prescriptions.length === 0 && <div style={{ color: "var(--muted)", fontSize: 14 }}>No prescriptions.</div>}
         <div style={{ display: "grid", gap: 10 }}>
           {prescriptions.map((r) => {
-            const chip = r.status === "signed" ? ["var(--green-bg)", "#166534"] : r.status === "dispensed" ? ["#e0f2f1", "var(--teal-dark)"] : r.status === "cancelled" ? ["#fee2e2", "var(--red)"] : ["#eef2f1", "var(--muted)"];
+            const chip = r.status === "signed" ? ["var(--green-bg)", "#166534"] : r.status === "dispensed" ? ["#e0f2f1", "var(--brand-text)"] : r.status === "cancelled" ? ["#fee2e2", "var(--red)"] : ["#eef2f1", "var(--muted)"];
             return (
               <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>

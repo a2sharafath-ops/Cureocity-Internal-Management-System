@@ -44,7 +44,7 @@ export default function AppointmentsBoard({ appts, today }: { appts: ApptRow[]; 
       padding: "7px 14px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none",
       background: view === k ? "var(--card)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)",
       boxShadow: view === k ? "var(--shadow)" : "none",
-    }}>{label} <span style={{ background: view === k ? "var(--teal-light)" : "#e7e7ea", color: view === k ? "var(--teal-dark)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
+    }}>{label} <span style={{ background: view === k ? "var(--brand-tint)" : "#e7e7ea", color: view === k ? "var(--brand-text)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
   );
 
   return (
@@ -77,7 +77,7 @@ export default function AppointmentsBoard({ appts, today }: { appts: ApptRow[]; 
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{a.title || a.type || "Consultation"}</div>
               </div>
               {chip(s[0], s[1], s[2])}
-              {a.client_id && <Link href={`/clients/${a.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--teal-dark)" }}>Card</Link>}
+              {a.client_id && <Link href={`/clients/${a.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Card</Link>}
             </div>
           );
         }) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {view} appointments for your clients.</div>}

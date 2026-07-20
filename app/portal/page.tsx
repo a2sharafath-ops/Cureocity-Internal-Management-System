@@ -138,7 +138,7 @@ export default async function PortalHome() {
   return (
     <div>
       {/* Hero */}
-      <div style={{ background: "linear-gradient(135deg, var(--teal-dark), var(--teal))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
+      <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
         <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
@@ -188,7 +188,7 @@ export default async function PortalHome() {
             <div style={{ color: "var(--muted)", fontSize: 13 }}>Nothing shared with you yet.</div>
           ) : shared.map((c, i) => (
             <div key={i} style={{ padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
-              <span style={{ background: "var(--teal-light)", color: "var(--teal-dark)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{c.kind}</span>
+              <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{c.kind}</span>
               {c.summary && <div style={{ marginTop: 6, fontSize: 13 }}>{c.summary}</div>}
             </div>
           ))}
@@ -303,7 +303,7 @@ export default async function PortalHome() {
                   <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
                   <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{h.name}</div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 700, color: streak > 0 ? "var(--teal-dark)" : "var(--muted)", fontSize: 14 }}>🔥 {streak}d</div>
+                    <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)", fontSize: 14 }}>🔥 {streak}d</div>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{week}/{h.target_per_week} this week</div>
                   </div>
                 </div>

@@ -58,7 +58,7 @@ export default function DietCharts({ charts, clients }: { charts: DietChartRow[]
             <input name="protein" placeholder="Protein target (e.g. 72 g)" style={inp} />
           </div>
           <textarea name="notes" rows={2} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
-          <div><button style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save as draft</button></div>
+          <div><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save as draft</button></div>
         </form>
       )}
 
@@ -87,7 +87,7 @@ export default function DietCharts({ charts, clients }: { charts: DietChartRow[]
                     </div>
                   ))}
                   {dc.notes && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>📝 {dc.notes}</div>}
-                  {dc.client_id && <div style={{ marginTop: 8 }}><Link href={`/clients/${dc.client_id}`} style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Open client card →</Link></div>}
+                  {dc.client_id && <div style={{ marginTop: 8 }}><Link href={`/clients/${dc.client_id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Open client card →</Link></div>}
                 </div>
               </div>
             )}

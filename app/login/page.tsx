@@ -42,7 +42,7 @@ export default function LoginPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--teal)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>
             ✚
           </div>
           <b style={{ fontSize: 18 }}>Cureocity</b>

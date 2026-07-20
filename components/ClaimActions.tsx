@@ -14,7 +14,7 @@ export default function ClaimActions({ id, status, claimed }: { id: string; stat
         <input type="hidden" name="id" value={id} />
         <input type="hidden" name="status" value="approved" />
         <input name="amount_approved" type="number" min={0} defaultValue={claimed} required style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 12, width: 100 }} />
-        <button type="submit" style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>Approve</button>
+        <button type="submit" style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Approve</button>
         <button type="button" onClick={() => setApproving(false)} style={{ ...btn, color: "var(--muted)" }}>✕</button>
       </form>
     );
@@ -33,7 +33,7 @@ export default function ClaimActions({ id, status, claimed }: { id: string; stat
       {status === "submitted" && simple("in_review", "Mark in review")}
       {(status === "submitted" || status === "in_review") && (
         <>
-          <button type="button" onClick={() => setApproving(true)} style={{ ...btn, borderColor: "var(--teal)", color: "var(--teal-dark)" }}>Approve</button>
+          <button type="button" onClick={() => setApproving(true)} style={{ ...btn, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Approve</button>
           {simple("rejected", "Reject", "var(--red)")}
         </>
       )}

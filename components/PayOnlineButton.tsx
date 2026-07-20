@@ -24,7 +24,7 @@ function loadCheckout(): Promise<boolean> {
   });
 }
 
-const btn: React.CSSProperties = { border: "1px solid var(--teal)", background: "#fff", color: "var(--teal-dark)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" };
+const btn: React.CSSProperties = { border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 
 export default function PayOnlineButton({ invoiceId, configured }: { invoiceId: string; configured: boolean }) {
   const [msg, setMsg] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function PayOnlineButton({ invoiceId, configured }: { invoiceId: 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <button type="button" onClick={pay} disabled={pending} style={{ ...btn, opacity: pending ? 0.6 : 1 }}>{pending ? "…" : "Pay online"}</button>
-      {msg && <span style={{ fontSize: 12, color: msg.includes("✓") ? "var(--teal-dark)" : "var(--muted)" }}>{msg}</span>}
+      {msg && <span style={{ fontSize: 12, color: msg.includes("✓") ? "var(--brand-text)" : "var(--muted)" }}>{msg}</span>}
     </span>
   );
 }
