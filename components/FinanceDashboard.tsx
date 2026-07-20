@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
-import StatCard from "@/components/StatCard";
 import MetricCard from "@/components/MetricCard";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 
@@ -124,11 +123,24 @@ export default async function FinanceDashboard({ name }: { name: string }) {
       {/* 1 — MONEY */}
       <div style={sectionTitle}>Money</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <StatCard label="Revenue this month" value={money(revenueMonth)} sub={revenuePrev ? `${revenueMonth >= revenuePrev ? "▲" : "▼"} vs ${money(revenuePrev)} last month` : `${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} minWidth={190} />
-        <StatCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
-        <StatCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} minWidth={170} />
-        <StatCard label="Net this month" value={money(netMonth)} sub="revenue − spend" color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
-        <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
+        <MetricCard
+          label="Revenue this month"
+          value={money(revenueMonth)}
+          sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`}
+          // Slot 04. Revenue up is good, revenue down is bad — declared, not
+          // inferred. Omitted entirely when there's no prior month to compare
+          // against, rather than showing a meaningless ▲100%.
+          trend={revenuePrev ? {
+            delta: Math.round(((revenueMonth - revenuePrev) / revenuePrev) * 100),
+            sentiment: revenueMonth >= revenuePrev ? "good" : "bad",
+            since: `vs ${money(revenuePrev)} last month`,
+          } : undefined}
+          minWidth={190}
+        />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} minWidth={170} />
+        <MetricCard label="Net this month" value={money(netMonth)} sub="revenue − spend" color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
+        <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
       </div>
 
       {/* 2 — NEEDS ATTENTION */}

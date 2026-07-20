@@ -6,7 +6,7 @@ import NpsForm from "@/components/NpsForm";
 import ReferralForm from "@/components/ReferralForm";
 import ReferralActions from "@/components/ReferralActions";
 import SegTabs from "@/components/SegTabs";
-import StatCard from "@/components/StatCard";
+import MetricCard from "@/components/MetricCard";
 import Chip from "@/components/Chip";
 import { winbackOffer, sendNpsSurvey, awardLoyalty, redeemLoyalty } from "@/lib/actions";
 
@@ -37,7 +37,7 @@ export default function RetentionHub({
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13 };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
   const kpi = (label: string, value: string, sub: string, bg: string, color: string) => (
-    <StatCard label={label} value={value} sub={sub} badge={{ bg, color }} />
+    <MetricCard label={label} value={value} sub={sub} badge={{ bg, color }} />
   );
   const chip = (bg: string, c: string, t: string, extra?: React.CSSProperties) => <Chip bg={bg} color={c} style={extra}>{t}</Chip>;
   const tierChip = (t: string) => chip(t === "High" ? "var(--red-bg)" : t === "Medium" ? "var(--amber-bg)" : "var(--green-bg)", t === "High" ? "var(--red-text)" : t === "Medium" ? "var(--amber-text)" : "var(--green-text)", t);

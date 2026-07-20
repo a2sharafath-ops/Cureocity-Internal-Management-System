@@ -6,7 +6,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { usePass } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
-import StatCard from "@/components/StatCard";
+import MetricCard from "@/components/MetricCard";
 import PassSell from "@/components/PassSell";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export default async function PassesPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px" };
-  const stat = (label: string, value: string) => <StatCard label={label} value={value} color="var(--brand-text)" />;
+  const stat = (label: string, value: string) => <MetricCard label={label} value={value} color="var(--brand-text)" />;
 
   return (
     <div style={{ maxWidth: 1040 }}>

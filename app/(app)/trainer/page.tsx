@@ -7,7 +7,7 @@ import { canSee } from "@/lib/roles";
 import SessionActions from "@/components/SessionActions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
-import StatCard from "@/components/StatCard";
+import MetricCard from "@/components/MetricCard";
 
 import { todayISO, todayLabel } from "@/lib/today";
 
@@ -72,7 +72,7 @@ export default async function TrainerPage() {
     </div>
   );
 
-  const kpi = (label: string, value: number | string) => <StatCard label={label} value={value} />;
+  const kpi = (label: string, value: number | string) => <MetricCard label={label} value={value} />;
 
   return (
     <div style={{ maxWidth: 900 }}>
