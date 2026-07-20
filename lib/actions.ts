@@ -3529,3 +3529,64 @@ export async function toggleWhiteboardNote(formData: FormData) {
   await supabase.from("whiteboard_notes").update({ done: !done }).eq("id", id);
   revalidatePath("/whiteboard");
 }
+
+// ---- quick drawer ----------------------------------------------------------
+
+/**
+ * Everything the Clients-list Quick drawer needs for one client, in a single
+ * round trip. The list itself only carries summary columns, so the drawer
+ * fetches the rest when it opens rather than bloating every row.
+ */
+export async function getClientQuickView(clientId: string) {
+  const p = await getProfile();
+  if (!p || !canSee(p.role, "/clients")) return null;
+
+  const supabase = createClient();
+  const today = todayISO();
+
+  const [
+    { data: client }, { data: pkgs }, { data: enrol }, { data: sessions },
+    { data: invoices }, { data: appts }, { data: bp }, { data: blood },
+    { data: assessments }, { data: files }, { data: measures }, { data: assigns },
+    { data: cpacks },
+  ] = await Promise.all([
+    supabase.from("clients").select("*").eq("id", clientId).maybeSingle(),
+    supabase.from("packages").select("id, name, sessions, validity, price, is_facility"),
+    supabase.from("enrollments").select("trainer_id, hour, session, staff(name)").eq("client_id", clientId).maybeSingle(),
+    supabase.from("sessions").select("id, seq, date, hour, status, staff(name)").eq("client_id", clientId).order("date"),
+    supabase.from("invoices").select("id, num, description, amount, status, issued_date").eq("client_id", clientId).order("num", { ascending: false }),
+    supabase.from("appointments").select("id, type, title, date, hour, status, staff(name)").eq("client_id", clientId).order("date", { ascending: false }).limit(8),
+    supabase.from("blueprints").select("scores, generated, status").eq("client_id", clientId).maybeSingle(),
+    supabase.from("blood_requests").select("submitted, requested_on").eq("client_id", clientId).maybeSingle(),
+    supabase.from("assessments").select("id, kind, due_date, scheduled_date, status, staff(name)").eq("client_id", clientId).order("due_date", { ascending: false }).limit(6),
+    supabase.from("files").select("id, name, kind, created_at").eq("client_id", clientId).order("created_at", { ascending: false }).limit(8),
+    supabase.from("measurements").select("weight, bmi, body_fat, date").eq("client_id", clientId).order("date", { ascending: false }).limit(1),
+    supabase.from("client_assignments").select("discipline, staff_id, method, staff:staff_id(name, role)").eq("client_id", clientId),
+    supabase.from("client_packages").select("package_name, category, start_date, end_date, price, status").eq("client_id", clientId).order("start_date", { ascending: false }),
+  ]);
+
+  if (!client) return null;
+
+  const pkg = (pkgs ?? []).find((x: { id: string }) => x.id === client.package_id) ?? null;
+  const done = (sessions ?? []).filter((s: { status: string }) => s.status === "completed");
+  const upcoming = (sessions ?? []).filter((s: { status: string; date: string }) => s.status === "scheduled" && s.date >= today);
+
+  return {
+    client,
+    pkg,
+    enrolment: enrol ?? null,
+    sessions: { total: (sessions ?? []).length, done: done.length, next: upcoming[0] ?? null },
+    invoices: invoices ?? [],
+    appointments: appts ?? [],
+    blueprint: bp ?? null,
+    blood: blood ?? null,
+    assessments: assessments ?? [],
+    files: files ?? [],
+    measurement: (measures ?? [])[0] ?? null,
+    assignments: assigns ?? [],
+    clientPackages: cpacks ?? [],
+    canWrite: canWrite(p.role),
+    canBill: canManageInvoices(p.role),
+  };
+}
+export type ClientQuickView = NonNullable<Awaited<ReturnType<typeof getClientQuickView>>>;
