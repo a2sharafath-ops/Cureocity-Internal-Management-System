@@ -148,7 +148,10 @@ export default async function OwnerDashboard({ name }: { name: string }) {
 
   // ---- ops pulse / growth ---------------------------------------------------
   const sessToday = sessions.filter((s) => s.date === today);
-  const apptsToday = appts.filter((a) => a.date === today && a.status === "scheduled");
+  const sessDone = sessToday.filter((s) => s.status === "completed").length;
+  const apptsAll = appts.filter((a) => a.date === today);
+  const apptsToday = apptsAll.filter((a) => a.status === "scheduled");
+  const withPackage = clients.filter((c) => c.package_id).length;
   const present = attendance.filter((a) => a.status === "present" || a.status === "Present").length;
   const openLeads = leads.filter((l) => !(l.stage ?? "").startsWith("5") && (l.stage ?? "") !== "LOST").length;
   const won = leads.filter((l) => (l.stage ?? "").startsWith("5")).length;
@@ -185,64 +188,63 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       {/* 2 — NEEDS ATTENTION (collapsed to a health score until clicked) */}
       <AttentionPanel flags={flags} />
 
+      {/* 3 — TODAY. Full width: this is the second thing an owner looks at. */}
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Today</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 20 }}>
+        <MetricCard value={sessToday.length} label="Sessions" href="/sessions"
+          meter={{ of: sessToday.length, filled: sessDone }}
+          sub={sessToday.length ? `${sessDone} of ${sessToday.length} completed` : "none scheduled"} />
+        <MetricCard value={apptsToday.length} label="Appointments" href="/appointments"
+          meter={{ of: apptsAll.length, filled: apptsToday.length }}
+          sub={apptsAll.length ? `${apptsToday.length} of ${apptsAll.length} still to run` : "none booked"} />
+        <MetricCard value={present} label="Staff present" href="/hr?tab=attendance"
+          meter={{ of: staff.length, filled: present }}
+          sub={`of ${staff.length} on the team`} />
+        <MetricCard value={clients.length} label="Clients" href="/clients"
+          meter={{ of: clients.length, filled: withPackage }}
+          sub={`${withPackage} of ${clients.length} on a package`} />
+      </div>
+
+      {/* 4 — GROWTH. Also full width, directly under Today. */}
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Growth</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 20 }}>
+        <MetricCard value={leads.length} label="Leads" href="/leads?view=all"
+          meter={{ of: leads.length, filled: won }}
+          sub={`${won} have converted`} />
+        <MetricCard value={openLeads} label="In pipeline" href="/leads?view=open"
+          meter={{ of: leads.length, filled: openLeads }}
+          sub={openLeads ? `${openLeads} of ${leads.length} still open` : "nothing open"} />
+        <MetricCard value={`${convRate}%`} label="Converted" href="/leads?view=won"
+          meter={{ of: 100, filled: convRate }}
+          sub={`${won} of ${leads.length} leads`} />
+      </div>
+
+      {/* 5 — SUPPORTING DETAIL, below the fold. */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
-        {/* 3 — OPS PULSE + GROWTH */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>📊 Today</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-              <MetricCard icon="🏋" value={sessToday.length} label="Sessions" href="/sessions"
-                sub={sessToday.length ? `${sessToday.filter((s) => s.status === "completed").length} completed` : "none scheduled"} />
-              <MetricCard icon="📅" value={apptsToday.length} label="Appointments" href="/appointments"
-                sub={apptsToday.length ? "scheduled today" : "none booked"} />
-              <MetricCard icon="👥" value={present} label="Staff present" href="/hr?tab=attendance"
-                sub={`of ${staff.length} on the team`} accent={present ? undefined : "var(--muted)"} />
-              <MetricCard icon="◉" value={clients.length} label="Clients" href="/clients"
-                sub={`${clients.filter((c) => c.package_id).length} with a package`} />
-            </div>
-          </div>
-          <div style={{ ...box, padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontWeight: 700 }}>🏋 Staff utilisation</div>
-              <span style={{ flex: 1 }} />
-              {idle > 0 && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{idle} idle</span>}
-            </div>
-            {util.length ? util.map((t) => {
-              const load = t.done + t.upcoming;
-              const pct = Math.min(100, load * 5); // ~20 sessions = a full bar
-              return (
-                <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 12.5 }}>
-                  <span style={{ width: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
-                  <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
-                    <div style={{ width: `${pct}%`, height: "100%", background: load ? "var(--teal)" : "transparent" }} />
-                  </div>
-                  <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{t.done} done · {t.upcoming} booked</span>
-                </div>
-              );
-            }) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No trainers on record.</div>}
-          </div>
-
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>📈 Growth</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-              <MetricCard icon="✦" value={leads.length} label="Leads" href="/leads?view=all"
-                sub="all time" />
-              <MetricCard icon="⏳" value={openLeads} label="In pipeline" href="/leads?view=open"
-                sub={openLeads ? "still working" : "nothing open"} accent={openLeads ? undefined : "var(--muted)"} />
-              <MetricCard icon="✓" value={`${convRate}%`} label="Converted" href="/leads?view=won"
-                sub={`${won} of ${leads.length} leads`} />
-            </div>
-            <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Link href="/targets" style={qa}>Sales Targets</Link>
-              <Link href="/reports" style={qa}>Reports</Link>
-            </div>
-          </div>
-        </div>
-
-        {/* 5 — GOVERNANCE */}
         <div style={{ ...box, padding: "14px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 700 }}>🛡 Control &amp; governance</div>
+            <div style={{ fontWeight: 700 }}>Staff utilisation</div>
+            <span style={{ flex: 1 }} />
+            {idle > 0 && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{idle} idle</span>}
+          </div>
+          {util.length ? util.map((t) => {
+            const load = t.done + t.upcoming;
+            const pct = Math.min(100, load * 5); // ~20 sessions = a full bar
+            return (
+              <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 12.5 }}>
+                <span style={{ width: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
+                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: load ? "var(--teal)" : "transparent" }} />
+                </div>
+                <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{t.done} done · {t.upcoming} booked</span>
+              </div>
+            );
+          }) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No trainers on record.</div>}
+        </div>
+
+        <div style={{ ...box, padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>Control &amp; governance</div>
             <span style={{ flex: 1 }} />
             <Link href="/audit" style={{ color: "var(--teal-dark)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>Full audit log →</Link>
           </div>

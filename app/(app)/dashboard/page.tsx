@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import { isClinician } from "@/lib/roles";
 import OwnerDashboard from "@/components/OwnerDashboard";
+import ManagerDashboard from "@/components/ManagerDashboard";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
@@ -46,6 +47,10 @@ export default async function DashboardPage() {
   // Super Admin gets the owner view — money, exceptions, control. (Previewing
   // another role drops them into that role's dashboard instead.)
   if (effective === "Super Admin") return <OwnerDashboard name={me?.name ?? "there"} />;
+
+  // Manager gets the same shape pointed at the floor: money, exceptions, then
+  // Today and Growth first, with utilisation and the schedule below.
+  if (effective === "Manager") return <ManagerDashboard name={me?.name ?? "there"} />;
 
   const role = effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);
