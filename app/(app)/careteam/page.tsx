@@ -52,6 +52,7 @@ export default async function CareTeamPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Every clinical tool in one place — records, orders, blueprint, telehealth &amp; more.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+        {card("🧠", "Whiteboard", "Daily team meeting", null, "clients on the board", "/whiteboard", "#ede9fe")}
         {card("🩺", "Consultations", "Doctor · Coach · Psychologist", consultsPend.count ?? 0, "to complete", "/pro", "#e0f2f1")}
         {canEmr(me.role) && card("📋", "Patient Records", "EMR — problems, meds, vitals", null, "open charts", "/emr", "#dbeafe")}
         {canEmr(me.role) && card("🧪", "Orders & Labs", "Prescriptions & results", ordersOpen.count ?? 0, "open orders", "/orders", "#fef3c7")}

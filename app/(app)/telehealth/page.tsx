@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -37,6 +38,7 @@ export default async function TelehealthPage() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <RealtimeRefresh tables={["telehealth_sessions"]} />
+      <BackLink />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Telehealth</h1>
         <span style={{ flex: 1 }} />

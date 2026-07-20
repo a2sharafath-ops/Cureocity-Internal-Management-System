@@ -67,3 +67,23 @@ describe("permission helpers", () => {
     expect(canConsult("Front Desk")).toBe(false);
   });
 });
+
+describe("workspace + whiteboard access", () => {
+  it("managers use their own dashboard, not a discipline workspace", () => {
+    expect(canSee("Manager", "/workspace")).toBe(false);
+    expect(canSee("Manager", "/dashboard")).toBe(true);
+  });
+  it("clinicians keep their workspace", () => {
+    for (const r of ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"]) {
+      expect(canSee(r, "/workspace")).toBe(true);
+    }
+  });
+  it("every clinician joins the whiteboard; front desk and finance do not", () => {
+    for (const r of ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist", "Manager"]) {
+      expect(canSee(r, "/whiteboard")).toBe(true);
+    }
+    expect(canSee("Front Desk", "/whiteboard")).toBe(false);
+    expect(canSee("Finance", "/whiteboard")).toBe(false);
+    expect(canSee("Super Admin", "/whiteboard")).toBe(true);
+  });
+});

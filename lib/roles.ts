@@ -38,8 +38,13 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/intake": ["Administrator", "Manager", "Front Desk"],
   "/access": ["Administrator", "Manager", "Front Desk"],
   "/trainer": ["Administrator", "Manager", ...CLIN],
-  "/workspace": ["Administrator", "Manager", ...CLIN],
+  // Managers have their own dashboard; the discipline workspaces are for the
+  // clinicians who actually carry a caseload (Administrator keeps access for
+  // previewing/supporting).
+  "/workspace": ["Administrator", ...CLIN],
   "/careteam": ["Administrator", "Manager", ...CLIN],
+  // the daily multi-disciplinary meeting — every clinician takes part
+  "/whiteboard": ["Administrator", "Manager", ...CLIN],
   "/telehealth": ["Administrator", "Manager", ...CLIN],
   "/forms": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/pro": ["Administrator", "Manager", ...CLIN],
@@ -196,7 +201,7 @@ const AREA_LABEL: Record<string, string> = {
   "/dashboard": "dash", "/leads": "crm", "/clients": "clients", "/appointments": "booking",
   "/sessions": "training", "/followups": "followups", "/messages": "comms", "/retention": "retention",
   "/targets": "targets", "/intake": "intake", "/access": "access", "/workspace": "workspace",
-  "/careteam": "careteam", "/telehealth": "telehealth", "/pro": "consults", "/meals": "meals",
+  "/careteam": "careteam", "/whiteboard": "whiteboard", "/telehealth": "telehealth", "/pro": "consults", "/meals": "meals",
   "/blueprint": "blueprint", "/trainer": "trainer", "/emr": "emr", "/orders": "orders",
   "/packages": "packages", "/services": "services", "/billing": "invoices", "/expenses": "expenses",
   "/finsheets": "finsheets", "/subscriptions": "subscriptions", "/pos": "pos", "/passes": "passes",

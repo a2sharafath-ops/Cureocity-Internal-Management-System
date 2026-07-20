@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BackLink from "@/components/BackLink";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -54,6 +55,7 @@ export default async function BlueprintPage() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <RealtimeRefresh tables={["blood_requests","consultations","blueprints"]} />
+      <BackLink />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>BluePrint</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         BluePrint-package clients · blood report → 3 consultations approved → generate · {clients.length} client{clients.length === 1 ? "" : "s"}

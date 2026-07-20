@@ -5,6 +5,8 @@ import { getProfile, getViewRole } from "@/lib/auth";
 import { isClinician } from "@/lib/roles";
 import OwnerDashboard from "@/components/OwnerDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
+import FinanceDashboard from "@/components/FinanceDashboard";
+import HrDashboard from "@/components/HrDashboard";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
@@ -51,6 +53,8 @@ export default async function DashboardPage() {
   // Manager gets the same shape pointed at the floor: money, exceptions, then
   // Today and Growth first, with utilisation and the schedule below.
   if (effective === "Manager") return <ManagerDashboard name={me?.name ?? "there"} />;
+  if (effective === "Finance") return <FinanceDashboard name={me?.name ?? "there"} />;
+  if (effective === "HR") return <HrDashboard name={me?.name ?? "there"} />;
 
   const role = effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);

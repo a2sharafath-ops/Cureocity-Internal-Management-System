@@ -6,6 +6,8 @@ export type Profile = {
   email: string | null;
   name: string;
   role: string;
+  /** home branch — used to scope things like the daily whiteboard */
+  branch: string | null;
 };
 
 export async function getProfile(): Promise<Profile | null> {
@@ -16,7 +18,7 @@ export async function getProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data } = await supabase
     .from("profiles")
-    .select("name, role")
+    .select("name, role, branch")
     .eq("id", user.id)
     .maybeSingle();
   return {
@@ -24,6 +26,7 @@ export async function getProfile(): Promise<Profile | null> {
     email: user.email ?? null,
     name: data?.name ?? user.email?.split("@")[0] ?? "User",
     role: data?.role ?? "Staff",
+    branch: data?.branch ?? null,
   };
 }
 

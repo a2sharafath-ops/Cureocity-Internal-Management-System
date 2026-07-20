@@ -1,3 +1,4 @@
+import BackLink from "@/components/BackLink";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -37,6 +38,7 @@ export default async function ExlibPage() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <RealtimeRefresh tables={["exercises", "workout_templates"]} />
+      <BackLink />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Exercise Library</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Online/offline exercises &amp; reusable workout templates.</p>
 

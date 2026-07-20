@@ -11,7 +11,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
-import { canWriteNutrition, ownsConsultKind } from "@/lib/discipline";
+import { canWriteNutrition, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
 import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
@@ -3371,4 +3371,157 @@ export async function deleteRecipe(formData: FormData) {
   await supabase.from("recipes").delete().eq("id", id);
   await logAudit(p, "Recipe deleted", id, null);
   revalidatePath("/workspace");
+}
+
+// ---- whiteboard: the daily multi-disciplinary meeting ----------------------
+
+/** Open (or reuse) today's board for a branch. */
+export async function openWhiteboard(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const branch = String(formData.get("branch") ?? "") || p.branch || "Kochi";
+  const date = String(formData.get("date") ?? "") || todayISO();
+  const supabase = createClient();
+
+  const { data: existing } = await supabase.from("whiteboard_sessions")
+    .select("id").eq("date", date).eq("branch", branch).maybeSingle();
+  if (!existing) {
+    await supabase.from("whiteboard_sessions").insert({ date, branch, facilitator: p.name, status: "open" });
+    await logAudit(p, "Whiteboard opened", date, branch);
+  }
+  revalidatePath("/whiteboard");
+}
+
+export async function closeWhiteboard(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("session_id"));
+  const supabase = createClient();
+  await supabase.from("whiteboard_sessions")
+    .update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Whiteboard closed", id, null);
+  revalidatePath("/whiteboard");
+}
+
+/** Put a client on today's board. */
+export async function addWhiteboardCard(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const session_id = String(formData.get("session_id"));
+  const client_id = String(formData.get("client_id"));
+  if (!session_id || !client_id) return;
+  const supabase = createClient();
+
+  const { data: dupe } = await supabase.from("whiteboard_cards")
+    .select("id").eq("session_id", session_id).eq("client_id", client_id).maybeSingle();
+  if (dupe) return; // already on the board today
+
+  const { count } = await supabase.from("whiteboard_cards")
+    .select("id", { count: "exact", head: true }).eq("session_id", session_id);
+  await supabase.from("whiteboard_cards").insert({
+    session_id, client_id,
+    reason: String(formData.get("reason") ?? "") || null,
+    origin: String(formData.get("origin") ?? "manual") === "flagged" ? "flagged" : "manual",
+    position: count ?? 0, added_by: p.name,
+  });
+  revalidatePath("/whiteboard");
+}
+
+export async function removeWhiteboardCard(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const supabase = createClient();
+  await supabase.from("whiteboard_cards").delete().eq("id", String(formData.get("id")));
+  revalidatePath("/whiteboard");
+}
+
+/** Mark a card discussed/deferred and record the meeting's takeaway. */
+export async function setWhiteboardCardStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const status = String(formData.get("status"));
+  if (!["pending", "discussed", "deferred"].includes(status)) return;
+  const headline = String(formData.get("headline") ?? "").trim();
+  const supabase = createClient();
+  await supabase.from("whiteboard_cards")
+    .update({ status, ...(headline ? { headline } : {}) }).eq("id", id);
+  revalidatePath("/whiteboard");
+}
+
+/**
+ * Adjust the team's working view of a BluePrint score. This never touches the
+ * signed-off `blueprints` row — the baseline stays as agreed, and the tweak is
+ * layered on top for this meeting.
+ */
+export async function tweakWhiteboardScore(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const key = String(formData.get("key"));
+  if (!id || !BP_SCORES.some((s) => s.key === key)) return;
+
+  const raw = String(formData.get("score") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const supabase = createClient();
+
+  const { data: card } = await supabase.from("whiteboard_cards")
+    .select("score_tweaks").eq("id", id).maybeSingle();
+  const tweaks = { ...((card?.score_tweaks ?? {}) as Record<string, unknown>) };
+
+  if (!raw && !note) {
+    delete tweaks[key]; // clearing both fields removes the adjustment
+  } else {
+    const n = Number(raw);
+    tweaks[key] = {
+      ...(raw !== "" && Number.isFinite(n) ? { score: Math.max(0, Math.min(100, n)) } : {}),
+      ...(note ? { note } : {}),
+    };
+  }
+
+  await supabase.from("whiteboard_cards").update({ score_tweaks: tweaks }).eq("id", id);
+  revalidatePath("/whiteboard");
+}
+
+/** Capture an insight, action or concern against a card. */
+export async function addWhiteboardNote(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const card_id = String(formData.get("card_id"));
+  const body = String(formData.get("body") ?? "").trim();
+  if (!card_id || !body) return;
+  const kind = String(formData.get("kind") ?? "insight");
+  const supabase = createClient();
+
+  await supabase.from("whiteboard_notes").insert({
+    card_id, body,
+    kind: ["insight", "action", "concern"].includes(kind) ? kind : "insight",
+    discipline: wsKeyForRole(p.role) ?? null,
+    owner_id: String(formData.get("owner_id") ?? "") || null,
+    due_date: String(formData.get("due_date") ?? "") || null,
+    author: p.name,
+  });
+
+  // a concern raised in the meeting becomes a real concern on the client's file
+  if (kind === "concern") {
+    const { data: card } = await supabase.from("whiteboard_cards").select("client_id").eq("id", card_id).maybeSingle();
+    if (card?.client_id) {
+      await supabase.from("concerns").insert({
+        client_id: card.client_id, role: wsKeyForRole(p.role) ?? "general",
+        category: "Whiteboard", body, raised_by: p.name, status: "Open",
+      });
+    }
+  }
+
+  revalidatePath("/whiteboard");
+}
+
+export async function toggleWhiteboardNote(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id"));
+  const done = String(formData.get("done")) === "true";
+  const supabase = createClient();
+  await supabase.from("whiteboard_notes").update({ done: !done }).eq("id", id);
+  revalidatePath("/whiteboard");
 }
