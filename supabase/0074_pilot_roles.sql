@@ -1,0 +1,22 @@
+-- ============================================================================
+-- SUPERSEDED — do not run. Safe to delete this file.
+--
+-- This originally locked a dedicated "CRM Desk" role to the leads table at the
+-- database level. We went a different way: the CRM pilot is a separate Vercel
+-- deployment of the same app with NEXT_PUBLIC_MODULE_SCOPE=crm, and the staff
+-- keep their normal Front Desk role.
+--
+-- Worth keeping in mind for later: deployment scoping restricts the UI, NOT
+-- access. Both deployments share one Supabase and one set of logins, so a Front
+-- Desk user can still open the main URL and see everything Front Desk allows.
+-- If you ever need a genuine boundary — an external agency working your leads,
+-- say — the approach that works is:
+--
+--   1. give them a role that is NOT "staff" (redefine is_staff() to exclude it),
+--      which closes every existing policy in one move;
+--   2. grant that role back only the tables its module needs (leads,
+--      campaigns, verifications);
+--   3. add the role to PILOT-style route restrictions in lib/roles.ts.
+--
+-- This file is intentionally a no-op.
+-- ============================================================================

@@ -1,5 +1,8 @@
 // Role → permissions map (mirrors the prototype's RBAC, simplified).
 
+
+import { moduleScope, scopeAllows } from "@/lib/deployment";
+
 // The five clinical discipline roles. Each has its own login and its own
 // discipline workspace, but they share the same clinician permission set
 // (what used to be the single "Health Professional" role).
@@ -76,8 +79,22 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/audit": ["Administrator"],
 };
 
+/**
+ * Where a role should land on sign-in. On a module-scoped deployment everyone
+ * lands on that module instead of the dashboard.
+ */
+export function homeFor(role: string): string {
+  return moduleScope()?.home ?? "/dashboard";
+}
+
 export function canSee(role: string, href: string): boolean {
+  // A module-scoped deployment (the CRM pilot, say) exposes only its own
+  // routes — to every role, Super Admin included. This is UI scoping for a
+  // focused rollout, not a security boundary; see lib/deployment.ts.
+  if (!scopeAllows(href)) return false;
+
   if (role === "Super Admin") return true;
+
   const rule = NAV_ACCESS[href];
   if (!rule) return true;
   if (rule === "all") return true;

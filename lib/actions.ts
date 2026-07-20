@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -574,7 +574,9 @@ export async function convertLeadWithPackage(formData: FormData) {
   }
   await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
   await logAudit(p, "Lead converted to client", lead.name, code);
-  if (inserted) redirect(`/clients/${inserted.id}?tab=timeline`);
+  // On a CRM-only deployment the client card isn't reachable, so send them
+  // back to the pipeline rather than bouncing them off a page that redirects.
+  if (inserted) redirect(canSee(p.role, "/clients") ? `/clients/${inserted.id}?tab=timeline` : "/leads");
 }
 
 // Send a 6-digit OTP to the lead's phone for conversion consent. SMS isn't
@@ -684,7 +686,9 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
   }
   await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
   await logAudit(p, "Lead converted (verified)", lead.name, code);
-  if (inserted) redirect(`/clients/${inserted.id}?tab=timeline`);
+  // On a CRM-only deployment the client card isn't reachable, so send them
+  // back to the pipeline rather than bouncing them off a page that redirects.
+  if (inserted) redirect(canSee(p.role, "/clients") ? `/clients/${inserted.id}?tab=timeline` : "/leads");
   return { ok: true };
 }
 

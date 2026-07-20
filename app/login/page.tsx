@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { moduleScope } from "@/lib/deployment";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -22,7 +23,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push("/dashboard");
+    router.push(moduleScope()?.home ?? "/dashboard");
     router.refresh();
   }
 

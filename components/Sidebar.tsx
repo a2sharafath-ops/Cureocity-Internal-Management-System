@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { canSee, isClinician } from "@/lib/roles";
+import { moduleScope } from "@/lib/deployment";
+
+const SCOPE = moduleScope();
 
 type NavItem = { href: string; label: string; icon: string };
 type NavSection = { title: string | null; items: NavItem[] };
@@ -168,7 +171,7 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
       </nav>
 
       <div style={{ position: "sticky", bottom: 0, marginTop: 20, paddingTop: 12, fontSize: 11, color: "#b4b4bb" }}>
-        Cureocity Internal · v0.1
+        {SCOPE ? `${SCOPE.label} · pilot` : "Cureocity Internal · v0.1"}
       </div>
     </aside>
   );

@@ -1,4 +1,7 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getProfile } from "@/lib/auth";
+import { canSee, homeFor } from "@/lib/roles";
 import LeadStageSelect from "@/components/LeadStageSelect";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import StatCard from "@/components/StatCard";
@@ -29,6 +32,10 @@ const VIEWS = {
 type ViewKey = keyof typeof VIEWS;
 
 export default async function LeadsPage({ searchParams }: { searchParams: { view?: string } }) {
+  // This page had no guard — any signed-in user could reach it by URL.
+  const me = await getProfile();
+  if (!me || !canSee(me.role, "/leads")) redirect(homeFor(me?.role ?? "Staff"));
+
   const view = (Object.keys(VIEWS) as ViewKey[]).includes(searchParams.view as ViewKey)
     ? (searchParams.view as ViewKey)
     : "all";
@@ -36,7 +43,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: { view
   const [{ data, error }, { data: campRows }, { data: clientRows }] = await Promise.all([
     supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde").order("num", { ascending: true }),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
-    supabase.from("clients").select("id, converted_from"),
+    // On a CRM-only deployment there is no client page to link to, and the
+    // pilot may not have client access — this lookup only powers the
+    // "converted → open client" link, so skip it.
+    canSee(me.role, "/clients")
+      ? supabase.from("clients").select("id, converted_from")
+      : Promise.resolve({ data: [] }),
   ]);
   const leads = (data ?? []) as Lead[];
   // lead id -> client id, for leads that have converted into a client

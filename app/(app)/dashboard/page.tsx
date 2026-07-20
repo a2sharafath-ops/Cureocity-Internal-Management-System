@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
+import { moduleScope } from "@/lib/deployment";
 import { isClinician } from "@/lib/roles";
 import OwnerDashboard from "@/components/OwnerDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
@@ -45,6 +46,10 @@ function Kpi({ icon, iconBg, iconColor, label, value, sub, href }: { icon: strin
 export default async function DashboardPage() {
   const me = await getProfile();
   const { effective } = await getViewRole();
+
+  // A module-scoped deployment has no dashboard — send them to the module.
+  const scope = moduleScope();
+  if (scope) redirect(scope.home);
 
   // Super Admin gets the owner view — money, exceptions, control. (Previewing
   // another role drops them into that role's dashboard instead.)
