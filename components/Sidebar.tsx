@@ -134,8 +134,10 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
               </div>
             )}
             {section.items.map((item) => {
-              const WORKSPACE_ROUTES = ["/pro", "/trainer", "/meals", "/console"];
-              const CARETEAM_ROUTES = ["/emr", "/orders", "/blueprint", "/exlib", "/telehealth"];
+              // The whiteboard hangs off both hubs, so it highlights whichever
+              // one this role actually reaches it from.
+              const WORKSPACE_ROUTES = ["/pro", "/trainer", "/meals", "/console", ...(clin ? ["/whiteboard"] : [])];
+              const CARETEAM_ROUTES = ["/emr", "/orders", "/blueprint", "/exlib", "/telehealth", ...(clin ? [] : ["/whiteboard"])];
               const active = pathname === item.href || pathname.startsWith(item.href + "/") ||
                 (item.href === "/workspace" && WORKSPACE_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) ||
                 (item.href === "/careteam" && CARETEAM_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/")));

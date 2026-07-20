@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canConsult } from "@/lib/roles";
+import { canSee, canConsult, isClinician } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { ageFromDob } from "@/lib/dob";
 import { boardCandidates, boardProgress, effectiveScores, type ScoreTweaks, type CandidateInput } from "@/lib/whiteboard";
@@ -138,7 +138,10 @@ export default async function WhiteboardPage() {
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["whiteboard_cards", "whiteboard_notes", "whiteboard_sessions"]} />
-      <BackLink />
+      {/* clinicians arrive from their workspace; everyone else from Care Team */}
+      {isClinician(me.role)
+        ? <BackLink href="/workspace" label="my Workspace" />
+        : <BackLink />}
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Whiteboard</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Daily team meeting — the same client data BluePrint reads, reviewed together and turned into today&apos;s actions.
