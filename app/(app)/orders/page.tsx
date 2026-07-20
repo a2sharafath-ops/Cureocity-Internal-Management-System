@@ -24,7 +24,7 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const stat = (rank: string) => rank === "stat" ? { color: "var(--red)", label: "STAT" } : rank === "urgent" ? { color: "#92400e", label: "URGENT" } : null;
+  const stat = (rank: string) => rank === "stat" ? { color: "var(--red)", label: "STAT" } : rank === "urgent" ? { color: "var(--amber-text)", label: "URGENT" } : null;
 
   return (
     <div style={{ maxWidth: 1000 }}>
@@ -46,7 +46,7 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
           <tbody>
             {orders.map((o) => {
               const s = stat(o.priority);
-              const chip = o.status === "resulted" ? ["var(--green-bg)", "#166534"] : o.status === "cancelled" ? ["#fee2e2", "var(--red)"] : o.status === "collected" ? ["var(--amber-bg)", "#92400e"] : ["#eef2f1", "var(--muted)"];
+              const chip = o.status === "resulted" ? ["var(--green-bg)", "var(--green-text)"] : o.status === "cancelled" ? ["var(--red-bg)", "var(--red)"] : o.status === "collected" ? ["var(--amber-bg)", "var(--amber-text)"] : ["var(--neutral-bg)", "var(--muted)"];
               return (
                 <tr key={o.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={td}>{o.clients ? <Link href={`/emr/${o.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{o.clients.name}</Link> : "—"}</td>

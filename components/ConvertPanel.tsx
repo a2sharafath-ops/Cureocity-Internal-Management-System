@@ -84,7 +84,7 @@ export default function ConvertPanel({
         <button type="submit" disabled={pending || !otpSent} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontSize: 14, fontWeight: 700, cursor: pending || !otpSent ? "not-allowed" : "pointer", opacity: pending || !otpSent ? 0.6 : 1 }}>Verify &amp; convert →</button>
       </div>
 
-      {devCode && <div style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>SMS provider not configured — read this code to the client: <b style={{ letterSpacing: 2 }}>{devCode}</b></div>}
+      {devCode && <div style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>SMS provider not configured — read this code to the client: <b style={{ letterSpacing: 2 }}>{devCode}</b></div>}
       {msg && <div style={{ fontSize: 13, color: msg.ok ? "var(--brand-text)" : "var(--red)" }}>{msg.text}</div>}
     </form>
   );

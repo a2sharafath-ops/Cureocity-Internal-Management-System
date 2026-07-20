@@ -59,11 +59,11 @@ export default function PackageCatalog({
 
           {/* attribute chips */}
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", margin: "10px 0" }}>
-            {sel.one_time && chip("#ede9fe", "#6d28d9", "🔵 One-time purchase")}
-            {sel.requires_slot ? chip("var(--amber-bg)", "#92400e", "📅 Requires slot booking") : chip("#eef2f1", "var(--muted)", "No slot needed")}
-            {chip("#dbeafe", "#1e40af", sel.delivery_mode)}
-            {sel.tags.map((t) => chip("var(--green-bg)", "#166534", t))}
-            {!sel.active && chip("var(--red-bg)", "#991b1b", "Deactivated")}
+            {sel.one_time && chip("var(--purple-bg)", "var(--purple-text)", "🔵 One-time purchase")}
+            {sel.requires_slot ? chip("var(--amber-bg)", "var(--amber-text)", "📅 Requires slot booking") : chip("var(--neutral-bg)", "var(--muted)", "No slot needed")}
+            {chip("var(--blue-bg)", "var(--blue-text)", sel.delivery_mode)}
+            {sel.tags.map((t) => chip("var(--green-bg)", "var(--green-text)", t))}
+            {!sel.active && chip("var(--red-bg)", "var(--red-text)", "Deactivated")}
           </div>
 
           {/* price + gst */}
@@ -79,17 +79,17 @@ export default function PackageCatalog({
             <div key={cat} style={{ marginTop: 12 }}>
               <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>{cat}</div>
               <ul style={{ margin: "3px 0 0", paddingLeft: 4, listStyle: "none" }}>
-                {list.map((s) => <li key={s.name} style={{ fontSize: 13, padding: "2px 0" }}><span style={{ color: "#16a34a" }}>✓</span> {s.name}{s.slot ? " 📅" : ""}</li>)}
+                {list.map((s) => <li key={s.name} style={{ fontSize: 13, padding: "2px 0" }}><span style={{ color: "var(--green)" }}>✓</span> {s.name}{s.slot ? " 📅" : ""}</li>)}
               </ul>
             </div>
           ))}
 
           {/* footer */}
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
-            {chip("#eef2f1", "var(--muted)", `${clients} client${clients === 1 ? "" : "s"}`)}
+            {chip("var(--neutral-bg)", "var(--muted)", `${clients} client${clients === 1 ? "" : "s"}`)}
             <span style={{ flex: 1 }} />
             {canManage && <button type="button" onClick={() => setEditId(sel.id)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Edit</button>}
-            {canManage && <form action={togglePackageActive}><input type="hidden" name="id" value={sel.id} /><input type="hidden" name="active" value={String(sel.active)} /><button style={{ border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: sel.active ? "var(--red-bg)" : "var(--brand-fill)", color: sel.active ? "#991b1b" : "#fff" }}>{sel.active ? "Deactivate" : "Reactivate"}</button></form>}
+            {canManage && <form action={togglePackageActive}><input type="hidden" name="id" value={sel.id} /><input type="hidden" name="active" value={String(sel.active)} /><button style={{ border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", background: sel.active ? "var(--red-bg)" : "var(--brand-fill)", color: sel.active ? "var(--red-text)" : "#fff" }}>{sel.active ? "Deactivate" : "Reactivate"}</button></form>}
           </div>
         </div>
       </div>
@@ -104,7 +104,7 @@ export default function PackageCatalog({
         <span style={{ fontSize: 13, color: "var(--muted)" }}>Front desk location:</span>
         <select value={branch} onChange={(e) => setBranch(e.target.value)} style={{ ...inp, width: "auto" }}>{branches.map((b) => <option key={b}>{b}</option>)}</select>
         <span style={{ flex: 1 }} />
-        {chip("#eef2f1", "var(--muted)", "Pick a duration inside each card")}
+        {chip("var(--neutral-bg)", "var(--muted)", "Pick a duration inside each card")}
         {canManage && <button type="button" onClick={() => setEditId("")} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Package</button>}
       </div>
 

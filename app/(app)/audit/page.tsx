@@ -49,7 +49,7 @@ export default async function AuditPage() {
       </div>
 
       {error ? (
-        <div style={{ marginTop: 16, background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
+        <div style={{ marginTop: 16, background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load the audit log.</b> {error.message}
           <div style={{ marginTop: 6, fontSize: 12 }}>Make sure supabase/0004_audit_log.sql has been run.</div>
         </div>
@@ -79,7 +79,7 @@ export default async function AuditPage() {
                       <div style={{ color: "var(--muted)", fontSize: 12 }}>{r.actor_role ?? ""}</div>
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{r.action}</span>
+                      <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{r.action}</span>
                     </td>
                     <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{detailOf(r)}</td>
                   </tr>

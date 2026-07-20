@@ -64,10 +64,10 @@ export default function FollowupsBoard({ rows, today }: { rows: FuRow[]; today: 
                 <b style={{ fontSize: 13 }}>{r.client_name ?? "—"}</b>
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{r.label}</div>
               </div>
-              {r.priority === "mandatory" && chip("var(--red-bg)", "#991b1b", "Mandatory")}
+              {r.priority === "mandatory" && chip("var(--red-bg)", "var(--red-text)", "Mandatory")}
               {r.status === "pending"
-                ? (isOverdue ? chip("var(--red-bg)", "#991b1b", "Overdue") : chip("var(--amber-bg)", "#92400e", "Due"))
-                : chip("var(--green-bg)", "#166534", r.status === "done" ? "Done" : "Skipped")}
+                ? (isOverdue ? chip("var(--red-bg)", "var(--red-text)", "Overdue") : chip("var(--amber-bg)", "var(--amber-text)", "Due"))
+                : chip("var(--green-bg)", "var(--green-text)", r.status === "done" ? "Done" : "Skipped")}
               {r.client_id && <Link href={`/clients/${r.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Card</Link>}
             </div>
           );

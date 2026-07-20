@@ -8,10 +8,10 @@ const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const chip: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, cursor: "pointer" };
 
 const ATT = [
-  { key: "present", label: "Present", color: "#166534", bg: "var(--green-bg)" },
-  { key: "leave", label: "Leave", color: "#b45309", bg: "var(--amber-bg)" },
-  { key: "absent", label: "Absent", color: "var(--red)", bg: "#fee2e2" },
-  { key: "half", label: "Half", color: "#2563eb", bg: "#dbeafe" },
+  { key: "present", label: "Present", color: "var(--green-text)", bg: "var(--green-bg)" },
+  { key: "leave", label: "Leave", color: "var(--amber-text-soft)", bg: "var(--amber-bg)" },
+  { key: "absent", label: "Absent", color: "var(--red)", bg: "var(--red-bg)" },
+  { key: "half", label: "Half", color: "var(--blue)", bg: "var(--blue-bg)" },
 ];
 
 export function AttendanceButtons({ staffId, date, current }: { staffId: string; date: string; current: string | null }) {
@@ -65,7 +65,7 @@ export function PayrollRow({ staffId, month, base, lopDays, id, status }: { staf
       {id && status !== "paid" && (
         <form action={payPayroll}><input type="hidden" name="id" value={id} /><button type="submit" style={{ ...chip, borderColor: "var(--brand-fill)", color: "var(--brand-text)" }}>Mark paid</button></form>
       )}
-      {status === "paid" && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>paid</span>}
+      {status === "paid" && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>paid</span>}
     </div>
   );
 }

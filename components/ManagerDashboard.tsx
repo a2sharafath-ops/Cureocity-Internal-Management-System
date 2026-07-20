@@ -161,7 +161,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
         <StatCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} minWidth={180} />
         <StatCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
-        <StatCard label="Follow-ups pending" value={String(followups.length)} sub={`${followups.filter((f) => f.due_date < today).length} overdue`} color={followups.some((f) => f.due_date < today) ? "#b45309" : undefined} minWidth={170} />
+        <StatCard label="Follow-ups pending" value={String(followups.length)} sub={`${followups.filter((f) => f.due_date < today).length} overdue`} color={followups.some((f) => f.due_date < today) ? "var(--amber-text-soft)" : undefined} minWidth={170} />
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
@@ -202,7 +202,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Staff utilisation</div>
             <span style={{ flex: 1 }} />
-            {idle > 0 && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{idle} idle</span>}
+            {idle > 0 && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{idle} idle</span>}
           </div>
           {util.length ? util.map((t) => {
             const load = t.done + t.upcoming;
@@ -210,7 +210,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
             return (
               <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 12.5 }}>
                 <span style={{ width: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
-                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
                   <div style={{ width: `${pct}%`, height: "100%", background: load ? "var(--brand-fill)" : "transparent" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{t.done} done · {t.upcoming} booked</span>
@@ -228,7 +228,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
           {schedule.length ? schedule.map((s, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", borderTop: i ? "1px solid var(--border)" : "none", fontSize: 12.5 }}>
               <span style={{ color: "var(--muted)", minWidth: 62 }}>{fmtHour(s.hour)}</span>
-              <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 600 }}>{s.kind}</span>
+              <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 600 }}>{s.kind}</span>
               <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {s.clientId ? <Link href={`/clients/${s.clientId}`} style={{ color: "inherit", textDecoration: "none", fontWeight: 600 }}>{s.who}</Link> : s.who}
               </span>

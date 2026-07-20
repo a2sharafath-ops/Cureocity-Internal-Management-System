@@ -27,7 +27,7 @@ export default async function SessionsPage() {
   ]);
 
   const staffRows = (staffR.data ?? []) as { id: string; name: string; color: string | null; is_trainer: boolean }[];
-  const trainers: Trainer[] = staffRows.filter((s) => s.is_trainer).map((s) => ({ id: s.id, name: s.name, color: s.color ?? "#0f766e" }));
+  const trainers: Trainer[] = staffRows.filter((s) => s.is_trainer).map((s) => ({ id: s.id, name: s.name, color: s.color ?? "#e11f34" }));
   const staff = staffRows.map((s) => ({ id: s.id, name: s.name }));
   const clients = (clientsR.data ?? []) as { id: string; name: string }[];
 

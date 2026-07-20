@@ -43,7 +43,7 @@ export default function SessionActions({
         <form
           action={rescheduleSession}
           onSubmit={() => setTimeout(() => setOpen(false), 50)}
-          style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: "#f8fbfa", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}
+          style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}
         >
           <input type="hidden" name="id" value={id} />
           <input

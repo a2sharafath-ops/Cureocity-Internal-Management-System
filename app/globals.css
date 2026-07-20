@@ -47,9 +47,8 @@
   --primary-700: var(--brand-700);
 
   /* Shell — light sidebar per the design system */
-  --sidebar: #ffffff;
-  --sidebar-hover: #fff1f2;
-  --sidebar-border: #ececef;
+  /* The sidebar is a brand gradient now (see Sidebar.tsx), so it no longer
+     needs its own surface tokens — selected rows use --brand-tint. */
 
   --bg: #f6f7f9;
   --card: #ffffff;
@@ -57,16 +56,43 @@
   --text: #17171b;
   --muted: #8a8a90;
 
-  --amber: #f59e0b;
-  --amber-bg: #fef3c7;
+  /* ---- Semantic status ---------------------------------------------------
+     Every status is a pair: a pale `-bg` tint and a dark `-text` that sits on
+     it. Never a solid fill with white text — these render at 11px in chips and
+     need the contrast. The `-text` values were the ones hardcoded across ~380
+     call sites; they're tokens now so a status can be retuned in one place.
+
+       success  paid · verified · completed · closed-won · on track · consent ✓
+       warning  unpaid · pending · due soon · unverified · deferred · paused
+       danger   overdue · lost · expired · consent missing · urgent
+       info     branch tags · COOL tier
+       neutral  no status · facility access · tidy · unset
+       special  escalated · MDT · auto-flagged
+  */
   --green: #16a34a;
   --green-bg: #dcfce7;
+  --green-text: #166534;
+
+  --amber: #f59e0b;
+  --amber-bg: #fef3c7;
+  --amber-text: #92400e;
+  --amber-text-soft: #b45309;   /* on white, where the tint isn't behind it */
+
   --red: #ef4444;
   --red-bg: #fee2e2;
+  --red-text: #991b1b;
+
   --blue: #2563eb;
   --blue-bg: #dbeafe;
+  --blue-text: #1e40af;
+
   --purple: #7c3aed;
   --purple-bg: #ede9fe;
+  --purple-text: #6d28d9;
+
+  --surface: #f8fbfa;        /* inset panels: inline forms, quoted notes */
+  --neutral-bg: #eef2f1;
+  --neutral-text: var(--muted);
 
   --radius: 14px;
   --radius-pill: 999px;
@@ -151,4 +177,4 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary-400) !im
 .ds-input { width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
   font-size: 14px; background: #fff; }
 .ds-chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px;
-  padding: 3px 10px; font-size: 12px; font-weight: 600; background: #eef2f1; color: var(--muted); }
+  padding: 3px 10px; font-size: 12px; font-weight: 600; background: var(--neutral-bg); color: var(--neutral-text); }

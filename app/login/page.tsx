@@ -60,7 +60,7 @@ export default function LoginPage() {
         <input style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
 
         {error && (
-          <div style={{ marginTop: 12, background: "var(--red-bg)", color: "#991b1b", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}>
+          <div style={{ marginTop: 12, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}>
             {error}
           </div>
         )}

@@ -61,7 +61,7 @@ export default async function ClassesPage() {
                 <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{c.rooms?.name ?? "—"}</span>
                 <span style={{ color: "var(--muted)", fontSize: 13 }}>{c.date} · {fmtHour(c.hour)} · {c.staff?.name ?? "—"}</span>
                 <span style={{ flex: 1 }} />
-                <span style={{ background: full ? "var(--amber-bg)" : "#eef2f1", color: full ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bk.length} / {c.capacity} booked</span>
+                <span style={{ background: full ? "var(--amber-bg)" : "var(--neutral-bg)", color: full ? "var(--amber-text)" : "var(--muted)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bk.length} / {c.capacity} booked</span>
                 {editable && (
                   <form action={deleteClass}>
                     <input type="hidden" name="id" value={c.id} />

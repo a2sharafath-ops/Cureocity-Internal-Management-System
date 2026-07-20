@@ -118,15 +118,15 @@ export default async function DashboardPage() {
         {isPro ? (
           <>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-              <Kpi icon="🗓" iconBg="var(--amber-bg)" iconColor="#b45309" label="Sessions Today" value={trainToday.length} sub="Trainer board" href="/trainer" />
-              <Kpi icon="🩺" iconBg="#e0f2f1" iconColor="var(--brand-text)" label="Consultations to complete" value={pconsults.length} sub="Professional workspace" href="/pro" />
-              <Kpi icon="🧬" iconBg="#ede9fe" iconColor="#6d28d9" label="Patients today" value={scheduledAppts.length} sub="Appointment calendar" href="/appointments" />
+              <Kpi icon="🗓" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Sessions Today" value={trainToday.length} sub="Trainer board" href="/trainer" />
+              <Kpi icon="🩺" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Consultations to complete" value={pconsults.length} sub="Professional workspace" href="/pro" />
+              <Kpi icon="🧬" iconBg="var(--purple-bg)" iconColor="var(--purple-text)" label="Patients today" value={scheduledAppts.length} sub="Appointment calendar" href="/appointments" />
             </div>
             <div style={{ ...card, overflow: "hidden" }}>
               <div style={{ padding: "12px 16px", fontWeight: 700 }}>Consultations to complete</div>
               {pconsults.length ? pconsults.map((c) => (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: "1px solid var(--border)" }}>
-                  <span style={{ background: "#e0f2f1", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{c.kind}</span>
+                  <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{c.kind}</span>
                   {c.clients ? <Link href={`/clients/${c.clients.id}`} style={{ fontWeight: 600, fontSize: 14, textDecoration: "none", color: "inherit" }}>{c.clients.name}</Link> : "—"}
                 </div>
               )) : <div style={{ padding: 16, color: "var(--muted)", fontSize: 13, borderTop: "1px solid var(--border)" }}>Nothing pending.</div>}
@@ -160,10 +160,10 @@ export default async function DashboardPage() {
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-        <Kpi icon="👤" iconBg="#e0f2f1" iconColor="var(--brand-text)" label="Active Clients" value={clientsC.count ?? 0} sub={`${leadsC.count ?? 0} leads in pipeline`} href="/leads" />
-        <Kpi icon="🗓" iconBg="#dbeafe" iconColor="#2563eb" label="Sessions Today" value={scheduledAppts.length + trainToday.length} sub={`${scheduledAppts.length} consult${scheduledAppts.length === 1 ? "" : "s"} (${assessToday} assessment${assessToday === 1 ? "" : "s"}) · ${trainToday.length} training`} href="/appointments" />
-        <Kpi icon="🧾" iconBg="var(--green-bg)" iconColor="#166534" label={`Revenue — ${monthLabel}`} value={money(revenue)} sub={`this month · from ${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} href="/billing" />
-        <Kpi icon="📦" iconBg="var(--amber-bg)" iconColor="#b45309" label="Client Renewals" value={renewC.count ?? 0} sub="package ending ≤30 days or low credits" href="/subscriptions" />
+        <Kpi icon="👤" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Active Clients" value={clientsC.count ?? 0} sub={`${leadsC.count ?? 0} leads in pipeline`} href="/leads" />
+        <Kpi icon="🗓" iconBg="var(--blue-bg)" iconColor="var(--blue)" label="Sessions Today" value={scheduledAppts.length + trainToday.length} sub={`${scheduledAppts.length} consult${scheduledAppts.length === 1 ? "" : "s"} (${assessToday} assessment${assessToday === 1 ? "" : "s"}) · ${trainToday.length} training`} href="/appointments" />
+        <Kpi icon="🧾" iconBg="var(--green-bg)" iconColor="var(--green-text)" label={`Revenue — ${monthLabel}`} value={money(revenue)} sub={`this month · from ${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} href="/billing" />
+        <Kpi icon="📦" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Client Renewals" value={renewC.count ?? 0} sub="package ending ≤30 days or low credits" href="/subscriptions" />
         {sessions.length > 0 && (
           <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, padding: "12px 18px", minWidth: 230 }}>
             <RingMeter value={Math.round((checkedIn / sessions.length) * 100)} size={72} stroke={9} label="Check-in rate" />
@@ -178,7 +178,7 @@ export default async function DashboardPage() {
         <div style={{ ...card, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <b style={{ fontSize: 15 }}>Today’s Schedule — {new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })}</b>
-            <span style={{ background: "#e0f2f1", color: "var(--brand-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{scheduleTotal} total</span>
+            <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{scheduleTotal} total</span>
             <span style={{ flex: 1 }} />
             <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 }}>Calendar →</Link>
           </div>
@@ -199,7 +199,7 @@ export default async function DashboardPage() {
               <span style={{ width: 80, color: "var(--muted)", fontSize: 13 }}>{fmtHour(s.hour)}</span>
               {s.clients ? <Link href={`/clients/${s.clients.id}`} style={{ fontWeight: 600, fontSize: 14, textDecoration: "none", color: "inherit" }}>{s.clients.name}</Link> : "—"}
               <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: s.status === "completed" ? "#166534" : "var(--muted)" }}>{s.status === "completed" ? "✓ checked in" : s.staff?.name ?? ""}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: s.status === "completed" ? "var(--green-text)" : "var(--muted)" }}>{s.status === "completed" ? "✓ checked in" : s.staff?.name ?? ""}</span>
             </div>
           )) : <div style={{ color: "var(--muted)", fontSize: 13, padding: "10px 0 6px", textAlign: "center" }}>No training sessions today</div>}
         </div>

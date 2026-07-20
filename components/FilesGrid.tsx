@@ -30,7 +30,7 @@ export default function FilesGrid({ files }: { files: FileItem[] }) {
             rel="noreferrer"
             style={{ display: "inline-flex", alignItems: "center", gap: 8, border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none", color: "var(--ink)", background: "#fff" }}
           >
-            <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10 }}>{label(f.kind)}</span>
+            <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 10 }}>{label(f.kind)}</span>
             {f.name ?? "file"}
           </a>
         )

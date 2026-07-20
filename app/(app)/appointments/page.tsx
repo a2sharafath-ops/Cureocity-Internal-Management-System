@@ -49,7 +49,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
 
   // Providers = care-team members that map to a booking discipline.
   const providers: Provider[] = staffRows
-    .map((s) => ({ id: s.id, name: s.name, color: s.color ?? "#0f766e", discipline: disciplineOf(s) }))
+    .map((s) => ({ id: s.id, name: s.name, color: s.color ?? "#e11f34", discipline: disciplineOf(s) }))
     .filter((p) => p.discipline !== "Other");
 
   const appts: ViewAppt[] = raw.map((a) => ({

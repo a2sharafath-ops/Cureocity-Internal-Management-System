@@ -48,7 +48,7 @@ export default async function UsersPage() {
       <AddStaffForm />
 
       {error ? (
-        <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load users.</b> {error.message}
         </div>
       ) : (
@@ -72,7 +72,7 @@ export default async function UsersPage() {
                     {!u.staff_id && (
                       <div
                         title="This login isn't linked to a care-team directory row, so they can't be booked as a provider."
-                        style={{ marginTop: 3, fontSize: 11, color: "#b45309" }}
+                        style={{ marginTop: 3, fontSize: 11, color: "var(--amber-text-soft)" }}
                       >
                         not in care-team directory
                       </div>
@@ -121,7 +121,7 @@ export default async function UsersPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <b style={{ fontSize: 14 }}>{r}</b>
                 <span style={{ flex: 1 }} />
-                <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{count} user{count === 1 ? "" : "s"}</span>
+                <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{count} user{count === 1 ? "" : "s"}</span>
               </div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}><b style={{ color: "var(--ink)" }}>Access:</b> {areas === "all" ? "All areas" : areas.join(", ")}</div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 6 }}><b style={{ color: "var(--ink)" }}>Capabilities:</b> {caps.length ? caps.join(", ") : "—"}</div>

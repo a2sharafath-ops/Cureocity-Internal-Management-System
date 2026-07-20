@@ -7,7 +7,7 @@ import CommsHub, { type CClient, type CMsg, type CTemplate, type CCampaign } fro
 
 export const dynamic = "force-dynamic";
 
-const AVATAR_COLORS = ["#0d9488", "#2563eb", "#7c3aed", "#d97706", "#dc2626", "#0891b2"];
+const AVATAR_COLORS = ["#e11f34", "var(--blue)", "var(--purple)", "#d97706", "#dc2626", "#0891b2"];
 
 export default async function MessagesPage() {
   const me = await getProfile();

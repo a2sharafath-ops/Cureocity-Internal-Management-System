@@ -71,10 +71,10 @@ export default function RxForm({ clientId, allergies, currentMeds }: { clientId:
       <button type="button" onClick={addLine} style={{ background: "#fff", color: "var(--brand-text)", border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}>+ Add drug</button>
 
       {flags.length > 0 && (
-        <div style={{ background: severe ? "#fee2e2" : "var(--amber-bg)", border: `1px solid ${severe ? "#fecaca" : "#fde68a"}`, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: severe ? "var(--red)" : "#92400e", marginBottom: 4 }}>⚠ {flags.length} interaction/allergy flag{flags.length === 1 ? "" : "s"}</div>
+        <div style={{ background: severe ? "var(--red-bg)" : "var(--amber-bg)", border: `1px solid ${severe ? "#fecaca" : "#fde68a"}`, borderRadius: 8, padding: "10px 12px", marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: severe ? "var(--red)" : "var(--amber-text)", marginBottom: 4 }}>⚠ {flags.length} interaction/allergy flag{flags.length === 1 ? "" : "s"}</div>
           {flags.map((f, i) => (
-            <div key={i} style={{ fontSize: 12.5, color: f.severity === "severe" ? "var(--red)" : "#92400e" }}>• {f.text}</div>
+            <div key={i} style={{ fontSize: 12.5, color: f.severity === "severe" ? "var(--red)" : "var(--amber-text)" }}>• {f.text}</div>
           ))}
         </div>
       )}

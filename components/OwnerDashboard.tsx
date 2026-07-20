@@ -182,7 +182,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
         <StatCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <StatCard label="Collection rate" value={`${collectRate}%`} sub="of everything billed" minWidth={160} />
         <StatCard label="Renewals ≤30 days" value={money(renewalValue)} sub={`${renewing.length} subscription${renewing.length === 1 ? "" : "s"}`} minWidth={180} />
-        <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "#b45309" : undefined} minWidth={180} />
+        <StatCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
       </div>
 
       {/* 2 — NEEDS ATTENTION (collapsed to a health score until clicked) */}
@@ -225,7 +225,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
           <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Staff utilisation</div>
             <span style={{ flex: 1 }} />
-            {idle > 0 && <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{idle} idle</span>}
+            {idle > 0 && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{idle} idle</span>}
           </div>
           {util.length ? util.map((t) => {
             const load = t.done + t.upcoming;
@@ -233,7 +233,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
             return (
               <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 12.5 }}>
                 <span style={{ width: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.name}</span>
-                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
                   <div style={{ width: `${pct}%`, height: "100%", background: load ? "var(--brand-fill)" : "transparent" }} />
                 </div>
                 <span style={{ color: "var(--muted)", minWidth: 96, textAlign: "right" }}>{t.done} done · {t.upcoming} booked</span>

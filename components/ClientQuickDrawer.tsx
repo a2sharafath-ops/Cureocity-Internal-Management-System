@@ -20,11 +20,11 @@ const hh = (h: number | null) => {
 };
 
 type Tone = { bg: string; color: string };
-const GREY: Tone = { bg: "#eef2f1", color: "var(--muted)" };
-const GREEN: Tone = { bg: "var(--green-bg)", color: "#166534" };
-const RED: Tone = { bg: "var(--red-bg)", color: "#991b1b" };
-const AMBER: Tone = { bg: "var(--amber-bg)", color: "#92400e" };
-const TEAL: Tone = { bg: "#e0f2f1", color: "var(--brand-text)" };
+const GREY: Tone = { bg: "var(--neutral-bg)", color: "var(--muted)" };
+const GREEN: Tone = { bg: "var(--green-bg)", color: "var(--green-text)" };
+const RED: Tone = { bg: "var(--red-bg)", color: "var(--red-text)" };
+const AMBER: Tone = { bg: "var(--amber-bg)", color: "var(--amber-text)" };
+const TEAL: Tone = { bg: "var(--brand-tint)", color: "var(--brand-text)" };
 const chip = (label: string, t: Tone) => (
   <span key={label} style={{ background: t.bg, color: t.color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{label}</span>
 );
@@ -106,6 +106,8 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
     generated: Boolean(data?.blueprint?.generated),
   });
   const bpProgress = blueprintProgress(bpSteps);
+  const isBpClient = c?.package_id === "bp1"
+    || (pkg?.name ?? "").toLowerCase().includes("blueprint");
 
   return (
     <div
@@ -164,7 +166,7 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
             <div style={panel}>
               <b style={{ fontSize: 13 }}>Session credits</b>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                <div style={{ flex: 1, background: "#eef2f1", borderRadius: 6, height: 8, overflow: "hidden" }}>
+                <div style={{ flex: 1, background: "var(--neutral-bg)", borderRadius: 6, height: 8, overflow: "hidden" }}>
                   <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-fill)" }} />
                 </div>
                 <b style={{ fontSize: 13, whiteSpace: "nowrap" }}>{used} / {credits || "—"}</b>
@@ -211,8 +213,10 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
               </div>
             </div>
 
-            {/* blueprint */}
-            {(data.blueprint || data.blood) && (
+            {/* BluePrint. Show for anyone on the BluePrint package even before
+                anything has happened — 0 of 5 is the state that needs chasing.
+                Also show if a blueprint or blood request exists on any package. */}
+            {(isBpClient || data.blueprint || data.blood) && (
               <div style={panel}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <b style={{ fontSize: 13 }}>BluePrint</b>
@@ -236,7 +240,7 @@ export default function ClientQuickDrawer({ clientId, onClose }: { clientId: str
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
                   {bpSteps.map((s) => (
-                    <span key={s.key} style={{ fontSize: 11, color: s.done ? "#166534" : "var(--muted)" }}>
+                    <span key={s.key} style={{ fontSize: 11, color: s.done ? "var(--green-text)" : "var(--muted)" }}>
                       {s.done ? "✓" : "○"} {s.label}
                     </span>
                   ))}

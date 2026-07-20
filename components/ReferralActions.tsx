@@ -17,7 +17,7 @@ export default function ReferralActions({ id, status }: { id: string; status: st
         <form action={setReferralStatus}>
           <input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="rewarded" />
           <input type="hidden" name="reward_amount" value="500" />
-          <button type="submit" style={{ ...btn, borderColor: "var(--amber)", color: "#92400e" }}>Reward ₹500</button>
+          <button type="submit" style={{ ...btn, borderColor: "var(--amber)", color: "var(--amber-text)" }}>Reward ₹500</button>
         </form>
       )}
       {status === "rewarded" && <span style={{ fontSize: 12, color: "var(--muted)" }}>✓ complete</span>}

@@ -39,7 +39,7 @@ export default async function CompliancePage() {
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
   const stat = (label: string, value: string, color = "var(--brand-text)") => <StatCard label={label} value={value} color={color} />;
-  const sevColor = (s: string) => s === "critical" ? "var(--red)" : s === "high" ? "#b45309" : s === "low" ? "var(--muted)" : "#92400e";
+  const sevColor = (s: string) => s === "critical" ? "var(--red)" : s === "high" ? "var(--amber-text-soft)" : s === "low" ? "var(--muted)" : "var(--amber-text)";
 
   return (
     <div style={{ maxWidth: 1120 }}>
@@ -91,8 +91,8 @@ export default async function CompliancePage() {
                 <td style={{ ...td, color: "var(--muted)" }}>{c.granted_date ?? "—"}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{c.expires_date ?? "—"}</td>
                 <td style={td}>{c.granted
-                  ? <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>granted</span>
-                  : <span style={{ background: "#fee2e2", color: "var(--red)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>revoked{c.revoked_date ? ` ${c.revoked_date}` : ""}</span>}</td>
+                  ? <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>granted</span>
+                  : <span style={{ background: "var(--red-bg)", color: "var(--red)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>revoked{c.revoked_date ? ` ${c.revoked_date}` : ""}</span>}</td>
                 <td style={{ ...td, textAlign: "right" }}>{c.granted && <ConsentRevoke id={c.id} />}</td>
               </tr>
             ))}

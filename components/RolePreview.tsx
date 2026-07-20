@@ -10,7 +10,7 @@ export default function RolePreview({ preview, profession }: { preview: string |
   return (
     <form action={setPreviewRole} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       {active && (
-        <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>
+        <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>
           {profession ? `Persona: ${profession}` : "Preview"}
         </span>
       )}

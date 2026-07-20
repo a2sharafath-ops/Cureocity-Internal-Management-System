@@ -62,7 +62,7 @@ export default async function PassesPage() {
             {passes.map((p) => {
               const expired = p.status === "active" && p.valid_until && p.valid_until < today;
               const status = expired ? "expired" : p.status;
-              const chip = status === "active" ? ["var(--green-bg)", "#166534"] : status === "used" ? ["#eef2f1", "var(--muted)"] : ["#fee2e2", "var(--red)"];
+              const chip = status === "active" ? ["var(--green-bg)", "var(--green-text)"] : status === "used" ? ["var(--neutral-bg)", "var(--muted)"] : ["var(--red-bg)", "var(--red)"];
               return (
                 <tr key={p.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ ...td, fontWeight: 600 }}>{p.name ?? "Pass"}</td>

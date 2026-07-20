@@ -4,9 +4,9 @@
 import type React from "react";
 
 function toneFor(pct: number): string {
-  if (pct >= 70) return "#16a34a";   // green
-  if (pct >= 40) return "#f59e0b";   // amber
-  return "#ef4444";                  // red
+  if (pct >= 70) return "var(--green)";   // green
+  if (pct >= 40) return "var(--amber)";   // amber
+  return "var(--red)";                  // red
 }
 
 function polar(cx: number, cy: number, r: number, deg: number) {
@@ -21,7 +21,7 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
 }
 
 export function RingMeter({
-  value, max = 100, size = 92, stroke = 10, color, label, centerText, track = "#eef2f1",
+  value, max = 100, size = 92, stroke = 10, color, label, centerText, track = "var(--neutral-bg)",
 }: { value: number; max?: number; size?: number; stroke?: number; color?: string; label?: string; centerText?: string; track?: string }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -56,7 +56,7 @@ export function Gauge({
   return (
     <div style={{ textAlign: "center" }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label ? `${label}: ${value}${unit ?? ""}` : undefined}>
-        <path d={arcPath(cx, cy, r, START, START + SWEEP)} fill="none" stroke="#eef2f1" strokeWidth={stroke} strokeLinecap="round" />
+        <path d={arcPath(cx, cy, r, START, START + SWEEP)} fill="none" stroke="var(--neutral-bg)" strokeWidth={stroke} strokeLinecap="round" />
         {frac > 0 && <path d={arcPath(cx, cy, r, START, end)} fill="none" stroke={stroked} strokeWidth={stroke} strokeLinecap="round" />}
         <text x="50%" y="47%" textAnchor="middle" dominantBaseline="central" fontSize={size * 0.24} fontWeight={800} fill="var(--ink)">{Math.round(value)}</text>
         {unit && <text x="50%" y="62%" textAnchor="middle" dominantBaseline="central" fontSize={size * 0.075} fill="var(--muted)">{unit}</text>}

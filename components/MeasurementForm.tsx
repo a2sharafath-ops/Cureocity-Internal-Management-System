@@ -26,7 +26,7 @@ export default function MeasurementForm({ clientId }: { clientId: string }) {
     );
   }
   return (
-    <form action={addMeasurement} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "#f8fbfa", border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
+    <form action={addMeasurement} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, padding: 14 }}>
       <input type="hidden" name="client_id" value={clientId} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
         <div>

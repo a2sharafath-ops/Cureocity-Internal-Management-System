@@ -14,12 +14,12 @@ export type FuRow = {
 };
 
 const STAGE_STYLE: Record<string, [string, string, string]> = {
-  PENDING_CALL:   ["var(--amber-bg)", "#92400e", "To call"],
-  LINK_SENT:      ["#dbeafe", "#1e40af", "Link sent"],
-  PENDING_REVIEW: ["#e0f2f1", "var(--brand-text)", "To review"],
-  BOOKED:         ["var(--green-bg)", "#166534", "Booked"],
+  PENDING_CALL:   ["var(--amber-bg)", "var(--amber-text)", "To call"],
+  LINK_SENT:      ["var(--blue-bg)", "var(--blue-text)", "Link sent"],
+  PENDING_REVIEW: ["var(--brand-tint)", "var(--brand-text)", "To review"],
+  BOOKED:         ["var(--green-bg)", "var(--green-text)", "Booked"],
   NO_CONSULT:     ["#f1f5f9", "#64748b", "No consult"],
-  COMPLETED:      ["var(--green-bg)", "#166534", "Completed"],
+  COMPLETED:      ["var(--green-bg)", "var(--green-text)", "Completed"],
 };
 
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
@@ -40,8 +40,8 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
   const th: React.CSSProperties = { padding: "9px 12px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "10px 12px", fontSize: 13, verticalAlign: "top" };
   const chip = (bg: string, c: string, t: string) => <Chip bg={bg} color={c}>{t}</Chip>;
-  const dueChip = (f: FuRow) => f.due_date < today ? chip("var(--red-bg)", "#991b1b", "Overdue") : f.due_date === today ? chip("var(--amber-bg)", "#92400e", "Today") : chip("#eef2f1", "var(--muted)", fmtDate(f.due_date));
-  const modeChip = (m: string) => chip(m === "Online" ? "#dbeafe" : "#ede9fe", m === "Online" ? "#1e40af" : "#6d28d9", m);
+  const dueChip = (f: FuRow) => f.due_date < today ? chip("var(--red-bg)", "var(--red-text)", "Overdue") : f.due_date === today ? chip("var(--amber-bg)", "var(--amber-text)", "Today") : chip("var(--neutral-bg)", "var(--muted)", fmtDate(f.due_date));
+  const modeChip = (m: string) => chip(m === "Online" ? "var(--blue-bg)" : "var(--purple-bg)", m === "Online" ? "var(--blue-text)" : "var(--purple-text)", m);
   const btn = (bg: string, color = "#fff"): React.CSSProperties => ({ background: bg, color, border: bg === "#fff" ? "1px solid var(--border)" : "none", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" });
   const hid = (f: FuRow) => <input type="hidden" name="id" value={f.id} />;
 
@@ -63,7 +63,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
                 {canOnline && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Send questionnaire</button></form>}
               </>}
           {canOnline && <form action={fuNoAnswer}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>No answer</button></form>}
-          <form action={fuNoConsult}>{hid(f)}<button style={btn("#fff", "#991b1b")}>No consult</button></form>
+          <form action={fuNoConsult}>{hid(f)}<button style={btn("#fff", "var(--red-text)")}>No consult</button></form>
         </div>
       );
     }
@@ -87,7 +87,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
         <thead><tr><th style={th}>Client</th><th style={th}>Service</th><th style={th}>Category</th><th style={th}>Day</th><th style={th}>Due</th><th style={th}>Mode</th><th style={th}>Status</th>{withActions && <th style={th}>Actions</th>}</tr></thead>
         <tbody>
           {list.map((f) => {
-            const [sb, sc, st] = STAGE_STYLE[f.stage] ?? ["#eef2f1", "#64748b", f.stage];
+            const [sb, sc, st] = STAGE_STYLE[f.stage] ?? ["var(--neutral-bg)", "#64748b", f.stage];
             return (
               <tr key={f.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}</td>
@@ -96,7 +96,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
                 <td style={td}>{f.day != null ? `Day ${f.day}` : "—"}</td>
                 <td style={td}>{dueChip(f)}</td>
                 <td style={td}>{modeChip(f.mode)}</td>
-                <td style={{ ...td, whiteSpace: "nowrap" }}>{chip(sb, sc, st)}{f.no_answer && <> {chip("var(--red-bg)", "#991b1b", "No answer")}</>}{f.reminder_sent && <> {chip("#e0f2f1", "var(--brand-text)", "Reminded")}</>}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>{chip(sb, sc, st)}{f.no_answer && <> {chip("var(--red-bg)", "var(--red-text)", "No answer")}</>}{f.reminder_sent && <> {chip("var(--brand-tint)", "var(--brand-text)", "Reminded")}</>}</td>
                 {withActions && <td style={td}>
                   {actions(f)}
                   {review === f.id && (
@@ -134,16 +134,16 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
           {cats.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <span style={{ flex: 1 }} />
-        {chip("var(--amber-bg)", "#92400e", `${calls.length} to call`)}
-        {chip("#dbeafe", "#1e40af", `${links.length} awaiting client`)}
-        {chip("#e0f2f1", "var(--brand-text)", `${reviews.length} to review`)}
+        {chip("var(--amber-bg)", "var(--amber-text)", `${calls.length} to call`)}
+        {chip("var(--blue-bg)", "var(--blue-text)", `${links.length} awaiting client`)}
+        {chip("var(--brand-tint)", "var(--brand-text)", `${reviews.length} to review`)}
       </div>
 
-      {sectionTitle("📞", "Clients to Call Today", calls.length, "#92400e", "var(--amber-bg)")}
+      {sectionTitle("📞", "Clients to Call Today", calls.length, "var(--amber-text)", "var(--amber-bg)")}
       {table(calls, true, "No calls due 🎉")}
-      {sectionTitle("🔗", "Links Sent — Awaiting Client", links.length, "#1e40af", "#dbeafe")}
+      {sectionTitle("🔗", "Links Sent — Awaiting Client", links.length, "var(--blue-text)", "var(--blue-bg)")}
       {table(links, true, "Nothing awaiting clients")}
-      {sectionTitle("📝", "Pending Consultant Review", reviews.length, "var(--brand-text)", "#e0f2f1")}
+      {sectionTitle("📝", "Pending Consultant Review", reviews.length, "var(--brand-text)", "var(--brand-tint)")}
       {table(reviews, true, "Review queue clear")}
       {sectionTitle("✅", "Closed", closed.length, "#64748b", "#f1f5f9")}
       {table(closed, false, "Nothing closed yet")}

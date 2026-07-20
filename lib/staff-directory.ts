@@ -15,9 +15,9 @@ export type DirectoryDefaults = {
 // so for clinical roles it must stay equal to the role name.
 const BY_ROLE: Record<string, DirectoryDefaults> = {
   "Doctor": { designation: "Doctor", department: "Clinical", is_trainer: false, color: "#dc2626" },
-  "Dietitian": { designation: "Dietitian", department: "Clinical", is_trainer: false, color: "#2563eb" },
-  "Fitness Trainer": { designation: "Fitness Trainer", department: "Fitness", is_trainer: true, color: "#0d9488" },
-  "Health Coach": { designation: "Health Coach", department: "Clinical", is_trainer: false, color: "#7c3aed" },
+  "Dietitian": { designation: "Dietitian", department: "Clinical", is_trainer: false, color: "var(--blue)" },
+  "Fitness Trainer": { designation: "Fitness Trainer", department: "Fitness", is_trainer: true, color: "#e11f34" },
+  "Health Coach": { designation: "Health Coach", department: "Clinical", is_trainer: false, color: "var(--purple)" },
   "Psychologist": { designation: "Psychologist", department: "Clinical", is_trainer: false, color: "#db2777" },
   "Front Desk": { designation: "Front Desk", department: "Front Desk", is_trainer: false, color: "#0891b2" },
   "Manager": { designation: "Manager", department: "Management", is_trainer: false, color: "#475569" },

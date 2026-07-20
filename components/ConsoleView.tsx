@@ -40,9 +40,9 @@ export default function ConsoleView({
           <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{client.name}{client.code ? ` · ${client.code}` : ""} · {kind} consultation</div>
         </div>
         <span style={{ flex: 1 }} />
-        {status === "completed" && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
+        {status === "completed" && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px" }}>
-          <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
+          <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--red)", display: "inline-block" }} />
           <b style={{ fontVariantNumeric: "tabular-nums", fontSize: 14 }}>{mm}:{ss}</b>
         </div>
       </div>

@@ -30,8 +30,8 @@ export default async function ExlibPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const td: React.CSSProperties = { padding: "8px 14px", fontSize: 14 };
   const typeChip = (t: string) => {
-    const map: Record<string, [string, string]> = { Strength: ["#e0f2f1", "var(--brand-text)"], Cardio: ["#dbeafe", "#2563eb"], Mobility: ["#ede9fe", "#6d28d9"] };
-    const [bg, c] = map[t] ?? ["#eef2f1", "var(--muted)"];
+    const map: Record<string, [string, string]> = { Strength: ["var(--brand-tint)", "var(--brand-text)"], Cardio: ["var(--blue-bg)", "var(--blue)"], Mobility: ["var(--purple-bg)", "var(--purple-text)"] };
+    const [bg, c] = map[t] ?? ["var(--neutral-bg)", "var(--muted)"];
     return <span style={{ background: bg, color: c, borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{t}</span>;
   };
 

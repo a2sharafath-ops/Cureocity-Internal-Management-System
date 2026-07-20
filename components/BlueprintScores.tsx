@@ -36,7 +36,7 @@ export default function BlueprintScores({
       )}
 
       {open && canEdit && (
-        <form action={saveBlueprintScores} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ marginTop: 10, background: "#f8fbfa", border: "1px solid var(--border)", borderRadius: 8, padding: 12, width: 460, maxWidth: "100%" }}>
+        <form action={saveBlueprintScores} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ marginTop: 10, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 12, width: 460, maxWidth: "100%" }}>
           <input type="hidden" name="client_id" value={clientId} />
           {BP_DOMAINS.map((d) => (
             <div key={d.key} style={{ marginBottom: 10 }}>

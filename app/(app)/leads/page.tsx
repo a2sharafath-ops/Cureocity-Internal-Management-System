@@ -178,8 +178,8 @@ export default async function LeadsPage({
       {/* tier cards — click to filter, click again to clear */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
         {statLink("🔥 HOT", tierCount("HOT"), "HOT", "var(--red)")}
-        {statLink("WARM", tierCount("WARM"), "WARM", "#b45309")}
-        {statLink("COOL", tierCount("COOL"), "COOL", "#2563eb")}
+        {statLink("WARM", tierCount("WARM"), "WARM", "var(--amber-text-soft)")}
+        {statLink("COOL", tierCount("COOL"), "COOL", "var(--blue)")}
         {statLink("Converting (Visit/Close)", convertingCount, "converting", "var(--brand-text)")}
       </div>
 
@@ -197,7 +197,7 @@ export default async function LeadsPage({
       )}
 
       {error ? (
-        <div style={{ background: "var(--red-bg)", color: "#991b1b", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load leads.</b> {error.message}
         </div>
       ) : (
@@ -220,7 +220,7 @@ export default async function LeadsPage({
                   <td style={td}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <b>{l.name}</b>
-                      {clientByLead.has(l.id) && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Client</span>}
+                      {clientByLead.has(l.id) && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Client</span>}
                     </div>
                     <div style={{ color: "var(--muted)", fontSize: 12 }}>{l.phone ?? "—"}{l.source ? ` · ${l.source}` : ""}</div>
                   </td>
@@ -232,7 +232,7 @@ export default async function LeadsPage({
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
                       <CallCell phone={l.phone} ivrConfigured={ivr.configured} />
-                      {clientByLead.has(l.id) && <Link href={`/clients/${clientByLead.get(l.id)}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#166534", textDecoration: "none" }}>Client ↗</Link>}
+                      {clientByLead.has(l.id) && <Link href={`/clients/${clientByLead.get(l.id)}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--green-text)", textDecoration: "none" }}>Client ↗</Link>}
                       <Link href={`/leads/${l.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", textDecoration: "none" }}>Open →</Link>
                     </div>
                   </td>

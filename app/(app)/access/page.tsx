@@ -59,7 +59,7 @@ export default async function AccessPage() {
           <div style={{ padding: "12px 16px", fontWeight: 700 }}>Inside now ({insideNow.length})</div>
           {insideNow.length ? insideNow.map((e) => (
             <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderTop: "1px solid var(--border)" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#16a34a" }} />
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green)" }} />
               {e.clients ? <Link href={`/clients/${e.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{e.clients.name}</Link> : (e.guest_name ?? "Guest")}
               <span style={{ flex: 1 }} />
               <span style={{ color: "var(--muted)", fontSize: 12 }}>{time(e.at)}</span>
@@ -76,7 +76,7 @@ export default async function AccessPage() {
                 <tr key={e.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{time(e.at)}</td>
                   <td style={td}>{e.clients ? <Link href={`/clients/${e.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{e.clients.name}</Link> : (e.guest_name ?? "Guest")}</td>
-                  <td style={td}><span style={{ background: e.direction === "in" ? "var(--green-bg)" : "#eef2f1", color: e.direction === "in" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.direction}</span></td>
+                  <td style={td}><span style={{ background: e.direction === "in" ? "var(--green-bg)" : "var(--neutral-bg)", color: e.direction === "in" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>{e.direction}</span></td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 13, textTransform: "capitalize" }}>{e.method}</td>
                   <td style={{ ...td, color: "var(--muted)", fontSize: 12 }}>{e.by_name ?? "—"}</td>
                 </tr>

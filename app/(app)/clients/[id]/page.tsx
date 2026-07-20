@@ -157,7 +157,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   for (const f of followups.filter((x) => x.kind === "onboarding")) {
     journey.push({ label: f.label, state: f.status === "done" ? "done" : f.status === "skipped" ? "pending" : "progress", detail: "Onboarding protocol", when: (f.due_date < todayISO() && f.status === "pending" ? "Overdue " : "Due ") + f.due_date });
   }
-  const dotColor = (s: string) => s === "done" ? "#16a34a" : s === "progress" ? "#f59e0b" : "#cbd5e1";
+  const dotColor = (s: string) => s === "done" ? "var(--green)" : s === "progress" ? "var(--amber)" : "#cbd5e1";
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -183,7 +183,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
         <span style={{ flex: 1 }} />
         {ro
-          ? <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>👁 Read-only</span>
+          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>👁 Read-only</span>
           : <Link
               href={`/clients/${params.id}/edit`}
               style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
@@ -234,7 +234,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <div style={{ fontWeight: 700 }}>Deals / Packages</div>
-          <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
+          <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
             {activeMembership ? "✔ Active membership" : "No active membership"}
           </span>
         </div>
@@ -257,10 +257,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 return (
                   <tr key={cp.id} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 6px", fontWeight: 600 }}>{cp.package_name ?? "—"}</td>
-                    <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "#dbeafe" : "var(--brand-tint)", color: cp.category === "membership" ? "#1e40af" : "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "var(--blue-bg)" : "var(--brand-tint)", color: cp.category === "membership" ? "var(--blue-text)" : "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
                     <td style={{ padding: "8px 6px", color: "var(--muted)" }}>{cp.start_date ?? "—"}{cp.end_date ? ` → ${cp.end_date}` : ""}</td>
                     <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(cp.price ?? 0).toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "8px 6px" }}><span style={{ background: live ? "var(--green-bg)" : "#eef2f1", color: live ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{live ? "Active" : "Expired"}</span></td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: live ? "var(--green-bg)" : "var(--neutral-bg)", color: live ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{live ? "Active" : "Expired"}</span></td>
                   </tr>
                 );
               })}
@@ -271,7 +271,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             <Stat label="Package" value={pkg?.name ?? "—"} />
             <Stat label="Price" value={pkg ? `₹${Number(pkg.price ?? 0).toLocaleString("en-IN")}` : "—"} />
             <Stat label="Joined" value={client.joined} />
-            <Stat label="Status" value={<span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>Active</span>} />
+            <Stat label="Status" value={<span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>Active</span>} />
           </div>
         )}
 
@@ -285,7 +285,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                   <td style={{ padding: "8px 6px", color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
                   <td style={{ padding: "8px 6px" }}>{i.description}</td>
                   <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
-                  <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "#eef2f1", color: i.status === "Paid" ? "#166534" : i.status === "Unpaid" ? "#92400e" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
+                  <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "var(--neutral-bg)", color: i.status === "Paid" ? "var(--green-text)" : i.status === "Unpaid" ? "var(--amber-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
                   <td style={{ padding: "8px 6px", textAlign: "right" }}>{canInvoice && <InvoiceActions id={i.id} status={i.status} />}</td>
                 </tr>
               ))}
@@ -302,7 +302,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <div style={{ fontWeight: 700 }}>Client Journey</div>
-          <span style={{ background: "#eef2f1", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>green = complete · amber = in progress</span>
+          <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>green = complete · amber = in progress</span>
         </div>
         <div style={{ display: "grid", gap: 2 }}>
           {journey.map((m, i) => (
@@ -356,7 +356,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                       <td style={{ padding: "8px 12px" }}>
                         {s.date}
                         {s.rescheduled && (
-                          <span style={{ marginLeft: 6, background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "1px 6px", fontSize: 10 }}>
+                          <span style={{ marginLeft: 6, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 6px", fontSize: 10 }}>
                             rescheduled
                           </span>
                         )}
@@ -367,8 +367,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                         <span
                           style={{
                             borderRadius: 999, padding: "2px 8px", fontSize: 11, fontWeight: 600,
-                            background: s.status === "completed" ? "var(--green-bg)" : "#eef2f1",
-                            color: s.status === "completed" ? "#166534" : "var(--muted)",
+                            background: s.status === "completed" ? "var(--green-bg)" : "var(--neutral-bg)",
+                            color: s.status === "completed" ? "var(--green-text)" : "var(--muted)",
                           }}
                         >
                           {s.status}
@@ -409,9 +409,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 0" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.kind}</span>
-                <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "#eef2f1", color: cs.status === "completed" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{cs.status}</span>
-                {cs.approved && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
-                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
+                <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "var(--neutral-bg)", color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{cs.status}</span>
+                {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
+                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
               </div>
               {cs.summary && <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>{cs.summary}</div>}
             </div>
@@ -441,9 +441,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 {list.map((cs) => (
                   <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "8px 0" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "#eef2f1", color: cs.status === "completed" ? "#166534" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.status}</span>
-                      {cs.approved && <span style={{ background: "var(--green-bg)", color: "#166534", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
-                      {cs.shared && <span style={{ background: "#dbeafe", color: "#1e40af", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
+                      <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "var(--neutral-bg)", color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.status}</span>
+                      {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
+                      {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
                     </div>
                     {cs.summary && <div style={{ marginTop: 5, fontSize: 13, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{cs.summary}</div>}
                   </div>
@@ -458,7 +458,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontWeight: 700 }}>🧬 BluePrint</div>
-          <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "#166534" : "#92400e", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
+          <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
           <span style={{ flex: 1 }} />
           {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
         </div>
@@ -578,7 +578,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                     </div>
                     <div style={{ textAlign: "right", minWidth: 88 }}>
                       <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>🔥 {streak}d streak</div>
-                      <div style={{ fontSize: 12, color: hit ? "#166534" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
+                      <div style={{ fontSize: 12, color: hit ? "var(--green-text)" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
                     </div>
                     {canCoach && (
                       <form action={archiveHabit}>

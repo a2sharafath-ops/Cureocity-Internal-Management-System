@@ -39,15 +39,15 @@ export type CardData = {
 };
 
 const KIND = {
-  insight: { label: "Insight", bg: "#e0f2f1", color: "var(--brand-text)" },
-  action: { label: "Action", bg: "var(--amber-bg)", color: "#92400e" },
-  concern: { label: "Concern", bg: "var(--red-bg)", color: "#991b1b" },
+  insight: { label: "Insight", bg: "var(--brand-tint)", color: "var(--brand-text)" },
+  action: { label: "Action", bg: "var(--amber-bg)", color: "var(--amber-text)" },
+  concern: { label: "Concern", bg: "var(--red-bg)", color: "var(--red-text)" },
 } as const;
 
 const STATUS = {
-  pending: { label: "To discuss", bg: "#eef2f1", color: "var(--muted)" },
-  discussed: { label: "Discussed", bg: "var(--green-bg)", color: "#166534" },
-  deferred: { label: "Deferred", bg: "var(--amber-bg)", color: "#92400e" },
+  pending: { label: "To discuss", bg: "var(--neutral-bg)", color: "var(--muted)" },
+  discussed: { label: "Discussed", bg: "var(--green-bg)", color: "var(--green-text)" },
+  deferred: { label: "Deferred", bg: "var(--amber-bg)", color: "var(--amber-text)" },
 } as const;
 
 const input: React.CSSProperties = { padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
@@ -78,7 +78,7 @@ export default function WhiteboardCard({ card, staff, locked }: {
               <b style={{ fontSize: 14 }}>{card.name}</b>
               <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{card.code}{card.age != null ? ` · ${card.age} yrs` : ""}</span>
               <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700 }}>{st.label}</span>
-              {card.origin === "flagged" && <span style={{ background: "#ede9fe", color: "#6d28d9", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>auto</span>}
+              {card.origin === "flagged" && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>auto</span>}
             </div>
             <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {card.headline || card.reason || "No reason recorded"}
@@ -87,12 +87,12 @@ export default function WhiteboardCard({ card, staff, locked }: {
         </button>
 
         {changed.length > 0 && (
-          <span style={{ background: "#ede9fe", color: "#6d28d9", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+          <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
             {changed.length} adjusted
           </span>
         )}
         {openActions > 0 && (
-          <span style={{ background: "var(--amber-bg)", color: "#92400e", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+          <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
             {openActions} action{openActions === 1 ? "" : "s"}
           </span>
         )}
@@ -128,7 +128,7 @@ export default function WhiteboardCard({ card, staff, locked }: {
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
                     <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
                     {s.delta != null && s.delta !== 0 && (
-                      <span style={{ color: s.delta > 0 ? "#166534" : "#991b1b", fontSize: 11, fontWeight: 700 }}>
+                      <span style={{ color: s.delta > 0 ? "var(--green-text)" : "var(--red-text)", fontSize: 11, fontWeight: 700 }}>
                         {s.delta > 0 ? "▲" : "▼"} {Math.abs(s.delta)}
                       </span>
                     )}
