@@ -5,6 +5,7 @@ import { tplAppointmentReminder } from "@/lib/email/templates";
 import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
+import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -136,17 +137,22 @@ export async function runDaily() {
   const followups = await generateFollowups(supabase);
   // BluePrint turnaround: warn before the 24h/48h deadlines, escalate after.
   const sla = await runBlueprintSla(supabase);
+  // Comprehensive turnarounds + day-offset milestones.
+  const comp = await runComprehensiveSla(supabase);
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
     detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`
-      + ` · blueprint SLA ${sla.scanned} scanned, ${sla.warnings} warned, ${sla.breaches} breached`,
+      + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
+      + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",
     body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`
-      + (sla.breaches ? ` · ${sla.breaches} BluePrint SLA breach${sla.breaches === 1 ? "" : "es"}` : ""),
+      + (sla.breaches + comp.breaches
+          ? ` · ${sla.breaches + comp.breaches} care SLA breach${sla.breaches + comp.breaches === 1 ? "" : "es"}`
+          : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, sla, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, comp, ranAt: new Date().toISOString() };
 }

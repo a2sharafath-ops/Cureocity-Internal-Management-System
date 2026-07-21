@@ -978,13 +978,21 @@ export async function completeConsultation(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   const summary = String(formData.get("summary") ?? "").trim() || null;
+  // The doctor's answer on the summary. Only meaningful on a Doctor consult,
+  // and only `true` starts the 24h prescription-delivery clock — a recorded
+  // "no" is a fact, an unanswered null is not a breach.
+  const rxRaw = formData.get("prescription_needed");
+  const rxNeeded = rxRaw == null ? null : String(rxRaw) === "true";
   const supabase = createClient();
   const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   // Starts this clinician's 24h sign-off clock, and — once all three
   // disciplines are complete — the 48h delivery clock. See lib/blueprint-sla.
   await supabase.from("consultations")
-    .update({ status: "completed", summary, completed_at: new Date().toISOString() })
+    .update({
+      status: "completed", summary, completed_at: new Date().toISOString(),
+      ...(row.kind === "Doctor" && rxNeeded !== null ? { prescription_needed: rxNeeded } : {}),
+    })
     .eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
@@ -1175,6 +1183,47 @@ async function startComprehensiveJourney(
     href: `/clients/${clientId}`,
     icon: "\u{1FA7A}",
   });
+}
+
+
+/**
+ * Pause or resume the Comprehensive clocks for one client.
+ *
+ * "Unless there is a delay from the client side" — this is that escape hatch,
+ * and it covers both shapes of commitment: the 24h turnarounds and the
+ * day-offset milestones. Closing a hold banks the elapsed time rather than
+ * discarding it, so every deadline slides by exactly how long we were waiting.
+ * Held time only ever discounts work not yet delivered, so a hold cannot
+ * retroactively rescue something that already went out late.
+ */
+export async function toggleComprehensiveHold(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const supabase = createClient();
+
+  const { data: row } = await supabase.from("care_protocols")
+    .select("id, hold_since, hold_ms")
+    .eq("client_id", client_id).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active")
+    .maybeSingle();
+  if (!row) return;
+
+  const now = Date.now();
+  const open = row.hold_since ? new Date(row.hold_since).getTime() : null;
+  const patch = open
+    ? {
+        hold_since: null,
+        hold_ms: Math.max(0, Number(row.hold_ms ?? 0)) + Math.max(0, now - open),
+        hold_note: null,
+      }
+    : { hold_since: new Date(now).toISOString(), hold_note: note };
+
+  await supabase.from("care_protocols").update(patch).eq("id", row.id);
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, open ? "Comprehensive SLA resumed" : "Comprehensive SLA held", c?.name, note);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/", "layout");
 }
 
 export async function requestBlood(formData: FormData) {
