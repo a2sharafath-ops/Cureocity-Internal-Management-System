@@ -1,36 +1,38 @@
-// Per-page title + subtitle, mirroring the Cureocity "Care Management"
-// prototype's descriptive sub-lines. Surfaced in the top header bar.
+// Per-page title, surfaced in the top header bar.
+//
+// Previously carried a descriptive `sub` line too, but the header sat directly
+// above each page's own h1 and intro paragraph, so it restated them.
 
-export type PageMeta = { title: string; sub: string };
+export type PageMeta = { title: string };
 
 export const PAGE_META: Record<string, PageMeta> = {
-  "/dashboard":     { title: "Dashboard",             sub: "Your centre at a glance — today's KPIs and activity" },
-  "/leads":         { title: "CRM & Leads",           sub: "Lead scoring — HOT / WARM / COOL / COLD tiers and product match" },
-  "/clients":       { title: "Clients",               sub: "CRM hub — searchable contacts and full client 360°" },
-  "/appointments":  { title: "Appointment Calendar",  sub: "Calendar — consultations, assessments & follow-ups" },
-  "/sessions":      { title: "Training Schedule",     sub: "PT trainer slots · fitness assessments · reschedules" },
-  "/classes":       { title: "Group Classes",         sub: "Group classes · room & resource booking" },
-  "/messages":      { title: "Communications",        sub: "Unified inbox — client message threads" },
-  "/campaigns":     { title: "Campaigns",             sub: "Message templates & audience campaigns" },
-  "/retention":     { title: "Retention",             sub: "At-risk & churn · NPS & feedback · referrals & loyalty" },
-  "/pro":           { title: "Professional Workspace", sub: "Consultations — Doctor · Dietitian · Coach · Psychologist" },
-  "/emr":           { title: "Patient Records",       sub: "EMR — problems · allergies · medications · vitals · encounters" },
-  "/orders":        { title: "Orders & Labs",         sub: "e-Prescriptions · lab orders & results · imaging" },
-  "/meals":         { title: "Meal Monitoring",       sub: "Dietitian workspace — meal logs & follow-ups" },
-  "/blueprint":     { title: "BluePrint",             sub: "Blood report & 9 personalised health scores" },
-  "/trainer":       { title: "Trainer Workspace",     sub: "Session board & member check-ins" },
-  "/billing":       { title: "Billing",               sub: "Invoices · subscriptions & renewals · refunds · dunning" },
-  "/subscriptions": { title: "Subscriptions",         sub: "Recurring plans & auto-renewals" },
-  "/pos":           { title: "Retail Store",          sub: "Point-of-sale — supplements, merchandise & accessories" },
-  "/passes":        { title: "Gym Passes",            sub: "Day passes & punch cards for members and walk-ins" },
-  "/claims":        { title: "Insurance",             sub: "Payers · policies · claims · pre-authorization" },
-  "/reports":       { title: "Reports",               sub: "Business performance — revenue, funnel & retention" },
-  "/packages":      { title: "Packages",              sub: "Bundled service packages with branch pricing" },
-  "/users":         { title: "Users & Roles",         sub: "Team access — roles, permissions and RBAC" },
-  "/notifications": { title: "Notifications",         sub: "Transactional email & delivery log" },
-  "/audit":         { title: "Audit Log",             sub: "Every change — who did what, and when" },
-  "/compliance":    { title: "Governance & Interop",  sub: "Identity · FHIR & DICOM · consent · access & retention" },
-  "/account":       { title: "My Account",            sub: "Your profile & password" },
+  "/dashboard":     { title: "Dashboard" },
+  "/leads":         { title: "CRM & Leads" },
+  "/clients":       { title: "Clients" },
+  "/appointments":  { title: "Appointment Calendar" },
+  "/sessions":      { title: "Training Schedule" },
+  "/classes":       { title: "Group Classes" },
+  "/messages":      { title: "Communications" },
+  "/campaigns":     { title: "Campaigns" },
+  "/retention":     { title: "Retention" },
+  "/pro":           { title: "Professional Workspace" },
+  "/emr":           { title: "Patient Records" },
+  "/orders":        { title: "Orders & Labs" },
+  "/meals":         { title: "Meal Monitoring" },
+  "/blueprint":     { title: "BluePrint" },
+  "/trainer":       { title: "Trainer Workspace" },
+  "/billing":       { title: "Billing" },
+  "/subscriptions": { title: "Subscriptions" },
+  "/pos":           { title: "Retail Store" },
+  "/passes":        { title: "Gym Passes" },
+  "/claims":        { title: "Insurance" },
+  "/reports":       { title: "Reports" },
+  "/packages":      { title: "Packages" },
+  "/users":         { title: "Users & Roles" },
+  "/notifications": { title: "Notifications" },
+  "/audit":         { title: "Audit Log" },
+  "/compliance":    { title: "Governance & Interop" },
+  "/account":       { title: "My Account" },
 };
 
 export function metaForPath(pathname: string): PageMeta | null {
