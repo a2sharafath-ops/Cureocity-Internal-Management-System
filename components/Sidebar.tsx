@@ -110,7 +110,15 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
         background: "linear-gradient(135deg, #8E0E15 0%, #D62430 55%, #FB404A 100%)",
         color: "rgba(255,255,255,0.88)",
         borderRight: "none",
-        minHeight: "100vh",
+        // The gradient must span ONE VIEWPORT, not the whole document. As a
+        // flex child with only `minHeight`, this stretched to the full page
+        // height — so on a long page (Leads renders 100+ rows) the visible
+        // top screen was just the first few percent of the ramp and read as
+        // flat maroon, while short pages showed the full gradient. Pinning to
+        // 100vh with alignSelf makes every page identical.
+        height: "100vh",
+        alignSelf: "flex-start",
+        overflowY: "auto",
         padding: "18px 12px 64px",
         position: "sticky",
         top: 0,
