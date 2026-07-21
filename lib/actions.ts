@@ -16,6 +16,7 @@ import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
+import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
 import { ivrConfig } from "@/lib/ivr/config";
@@ -675,6 +676,9 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
         end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
         price: amount, status: "active", created_by: p.name,
       });
+      if (packageCategory(package_id, pkg.is_facility) === "blueprint") {
+        await startBlueprintJourney(supabase, inserted.id, lead.name, p.name);
+      }
     }
   }
   // record referral attribution
@@ -752,6 +756,10 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     await supabase.from("enrollments").insert({ client_id, trainer_id: "t0", hour: 9, session: "PT" });
     await supabase.from("sessions").insert(buildSessions(client_id, "t0", 9, start, pkg.sessions));
   }
+  if (cat === "blueprint") {
+    const { data: cli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+    await startBlueprintJourney(supabase, client_id, cli?.name ?? "Client", p.name);
+  }
   await logAudit(p, "Package purchased", pkg.name, client_id);
   revalidatePath(`/clients/${client_id}`);
   return { ok: true };
@@ -826,7 +834,11 @@ export async function completeConsultation(formData: FormData) {
   const supabase = createClient();
   const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
-  await supabase.from("consultations").update({ status: "completed", summary }).eq("id", id);
+  // Starts this clinician's 24h sign-off clock, and — once all three
+  // disciplines are complete — the 48h delivery clock. See lib/blueprint-sla.
+  await supabase.from("consultations")
+    .update({ status: "completed", summary, completed_at: new Date().toISOString() })
+    .eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
 }
@@ -841,12 +853,115 @@ export async function toggleConsultFlag(formData: FormData) {
   const supabase = createClient();
   const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
-  await supabase.from("consultations").update({ [field]: !value }).eq("id", id);
+  const next = !value;
+  // Stamp who signed off and when — this is what stops the 24h clock. Clearing
+  // the flag clears the stamp, so un-approving restarts the clock rather than
+  // leaving a stale "approved at" behind.
+  const patch: Record<string, unknown> = { [field]: next };
+  if (field === "approved") {
+    patch.approved_at = next ? new Date().toISOString() : null;
+    patch.approved_by = next ? p.name : null;
+  }
+  await supabase.from("consultations").update(patch).eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
 }
 
 // ---- BluePrint -------------------------------------------------------------
+
+/**
+ * Everything that must happen the moment a client buys BluePrint.
+ *
+ * Two things start immediately and were previously left to somebody
+ * remembering: the blood report request, and getting the three clinical
+ * appointments into the diary. The blood request is created outright — it's a
+ * message to the client, it has no calendar consequence, and delaying it
+ * delays everything downstream. The three appointments are *not* auto-booked:
+ * picking a slot in a clinician's diary without a human choosing it produces
+ * times that suit nobody and a pile of reschedules. Instead each becomes a
+ * front-desk task, so the work is visible and owned but the humans still pick
+ * the time.
+ *
+ * Safe to call twice — the blood request upserts on client_id and the tasks
+ * are skipped if a matching open one already exists.
+ */
+async function startBlueprintJourney(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+  clientName: string,
+  actor: string,
+) {
+  await supabase.from("blood_requests").upsert({
+    client_id: clientId, requested_at: todayISO(), submitted: false,
+  });
+  // The blueprint row exists from the start so the SLA sweep has somewhere to
+  // record holds, rather than materialising only at the end of the journey.
+  await supabase.from("blueprints").upsert(
+    { client_id: clientId, status: "in_progress", updated_at: new Date().toISOString() },
+    { onConflict: "client_id", ignoreDuplicates: true },
+  );
+
+  const titles = BP_BOOKING_TASKS.map((t) => `${t.label} — ${clientName}`);
+  const { data: existing } = await supabase.from("tasks")
+    .select("title").eq("client_id", clientId).neq("status", "done").in("title", titles);
+  const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+
+  const rows = BP_BOOKING_TASKS
+    .map((t, i) => ({ t, title: titles[i] }))
+    .filter(({ title }) => !taken.has(title))
+    .map(({ t, title }) => ({
+      title, client_id: clientId, type: "Ops", priority: "High",
+      status: "todo", due_date: addDaysISO(todayISO(), BP_BOOKING_DUE_DAYS),
+      created_by: actor,
+    }));
+  if (rows.length) await supabase.from("tasks").insert(rows);
+
+  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+    title: "BluePrint started",
+    body: `${clientName} — blood report requested, ${rows.length} appointment${rows.length === 1 ? "" : "s"} to book.`,
+    href: "/blueprint",
+    icon: "🧬",
+  });
+}
+
+/**
+ * Pause or resume the SLA clocks for one client.
+ *
+ * "Unless there is a delay from the client side" — this is that escape hatch.
+ * Closing a hold banks the elapsed time rather than discarding it, so the
+ * deadline slides by exactly as long as we were actually waiting, the same way
+ * the package freeze works. Held time is only ever discounted from work that
+ * hadn't been delivered yet, so a hold cannot retroactively rescue a blueprint
+ * that already went out late.
+ */
+export async function toggleBlueprintHold(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageBlueprint(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const supabase = createClient();
+
+  const { data: bp } = await supabase.from("blueprints")
+    .select("hold_since, hold_ms").eq("client_id", client_id).maybeSingle();
+  const now = Date.now();
+  const open = bp?.hold_since ? new Date(bp.hold_since).getTime() : null;
+
+  const patch = open
+    ? {
+        hold_since: null,
+        hold_ms: Math.max(0, Number(bp?.hold_ms ?? 0)) + Math.max(0, now - open),
+        hold_note: null,
+      }
+    : { hold_since: new Date(now).toISOString(), hold_note: note };
+
+  await supabase.from("blueprints").upsert({
+    client_id, ...patch, updated_at: new Date(now).toISOString(),
+  });
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, open ? "BluePrint SLA resumed" : "BluePrint SLA held", c?.name, note);
+  revalidatePath("/blueprint");
+  revalidatePath("/", "layout");
+}
 
 export async function requestBlood(formData: FormData) {
   const p = await getProfile();
@@ -966,9 +1081,15 @@ export async function generateBlueprint(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const consolidated = String(formData.get("consolidated") ?? "").trim() || null;
   const supabase = createClient();
+  const now = new Date().toISOString();
+  // One click still does both halves — writing the consolidated summary and
+  // approving the blueprint — but they're stamped separately so the 48h
+  // delivery clock can be measured, and so the two can be split into distinct
+  // gates later without another migration.
   await supabase.from("blueprints").upsert({
     client_id, consolidated, status: "generated", generated: true, generated_date: todayISO(),
-    updated_at: new Date().toISOString(),
+    consolidated_at: now, approved: true, approved_at: now, approved_by: p.name,
+    updated_at: now,
   });
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blueprint generated", c?.name, null);
@@ -3558,7 +3679,10 @@ export async function getClientQuickView(clientId: string) {
     supabase.from("invoices").select("id, num, description, amount, status, issued_date").eq("client_id", clientId).order("num", { ascending: false }),
     supabase.from("appointments").select("id, type, title, date, hour, status, staff(name)").eq("client_id", clientId).order("date", { ascending: false }).limit(8),
     supabase.from("blueprints").select("scores, generated, status").eq("client_id", clientId).maybeSingle(),
-    supabase.from("blood_requests").select("submitted, requested_on").eq("client_id", clientId).maybeSingle(),
+    // `requested_on` never existed — the column is `requested_at` (0005_care).
+    // PostgREST errored on the select, so `blood` came back null and the first
+    // two BluePrint gates in the quick drawer silently read as not-started.
+    supabase.from("blood_requests").select("submitted, requested_at").eq("client_id", clientId).maybeSingle(),
     supabase.from("consultations").select("kind, approved, status").eq("client_id", clientId),
     supabase.from("assessments").select("id, kind, due_date, scheduled_date, status, staff(name)").eq("client_id", clientId).order("due_date", { ascending: false }).limit(6),
     supabase.from("files").select("id, name, kind, created_at").eq("client_id", clientId).order("created_at", { ascending: false }).limit(8),

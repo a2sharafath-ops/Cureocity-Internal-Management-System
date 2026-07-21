@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/email/send";
 import { tplAppointmentReminder } from "@/lib/email/templates";
 import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
+import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -124,14 +125,19 @@ export async function runDaily() {
   const renewed = await processRenewals(supabase);
   const reminders = await sendReminders(supabase);
   const followups = await generateFollowups(supabase);
+  // BluePrint turnaround: warn before the 24h/48h deadlines, escalate after.
+  const sla = await runBlueprintSla(supabase);
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
-    target: null, detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`,
+    target: null,
+    detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`
+      + ` · blueprint SLA ${sla.scanned} scanned, ${sla.warnings} warned, ${sla.breaches} breached`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",
-    body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`,
+    body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`
+      + (sla.breaches ? ` · ${sla.breaches} BluePrint SLA breach${sla.breaches === 1 ? "" : "es"}` : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, ranAt: new Date().toISOString() };
 }
