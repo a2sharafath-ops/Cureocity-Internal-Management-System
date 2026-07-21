@@ -6,6 +6,7 @@ import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
 import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
+import { runLeadFollowups } from "@/lib/cron/lead-followups";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -139,21 +140,25 @@ export async function runDaily() {
   const sla = await runBlueprintSla(supabase);
   // Comprehensive turnarounds + day-offset milestones.
   const comp = await runComprehensiveSla(supabase);
+  // Lead callbacks: remind the owner, escalate to management after 3 days.
+  const cb = await runLeadFollowups(supabase, todayISO());
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
     detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`
       + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
       + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`
-      + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`,
+      + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`
+      + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",
     body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`
+      + (cb.escalated ? ` · ${cb.escalated} callback${cb.escalated === 1 ? "" : "s"} escalated` : "")
       + (sla.breaches + comp.breaches
           ? ` · ${sla.breaches + comp.breaches} care SLA breach${sla.breaches + comp.breaches === 1 ? "" : "es"}`
           : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, sla, comp, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, comp, callbacks: cb, ranAt: new Date().toISOString() };
 }

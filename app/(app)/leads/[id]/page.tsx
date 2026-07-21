@@ -8,6 +8,7 @@ import { leadScore, leadProduct, LS, TIER_STYLE } from "@/lib/leadscore";
 import { LeadEditForm, CallCell, type Lead } from "@/components/LeadControls";
 import ConvertPanel from "@/components/ConvertPanel";
 import ExperiencePanel from "@/components/ExperiencePanel";
+import LeadRemarks, { type Remark } from "@/components/LeadRemarks";
 import { canWrite } from "@/lib/roles";
 import { ivrStatus } from "@/lib/ivr/config";
 
@@ -24,8 +25,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   if (!me || !canSee(me.role, "/leads")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes").eq("id", params.id).maybeSingle(),
+  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: remarkRows }] = await Promise.all([
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     supabase.from("clients").select("id, name").order("name"),
@@ -38,6 +39,9 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       .eq("lead_id", params.id).order("date"),
     supabase.from("staff").select("id, name, role")
       .in("role", ["Fitness Trainer", "Health Coach"]).order("name"),
+    supabase.from("lead_remarks")
+      .select("id, body, outcome, by_name, created_at")
+      .eq("lead_id", params.id).order("created_at", { ascending: false }),
   ]);
   if (!leadRow) notFound();
   const lead = leadRow as Lead;
@@ -53,6 +57,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   const experienceSessions = ((sessRows ?? []) as unknown as { id: string; date: string | null; hour: number | null; status: string; is_experience: boolean | null; staff: unknown }[])
     .map((x) => ({ ...x, providerName: staffName(x.staff) }));
   const trainers = (trainerRows ?? []) as { id: string; name: string }[];
+  const remarks = (remarkRows ?? []) as Remark[];
+  const fu = leadRow as unknown as { next_follow_up: string | null; next_follow_up_note: string | null; follow_up_owner: string | null };
 
   const { total, tier } = leadScore(lead);
   const product = leadProduct(lead);
@@ -109,6 +115,17 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       <div style={{ ...box, background: "#f0fdf9" }}>
         <b style={{ fontSize: 15 }}>Convert to client</b>
         <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 14px" }}>Pick a package &amp; offer, record referral, capture consent, and verify by OTP. On success the client, sessions and package invoice are created and you're taken to billing.</p>
+        <LeadRemarks
+          leadId={lead.id}
+          remarks={remarks}
+          nextFollowUp={fu.next_follow_up}
+          followUpNote={fu.next_follow_up_note}
+          followUpOwner={fu.follow_up_owner}
+          today={todayISO()}
+          canWrite={canWrite(me.role)}
+          legacyNotes={lead.notes ?? null}
+        />
+
         <ExperiencePanel
           leadId={lead.id}
           appointments={experienceAppts}

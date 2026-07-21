@@ -18,6 +18,7 @@ import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/
 import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
+import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
 import {
   EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
   EXPERIENCE_TRAINING_TITLE, EXPERIENCE_SEQ,
@@ -1412,6 +1413,74 @@ async function carryExperienceToClient(
     .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
   await supabase.from("sessions")
     .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
+}
+
+
+// ---- lead remarks + callbacks ----------------------------------------------
+
+/**
+ * Log a remark and set the next callback in one step.
+ *
+ * Deliberately one action, not two. The sales audit found the follow-up date
+ * filled 17% of the time while remarks said "call tomorrow" — that gap exists
+ * precisely because recording what happened and deciding what happens next
+ * were separate chores. Here the date defaults from the outcome (no answer →
+ * tomorrow, spoke → a week) so the common case is one click.
+ */
+export async function addLeadRemark(
+  _prev: { ok?: string; error?: string },
+  formData: FormData,
+): Promise<{ ok?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { error: "Not permitted." };
+
+  const lead_id = String(formData.get("lead_id") || "");
+  const body = String(formData.get("body") ?? "").trim();
+  const outcome = String(formData.get("outcome") || "note") as RemarkOutcome;
+  if (!lead_id || !body) return { error: "Write what happened." };
+
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, fde").eq("id", lead_id).maybeSingle();
+  if (!lead) return { error: "Lead not found." };
+
+  await supabase.from("lead_remarks").insert({
+    lead_id, body, outcome, by_name: p.name,
+  });
+
+  // Explicit date wins; otherwise fall back to the outcome's suggestion. An
+  // outcome with no suggestion (not interested) clears the callback rather
+  // than leaving a stale one to chase.
+  const explicit = String(formData.get("next_follow_up") || "").trim();
+  const offset = SUGGESTED_OFFSET[outcome] ?? null;
+  const next = explicit || (offset != null ? addDaysISO(todayISO(), offset) : null);
+
+  await supabase.from("leads").update({
+    next_follow_up: next,
+    next_follow_up_note: String(formData.get("next_note") ?? "").trim() || null,
+    follow_up_owner: p.name,
+  }).eq("id", lead_id);
+
+  await logAudit(p, "Lead remark added", lead.name, `${outcome}${next ? ` · callback ${next}` : ""}`);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+  return { ok: next ? `Saved. Next callback ${next}.` : "Saved. No callback scheduled." };
+}
+
+/** Change or clear a lead's callback date without logging a remark. */
+export async function setLeadFollowup(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const lead_id = String(formData.get("lead_id") || "");
+  const date = String(formData.get("next_follow_up") || "").trim() || null;
+  if (!lead_id) return;
+  const supabase = createClient();
+  await supabase.from("leads").update({
+    next_follow_up: date, follow_up_owner: date ? p.name : null,
+  }).eq("id", lead_id);
+  const { data: l } = await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle();
+  await logAudit(p, date ? "Lead callback set" : "Lead callback cleared", l?.name, date);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
 }
 
 export async function requestBlood(formData: FormData) {

@@ -12,8 +12,10 @@ import { LeadForm, CallCell } from "@/components/LeadControls";
 import LeadSearch from "@/components/LeadSearch";
 import { matchesLeadQuery } from "@/lib/leadsearch";
 import { namesMatch } from "@/lib/staff-directory";
+import { followupView, FOLLOWUP_TONE } from "@/lib/lead-followup";
 import { monthKey, prevMonthKey, countInMonth } from "@/lib/trend";
 import { ivrStatus } from "@/lib/ivr/config";
+import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,7 @@ type Lead = {
   interest: string | null; urgency: string | null; history: string | null; goals: string | null;
   location: string | null; budget: string | null; profession: string | null;
   stage: string | null; fde: string | null; created_at: string | null;
+  next_follow_up: string | null; follow_up_owner: string | null;
 };
 
 // Broad slices, kept because the owner dashboard's Growth cards link straight
@@ -68,7 +71,11 @@ const FDE_ALIASES: Record<string, string> = { tamanna: "Thamanna Nazer" };
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: { view?: string; stage?: string; tier?: string; q?: string; n?: string };
+  searchParams: {
+    view?: string; stage?: string; tier?: string; q?: string; n?: string;
+    /** date-wise search: created_at range, and a callback-due filter */
+    from?: string; to?: string; due?: string;
+  };
 }) {
   // This page had no guard — any signed-in user could reach it by URL.
   const me = await getProfile();
@@ -83,9 +90,17 @@ export default async function LeadsPage({
     : null;
   const q = (searchParams.q ?? "").trim();
   const shown = Math.max(PAGE_SIZE, Number(searchParams.n) || PAGE_SIZE);
+  // Date-wise search. `from`/`to` bound when the lead arrived; `due` filters on
+  // the callback date, which is the question front desk actually asks in the
+  // morning ("what do I owe today?").
+  const isDate = (v?: string) => Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
+  const from = isDate(searchParams.from) ? searchParams.from! : "";
+  const to = isDate(searchParams.to) ? searchParams.to! : "";
+  const due = ["today", "overdue", "week", "none"].includes(searchParams.due ?? "")
+    ? searchParams.due! : "";
   const supabase = createClient();
-  const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, created_at").order("num", { ascending: true }),
+  const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }, { data: remarkRows }] = await Promise.all([
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, created_at, next_follow_up, follow_up_owner").order("num", { ascending: true }),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     // On a CRM-only deployment there is no client page to link to, and the
     // pilot may not have client access — this lookup only powers the
@@ -94,6 +109,10 @@ export default async function LeadsPage({
       ? supabase.from("clients").select("id, converted_from")
       : Promise.resolve({ data: [] }),
     supabase.from("staff").select("name"),
+    // Newest first; we keep the first row seen per lead, which is the latest.
+    supabase.from("lead_remarks")
+      .select("lead_id, body, outcome, by_name, created_at")
+      .order("created_at", { ascending: false }).limit(3000),
   ]);
   const leads = (data ?? []) as Lead[];
   // lead id -> client id, for leads that have converted into a client
@@ -102,6 +121,12 @@ export default async function LeadsPage({
     if (c.converted_from) clientByLead.set(c.converted_from, c.id);
   }
   const campaigns = [...new Set(((campRows ?? []) as { name: string }[]).map((c) => c.name))];
+
+  // Latest remark per lead. Rows arrive newest-first, so the first one wins.
+  const lastRemark = new Map<string, { body: string; outcome: string | null; by_name: string | null; created_at: string }>();
+  for (const r of (remarkRows ?? []) as { lead_id: string; body: string; outcome: string | null; by_name: string | null; created_at: string }[]) {
+    if (!lastRemark.has(r.lead_id)) lastRemark.set(r.lead_id, r);
+  }
 
   // Resolve the imported short name to the staff directory's full name, so the
   // column matches how the same person is named everywhere else in the app.
@@ -116,7 +141,22 @@ export default async function LeadsPage({
   // Search narrows everything upstream of the tabs, so every count on the page
   // — view tabs, stage chips, tier cards — reports matches within the search
   // rather than across the whole book. Same invariant the other filters keep.
-  const matched = q ? leads.filter((l) => matchesLeadQuery(l, q)) : leads;
+  const inWeek = (d: string | null) => {
+    if (!d) return false;
+    const days = Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${todayISO()}T00:00:00Z`)) / 86400000);
+    return days >= 0 && days <= 7;
+  };
+  const matchesDates = (l: Lead) => {
+    const created = (l.created_at ?? "").slice(0, 10);
+    if (from && (!created || created < from)) return false;
+    if (to && (!created || created > to)) return false;
+    if (due === "today" && l.next_follow_up !== todayISO()) return false;
+    if (due === "overdue" && !(l.next_follow_up && l.next_follow_up < todayISO())) return false;
+    if (due === "week" && !inWeek(l.next_follow_up)) return false;
+    if (due === "none" && l.next_follow_up) return false;
+    return true;
+  };
+  const matched = leads.filter((l) => (!q || matchesLeadQuery(l, q)) && matchesDates(l));
   const viewCount = (k: ViewKey) => matched.filter((l) => VIEWS[k].match(l.stage ?? "")).length;
 
   // Score everything once, then narrow. Counts on the tabs and cards reflect
@@ -165,6 +205,9 @@ export default async function LeadsPage({
     const ti = patch.tier === undefined ? tierFilter : patch.tier;
     if (ti) p.set("tier", ti);
     if (q) p.set("q", q);   // filters compose with the search, never clear it
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    if (due) p.set("due", due);
     const s = p.toString();
     return s ? `/leads?${s}` : "/leads";
   };
@@ -211,6 +254,39 @@ export default async function LeadsPage({
         params={{ view, stage: stageFilter ?? undefined, tier: tierFilter ?? undefined }}
         count={q ? matched.length : null}
       />
+
+      {/* Date-wise search. `from`/`to` bound when the lead arrived; the
+          callback chips answer "what do I owe today?", which is the question
+          front desk actually opens this page with. */}
+      <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        {view !== "all" && <input type="hidden" name="view" value={view} />}
+        {stageFilter && <input type="hidden" name="stage" value={stageFilter} />}
+        {tierFilter && <input type="hidden" name="tier" value={tierFilter} />}
+        {q && <input type="hidden" name="q" value={q} />}
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>Added</span>
+        <input type="date" name="from" defaultValue={from} aria-label="Added from"
+          style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" }} />
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>to</span>
+        <input type="date" name="to" defaultValue={to} aria-label="Added to"
+          style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" }} />
+        <select name="due" defaultValue={due} aria-label="Callback due"
+          style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" }}>
+          <option value="">Any callback</option>
+          <option value="today">Due today</option>
+          <option value="overdue">Overdue</option>
+          <option value="week">Next 7 days</option>
+          <option value="none">No callback set</option>
+        </select>
+        <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+          Apply
+        </button>
+        {(from || to || due) && (
+          <Link href={href({ stage: stageFilter, tier: tierFilter }).replace(/[?&](from|to|due)=[^&]*/g, "")}
+            style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>
+            Clear dates
+          </Link>
+        )}
+      </form>
 
       <div style={{ marginBottom: 12 }}>
         <SegTabs
@@ -270,6 +346,8 @@ export default async function LeadsPage({
                 <th style={th}>Score</th>
                 <th style={th}>Tier</th>
                 <th style={th}>Best-fit product</th>
+                <th style={th}>Last remark</th>
+                <th style={th}>Callback</th>
                 <th style={th}>Front desk</th>
                 <th style={th}>Stage</th>
                 <th style={th} />
@@ -289,6 +367,38 @@ export default async function LeadsPage({
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{product}</td>
+                  <td style={{ ...td, maxWidth: 240 }}>
+                    {(() => {
+                      const r = lastRemark.get(l.id);
+                      if (!r) return <span style={{ color: "var(--muted)" }}>—</span>;
+                      return (
+                        <>
+                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.body}>
+                            {r.body}
+                          </div>
+                          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
+                            {new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            {r.by_name ? ` · ${r.by_name}` : ""}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </td>
+                  <td style={td}>
+                    {(() => {
+                      const v = followupView(l.next_follow_up, todayISO());
+                      if (v.status === "none") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
+                      const tone = FOLLOWUP_TONE[v.status];
+                      return (
+                        <>
+                          <span style={{ background: tone.bg, color: tone.color, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                            {v.label}
+                          </span>
+                          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>{l.next_follow_up}</div>
+                        </>
+                      );
+                    })()}
+                  </td>
                   <td style={td}>
                     {(() => {
                       const f = fdeName(l.fde);
@@ -314,7 +424,7 @@ export default async function LeadsPage({
                 </tr>
               ))}
               {scored.length === 0 && (
-                <tr><td colSpan={8} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>
+                <tr><td colSpan={10} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>
                   {leads.length === 0
                     ? "No leads yet"
                     : q
