@@ -23,7 +23,7 @@ type ProfileRow = {
 
 export default async function UsersPage() {
   const me = await getProfile();
-  // Managers are here for one reason — fixing a colleague's sign-in. Roles,
+  // Managers are here for one reason — fixing a colleague's login. Roles,
   // branches, renames, deletes and adding staff stay with Administrator and
   // Super Admin, and those server actions already enforce it independently, so
   // hiding the controls here is presentation rather than the security boundary.
@@ -50,7 +50,7 @@ export default async function UsersPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         {canAdmin
           ? `Team access — roles, permissions and RBAC · ${users.length} staff`
-          : `Sign-in help — reset a password or correct an email · ${users.length} staff`}
+          : `Credentials — reset a password or correct an email · ${users.length} staff`}
       </p>
 
       {canAdmin && <AddStaffForm />}
@@ -60,7 +60,13 @@ export default async function UsersPage() {
           <b>Couldn&apos;t load users.</b> {error.message}
         </div>
       ) : (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
+        <div style={{
+          background: "var(--card)", border: "1px solid var(--border)",
+          borderRadius: "var(--radius)", boxShadow: "var(--shadow)",
+          // not `hidden`: the Sign-in dropdown is absolutely positioned and was
+          // being clipped at the right edge of the card.
+          overflow: "visible",
+        }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 12 }}>
