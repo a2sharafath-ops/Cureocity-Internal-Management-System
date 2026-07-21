@@ -7,6 +7,8 @@ import { todayISO } from "@/lib/today";
 import { leadScore, leadProduct, LS, TIER_STYLE } from "@/lib/leadscore";
 import { LeadEditForm, CallCell, type Lead } from "@/components/LeadControls";
 import ConvertPanel from "@/components/ConvertPanel";
+import ExperiencePanel from "@/components/ExperiencePanel";
+import { canWrite } from "@/lib/roles";
 import { ivrStatus } from "@/lib/ivr/config";
 
 export const dynamic = "force-dynamic";
@@ -22,11 +24,20 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   if (!me || !canSee(me.role, "/leads")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }] = await Promise.all([
+  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }] = await Promise.all([
     supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     supabase.from("clients").select("id, name").order("name"),
+    // Pre-sale bookings live on the lead until they convert (0080).
+    supabase.from("appointments")
+      .select("id, type, date, hour, status, is_experience, staff(name)")
+      .eq("lead_id", params.id).order("date"),
+    supabase.from("sessions")
+      .select("id, date, hour, status, is_experience, staff(name)")
+      .eq("lead_id", params.id).order("date"),
+    supabase.from("staff").select("id, name, role")
+      .in("role", ["Fitness Trainer", "Health Coach"]).order("name"),
   ]);
   if (!leadRow) notFound();
   const lead = leadRow as Lead;
@@ -34,6 +45,14 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   const campaigns = [...new Set(((campRows ?? []) as { name: string }[]).map((c) => c.name))];
   const clients = (clientRows ?? []) as { id: string; name: string }[];
   const ivr = ivrStatus();
+  // Supabase types embedded relations as arrays; collapse to the one row.
+  const staffName = (v: unknown): string | null =>
+    ((Array.isArray(v) ? v[0] : v) as { name?: string } | null)?.name ?? null;
+  const experienceAppts = ((apptRows ?? []) as unknown as { id: string; type: string | null; date: string | null; hour: number | null; status: string; is_experience: boolean | null; staff: unknown }[])
+    .map((a) => ({ ...a, providerName: staffName(a.staff) }));
+  const experienceSessions = ((sessRows ?? []) as unknown as { id: string; date: string | null; hour: number | null; status: string; is_experience: boolean | null; staff: unknown }[])
+    .map((x) => ({ ...x, providerName: staffName(x.staff) }));
+  const trainers = (trainerRows ?? []) as { id: string; name: string }[];
 
   const { total, tier } = leadScore(lead);
   const product = leadProduct(lead);
@@ -90,6 +109,15 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       <div style={{ ...box, background: "#f0fdf9" }}>
         <b style={{ fontSize: 15 }}>Convert to client</b>
         <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 14px" }}>Pick a package &amp; offer, record referral, capture consent, and verify by OTP. On success the client, sessions and package invoice are created and you're taken to billing.</p>
+        <ExperiencePanel
+          leadId={lead.id}
+          appointments={experienceAppts}
+          sessions={experienceSessions}
+          trainers={trainers}
+          today={todayISO()}
+          canBook={canWrite(me.role)}
+        />
+
         <ConvertPanel leadId={lead.id} phone={lead.phone} packages={packages.map((p) => ({ id: p.id, name: p.name, price: p.price }))} clients={clients} />
       </div>
     </div>

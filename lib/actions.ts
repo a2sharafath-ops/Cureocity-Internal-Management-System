@@ -19,6 +19,10 @@ import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import {
+  EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
+  EXPERIENCE_TRAINING_TITLE, EXPERIENCE_SEQ,
+} from "@/lib/experience";
+import {
   INITIAL_BOOKINGS, PT_BOOKING_LABEL, BOOKING_DUE_DAYS,
   BLOOD_PANEL, COMPREHENSIVE_CATEGORY,
 } from "@/lib/comprehensive";
@@ -701,6 +705,10 @@ export async function convertLeadWithPackage(formData: FormData) {
     package_id, used: 0, verified: true, converted_from: id, pro_id: "d1",
   }).select("id").single();
 
+  // Experience bookings move across before anything else, so the client's
+  // history starts at their first visit rather than at payment.
+  if (inserted) await carryExperienceToClient(supabase, id, inserted.id);
+
   if (inserted && package_id) {
     const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
     if (pkg && !pkg.is_facility && pkg.sessions > 0) {
@@ -1292,6 +1300,118 @@ export async function getComprehensiveView(clientId: string) {
     hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
     holdNote: (proto.hold_note as string | null) ?? null,
   };
+}
+
+
+// ---- free experience sessions (pre-sale) -----------------------------------
+
+/**
+ * Book a lead's free fitness assessment or trial training session.
+ *
+ * These are the only bookings that exist before someone pays. The database
+ * enforces one of each per lead (0080), so a second attempt fails at the
+ * index rather than here — this returns the error rather than throwing, so
+ * front desk sees "already booked" instead of a stack trace.
+ *
+ * Free, so no invoice. A no-show costs a slot, not money.
+ */
+export async function bookExperienceSession(
+  _prev: { ok?: string; error?: string },
+  formData: FormData,
+): Promise<{ ok?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { error: "Not permitted." };
+
+  const lead_id = String(formData.get("lead_id") || "");
+  const kind = String(formData.get("kind") || "");     // assessment | training
+  const date = String(formData.get("date") || "");
+  const hour = Number(formData.get("hour")) || 9;
+  const staff_id = String(formData.get("staff_id") || "") || null;
+  if (!lead_id || !date) return { error: "Pick a date." };
+  if (kind !== "assessment" && kind !== "training") return { error: "Unknown session type." };
+
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, stage").eq("id", lead_id).maybeSingle();
+  if (!lead) return { error: "Lead not found." };
+
+  if (kind === "assessment") {
+    const { error } = await supabase.from("appointments").insert({
+      lead_id, client_id: null, provider_id: staff_id,
+      type: EXPERIENCE_ASSESSMENT_TYPE, title: EXPERIENCE_ASSESSMENT_TITLE,
+      date, hour, duration_min: 45, status: "scheduled",
+      is_experience: true, created_by: p.name,
+    });
+    if (error) {
+      return { error: /duplicate|unique/i.test(error.message)
+        ? "This lead has already had their free assessment."
+        : error.message };
+    }
+  } else {
+    // sessions.trainer_id is NOT NULL, so a trainer must be chosen for a
+    // training session even though it's optional for an assessment.
+    if (!staff_id) return { error: "Pick a trainer for the training session." };
+    const { error } = await supabase.from("sessions").insert({
+      lead_id, client_id: null, trainer_id: staff_id,
+      seq: EXPERIENCE_SEQ, date, hour, status: "scheduled", is_experience: true,
+    });
+    if (error) {
+      return { error: /duplicate|unique/i.test(error.message)
+        ? "This lead has already had their free training session."
+        : error.message };
+    }
+  }
+
+  // A booked experience session means the lead is further along than
+  // "contacted" — reflect that, but never move a lead backwards.
+  if (lead.stage === "1-New Lead" || lead.stage === "2-Discovery") {
+    await supabase.from("leads").update({ stage: "4-Visit/Trial" }).eq("id", lead_id);
+  }
+
+  await logAudit(p, "Experience session booked", lead.name, `${kind} · ${date} ${hour}:00`);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+  revalidatePath("/appointments");
+  return { ok: `Booked — ${kind === "assessment" ? "free assessment" : "free training session"} on ${date}.` };
+}
+
+/** Mark an experience session attended, cancelled or a no-show. */
+export async function setExperienceStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const lead_id = String(formData.get("lead_id") || "");
+  const kind = String(formData.get("kind") || "");
+  const id = String(formData.get("id") || "");
+  const status = String(formData.get("status") || "");
+  if (!id || !["completed", "cancelled", "no_show"].includes(status)) return;
+
+  const supabase = createClient();
+  const table = kind === "training" ? "sessions" : "appointments";
+  // `sessions` has no no_show state; treat it as cancelled there so the row
+  // stays truthful rather than inventing a status the table doesn't have.
+  const value = table === "sessions" && status === "no_show" ? "cancelled" : status;
+  await supabase.from(table).update({ status: value }).eq("id", id);
+
+  await logAudit(p, "Experience session updated", kind, status);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+}
+
+/**
+ * Move a converting lead's experience bookings onto their new client record.
+ *
+ * Without this the history is orphaned: the assessment that sold them the
+ * package would vanish the moment they bought it, and the client's timeline
+ * would start at payment rather than at their first real visit.
+ */
+async function carryExperienceToClient(
+  supabase: ReturnType<typeof createClient>,
+  leadId: string,
+  clientId: string,
+) {
+  await supabase.from("appointments")
+    .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
+  await supabase.from("sessions")
+    .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
 }
 
 export async function requestBlood(formData: FormData) {
