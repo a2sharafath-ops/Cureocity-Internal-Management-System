@@ -6,6 +6,7 @@ import { canSee, canManageInvoices } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
+import { monthTrend, prevMonthKey, sumInMonth, type Direction } from "@/lib/trend";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import PayOnlineButton from "@/components/PayOnlineButton";
@@ -58,9 +59,20 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   const overdue = dunning.filter((i) => i.issued_date && daysBetween(today, i.issued_date) >= 1);
   const bucket = (lo: number, hi: number) => overdue.filter((i) => { const d = daysBetween(today, i.issued_date!); return d >= lo && (hi === Infinity ? true : d <= hi); }).length;
 
+  // The invoice select carries issued_date and paid_date already, so last
+  // month is a filter rather than a query. Capped at 300 rows though — on a
+  // busy month the comparison window could be truncated, which is why the
+  // helper omits the trend entirely rather than guessing when prior is 0.
+  const lastMonth = prevMonthKey(month);
+  const revenuePrev = sumInMonth(invoices.filter((i) => i.status === "Paid"), lastMonth, (i) => i.paid_date, (i) => Number(i.amount));
+  const unpaidPrev = sumInMonth(unpaidInv, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
+  const overduePrev = sumInMonth(overdue, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
+  const refundedPrev = sumInMonth(refunded, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const kpi = (label: string, value: string, sub?: string) => (
-    <MetricCard label={label} value={value} sub={sub} minWidth={170} />
+  const kpi = (label: string, value: string, sub?: string, now?: number, prev?: number, dir: Direction = "up-good") => (
+    <MetricCard label={label} value={value} sub={sub} minWidth={170}
+      trend={now == null ? undefined : monthTrend(now, prev, dir)} />
   );
   const statusChip = (s: string) => {
     const map: Record<string, [string, string]> = { Paid: ["var(--green-bg)", "var(--green-text)"], Unpaid: ["var(--amber-bg)", "var(--amber-text)"], Refunded: ["var(--neutral-bg)", "var(--muted)"] };
@@ -117,10 +129,10 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Invoices · subscriptions &amp; renewals · refunds &amp; credits · dunning</p>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
-        {kpi("Revenue this month", money(revenue), "paid invoices")}
-        {kpi("Outstanding", money(unpaid), `${unpaidInv.length} unpaid`)}
-        {kpi("Overdue", money(overdue.reduce((s, i) => s + Number(i.amount), 0)), `${overdue.length} invoices`)}
-        {kpi("Refunded", money(refunded.reduce((s, i) => s + Number(i.amount), 0)), `${refunded.length} total`)}
+        {kpi("Revenue this month", money(revenue), `${invoices.filter((i) => i.status === "Paid" && (i.paid_date ?? "").startsWith(month)).length} paid invoices`, revenue, revenuePrev, "up-good")}
+        {kpi("Outstanding", money(unpaid), `${unpaidInv.length} unpaid`, unpaid, unpaidPrev, "up-bad")}
+        {kpi("Overdue", money(overdue.reduce((s, i) => s + Number(i.amount), 0)), `${overdue.length} invoices`, overdue.reduce((s, i) => s + Number(i.amount), 0), overduePrev, "up-bad")}
+        {kpi("Refunded", money(refunded.reduce((s, i) => s + Number(i.amount), 0)), `${refunded.length} total`, refunded.reduce((s, i) => s + Number(i.amount), 0), refundedPrev, "up-bad")}
       </div>
 
       {/* tabs */}

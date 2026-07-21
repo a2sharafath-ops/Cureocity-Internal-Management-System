@@ -6,6 +6,7 @@ import { todayISO } from "@/lib/today";
 import { deleteExpense } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
+import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import ExpenseForm from "@/components/ExpenseForm";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +28,16 @@ export default async function ExpensesPage() {
   const byCat = new Map<string, number>();
   for (const e of expenses) byCat.set(e.category, (byCat.get(e.category) ?? 0) + Number(e.amount));
   const topCats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  // `date` is already selected; the 200-row cap is the only limit on how far
+  // back the comparison can see.
+  const lastMonth = prevMonthKey(month);
+  const monthPrev = sumInMonth(expenses, lastMonth, (e) => e.date, (e) => Number(e.amount));
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const stat = (label: string, value: string, sub?: string) => <MetricCard label={label} value={value} sub={sub} minWidth={160} />;
+  const stat = (label: string, value: string, sub?: string, trend?: ReturnType<typeof monthTrend>) =>
+    <MetricCard label={label} value={value} sub={sub} trend={trend} minWidth={160} />;
 
   return (
     <div style={{ maxWidth: 980 }}>
@@ -44,7 +50,8 @@ export default async function ExpensesPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Operating costs &amp; profitability.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-        {stat("This month", money(monthTotal))}
+        {/* spend rising is bad — declared, never inferred from the sign */}
+        {stat("This month", money(monthTotal), `${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} entries`, monthTrend(monthTotal, monthPrev, "up-bad"))}
         {stat("All time", money(total), `${expenses.length} entries`)}
         {topCats.map(([c, v]) => stat(c, money(v)))}
       </div>

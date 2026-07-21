@@ -93,6 +93,11 @@ export default async function ReportsPage() {
     }
   }
   const revenueData = months.map((m) => ({ label: m.label, value: revByMonth.get(m.key) ?? 0 }));
+  // These two were already computed for the 6-month chart and thrown away by
+  // the KPI row. All-time revenue can't carry a month-over-month trend — it
+  // only ever rises — so the current month becomes slot 03 context instead,
+  // which is the honest version of a baseline for a cumulative figure.
+  const thisMonthRev = revByMonth.get(months[months.length - 1].key) ?? 0;
 
   // lead funnel
   const stageCounts = new Map(STAGES.map((s) => [s, 0]));
@@ -139,7 +144,7 @@ export default async function ReportsPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Live from your data</p>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
-        {kpi("Total revenue", money(totalPaid), "all paid invoices")}
+        {kpi("Total revenue", money(totalPaid), `${money(thisMonthRev)} this month`)}
         {kpi("Outstanding", money(outstanding), "unpaid")}
         {kpi("Active clients", String(clients.length))}
         {kpi("Session completion", `${completionRate}%`, `${completedSessions} of ${totalSessions}`)}

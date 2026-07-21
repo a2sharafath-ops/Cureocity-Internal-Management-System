@@ -19,7 +19,7 @@ export default function NotificationBell({ items, unread }: { items: Notif[]; un
   return (
     <div style={{ position: "relative" }}>
       <button type="button" onClick={() => setOpen((o) => !o)} title="Notifications"
-        style={{ position: "relative", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, width: 34, height: 34, cursor: "pointer", fontSize: 16 }}>
+        style={{ position: "relative", border: "1px solid rgba(20,20,25,0.07)", background: "rgba(255,255,255,0.55)", borderRadius: 999, width: 34, height: 34, cursor: "pointer", fontSize: 15 }}>
         🔔
         {unread > 0 && <span style={{ position: "absolute", top: -6, right: -6, background: "var(--red)", color: "#fff", borderRadius: 999, minWidth: 17, height: 17, fontSize: 10, fontWeight: 700, display: "grid", placeItems: "center", padding: "0 4px" }}>{unread > 9 ? "9+" : unread}</span>}
       </button>

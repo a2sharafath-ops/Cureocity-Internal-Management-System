@@ -7,6 +7,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
+import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -64,6 +65,9 @@ export default async function ManagerDashboard({ name }: { name: string }) {
   const unpaid = invoices.filter((i) => i.status !== "Paid");
   const revenueMonth = paid.filter((i) => (i.paid_date ?? "").startsWith(month)).reduce((s, i) => s + Number(i.amount), 0);
   const outstanding = unpaid.reduce((s, i) => s + Number(i.amount), 0);
+  const lastMonth = prevMonthKey(month);
+  const revenuePrev = sumInMonth(paid, lastMonth, (i) => i.paid_date, (i) => Number(i.amount));
+  const outstandingPrev = sumInMonth(unpaid, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
 
   // ---- exception queue -----------------------------------------------------
   const flags: Flag[] = [];
@@ -158,8 +162,8 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       {/* 1 — MONEY (collections only) */}
       <div style={sectionTitle}>Money</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} minWidth={180} />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "up-good")} minWidth={180} />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "up-bad")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <MetricCard label="Follow-ups pending" value={String(followups.length)} sub={`${followups.filter((f) => f.due_date < today).length} overdue`} color={followups.some((f) => f.due_date < today) ? "var(--amber-text-soft)" : undefined} minWidth={170} />
       </div>
 

@@ -19,7 +19,7 @@ export default function RolePreview({ preview, profession }: { preview: string |
         value={active ?? "off"}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
         title="Preview the app as another role, or step into a professional workspace"
-        style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12, background: "#fff", cursor: "pointer" }}
+        style={{ border: "1px solid rgba(20,20,25,0.07)", borderRadius: 999, padding: "6px 10px", fontSize: 12, background: "rgba(255,255,255,0.55)", cursor: "pointer" }}
       >
         <option value="off">View as… (Administrator)</option>
         <optgroup label="Roles">
