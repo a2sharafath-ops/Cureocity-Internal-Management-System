@@ -11,12 +11,15 @@ export default function LeadSearch({
   initial,
   params,
   count,
+  trailing,
 }: {
   initial: string;
   /** the other active filters, preserved on every search */
   params: { view?: string; stage?: string; tier?: string };
   /** matches for the current query — null when nothing is being searched */
   count: number | null;
+  /** rendered immediately after the input — the Advanced search toggle */
+  trailing?: React.ReactNode;
 }) {
   const router = useRouter();
   const [q, setQ] = useState(initial);
@@ -47,7 +50,7 @@ export default function LeadSearch({
   }, [q, params.view, params.stage, params.tier, router]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <div style={{ position: "relative", flex: 1, maxWidth: 380, minWidth: 220 }}>
         <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none" }}>🔍</span>
         <input
@@ -77,6 +80,7 @@ export default function LeadSearch({
           </button>
         )}
       </div>
+      {trailing}
       {count !== null && (
         <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
           {count === 0
