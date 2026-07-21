@@ -7,6 +7,7 @@
 // green, which is worse than showing no trend at all.
 
 import type { Trend } from "@/components/MetricCard";
+import { directionOf, type MetricKey } from "@/lib/metric-directions";
 
 /** "2026-07" for the month containing `iso`, or the current month. */
 export function monthKey(iso?: string): string {
@@ -20,8 +21,6 @@ export function prevMonthKey(key: string): string {
   d.setUTCMonth(d.getUTCMonth() - 1);
   return d.toISOString().slice(0, 7);
 }
-
-export type Direction = "up-good" | "up-bad";
 
 /**
  * Build a trend, or return undefined when one would mislead.
@@ -39,7 +38,9 @@ export type Direction = "up-good" | "up-bad";
 export function monthTrend(
   current: number,
   previous: number | null | undefined,
-  direction: Direction,
+  /** Which metric this is. Direction is looked up from METRIC_DIRECTION, not
+   *  passed in — the call site doesn't get to decide whether up is good. */
+  metric: MetricKey,
   since = "vs last month",
 ): Trend | undefined {
   if (previous == null || previous === 0) return undefined;
@@ -50,7 +51,7 @@ export function monthTrend(
   if (delta === 0) return { delta: 0, sentiment: "neutral", since };
 
   const rose = current > previous;
-  const good = direction === "up-good" ? rose : !rose;
+  const good = directionOf(metric) === "up-good" ? rose : !rose;
   return { delta, sentiment: good ? "good" : "bad", since };
 }
 

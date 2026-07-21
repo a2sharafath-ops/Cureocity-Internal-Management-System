@@ -136,12 +136,12 @@ export default async function FinanceDashboard({ name }: { name: string }) {
           // Slot 04. Revenue up is good, revenue down is bad — declared, not
           // inferred. Omitted entirely when there's no prior month to compare
           // against, rather than showing a meaningless ▲100%.
-          trend={monthTrend(revenueMonth, revenuePrev, "up-good")}
+          trend={monthTrend(revenueMonth, revenuePrev, "revenue_month")}
           minWidth={190}
         />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "up-bad")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
-        <MetricCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} trend={monthTrend(spendMonth, spendPrev, "up-bad")} minWidth={170} />
-        <MetricCard label="Net this month" value={money(netMonth)} sub="revenue − spend" trend={monthTrend(netMonth, netPrev, "up-good")} color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "outstanding")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} trend={monthTrend(spendMonth, spendPrev, "spend_month")} minWidth={170} />
+        <MetricCard label="Net this month" value={money(netMonth)} sub="revenue − spend" trend={monthTrend(netMonth, netPrev, "net_month")} color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
         <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
       </div>
 

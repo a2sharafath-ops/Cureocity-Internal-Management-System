@@ -51,7 +51,7 @@ export default async function ExpensesPage() {
 
       <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
         {/* spend rising is bad — declared, never inferred from the sign */}
-        {stat("This month", money(monthTotal), `${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} entries`, monthTrend(monthTotal, monthPrev, "up-bad"))}
+        {stat("This month", money(monthTotal), `${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} entries`, monthTrend(monthTotal, monthPrev, "spend_month"))}
         {stat("All time", money(total), `${expenses.length} entries`)}
         {topCats.map(([c, v]) => stat(c, money(v)))}
       </div>

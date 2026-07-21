@@ -182,8 +182,8 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       {/* 1 — MONEY */}
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Money</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "up-good")} minWidth={180} />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "up-bad")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "revenue_month")} minWidth={180} />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "outstanding")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <MetricCard label="Collection rate" value={`${collectRate}%`} sub="of everything billed" minWidth={160} />
         <MetricCard label="Renewals ≤30 days" value={money(renewalValue)} sub={`${renewing.length} subscription${renewing.length === 1 ? "" : "s"}`} minWidth={180} />
         <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
