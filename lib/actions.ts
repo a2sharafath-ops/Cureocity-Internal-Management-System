@@ -1226,14 +1226,33 @@ export async function toggleComprehensiveHold(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+/** A client can hold a BluePrint panel and a Comprehensive panel at once. When
+ *  they upload a report from the portal we can't tell which it satisfies, so
+ *  close the oldest outstanding one — that's the one they were asked for
+ *  first. Staff can correct it from the BluePrint page. */
+async function markEarliestPanelReceived(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+) {
+  const { data } = await supabase.from("blood_requests")
+    .select("id").eq("client_id", clientId).eq("submitted", false)
+    .order("requested_at", { ascending: true }).limit(1);
+  const row = (data ?? [])[0] as { id: string } | undefined;
+  if (row) {
+    await supabase.from("blood_requests")
+      .update({ submitted: true, submitted_date: todayISO() }).eq("id", row.id);
+  }
+}
+
 export async function requestBlood(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
-  await supabase.from("blood_requests").upsert({
-    client_id, requested_at: todayISO(), submitted: false,
-  });
+  await supabase.from("blood_requests").upsert(
+    { client_id, panel: BP_PANEL, requested_at: todayISO(), submitted: false },
+    { onConflict: "client_id,panel" },
+  );
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report requested", c?.name, null);
   revalidatePath("/blueprint");
@@ -1244,7 +1263,12 @@ export async function markBloodReceived(formData: FormData) {
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
-  await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", client_id);
+  // Panel comes from the form so front desk can receive either report set;
+  // defaults to the BluePrint panel, which is what every existing row is.
+  const panel = String(formData.get("panel") ?? BP_PANEL);
+  await supabase.from("blood_requests")
+    .update({ submitted: true, submitted_date: todayISO() })
+    .eq("client_id", client_id).eq("panel", panel);
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report received", c?.name, null);
   revalidatePath("/blueprint");
@@ -1319,7 +1343,9 @@ export async function uploadPortalFile(_prev: UploadState, formData: FormData): 
   const r = await storeFile(prof.client_id, kind, file, prof.name ?? "Client");
   if (r.error) return { error: r.error };
   if (kind === "blood_report") {
-    await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", prof.client_id);
+    // A client uploading a report satisfies whichever panel is still open. If
+    // both are, the earliest requested wins — they were asked for it first.
+    await markEarliestPanelReceived(supabase, prof.client_id);
   }
   await logAudit({ id: user.id, name: prof.name ?? undefined, role: "Client" }, "File uploaded (portal)", prof.name, `${kind}: ${file.name}`);
   revalidatePath("/portal");
@@ -3952,7 +3978,7 @@ export async function getClientQuickView(clientId: string) {
     // `requested_on` never existed — the column is `requested_at` (0005_care).
     // PostgREST errored on the select, so `blood` came back null and the first
     // two BluePrint gates in the quick drawer silently read as not-started.
-    supabase.from("blood_requests").select("submitted, requested_at").eq("client_id", clientId).maybeSingle(),
+    supabase.from("blood_requests").select("submitted, requested_at, panel").eq("client_id", clientId).order("requested_at"),
     supabase.from("consultations").select("kind, approved, status").eq("client_id", clientId),
     supabase.from("assessments").select("id, kind, due_date, scheduled_date, status, staff(name)").eq("client_id", clientId).order("due_date", { ascending: false }).limit(6),
     supabase.from("files").select("id, name, kind, created_at").eq("client_id", clientId).order("created_at", { ascending: false }).limit(8),
@@ -3979,7 +4005,13 @@ export async function getClientQuickView(clientId: string) {
     invoices: invoices ?? [],
     appointments: appts ?? [],
     blueprint: bp ?? null,
-    blood: blood ?? null,
+    // Multi-panel since 0078: the drawer wants whichever panel is still
+    // outstanding, falling back to the latest so a finished client still shows
+    // a status rather than a blank gate.
+    blood: (() => {
+      const rows = (blood ?? []) as { submitted: boolean; requested_at: string | null; panel: string }[];
+      return rows.find((b) => !b.submitted) ?? rows[rows.length - 1] ?? null;
+    })(),
     assessments: assessments ?? [],
     files: files ?? [],
     measurement: (measures ?? [])[0] ?? null,

@@ -11,12 +11,21 @@
 // plus 6 turnarounds, so the dedupe matters more here than it did there.
 
 import { comprehensiveSla, OWNER_ROLES, formatLeft, type Gate } from "@/lib/comprehensive-sla";
-import { COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
+import {
+  COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, bookableNow,
+  bookingTaskTitle, reassessmentOutOfOrder,
+} from "@/lib/comprehensive";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type SlaSweepResult = { scanned: number; warnings: number; breaches: number };
+export type SlaSweepResult = {
+  scanned: number; warnings: number; breaches: number;
+  /** booking tasks raised for milestones that just became bookable */
+  booked: number;
+  /** doctor reviews sitting ahead of an incomplete reassessment */
+  outOfOrder: number;
+};
 
 const MANAGEMENT = ["Manager", "Administrator", "Super Admin"];
 
@@ -32,7 +41,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     consolidated_at: string | null; approved_at: string | null;
     hold_since: string | null; hold_ms: number | null;
   }[];
-  if (!protos.length) return { scanned: 0, warnings: 0, breaches: 0 };
+  if (!protos.length) return { scanned: 0, warnings: 0, breaches: 0, booked: 0, outOfOrder: 0 };
 
   const ids = protos.map((p) => p.client_id);
   const [
@@ -106,7 +115,16 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
   }
 
   const events: { client_id: string; protocol: string; gate: string; kind: string; due_at: string }[] = [];
-  let warnings = 0, breaches = 0;
+  const newTasks: Record<string, unknown>[] = [];
+  let warnings = 0, breaches = 0, booked = 0, outOfOrder = 0;
+
+  // Existing open booking tasks, so a milestone doesn't get re-queued nightly.
+  const { data: openTasks } = await supabase.from("tasks")
+    .select("client_id, title").in("client_id", ids).neq("status", "done");
+  const taskSet = new Set(
+    ((openTasks ?? []) as { client_id: string; title: string }[]).map((t) => `${t.client_id}|${t.title}`),
+  );
+  const today = new Date(now).toISOString().slice(0, 10);
 
   for (const p of protos) {
     const name = nameOf.get(p.client_id) ?? "A client";
@@ -151,12 +169,52 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
       if (g.clock.status === "due_soon") await fire(g, "warning");
       if (g.clock.status === "breached") await fire(g, "breach");
     }
+
+    // ---- milestone booking prompts ----------------------------------------
+    // Raised when a milestone becomes bookable, not at day 0 — queueing twelve
+    // prompts the day someone buys comp12 would be noise, and the day-77 one
+    // couldn't be actioned anyway.
+    const appts = apptsBy.get(p.client_id) ?? [];
+    const cycles = cyclesFor(validity.get(p.client_id) ?? 28);
+    for (const m of milestoneDates(p.start_date, cycles)) {
+      if (!bookableNow(m, today, appts)) continue;
+      const title = bookingTaskTitle(m, name);
+      if (taskSet.has(`${p.client_id}|${title}`)) continue;
+      taskSet.add(`${p.client_id}|${title}`);
+      newTasks.push({
+        title, client_id: p.client_id, type: "Ops",
+        priority: today >= m.dueDate ? "High" : "Medium",
+        status: "todo", due_date: m.dueDate, created_by: "auto",
+      });
+      booked++;
+    }
+
+    // ---- reassessment ordering --------------------------------------------
+    // A warning, not a block: the doctor's month-end review is meant to happen
+    // after the fitness reassessment so the numbers are current. A clinic with
+    // a reason to reverse them shouldn't be stopped, but nobody should do it
+    // by accident.
+    for (const bad of reassessmentOutOfOrder(p.start_date, cycles, appts)) {
+      const gate = `order:doctor_before_reassess#${bad.cycle}`;
+      if (already.has(`${p.client_id}|${gate}|warning`)) continue;
+      already.add(`${p.client_id}|${gate}|warning`);
+      events.push({ client_id: p.client_id, protocol: COMPREHENSIVE_CATEGORY, gate, kind: "warning", due_at: `${bad.doctorDate}T00:00:00Z` });
+      outOfOrder++;
+      await notifyRoles(supabase, ["Fitness Trainer", ...MANAGEMENT], {
+        title: `Reassessment not done — ${name}`,
+        body: `Doctor review is booked for ${bad.doctorDate} but the fitness reassessment isn't complete.`,
+        href: `/clients/${p.client_id}`,
+        icon: "⚠️",
+      });
+    }
   }
+
+  if (newTasks.length) await supabase.from("tasks").insert(newTasks);
 
   if (events.length) {
     await supabase.from("blueprint_sla_events")
       .upsert(events, { onConflict: "client_id,protocol,gate,kind", ignoreDuplicates: true });
   }
 
-  return { scanned: protos.length, warnings, breaches };
+  return { scanned: protos.length, warnings, breaches, booked, outOfOrder };
 }

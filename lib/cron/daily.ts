@@ -144,7 +144,8 @@ export async function runDaily() {
     target: null,
     detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`
       + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
-      + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`,
+      + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`
+      + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",

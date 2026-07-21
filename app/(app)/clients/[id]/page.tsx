@@ -116,6 +116,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const stepTrend = reads.slice(0, 7).reverse(); // oldest→newest of last 7
 
   const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
+  // Prescriptions rendered only on the EMR chart before this — invisible on the
+  // client's own card, which is where front desk and coaches actually look.
+  const { data: rxData } = await supabase.from("prescriptions")
+    .select("id, status, provider, signed_date, shared_at, prescription_items(drug, dose, frequency, duration)")
+    .eq("client_id", params.id).order("created_at", { ascending: false }).limit(5);
+  const prescriptions = (rxData ?? []) as unknown as {
+    id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
+    prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
+  }[];
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
   // owner / coach names, blueprint status, onboarding journey follow-ups, packages held
@@ -175,7 +184,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions"]} />
       <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
@@ -637,6 +646,38 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <WearableConnect clientId={params.id} connected={connMap} />
             </>
           )}
+        </div>
+      )}
+
+      {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
+          writing from one the client can actually see in their portal — the
+          distinction the 24h delivery clock measures. */}
+      {prescriptions.length > 0 && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>💊 Prescriptions</div>
+            <span style={{ flex: 1 }} />
+            <Link href={`/emr/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>
+          </div>
+          {prescriptions.map((rx) => (
+            <div key={rx.id} style={{ borderTop: "1px solid var(--border)", padding: "9px 0", fontSize: 13 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                <b>{rx.provider ?? "Doctor"}</b>
+                <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ?? "unsigned"}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{
+                  background: rx.shared_at ? "var(--green-bg)" : "var(--amber-bg)",
+                  color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)",
+                  borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700,
+                }}>
+                  {rx.shared_at ? "In client portal" : "Not yet shared"}
+                </span>
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
+                {(rx.prescription_items ?? []).map((i) => i.drug + (i.dose ? ` ${i.dose}` : "")).join(" · ") || "No items"}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

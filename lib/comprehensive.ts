@@ -168,4 +168,56 @@ export function ptDeadline(startISO: string, cycle = 1): string {
   return addDaysISO(startISO, cycle * CYCLE_DAYS);
 }
 
+/**
+ * A milestone is bookable once `fromDate` arrives and no completed appointment
+ * of its type has landed since. Front desk gets a task then, rather than at
+ * day 0 — twelve booking prompts on the day someone buys comp12 would be
+ * noise, and the day-77 one couldn't be actioned anyway.
+ */
+export function bookableNow(
+  m: DatedMilestone,
+  today: string,
+  appointments: { type: string | null; date: string | null; status: string }[],
+): boolean {
+  if (today < m.fromDate) return false;
+  const satisfied = appointments.some(
+    (a) => a.type === m.apptType && a.date && a.date >= m.fromDate &&
+      (a.status === "completed" || a.status === "scheduled"),
+  );
+  return !satisfied;
+}
+
+/** Task title for a milestone booking. Matched on to avoid duplicates, so
+ *  don't reword without a data migration. */
+export function bookingTaskTitle(m: DatedMilestone, clientName: string): string {
+  return `Book ${m.label.toLowerCase()} — ${clientName}`;
+}
+
+/**
+ * The day-28 doctor review should happen *after* the fitness reassessment, so
+ * the doctor has current numbers. This reports the ordering problem rather
+ * than blocking the booking — a clinic that needs to see the doctor first has
+ * a reason, and a hard block would just get worked around.
+ */
+export function reassessmentOutOfOrder(
+  startISO: string,
+  cycles: number,
+  appointments: { type: string | null; date: string | null; status: string }[],
+): { cycle: number; doctorDate: string }[] {
+  const out: { cycle: number; doctorDate: string }[] = [];
+  for (const m of milestoneDates(startISO, cycles)) {
+    if (m.key !== "doctor_28") continue;
+    const doc = appointments.find(
+      (a) => a.type === "Doctor Consultation" && a.date && a.date >= m.fromDate && a.status !== "cancelled",
+    );
+    if (!doc?.date) continue;
+    const reassessDone = appointments.some(
+      (a) => a.type === "Fitness Services" && a.status === "completed" &&
+        a.date && a.date >= addDaysISO(startISO, (m.cycle - 1) * CYCLE_DAYS + 21) && a.date <= doc.date!,
+    );
+    if (!reassessDone) out.push({ cycle: m.cycle, doctorDate: doc.date });
+  }
+  return out;
+}
+
 export { DAY };
