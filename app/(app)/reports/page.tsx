@@ -143,7 +143,11 @@ export default async function ReportsPage() {
     const d = new Date();
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
   })();
-  const closingThisMonth = pipe.weightedBy(monthEnd);
+  // Window starts today, not at the epoch — a deal whose close date has already
+  // slipped is not evidence about this month. It is reported separately.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const closingThisMonth = pipe.weightedBy(todayStr, monthEnd);
+  const overdueClose = pipe.overdueValue(todayStr);
   const thisMonthRevenue = revByMonth.get(months[months.length - 1].key) ?? 0;
   const { data: targetRow } = await supabase.from("sales_targets")
     .select("revenue_target").eq("month", months[months.length - 1].key).maybeSingle();
@@ -172,7 +176,12 @@ export default async function ReportsPage() {
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
         {kpi("Open pipeline", money(pipe.open), `${pipe.counted} deal${pipe.counted === 1 ? "" : "s"} with a value`)}
         {kpi("Weighted pipeline", money(pipe.weighted), "adjusted for stage close rates")}
-        {kpi("Could close this month", money(closingThisMonth), `by ${monthEnd}`)}
+        {kpi("Could close this month", money(closingThisMonth),
+          overdueClose
+            // Surfacing this matters: it used to be silently folded into the
+            // number above, inflating it a little more every month.
+            ? `by ${monthEnd} · ${money(overdueClose)} past its close date`
+            : `by ${monthEnd}`)}
         {kpi("No value set", String(pipe.unvalued), pipe.unvalued ? "not in the forecast" : "all deals valued")}
       </div>
 
