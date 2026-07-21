@@ -201,9 +201,9 @@ export default async function OwnerDashboard({ name }: { name: string }) {
         <MetricCard value={apptsToday.length} label="Appointments" href="/appointments"
           meter={{ of: apptsAll.length, filled: apptsToday.length }}
           sub={apptsAll.length ? `${apptsToday.length} of ${apptsAll.length} still to run` : "none booked"} />
-                  // No attendance rows for today means nobody has marked it yet, which
-          // is not the same fact as nobody turning up. Show `—` and say so,
-          // rather than a 0 that reads as an empty centre.
+        {/* No attendance rows for today means nobody has marked it yet, which
+            is not the same fact as nobody turning up. Show `—` and say so,
+            rather than a 0 that reads as an empty centre. */}
         <MetricCard value={attendance.length ? present : "—"} label="Staff present" href="/hr?tab=attendance"
           meter={{ of: staff.length, filled: attendance.length ? present : 0 }}
           sub={attendance.length ? `of ${staff.length} on the team` : "not marked yet today"} />
