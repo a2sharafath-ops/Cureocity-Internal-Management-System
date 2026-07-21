@@ -73,8 +73,26 @@ export default function ConsultationItem({ c }: { c: Consult }) {
             placeholder="Consultation summary (findings, plan, recommendations)…"
             style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" }}
           />
-          <button type="submit" style={{ marginTop: 8, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            Save & complete
+          {/* Only the doctor is asked, and the answer is required — an
+              unanswered null can't be distinguished from "no", so the 24h
+              prescription clock would never start and a forgotten prescription
+              would be invisible. One click, and "no" becomes a recorded fact. */}
+          {c.kind === "Doctor" && (
+            <div style={{ marginTop: 10, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 11px" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>Does this client need a prescription?</div>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, marginRight: 16, cursor: "pointer" }}>
+                <input type="radio" name="prescription_needed" value="true" required /> Yes
+              </label>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input type="radio" name="prescription_needed" value="false" required /> No
+              </label>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>
+                Answering yes starts a 24-hour clock to get it into the client&apos;s portal.
+              </div>
+            </div>
+          )}
+          <button type="submit" style={{ marginTop: 10, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            Save &amp; complete
           </button>
         </form>
       )}

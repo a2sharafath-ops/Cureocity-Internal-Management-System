@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
 import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
@@ -17,6 +18,15 @@ import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/
 import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
+import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
+import {
+  EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
+  EXPERIENCE_TRAINING_TITLE, EXPERIENCE_SEQ,
+} from "@/lib/experience";
+import {
+  INITIAL_BOOKINGS, PT_BOOKING_LABEL, BOOKING_DUE_DAYS,
+  BLOOD_PANEL, COMPREHENSIVE_CATEGORY,
+} from "@/lib/comprehensive";
 import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
 import { ivrConfig } from "@/lib/ivr/config";
@@ -696,6 +706,10 @@ export async function convertLeadWithPackage(formData: FormData) {
     package_id, used: 0, verified: true, converted_from: id, pro_id: "d1",
   }).select("id").single();
 
+  // Experience bookings move across before anything else, so the client's
+  // history starts at their first visit rather than at payment.
+  if (inserted) await carryExperienceToClient(supabase, id, inserted.id);
+
   if (inserted && package_id) {
     const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
     if (pkg && !pkg.is_facility && pkg.sessions > 0) {
@@ -813,8 +827,11 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
         end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
         price: amount, status: "active", created_by: p.name,
       });
-      if (packageCategory(package_id, pkg.is_facility) === "blueprint") {
+      const cat0 = packageCategory(package_id, pkg.is_facility);
+      if (cat0 === "blueprint") {
         await startBlueprintJourney(supabase, inserted.id, lead.name, p.name);
+      } else if (cat0 === COMPREHENSIVE_CATEGORY) {
+        await startComprehensiveJourney(supabase, inserted.id, lead.name, joined, p.name);
       }
     }
   }
@@ -893,9 +910,11 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     await supabase.from("enrollments").insert({ client_id, trainer_id: "t0", hour: 9, session: "PT" });
     await supabase.from("sessions").insert(buildSessions(client_id, "t0", 9, start, pkg.sessions));
   }
-  if (cat === "blueprint") {
+  if (cat === "blueprint" || cat === COMPREHENSIVE_CATEGORY) {
     const { data: cli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
-    await startBlueprintJourney(supabase, client_id, cli?.name ?? "Client", p.name);
+    const who = cli?.name ?? "Client";
+    if (cat === "blueprint") await startBlueprintJourney(supabase, client_id, who, p.name);
+    else await startComprehensiveJourney(supabase, client_id, who, start, p.name);
   }
   await logAudit(p, "Package purchased", pkg.name, client_id);
   revalidatePath(`/clients/${client_id}`);
@@ -968,13 +987,21 @@ export async function completeConsultation(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   const summary = String(formData.get("summary") ?? "").trim() || null;
+  // The doctor's answer on the summary. Only meaningful on a Doctor consult,
+  // and only `true` starts the 24h prescription-delivery clock — a recorded
+  // "no" is a fact, an unanswered null is not a breach.
+  const rxRaw = formData.get("prescription_needed");
+  const rxNeeded = rxRaw == null ? null : String(rxRaw) === "true";
   const supabase = createClient();
   const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   // Starts this clinician's 24h sign-off clock, and — once all three
   // disciplines are complete — the 48h delivery clock. See lib/blueprint-sla.
   await supabase.from("consultations")
-    .update({ status: "completed", summary, completed_at: new Date().toISOString() })
+    .update({
+      status: "completed", summary, completed_at: new Date().toISOString(),
+      ...(row.kind === "Doctor" && rxNeeded !== null ? { prescription_needed: rxNeeded } : {}),
+    })
     .eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
@@ -1028,9 +1055,10 @@ async function startBlueprintJourney(
   clientName: string,
   actor: string,
 ) {
-  await supabase.from("blood_requests").upsert({
-    client_id: clientId, requested_at: todayISO(), submitted: false,
-  });
+  await supabase.from("blood_requests").upsert(
+    { client_id: clientId, panel: BP_PANEL, requested_at: todayISO(), submitted: false },
+    { onConflict: "client_id,panel" },
+  );
   // The blueprint row exists from the start so the SLA sweep has somewhere to
   // record holds, rather than materialising only at the end of the journey.
   await supabase.from("blueprints").upsert(
@@ -1100,14 +1128,370 @@ export async function toggleBlueprintHold(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Everything that must happen the moment a client buys Comprehensive.
+ *
+ * Day 0 does four things, and only the first is fully automatic:
+ *   1. request the Comprehensive blood panel — a different set of reports from
+ *      the BluePrint panel, which is why blood_requests now carries a `panel`
+ *      and a client can hold one of each;
+ *   2. assign the care team, including the health coach (rotation, seniority
+ *      first) — the coach owns scheduling the diet chart explanation later;
+ *   3. queue four front-desk bookings: doctor, dietitian, trainer, and the 12
+ *      strength sessions. Prompted rather than auto-booked, so a human picks
+ *      times that suit the client;
+ *   4. open the protocol row that anchors every day-offset milestone and
+ *      holds the client-side pause.
+ *
+ * Idempotent: blood upserts on (client_id, panel), the protocol row is unique
+ * per (client, protocol, start), and tasks are skipped when an open one with
+ * the same title already exists.
+ */
+async function startComprehensiveJourney(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+  clientName: string,
+  startDate: string,
+  actor: string,
+) {
+  await supabase.from("blood_requests").upsert(
+    { client_id: clientId, panel: BLOOD_PANEL, requested_at: todayISO(), submitted: false },
+    { onConflict: "client_id,panel" },
+  );
+
+  // Doctor / dietitian / trainer come from the initial booking once it exists;
+  // coach and trainer fall back to rotation. Safe to call before any booking —
+  // it assigns what it can and fills the rest in later.
+  await assignCareTeam(supabase, clientId, { actor });
+
+  await supabase.from("care_protocols").upsert(
+    {
+      client_id: clientId, protocol: COMPREHENSIVE_CATEGORY,
+      start_date: startDate, status: "active", created_by: actor,
+    },
+    { onConflict: "client_id,protocol,start_date", ignoreDuplicates: true },
+  );
+
+  const wanted = [
+    ...INITIAL_BOOKINGS.map((b) => `${b.label} — ${clientName}`),
+    `${PT_BOOKING_LABEL} — ${clientName}`,
+  ];
+  const { data: existing } = await supabase.from("tasks")
+    .select("title").eq("client_id", clientId).neq("status", "done").in("title", wanted);
+  const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+
+  const rows = wanted.filter((t) => !taken.has(t)).map((title) => ({
+    title, client_id: clientId, type: "Ops", priority: "High", status: "todo",
+    due_date: addDaysISO(todayISO(), BOOKING_DUE_DAYS), created_by: actor,
+  }));
+  if (rows.length) await supabase.from("tasks").insert(rows);
+
+  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+    title: "Comprehensive started",
+    body: `${clientName} — blood panel requested, care team assigned, ${rows.length} booking${rows.length === 1 ? "" : "s"} to make.`,
+    href: `/clients/${clientId}`,
+    icon: "\u{1FA7A}",
+  });
+}
+
+
+/**
+ * Pause or resume the Comprehensive clocks for one client.
+ *
+ * "Unless there is a delay from the client side" — this is that escape hatch,
+ * and it covers both shapes of commitment: the 24h turnarounds and the
+ * day-offset milestones. Closing a hold banks the elapsed time rather than
+ * discarding it, so every deadline slides by exactly how long we were waiting.
+ * Held time only ever discounts work not yet delivered, so a hold cannot
+ * retroactively rescue something that already went out late.
+ */
+export async function toggleComprehensiveHold(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const supabase = createClient();
+
+  const { data: row } = await supabase.from("care_protocols")
+    .select("id, hold_since, hold_ms")
+    .eq("client_id", client_id).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active")
+    .maybeSingle();
+  if (!row) return;
+
+  const now = Date.now();
+  const open = row.hold_since ? new Date(row.hold_since).getTime() : null;
+  const patch = open
+    ? {
+        hold_since: null,
+        hold_ms: Math.max(0, Number(row.hold_ms ?? 0)) + Math.max(0, now - open),
+        hold_note: null,
+      }
+    : { hold_since: new Date(now).toISOString(), hold_note: note };
+
+  await supabase.from("care_protocols").update(patch).eq("id", row.id);
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, open ? "Comprehensive SLA resumed" : "Comprehensive SLA held", c?.name, note);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/", "layout");
+}
+
+/** A client can hold a BluePrint panel and a Comprehensive panel at once. When
+ *  they upload a report from the portal we can't tell which it satisfies, so
+ *  close the oldest outstanding one — that's the one they were asked for
+ *  first. Staff can correct it from the BluePrint page. */
+async function markEarliestPanelReceived(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+) {
+  const { data } = await supabase.from("blood_requests")
+    .select("id").eq("client_id", clientId).eq("submitted", false)
+    .order("requested_at", { ascending: true }).limit(1);
+  const row = (data ?? [])[0] as { id: string } | undefined;
+  if (row) {
+    await supabase.from("blood_requests")
+      .update({ submitted: true, submitted_date: todayISO() }).eq("id", row.id);
+  }
+}
+
+/**
+ * The Comprehensive protocol picture for one client — every clock, ready to
+ * render. Mirrors the shape the nightly sweep builds, so the panel a clinician
+ * looks at and the notification they receive can never disagree.
+ */
+export async function getComprehensiveView(clientId: string) {
+  const p = await getProfile();
+  if (!p || !canSee(p.role, "/clients")) return null;
+  const supabase = createClient();
+
+  const { data: proto } = await supabase.from("care_protocols")
+    .select("start_date, consolidated_at, approved_at, hold_since, hold_ms, hold_note")
+    .eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active")
+    .maybeSingle();
+  if (!proto) return null;
+
+  const [
+    { data: consults }, { data: charts }, { data: workouts },
+    { data: rx }, { data: sessions }, { data: appts }, { data: cp },
+  ] = await Promise.all([
+    supabase.from("consultations")
+      .select("kind, completed_at, approved_at, prescription_needed").eq("client_id", clientId),
+    supabase.from("diet_charts").select("drafted_at").eq("client_id", clientId).order("drafted_at").limit(1),
+    supabase.from("client_workouts").select("created_at, plan_weeks").eq("client_id", clientId).order("created_at").limit(5),
+    supabase.from("prescriptions").select("shared_at").eq("client_id", clientId).not("shared_at", "is", null).order("shared_at").limit(1),
+    supabase.from("sessions").select("status").eq("client_id", clientId).eq("status", "completed"),
+    supabase.from("appointments").select("type, date, status").eq("client_id", clientId),
+    supabase.from("client_packages").select("package_id").eq("client_id", clientId).eq("status", "active").maybeSingle(),
+  ]);
+
+  const plan = ((workouts ?? []) as { created_at: string; plan_weeks: number | null }[])
+    .find((w) => (w.plan_weeks ?? 1) >= 1);
+
+  return {
+    startDate: proto.start_date as string,
+    validityDays: (cp?.package_id === "comp12" ? 84 : 28),
+    consults: ((consults ?? []) as { kind: string; completed_at: string | null; approved_at: string | null; prescription_needed: boolean | null }[])
+      .map((c) => ({ kind: c.kind, completedAt: c.completed_at, approvedAt: c.approved_at, prescriptionNeeded: c.prescription_needed })),
+    consolidatedAt: proto.consolidated_at as string | null,
+    approvedAt: proto.approved_at as string | null,
+    dietDraftedAt: ((charts ?? [])[0] as { drafted_at: string | null } | undefined)?.drafted_at ?? null,
+    workoutPlannedAt: plan?.created_at ?? null,
+    prescriptionSharedAt: ((rx ?? [])[0] as { shared_at: string | null } | undefined)?.shared_at ?? null,
+    sessionsCompleted: (sessions ?? []).length,
+    appointments: ((appts ?? []) as { type: string | null; date: string | null; status: string }[]),
+    hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
+    holdNote: (proto.hold_note as string | null) ?? null,
+  };
+}
+
+
+// ---- free experience sessions (pre-sale) -----------------------------------
+
+/**
+ * Book a lead's free fitness assessment or trial training session.
+ *
+ * These are the only bookings that exist before someone pays. The database
+ * enforces one of each per lead (0080), so a second attempt fails at the
+ * index rather than here — this returns the error rather than throwing, so
+ * front desk sees "already booked" instead of a stack trace.
+ *
+ * Free, so no invoice. A no-show costs a slot, not money.
+ */
+export async function bookExperienceSession(
+  _prev: { ok?: string; error?: string },
+  formData: FormData,
+): Promise<{ ok?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { error: "Not permitted." };
+
+  const lead_id = String(formData.get("lead_id") || "");
+  const kind = String(formData.get("kind") || "");     // assessment | training
+  const date = String(formData.get("date") || "");
+  const hour = Number(formData.get("hour")) || 9;
+  const staff_id = String(formData.get("staff_id") || "") || null;
+  if (!lead_id || !date) return { error: "Pick a date." };
+  if (kind !== "assessment" && kind !== "training") return { error: "Unknown session type." };
+
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, stage").eq("id", lead_id).maybeSingle();
+  if (!lead) return { error: "Lead not found." };
+
+  if (kind === "assessment") {
+    const { error } = await supabase.from("appointments").insert({
+      lead_id, client_id: null, provider_id: staff_id,
+      type: EXPERIENCE_ASSESSMENT_TYPE, title: EXPERIENCE_ASSESSMENT_TITLE,
+      date, hour, duration_min: 45, status: "scheduled",
+      is_experience: true, created_by: p.name,
+    });
+    if (error) {
+      return { error: /duplicate|unique/i.test(error.message)
+        ? "This lead has already had their free assessment."
+        : error.message };
+    }
+  } else {
+    // sessions.trainer_id is NOT NULL, so a trainer must be chosen for a
+    // training session even though it's optional for an assessment.
+    if (!staff_id) return { error: "Pick a trainer for the training session." };
+    const { error } = await supabase.from("sessions").insert({
+      lead_id, client_id: null, trainer_id: staff_id,
+      seq: EXPERIENCE_SEQ, date, hour, status: "scheduled", is_experience: true,
+    });
+    if (error) {
+      return { error: /duplicate|unique/i.test(error.message)
+        ? "This lead has already had their free training session."
+        : error.message };
+    }
+  }
+
+  // A booked experience session means the lead is further along than
+  // "contacted" — reflect that, but never move a lead backwards.
+  if (lead.stage === "1-New Lead" || lead.stage === "2-Discovery") {
+    await supabase.from("leads").update({ stage: "4-Visit/Trial" }).eq("id", lead_id);
+  }
+
+  await logAudit(p, "Experience session booked", lead.name, `${kind} · ${date} ${hour}:00`);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+  revalidatePath("/appointments");
+  return { ok: `Booked — ${kind === "assessment" ? "free assessment" : "free training session"} on ${date}.` };
+}
+
+/** Mark an experience session attended, cancelled or a no-show. */
+export async function setExperienceStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const lead_id = String(formData.get("lead_id") || "");
+  const kind = String(formData.get("kind") || "");
+  const id = String(formData.get("id") || "");
+  const status = String(formData.get("status") || "");
+  if (!id || !["completed", "cancelled", "no_show"].includes(status)) return;
+
+  const supabase = createClient();
+  const table = kind === "training" ? "sessions" : "appointments";
+  // `sessions` has no no_show state; treat it as cancelled there so the row
+  // stays truthful rather than inventing a status the table doesn't have.
+  const value = table === "sessions" && status === "no_show" ? "cancelled" : status;
+  await supabase.from(table).update({ status: value }).eq("id", id);
+
+  await logAudit(p, "Experience session updated", kind, status);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+}
+
+/**
+ * Move a converting lead's experience bookings onto their new client record.
+ *
+ * Without this the history is orphaned: the assessment that sold them the
+ * package would vanish the moment they bought it, and the client's timeline
+ * would start at payment rather than at their first real visit.
+ */
+async function carryExperienceToClient(
+  supabase: ReturnType<typeof createClient>,
+  leadId: string,
+  clientId: string,
+) {
+  await supabase.from("appointments")
+    .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
+  await supabase.from("sessions")
+    .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
+}
+
+
+// ---- lead remarks + callbacks ----------------------------------------------
+
+/**
+ * Log a remark and set the next callback in one step.
+ *
+ * Deliberately one action, not two. The sales audit found the follow-up date
+ * filled 17% of the time while remarks said "call tomorrow" — that gap exists
+ * precisely because recording what happened and deciding what happens next
+ * were separate chores. Here the date defaults from the outcome (no answer →
+ * tomorrow, spoke → a week) so the common case is one click.
+ */
+export async function addLeadRemark(
+  _prev: { ok?: string; error?: string },
+  formData: FormData,
+): Promise<{ ok?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { error: "Not permitted." };
+
+  const lead_id = String(formData.get("lead_id") || "");
+  const body = String(formData.get("body") ?? "").trim();
+  const outcome = String(formData.get("outcome") || "note") as RemarkOutcome;
+  if (!lead_id || !body) return { error: "Write what happened." };
+
+  const supabase = createClient();
+  const { data: lead } = await supabase.from("leads").select("name, fde").eq("id", lead_id).maybeSingle();
+  if (!lead) return { error: "Lead not found." };
+
+  await supabase.from("lead_remarks").insert({
+    lead_id, body, outcome, by_name: p.name,
+  });
+
+  // Explicit date wins; otherwise fall back to the outcome's suggestion. An
+  // outcome with no suggestion (not interested) clears the callback rather
+  // than leaving a stale one to chase.
+  const explicit = String(formData.get("next_follow_up") || "").trim();
+  const offset = SUGGESTED_OFFSET[outcome] ?? null;
+  const next = explicit || (offset != null ? addDaysISO(todayISO(), offset) : null);
+
+  await supabase.from("leads").update({
+    next_follow_up: next,
+    next_follow_up_note: String(formData.get("next_note") ?? "").trim() || null,
+    follow_up_owner: p.name,
+  }).eq("id", lead_id);
+
+  await logAudit(p, "Lead remark added", lead.name, `${outcome}${next ? ` · callback ${next}` : ""}`);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+  return { ok: next ? `Saved. Next callback ${next}.` : "Saved. No callback scheduled." };
+}
+
+/** Change or clear a lead's callback date without logging a remark. */
+export async function setLeadFollowup(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const lead_id = String(formData.get("lead_id") || "");
+  const date = String(formData.get("next_follow_up") || "").trim() || null;
+  if (!lead_id) return;
+  const supabase = createClient();
+  await supabase.from("leads").update({
+    next_follow_up: date, follow_up_owner: date ? p.name : null,
+  }).eq("id", lead_id);
+  const { data: l } = await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle();
+  await logAudit(p, date ? "Lead callback set" : "Lead callback cleared", l?.name, date);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+}
+
 export async function requestBlood(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
-  await supabase.from("blood_requests").upsert({
-    client_id, requested_at: todayISO(), submitted: false,
-  });
+  await supabase.from("blood_requests").upsert(
+    { client_id, panel: BP_PANEL, requested_at: todayISO(), submitted: false },
+    { onConflict: "client_id,panel" },
+  );
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report requested", c?.name, null);
   revalidatePath("/blueprint");
@@ -1118,7 +1502,12 @@ export async function markBloodReceived(formData: FormData) {
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
-  await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", client_id);
+  // Panel comes from the form so front desk can receive either report set;
+  // defaults to the BluePrint panel, which is what every existing row is.
+  const panel = String(formData.get("panel") ?? BP_PANEL);
+  await supabase.from("blood_requests")
+    .update({ submitted: true, submitted_date: todayISO() })
+    .eq("client_id", client_id).eq("panel", panel);
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report received", c?.name, null);
   revalidatePath("/blueprint");
@@ -1193,7 +1582,9 @@ export async function uploadPortalFile(_prev: UploadState, formData: FormData): 
   const r = await storeFile(prof.client_id, kind, file, prof.name ?? "Client");
   if (r.error) return { error: r.error };
   if (kind === "blood_report") {
-    await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", prof.client_id);
+    // A client uploading a report satisfies whichever panel is still open. If
+    // both are, the earliest requested wins — they were asked for it first.
+    await markEarliestPanelReceived(supabase, prof.client_id);
   }
   await logAudit({ id: user.id, name: prof.name ?? undefined, role: "Client" }, "File uploaded (portal)", prof.name, `${kind}: ${file.name}`);
   revalidatePath("/portal");
@@ -2215,12 +2606,19 @@ export async function generateFollowups() {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
   const supabase = createClient();
-  const [{ data: clients }, { data: subs }] = await Promise.all([
+  // Same package scoping as the cron — the onboarding protocol only belongs to
+  // Comprehensive clients.
+  const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
+    supabase.from("client_packages").select("client_id, category").eq("status", "active"),
   ]);
+  const catOf = new Map(
+    ((cps ?? []) as { client_id: string; category: string | null }[]).map((r) => [r.client_id, r.category]),
+  );
   const rows = buildFollowupRows(
-    (clients ?? []) as { id: string; joined: string | null }[],
+    ((clients ?? []) as { id: string; joined: string | null }[])
+      .map((c) => ({ ...c, category: catOf.get(c.id) ?? null })),
     (subs ?? []) as { client_id: string; renews_on: string | null }[],
     p.name,
   );
@@ -3819,7 +4217,7 @@ export async function getClientQuickView(clientId: string) {
     // `requested_on` never existed — the column is `requested_at` (0005_care).
     // PostgREST errored on the select, so `blood` came back null and the first
     // two BluePrint gates in the quick drawer silently read as not-started.
-    supabase.from("blood_requests").select("submitted, requested_at").eq("client_id", clientId).maybeSingle(),
+    supabase.from("blood_requests").select("submitted, requested_at, panel").eq("client_id", clientId).order("requested_at"),
     supabase.from("consultations").select("kind, approved, status").eq("client_id", clientId),
     supabase.from("assessments").select("id, kind, due_date, scheduled_date, status, staff(name)").eq("client_id", clientId).order("due_date", { ascending: false }).limit(6),
     supabase.from("files").select("id, name, kind, created_at").eq("client_id", clientId).order("created_at", { ascending: false }).limit(8),
@@ -3846,7 +4244,13 @@ export async function getClientQuickView(clientId: string) {
     invoices: invoices ?? [],
     appointments: appts ?? [],
     blueprint: bp ?? null,
-    blood: blood ?? null,
+    // Multi-panel since 0078: the drawer wants whichever panel is still
+    // outstanding, falling back to the latest so a finished client still shows
+    // a status rather than a blank gate.
+    blood: (() => {
+      const rows = (blood ?? []) as { submitted: boolean; requested_at: string | null; panel: string }[];
+      return rows.find((b) => !b.submitted) ?? rows[rows.length - 1] ?? null;
+    })(),
     assessments: assessments ?? [],
     files: files ?? [],
     measurement: (measures ?? [])[0] ?? null,

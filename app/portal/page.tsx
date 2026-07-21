@@ -54,7 +54,9 @@ export default async function PortalHome() {
     supabase.from("sessions").select("seq, date, hour, status").eq("client_id", client.id).order("seq"),
     supabase.from("consultations").select("kind, summary, created_at").eq("client_id", client.id).eq("shared", true).order("created_at", { ascending: false }),
     supabase.from("blueprints").select("generated, generated_date, consolidated, scores").eq("client_id", client.id).eq("generated", true).maybeSingle(),
-    supabase.from("blood_requests").select("submitted, submitted_date, requested_at").eq("client_id", client.id).maybeSingle(),
+    // multi-panel since 0078 — maybeSingle() would throw once a client holds
+    // both a BluePrint and a Comprehensive panel
+    supabase.from("blood_requests").select("submitted, submitted_date, requested_at, panel").eq("client_id", client.id).order("requested_at"),
     supabase.from("files").select("id, name, kind, path, created_at").eq("client_id", client.id).order("created_at", { ascending: false }),
   ]);
 
@@ -76,14 +78,37 @@ export default async function PortalHome() {
   const messages = (msgRows ?? []) as Msg[];
 
   // read-only medical record (RLS scopes to own rows)
-  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }] = await Promise.all([
+  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }, { data: rxRows }, { data: chartRows }] = await Promise.all([
     supabase.from("problems").select("description, status").eq("client_id", client.id).eq("status", "active"),
     supabase.from("allergies").select("substance, severity").eq("client_id", client.id),
     supabase.from("medications").select("name, dose, frequency").eq("client_id", client.id).eq("status", "active"),
+    // Prescriptions the doctor has actually delivered. `shared_at` is the
+    // delivery gate — a signed-but-unshared prescription is still the
+    // doctor's draft and must not appear here.
+    supabase.from("prescriptions")
+      .select("id, status, notes, provider, signed_date, shared_at, prescription_items(drug, dose, frequency, route, duration, instructions)")
+      .eq("client_id", client.id).not("shared_at", "is", null)
+      .order("shared_at", { ascending: false }),
+    // Only published charts. RLS already restricts this, but saying it here
+    // means a draft can't leak through a future policy change either.
+    supabase.from("diet_charts")
+      .select("id, version, calories, protein, notes, meals, published_at, by_name")
+      .eq("client_id", client.id).eq("status", "Published")
+      .order("version", { ascending: false }).limit(1),
   ]);
   const myProblems = (emrProblems ?? []) as { description: string; status: string }[];
   const myAllergies = (emrAllergies ?? []) as { substance: string; severity: string }[];
   const myMeds = (emrMeds ?? []) as { name: string; dose: string | null; frequency: string | null }[];
+  type RxItem = { drug: string; dose: string | null; frequency: string | null; route: string | null; duration: string | null; instructions: string | null };
+  const myRx = (rxRows ?? []) as unknown as {
+    id: string; status: string; notes: string | null; provider: string | null;
+    signed_date: string | null; shared_at: string | null; prescription_items: RxItem[];
+  }[];
+  const myChart = ((chartRows ?? []) as unknown as {
+    id: string; version: number; calories: number | null; protein: number | null;
+    notes: string | null; meals: { meal?: string; items?: string }[] | null;
+    published_at: string | null; by_name: string | null;
+  }[])[0] ?? null;
   const hasEmr = myProblems.length > 0 || myAllergies.length > 0 || myMeds.length > 0;
 
   const { data: apptRows } = await supabase
@@ -130,7 +155,11 @@ export default async function PortalHome() {
   const sess = (sessions ?? []) as { seq: number; date: string; hour: number; status: string }[];
   const shared = (consults ?? []) as { kind: string; summary: string | null; created_at: string }[];
   const bp = bpData as { generated: boolean; generated_date: string | null; consolidated: string | null; scores: BpScores | null } | null;
-  const blood = bloodData as { submitted: boolean; submitted_date: string | null; requested_at: string | null } | null;
+  // The panel the client still owes us, if any — earliest requested first.
+  // Falls back to the most recent row so a fully-submitted client still sees
+  // their status rather than a blank.
+  const bloodRows = (bloodData ?? []) as { submitted: boolean; submitted_date: string | null; requested_at: string | null; panel: string }[];
+  const blood = bloodRows.find((b) => !b.submitted) ?? bloodRows[bloodRows.length - 1] ?? null;
 
   const done = sess.filter((s) => s.status === "completed").length;
   const upcoming = sess.filter((s) => s.status === "scheduled");
@@ -139,7 +168,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -366,6 +395,60 @@ export default async function PortalHome() {
               {myMeds.length ? myMeds.map((md, i) => <div key={i}>• {md.name}{md.dose ? ` ${md.dose}` : ""}{md.frequency ? ` · ${md.frequency}` : ""}</div>) : <div style={{ color: "var(--muted)" }}>None recorded</div>}
             </div>
           </div>
+
+          {/* Prescriptions. These existed in the database and were readable by
+              the client under RLS, but rendered nowhere outside the EMR chart —
+              so a prescription the doctor wrote was invisible to the person it
+              was written for. `shared_at` gates delivery. */}
+          {myRx.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>Prescriptions</div>
+              {myRx.map((rx) => (
+                <div key={rx.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: "var(--surface)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                    <b style={{ fontSize: 13 }}>{rx.provider ?? "Your doctor"}</b>
+                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ?? ""}</span>
+                    <span style={{ flex: 1 }} />
+                    <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>Issued</span>
+                  </div>
+                  {(rx.prescription_items ?? []).map((it, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "3px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+                      <b>{it.drug}</b>{it.dose ? ` — ${it.dose}` : ""}{it.frequency ? ` · ${it.frequency}` : ""}
+                      {it.duration ? ` · ${it.duration}` : ""}
+                      {it.instructions && <div style={{ color: "var(--muted)", fontSize: 12 }}>{it.instructions}</div>}
+                    </div>
+                  ))}
+                  {rx.notes && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{rx.notes}</div>}
+                </div>
+              ))}
+              <div style={{ color: "var(--muted)", fontSize: 11 }}>
+                Always follow your doctor&apos;s instructions. Contact the centre if anything is unclear.
+              </div>
+            </div>
+          )}
+
+          {/* Published diet chart. Same story — RLS already allowed the client
+              to read published charts; nothing ever showed them one. */}
+          {myChart && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>Your diet chart</div>
+              <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: "var(--surface)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                  <b style={{ fontSize: 13 }}>Version {myChart.version}</b>
+                  {myChart.by_name && <span style={{ color: "var(--muted)", fontSize: 12 }}>by {myChart.by_name}</span>}
+                  <span style={{ flex: 1 }} />
+                  {myChart.calories != null && <span style={{ fontSize: 12 }}>{myChart.calories} kcal</span>}
+                  {myChart.protein != null && <span style={{ fontSize: 12, color: "var(--muted)" }}>· {myChart.protein}g protein</span>}
+                </div>
+                {(myChart.meals ?? []).map((m, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: "3px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+                    <b>{m.meal ?? `Meal ${i + 1}`}</b>{m.items ? ` — ${m.items}` : ""}
+                  </div>
+                ))}
+                {myChart.notes && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{myChart.notes}</div>}
+              </div>
+            </div>
+          )}
         </>
       )}
 

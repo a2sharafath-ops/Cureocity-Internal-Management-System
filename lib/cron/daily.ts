@@ -5,6 +5,8 @@ import { tplAppointmentReminder } from "@/lib/email/templates";
 import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
+import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
+import { runLeadFollowups } from "@/lib/cron/lead-followups";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -107,12 +109,21 @@ async function sendReminders(supabase: Admin) {
 }
 
 async function generateFollowups(supabase: Admin) {
-  const [{ data: clients }, { data: subs }] = await Promise.all([
+  // The onboarding protocol is the Comprehensive care plan, so the client's
+  // package category has to come along — without it every client, including
+  // BluePrint and facility-only members, was queued for diet follow-ups they
+  // never bought.
+  const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
+    supabase.from("client_packages").select("client_id, category").eq("status", "active"),
   ]);
+  const catOf = new Map(
+    ((cps ?? []) as { client_id: string; category: string | null }[]).map((r) => [r.client_id, r.category]),
+  );
   const rows = buildFollowupRows(
-    (clients ?? []) as { id: string; joined: string | null }[],
+    ((clients ?? []) as { id: string; joined: string | null }[])
+      .map((c) => ({ ...c, category: catOf.get(c.id) ?? null })),
     (subs ?? []) as { client_id: string; renews_on: string | null }[],
     "auto",
   );
@@ -127,17 +138,27 @@ export async function runDaily() {
   const followups = await generateFollowups(supabase);
   // BluePrint turnaround: warn before the 24h/48h deadlines, escalate after.
   const sla = await runBlueprintSla(supabase);
+  // Comprehensive turnarounds + day-offset milestones.
+  const comp = await runComprehensiveSla(supabase);
+  // Lead callbacks: remind the owner, escalate to management after 3 days.
+  const cb = await runLeadFollowups(supabase, todayISO());
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
     detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`
-      + ` · blueprint SLA ${sla.scanned} scanned, ${sla.warnings} warned, ${sla.breaches} breached`,
+      + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
+      + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`
+      + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`
+      + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",
     body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`
-      + (sla.breaches ? ` · ${sla.breaches} BluePrint SLA breach${sla.breaches === 1 ? "" : "es"}` : ""),
+      + (cb.escalated ? ` · ${cb.escalated} callback${cb.escalated === 1 ? "" : "s"} escalated` : "")
+      + (sla.breaches + comp.breaches
+          ? ` · ${sla.breaches + comp.breaches} care SLA breach${sla.breaches + comp.breaches === 1 ? "" : "es"}`
+          : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, sla, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, comp, callbacks: cb, ranAt: new Date().toISOString() };
 }
