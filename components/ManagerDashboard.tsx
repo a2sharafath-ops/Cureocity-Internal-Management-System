@@ -162,8 +162,8 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       {/* 1 — MONEY (collections only) */}
       <div style={sectionTitle}>Money</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "up-good")} minWidth={180} />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "up-bad")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "revenue_month")} minWidth={180} />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "outstanding")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <MetricCard label="Follow-ups pending" value={String(followups.length)} sub={`${followups.filter((f) => f.due_date < today).length} overdue`} color={followups.some((f) => f.due_date < today) ? "var(--amber-text-soft)" : undefined} minWidth={170} />
       </div>
 

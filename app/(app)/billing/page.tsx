@@ -6,7 +6,8 @@ import { canSee, canManageInvoices } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
-import { monthTrend, prevMonthKey, sumInMonth, type Direction } from "@/lib/trend";
+import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
+import type { MetricKey } from "@/lib/metric-directions";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import PayOnlineButton from "@/components/PayOnlineButton";
@@ -70,9 +71,9 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   const refundedPrev = sumInMonth(refunded, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const kpi = (label: string, value: string, sub?: string, now?: number, prev?: number, dir: Direction = "up-good") => (
+  const kpi = (label: string, value: string, sub?: string, now?: number, prev?: number, metric: MetricKey = "revenue_month") => (
     <MetricCard label={label} value={value} sub={sub} minWidth={170}
-      trend={now == null ? undefined : monthTrend(now, prev, dir)} />
+      trend={now == null ? undefined : monthTrend(now, prev, metric)} />
   );
   const statusChip = (s: string) => {
     const map: Record<string, [string, string]> = { Paid: ["var(--green-bg)", "var(--green-text)"], Unpaid: ["var(--amber-bg)", "var(--amber-text)"], Refunded: ["var(--neutral-bg)", "var(--muted)"] };
@@ -129,10 +130,10 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Invoices · subscriptions &amp; renewals · refunds &amp; credits · dunning</p>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
-        {kpi("Revenue this month", money(revenue), `${invoices.filter((i) => i.status === "Paid" && (i.paid_date ?? "").startsWith(month)).length} paid invoices`, revenue, revenuePrev, "up-good")}
-        {kpi("Outstanding", money(unpaid), `${unpaidInv.length} unpaid`, unpaid, unpaidPrev, "up-bad")}
-        {kpi("Overdue", money(overdue.reduce((s, i) => s + Number(i.amount), 0)), `${overdue.length} invoices`, overdue.reduce((s, i) => s + Number(i.amount), 0), overduePrev, "up-bad")}
-        {kpi("Refunded", money(refunded.reduce((s, i) => s + Number(i.amount), 0)), `${refunded.length} total`, refunded.reduce((s, i) => s + Number(i.amount), 0), refundedPrev, "up-bad")}
+        {kpi("Revenue this month", money(revenue), `${invoices.filter((i) => i.status === "Paid" && (i.paid_date ?? "").startsWith(month)).length} paid invoices`, revenue, revenuePrev, "revenue_month")}
+        {kpi("Outstanding", money(unpaid), `${unpaidInv.length} unpaid`, unpaid, unpaidPrev, "outstanding")}
+        {kpi("Overdue", money(overdue.reduce((s, i) => s + Number(i.amount), 0)), `${overdue.length} invoices`, overdue.reduce((s, i) => s + Number(i.amount), 0), overduePrev, "overdue")}
+        {kpi("Refunded", money(refunded.reduce((s, i) => s + Number(i.amount), 0)), `${refunded.length} total`, refunded.reduce((s, i) => s + Number(i.amount), 0), refundedPrev, "refunded")}
       </div>
 
       {/* tabs */}
