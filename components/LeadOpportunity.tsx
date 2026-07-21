@@ -12,7 +12,8 @@
 
 import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { setLeadOpportunity, disqualifyLead, requalifyLead, DISQUALIFY_REASONS } from "@/lib/actions";
+import { setLeadOpportunity, disqualifyLead, requalifyLead } from "@/lib/actions";
+import { DISQUALIFY_REASONS } from "@/lib/lead-followup";
 import { STAGE_PROBABILITY } from "@/lib/pipeline";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");

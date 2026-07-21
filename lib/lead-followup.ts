@@ -111,3 +111,22 @@ export const SUGGESTED_OFFSET: Record<RemarkOutcome, number | null> = {
   not_interested: null,
   note: null,
 };
+
+/**
+ * Reasons a lead was never a real opportunity — distinct from LOST, which
+ * means we competed and lost.
+ *
+ * Lives here rather than in lib/actions.ts because that file is `"use server"`
+ * and may only export async functions. A const export there type-checks
+ * cleanly and then throws at request time, taking the whole page with it.
+ */
+export const DISQUALIFY_REASONS = [
+  { key: "unreachable",     label: "Never reachable" },
+  { key: "wrong_number",    label: "Wrong number" },
+  { key: "duplicate",       label: "Duplicate of another lead" },
+  { key: "out_of_area",     label: "Outside our area" },
+  { key: "not_our_service", label: "Wants something we don't offer" },
+  { key: "spam",            label: "Spam / test entry" },
+] as const;
+
+export type DisqualifyReason = (typeof DISQUALIFY_REASONS)[number]["key"];
