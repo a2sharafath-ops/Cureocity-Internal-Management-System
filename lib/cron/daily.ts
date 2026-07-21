@@ -9,6 +9,7 @@ import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
 import { runLeadFollowups } from "@/lib/cron/lead-followups";
 import { runLeadCoverage } from "@/lib/cron/lead-coverage";
 import { runLeadIdle } from "@/lib/cron/lead-idle";
+import { runLeadStagnation } from "@/lib/cron/lead-stagnation";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -149,6 +150,9 @@ export async function runDaily() {
   const cov = await runLeadCoverage(supabase, todayISO());
   // High-value deals going quiet. Silent until leads carry an expected_value.
   const idle = await runLeadIdle(supabase, todayISO());
+  // Leads where work is happening but nothing progresses. Silent until the
+  // 0086 stage clock has recorded real transitions.
+  const stag = await runLeadStagnation(supabase, todayISO());
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
@@ -158,7 +162,8 @@ export async function runDaily() {
       + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`
       + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`
       + ` · coverage digests ${cov.sent} sent to ${cov.owners} owner(s), ${cov.leads} leads with no next step`
-      + ` · idle deals ${idle.idle} flagged / ${idle.escalated} escalated of ${idle.scanned} valued`,
+      + ` · idle deals ${idle.idle} flagged / ${idle.escalated} escalated of ${idle.scanned} valued`
+      + ` · stagnant ${stag.stagnant} / ${stag.escalated} stalled of ${stag.scanned} clocked, ${stag.digests} digest(s)`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",
@@ -170,5 +175,5 @@ export async function runDaily() {
           : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, sla, comp, callbacks: cb, coverage: cov, idle, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, comp, callbacks: cb, coverage: cov, idle, stagnation: stag, ranAt: new Date().toISOString() };
 }
