@@ -9,7 +9,7 @@ import TasksView, { type TaskRow } from "@/components/TasksView";
 
 export const dynamic = "force-dynamic";
 
-type Raw = { id: string; title: string; type: string; priority: string; status: string; due_date: string | null; assignee_id: string | null; staff: { name: string } | null; clients: { id: string; name: string } | null };
+type Raw = { id: string; title: string; type: string; priority: string; status: string; due_date: string | null; assignee_id: string | null; staff: { name: string } | null; clients: { id: string; name: string } | null; leads: { id: string; name: string } | null };
 
 export default async function TasksPage() {
   const me = await getProfile();
@@ -17,7 +17,7 @@ export default async function TasksPage() {
 
   const supabase = createClient();
   const [{ data: taskData }, { data: staffData }, { data: clientData }] = await Promise.all([
-    supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, staff(name), clients(id, name)").order("created_at", { ascending: false }),
+    supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, staff(name), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
     supabase.from("staff").select("id, name").order("name"),
     supabase.from("clients").select("id, name").order("name"),
   ]);
@@ -28,6 +28,10 @@ export default async function TasksPage() {
   const tasks: TaskRow[] = raw.map((t) => ({
     id: t.id, title: t.title, type: t.type, priority: t.priority, status: t.status, due_date: t.due_date,
     assignee: t.staff?.name ?? null, clientId: t.clients?.id ?? null, clientName: t.clients?.name ?? null,
+    // A task can belong to a lead instead of a client (0085). Without this the
+    // auto-created "call this new lead" task would show a dash in the Client
+    // column with no way back to the record it's about.
+    leadId: t.leads?.id ?? null, leadName: t.leads?.name ?? null,
   }));
   const staffNames = Array.from(new Set(tasks.map((t) => t.assignee).filter(Boolean) as string[]));
   const types = Array.from(new Set(tasks.map((t) => t.type).filter(Boolean)));

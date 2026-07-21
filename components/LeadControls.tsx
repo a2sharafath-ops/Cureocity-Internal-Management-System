@@ -12,7 +12,7 @@ const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 
 export type Lead = {
-  id: string; name: string; phone: string | null; source: string | null; campaign: string | null; interest: string | null;
+  id: string; name: string; phone: string | null; email: string | null; source: string | null; campaign: string | null; interest: string | null;
   urgency: string | null; history: string | null; goals: string | null; location: string | null;
   budget: string | null; profession: string | null; fde: string | null; stage: string | null;
   owner_id?: string | null;
@@ -42,6 +42,12 @@ export function LeadFields({ lead, campaigns, staff }: { lead?: Lead; campaigns:
         <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Phone</label><input style={inputControl} name="phone" defaultValue={lead?.phone ?? ""} /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ display: "grid", gap: 3 }}>
+          <label style={lbl}>Email <span style={{ opacity: .6 }}>(optional)</span></label>
+          {/* Optional on purpose — this is a phone-first business. When given,
+              it triggers an acknowledgement email on save. */}
+          <input style={inputControl} type="email" name="email" defaultValue={lead?.email ?? ""} placeholder="name@example.com" />
+        </div>
         <Sel name="source" label="Source" opts={SOURCES} def={lead?.source} />
         <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Campaign</label><input style={inputControl} name="campaign" list="lead-campaigns" defaultValue={lead?.campaign ?? ""} placeholder="e.g. Summer Shred '26" /><datalist id="lead-campaigns">{campaigns.map((c) => <option key={c} value={c} />)}</datalist></div>
         <div style={{ display: "grid", gap: 3 }}>

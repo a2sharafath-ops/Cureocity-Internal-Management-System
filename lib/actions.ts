@@ -34,7 +34,7 @@ import { ivrConfig } from "@/lib/ivr/config";
 import crypto from "crypto";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 import { sendEmail } from "@/lib/email/send";
-import { renderChoice, tplInvoiceCreated, tplPaymentReceived, type Template } from "@/lib/email/templates";
+import { renderChoice, tplInvoiceCreated, tplPaymentReceived, tplLeadEnquiry, type Template } from "@/lib/email/templates";
 
 
 // ---- helpers ---------------------------------------------------------------
@@ -653,7 +653,7 @@ export async function updateLeadStage(formData: FormData) {
   revalidatePath("/leads");
 }
 
-const LEAD_FIELDS = ["name", "phone", "source", "campaign", "interest", "urgency", "history", "goals", "location", "budget", "profession", "fde", "objection", "notes"];
+const LEAD_FIELDS = ["name", "phone", "email", "source", "campaign", "interest", "urgency", "history", "goals", "location", "budget", "profession", "fde", "objection", "notes"];
 
 export async function createLead(formData: FormData) {
   const p = await getProfile();
@@ -683,7 +683,42 @@ export async function createLead(formData: FormData) {
   row.score = fresh.total;
   row.tier = fresh.tier;
   row.scored_at = new Date().toISOString();
-  await supabase.from("leads").insert(row);
+  const { data: created } = await supabase.from("leads").insert(row).select("id").maybeSingle();
+  const leadId = (created as { id: string } | null)?.id ?? null;
+
+  // ---- first response ------------------------------------------------------
+  // Speed to first contact is the strongest lever on conversion, and nothing in
+  // the app used to prompt it: a new lead sat inert until somebody happened to
+  // look at the list. Two things now happen immediately.
+  if (leadId) {
+    // 1. A task for the owner. Always — every lead has a phone number, and this
+    //    works whether or not an email was given.
+    const owner = (row.owner_id as string | null) ?? null;
+    if (owner) {
+      await supabase.from("tasks").insert({
+        title: `Call ${name} — new lead`,
+        assignee_id: owner,
+        lead_id: leadId,
+        type: "Follow-up",
+        priority: "High",
+        status: "todo",
+        due_date: todayISO(),
+        created_by: "auto",
+      });
+    }
+
+    // 2. An acknowledgement to the lead, when we have somewhere to send it.
+    //    tplLeadEnquiry, not tplWelcome — the latter opens "Your membership is
+    //    active", which is untrue for someone who has just enquired.
+    const email = (row.email as string | null) ?? null;
+    if (email) {
+      await notifyEmail({
+        supabase, to: email, leadId, template: "lead_enquiry",
+        tpl: tplLeadEnquiry(name), actor: p.name,
+      });
+    }
+  }
+
   await logAudit(p, "Lead added", name, null);
   revalidatePath("/leads");
 }
@@ -3126,18 +3161,19 @@ async function notifyEmail(opts: {
   supabase: ReturnType<typeof createClient>;
   to: string | null | undefined;
   clientId?: string | null;
+  leadId?: string | null;
   template: string;
   tpl: Template;
   actor?: string | null;
 }) {
-  const { supabase, to, clientId, template, tpl, actor } = opts;
+  const { supabase, to, clientId, leadId, template, tpl, actor } = opts;
   if (!to) return;
   let result;
   try { result = await sendEmail(to, tpl.subject, tpl.html); }
   catch { result = { status: "failed" as const, error: "Unexpected" }; }
   try {
     await supabase.from("email_log").insert({
-      to_email: to, client_id: clientId ?? null, template, subject: tpl.subject,
+      to_email: to, client_id: clientId ?? null, lead_id: leadId ?? null, template, subject: tpl.subject,
       status: result.status, provider: "resend",
       provider_id: "providerId" in result ? result.providerId ?? null : null,
       error: "error" in result ? result.error ?? null : null,
