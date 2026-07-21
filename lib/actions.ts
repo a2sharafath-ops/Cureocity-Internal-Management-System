@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
 import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
@@ -17,6 +18,10 @@ import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/
 import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
+import {
+  INITIAL_BOOKINGS, PT_BOOKING_LABEL, BOOKING_DUE_DAYS,
+  BLOOD_PANEL, COMPREHENSIVE_CATEGORY,
+} from "@/lib/comprehensive";
 import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
 import { ivrConfig } from "@/lib/ivr/config";
@@ -813,8 +818,11 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
         end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
         price: amount, status: "active", created_by: p.name,
       });
-      if (packageCategory(package_id, pkg.is_facility) === "blueprint") {
+      const cat0 = packageCategory(package_id, pkg.is_facility);
+      if (cat0 === "blueprint") {
         await startBlueprintJourney(supabase, inserted.id, lead.name, p.name);
+      } else if (cat0 === COMPREHENSIVE_CATEGORY) {
+        await startComprehensiveJourney(supabase, inserted.id, lead.name, joined, p.name);
       }
     }
   }
@@ -893,9 +901,11 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     await supabase.from("enrollments").insert({ client_id, trainer_id: "t0", hour: 9, session: "PT" });
     await supabase.from("sessions").insert(buildSessions(client_id, "t0", 9, start, pkg.sessions));
   }
-  if (cat === "blueprint") {
+  if (cat === "blueprint" || cat === COMPREHENSIVE_CATEGORY) {
     const { data: cli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
-    await startBlueprintJourney(supabase, client_id, cli?.name ?? "Client", p.name);
+    const who = cli?.name ?? "Client";
+    if (cat === "blueprint") await startBlueprintJourney(supabase, client_id, who, p.name);
+    else await startComprehensiveJourney(supabase, client_id, who, start, p.name);
   }
   await logAudit(p, "Package purchased", pkg.name, client_id);
   revalidatePath(`/clients/${client_id}`);
@@ -1028,9 +1038,10 @@ async function startBlueprintJourney(
   clientName: string,
   actor: string,
 ) {
-  await supabase.from("blood_requests").upsert({
-    client_id: clientId, requested_at: todayISO(), submitted: false,
-  });
+  await supabase.from("blood_requests").upsert(
+    { client_id: clientId, panel: BP_PANEL, requested_at: todayISO(), submitted: false },
+    { onConflict: "client_id,panel" },
+  );
   // The blueprint row exists from the start so the SLA sweep has somewhere to
   // record holds, rather than materialising only at the end of the journey.
   await supabase.from("blueprints").upsert(
@@ -1098,6 +1109,72 @@ export async function toggleBlueprintHold(formData: FormData) {
   await logAudit(p, open ? "BluePrint SLA resumed" : "BluePrint SLA held", c?.name, note);
   revalidatePath("/blueprint");
   revalidatePath("/", "layout");
+}
+
+/**
+ * Everything that must happen the moment a client buys Comprehensive.
+ *
+ * Day 0 does four things, and only the first is fully automatic:
+ *   1. request the Comprehensive blood panel — a different set of reports from
+ *      the BluePrint panel, which is why blood_requests now carries a `panel`
+ *      and a client can hold one of each;
+ *   2. assign the care team, including the health coach (rotation, seniority
+ *      first) — the coach owns scheduling the diet chart explanation later;
+ *   3. queue four front-desk bookings: doctor, dietitian, trainer, and the 12
+ *      strength sessions. Prompted rather than auto-booked, so a human picks
+ *      times that suit the client;
+ *   4. open the protocol row that anchors every day-offset milestone and
+ *      holds the client-side pause.
+ *
+ * Idempotent: blood upserts on (client_id, panel), the protocol row is unique
+ * per (client, protocol, start), and tasks are skipped when an open one with
+ * the same title already exists.
+ */
+async function startComprehensiveJourney(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+  clientName: string,
+  startDate: string,
+  actor: string,
+) {
+  await supabase.from("blood_requests").upsert(
+    { client_id: clientId, panel: BLOOD_PANEL, requested_at: todayISO(), submitted: false },
+    { onConflict: "client_id,panel" },
+  );
+
+  // Doctor / dietitian / trainer come from the initial booking once it exists;
+  // coach and trainer fall back to rotation. Safe to call before any booking —
+  // it assigns what it can and fills the rest in later.
+  await assignCareTeam(supabase, clientId, { actor });
+
+  await supabase.from("care_protocols").upsert(
+    {
+      client_id: clientId, protocol: COMPREHENSIVE_CATEGORY,
+      start_date: startDate, status: "active", created_by: actor,
+    },
+    { onConflict: "client_id,protocol,start_date", ignoreDuplicates: true },
+  );
+
+  const wanted = [
+    ...INITIAL_BOOKINGS.map((b) => `${b.label} — ${clientName}`),
+    `${PT_BOOKING_LABEL} — ${clientName}`,
+  ];
+  const { data: existing } = await supabase.from("tasks")
+    .select("title").eq("client_id", clientId).neq("status", "done").in("title", wanted);
+  const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+
+  const rows = wanted.filter((t) => !taken.has(t)).map((title) => ({
+    title, client_id: clientId, type: "Ops", priority: "High", status: "todo",
+    due_date: addDaysISO(todayISO(), BOOKING_DUE_DAYS), created_by: actor,
+  }));
+  if (rows.length) await supabase.from("tasks").insert(rows);
+
+  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+    title: "Comprehensive started",
+    body: `${clientName} — blood panel requested, care team assigned, ${rows.length} booking${rows.length === 1 ? "" : "s"} to make.`,
+    href: `/clients/${clientId}`,
+    icon: "\u{1FA7A}",
+  });
 }
 
 export async function requestBlood(formData: FormData) {
@@ -2215,12 +2292,19 @@ export async function generateFollowups() {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
   const supabase = createClient();
-  const [{ data: clients }, { data: subs }] = await Promise.all([
+  // Same package scoping as the cron — the onboarding protocol only belongs to
+  // Comprehensive clients.
+  const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
+    supabase.from("client_packages").select("client_id, category").eq("status", "active"),
   ]);
+  const catOf = new Map(
+    ((cps ?? []) as { client_id: string; category: string | null }[]).map((r) => [r.client_id, r.category]),
+  );
   const rows = buildFollowupRows(
-    (clients ?? []) as { id: string; joined: string | null }[],
+    ((clients ?? []) as { id: string; joined: string | null }[])
+      .map((c) => ({ ...c, category: catOf.get(c.id) ?? null })),
     (subs ?? []) as { client_id: string; renews_on: string | null }[],
     p.name,
   );

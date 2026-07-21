@@ -11,6 +11,17 @@ function addDaysUTC(iso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Which clients get the onboarding protocol at all. It is the Comprehensive
+ *  care plan — day 10 and 21 are diet follow-ups, day 28 is the doctor's
+ *  month-end review — so a BluePrint client or a facility-only member should
+ *  never have been queued for it. Before this filter every client got all
+ *  four rows regardless of what they bought. */
+export type ProtocolClient = { id: string; joined: string | null; category?: string | null };
+
+export function onProtocol(c: ProtocolClient): boolean {
+  return (c.category ?? "").toLowerCase() === "comprehensive";
+}
+
 export type FollowupRow = {
   client_id: string; kind: string; label: string; due_date: string;
   priority: string; created_by: string; category: string; day: number | null; mode: string; stage: string;
@@ -18,20 +29,24 @@ export type FollowupRow = {
 
 // Protocol day → discipline + label + default mode (mirrors the prototype care plan).
 const DAY_PROTOCOL: Record<number, { category: string; label: string; mode: string }> = {
-  2:  { category: "Fitness Services",     label: "Day 2 fitness check-in",  mode: "Offline" },
+  // Day 2 is the diet chart explanation, per services.day_offset and the
+  // Comprehensive protocol — not a fitness check-in. The old label was the one
+  // place the two definitions disagreed.
+  2:  { category: "Diet Consultation",   label: "Day 2 diet chart explanation", mode: "Offline" },
   10: { category: "Diet Consultation",   label: "Day 10 diet follow-up",   mode: "Online" },
   21: { category: "Diet Consultation",   label: "Day 21 diet review",      mode: "Offline" },
   28: { category: "Doctor Consultation", label: "Day 28 doctor follow-up", mode: "Offline" },
 };
 
 export function buildFollowupRows(
-  clients: { id: string; joined: string | null }[],
+  clients: ProtocolClient[],
   subs: { client_id: string; renews_on: string | null }[],
   createdBy: string,
 ): FollowupRow[] {
   const rows: FollowupRow[] = [];
   for (const c of clients) {
     if (!c.joined) continue;
+    if (!onProtocol(c)) continue;   // renewal rows below still apply to everyone
     for (const off of ONBOARDING_OFFSETS) {
       const p = DAY_PROTOCOL[off];
       rows.push({

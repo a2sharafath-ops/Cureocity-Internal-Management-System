@@ -107,12 +107,21 @@ async function sendReminders(supabase: Admin) {
 }
 
 async function generateFollowups(supabase: Admin) {
-  const [{ data: clients }, { data: subs }] = await Promise.all([
+  // The onboarding protocol is the Comprehensive care plan, so the client's
+  // package category has to come along — without it every client, including
+  // BluePrint and facility-only members, was queued for diet follow-ups they
+  // never bought.
+  const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
+    supabase.from("client_packages").select("client_id, category").eq("status", "active"),
   ]);
+  const catOf = new Map(
+    ((cps ?? []) as { client_id: string; category: string | null }[]).map((r) => [r.client_id, r.category]),
+  );
   const rows = buildFollowupRows(
-    (clients ?? []) as { id: string; joined: string | null }[],
+    ((clients ?? []) as { id: string; joined: string | null }[])
+      .map((c) => ({ ...c, category: catOf.get(c.id) ?? null })),
     (subs ?? []) as { client_id: string; renews_on: string | null }[],
     "auto",
   );
