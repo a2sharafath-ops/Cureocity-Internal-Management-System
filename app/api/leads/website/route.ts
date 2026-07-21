@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ingestLead, validate } from "@/lib/ingest-lead";
+import { ingestLead, pickOwner, validate } from "@/lib/ingest-lead";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +63,16 @@ export async function POST(req: Request) {
   const supabase = createAdminClient();
 
   // Every website lead needs an owner or it is invisible to the daily digests
-  // and the callback sweep. WEBSITE_LEAD_OWNER holds a staff id; if unset, the
-  // lead is still captured — losing an enquiry is worse than an unowned one —
-  // but it will surface in the "unowned" alerts rather than vanish.
-  const ownerId = process.env.WEBSITE_LEAD_OWNER || null;
+  // and the callback sweep. WEBSITE_LEAD_OWNER takes one staff id, or several
+  // comma-separated to share them out:
+  //
+  //   WEBSITE_LEAD_OWNER=s1                  -> always Sini
+  //   WEBSITE_LEAD_OWNER=s1,thamanna-nazer   -> whoever currently has fewer
+  //
+  // If unset the lead is still captured — losing an enquiry is worse than an
+  // unowned one — but it surfaces in the "unowned" alerts rather than vanishing.
+  const configured = (process.env.WEBSITE_LEAD_OWNER ?? "").split(",");
+  const ownerId = await pickOwner(supabase, configured);
 
   const result = await ingestLead(supabase, checked.value, { ownerId });
 

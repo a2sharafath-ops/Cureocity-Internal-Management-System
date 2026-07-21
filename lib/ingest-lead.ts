@@ -37,6 +37,43 @@ export type IngestInput = {
   notes?: string | null;
 };
 
+/**
+ * Choose which owner gets the next externally-captured lead.
+ *
+ * Least-loaded wins, not strict alternation. Alternation looks fairer but
+ * isn't: if one person is off for a week, every other lead still lands in a
+ * queue nobody is working. Counting live open leads self-corrects — whoever is
+ * actually carrying less gets the next one, and someone returning from leave
+ * catches up naturally instead of starting behind.
+ *
+ * Ties break on the order given, so the behaviour is deterministic and testable.
+ */
+export async function pickOwner(supabase: Sb, candidates: string[]): Promise<string | null> {
+  const ids = candidates.map((c) => c.trim()).filter(Boolean);
+  if (!ids.length) return null;
+  if (ids.length === 1) return ids[0];
+
+  const { data } = await supabase
+    .from("leads")
+    .select("owner_id, stage, disqualified_at")
+    .in("owner_id", ids);
+
+  const rows = (data ?? []) as { owner_id: string | null; stage: string | null; disqualified_at: string | null }[];
+  const load = new Map<string, number>(ids.map((id) => [id, 0]));
+  for (const r of rows) {
+    // Only leads still in play count as workload. A closed or lost lead is not
+    // work, and counting it would permanently penalise whoever converts most.
+    if (r.disqualified_at) continue;
+    const st = r.stage ?? "";
+    if (st === "LOST" || st.startsWith("5")) continue;
+    if (r.owner_id && load.has(r.owner_id)) load.set(r.owner_id, (load.get(r.owner_id) ?? 0) + 1);
+  }
+
+  return ids.slice().sort((a, b) =>
+    (load.get(a) ?? 0) - (load.get(b) ?? 0) || ids.indexOf(a) - ids.indexOf(b)
+  )[0];
+}
+
 export type IngestResult =
   | { status: "created"; leadId: string; num: number }
   | { status: "duplicate"; leadId: string; reason: string }
