@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
+import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -62,6 +63,10 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   const renewing = subs.filter((s) => s.status === "active" && s.renews_on && s.renews_on <= in30);
   const renewalValue = renewing.reduce((s, x) => s + Number(x.amount), 0);
   const billedTotal = invoices.reduce((s, i) => s + Number(i.amount), 0);
+  // invoices is fetched unfiltered with both dates, so last month costs nothing
+  const lastMonth = prevMonthKey(month);
+  const revenuePrev = sumInMonth(paid, lastMonth, (i) => i.paid_date, (i) => Number(i.amount));
+  const outstandingPrev = sumInMonth(unpaid, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
   const collectRate = billedTotal ? Math.round((paid.reduce((s, i) => s + Number(i.amount), 0) / billedTotal) * 100) : 0;
 
   // ---- exception queue ------------------------------------------------------
@@ -177,8 +182,8 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       {/* 1 — MONEY */}
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Money</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} minWidth={180} />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "up-good")} minWidth={180} />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "up-bad")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
         <MetricCard label="Collection rate" value={`${collectRate}%`} sub="of everything billed" minWidth={160} />
         <MetricCard label="Renewals ≤30 days" value={money(renewalValue)} sub={`${renewing.length} subscription${renewing.length === 1 ? "" : "s"}`} minWidth={180} />
         <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
@@ -196,9 +201,12 @@ export default async function OwnerDashboard({ name }: { name: string }) {
         <MetricCard value={apptsToday.length} label="Appointments" href="/appointments"
           meter={{ of: apptsAll.length, filled: apptsToday.length }}
           sub={apptsAll.length ? `${apptsToday.length} of ${apptsAll.length} still to run` : "none booked"} />
-        <MetricCard value={present} label="Staff present" href="/hr?tab=attendance"
-          meter={{ of: staff.length, filled: present }}
-          sub={`of ${staff.length} on the team`} />
+                  // No attendance rows for today means nobody has marked it yet, which
+          // is not the same fact as nobody turning up. Show `—` and say so,
+          // rather than a 0 that reads as an empty centre.
+        <MetricCard value={attendance.length ? present : "—"} label="Staff present" href="/hr?tab=attendance"
+          meter={{ of: staff.length, filled: attendance.length ? present : 0 }}
+          sub={attendance.length ? `of ${staff.length} on the team` : "not marked yet today"} />
         <MetricCard value={clients.length} label="Clients" href="/clients"
           meter={{ of: clients.length, filled: withPackage }}
           sub={`${withPackage} of ${clients.length} on a package`} />

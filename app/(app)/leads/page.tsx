@@ -12,6 +12,7 @@ import { LeadForm, CallCell } from "@/components/LeadControls";
 import LeadSearch from "@/components/LeadSearch";
 import { matchesLeadQuery } from "@/lib/leadsearch";
 import { namesMatch } from "@/lib/staff-directory";
+import { monthKey, prevMonthKey, countInMonth } from "@/lib/trend";
 import { ivrStatus } from "@/lib/ivr/config";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ type Lead = {
   id: string; name: string; phone: string | null; source: string | null; campaign: string | null;
   interest: string | null; urgency: string | null; history: string | null; goals: string | null;
   location: string | null; budget: string | null; profession: string | null;
-  stage: string | null; fde: string | null;
+  stage: string | null; fde: string | null; created_at: string | null;
 };
 
 // Broad slices, kept because the owner dashboard's Growth cards link straight
@@ -84,7 +85,7 @@ export default async function LeadsPage({
   const shown = Math.max(PAGE_SIZE, Number(searchParams.n) || PAGE_SIZE);
   const supabase = createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde").order("num", { ascending: true }),
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, created_at").order("num", { ascending: true }),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     // On a CRM-only deployment there is no client page to link to, and the
     // pilot may not have client access — this lookup only powers the
@@ -132,6 +133,23 @@ export default async function LeadsPage({
   const tierCount = (t: Tier) => inView.filter((s) => s.tier === t && matchesStage(s)).length;
   const convertingCount = inView.filter((s) => isConverting(s.lead.stage) && matchesStage(s)).length;
 
+  // Tier cards count every lead in that tier, ever — a cumulative number that
+  // only ever grows, so a "vs last month" arrow on it would be meaningless in
+  // the same way it is on all-time revenue. What IS comparable is the inflow:
+  // how many arrived this month against last. That goes in slot 03 as context,
+  // beside a cumulative value, rather than in slot 04 as a trend on it.
+  const thisMonth = monthKey();
+  const lastMonth = prevMonthKey(thisMonth);
+  const inflow = (rows: typeof inView) => ({
+    now: countInMonth(rows, thisMonth, (r) => r.lead.created_at),
+    prev: countInMonth(rows, lastMonth, (r) => r.lead.created_at),
+  });
+  const inflowSub = (rows: typeof inView) => {
+    const { now, prev } = inflow(rows);
+    if (!now && !prev) return undefined;          // nothing dated — say nothing
+    return prev ? `${now} new this month · ${prev} last` : `${now} new this month`;
+  };
+
   const scored = inView
     .filter((s) => matchesStage(s) && matchesTier(s))
     .sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
@@ -158,7 +176,7 @@ export default async function LeadsPage({
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 14 };
   // A stat card that filters the list. Clicking the active one clears it, so
   // the cards behave like toggles rather than a one-way trip.
-  const statLink = (label: string, value: number, tier: TierKey, color: string) => {
+  const statLink = (label: string, value: number, tier: TierKey, color: string, sub?: string) => {
     const on = tierFilter === tier;
     // The card owns its own drill-down now (slot 05) — this wrapper is only
     // here to draw the active outline.
@@ -167,6 +185,7 @@ export default async function LeadsPage({
         <MetricCard
           label={on ? `${label}  ✓` : label}
           value={String(value)}
+          sub={sub}
           color={color}
           href={href({ tier: on ? null : tier })}
         />
@@ -218,10 +237,10 @@ export default async function LeadsPage({
 
       {/* tier cards — click to filter, click again to clear */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
-        {statLink("HOT", tierCount("HOT"), "HOT", "var(--red)")}
-        {statLink("WARM", tierCount("WARM"), "WARM", "var(--amber-text-soft)")}
-        {statLink("COOL", tierCount("COOL"), "COOL", "var(--blue)")}
-        {statLink("Converting (Visit/Close)", convertingCount, "converting", "var(--brand-text)")}
+        {statLink("HOT", tierCount("HOT"), "HOT", "var(--red)", inflowSub(inView.filter((s) => s.tier === "HOT" && matchesStage(s))))}
+        {statLink("WARM", tierCount("WARM"), "WARM", "var(--amber-text-soft)", inflowSub(inView.filter((s) => s.tier === "WARM" && matchesStage(s))))}
+        {statLink("COOL", tierCount("COOL"), "COOL", "var(--blue)", inflowSub(inView.filter((s) => s.tier === "COOL" && matchesStage(s))))}
+        {statLink("Converting (Visit/Close)", convertingCount, "converting", "var(--brand-text)", inflowSub(inView.filter((s) => isConverting(s.lead.stage) && matchesStage(s))))}
       </div>
 
       {(stageFilter || tierFilter) && (

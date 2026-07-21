@@ -7,6 +7,7 @@ import UserBranchSelect from "@/components/UserBranchSelect";
 import UserNameEdit from "@/components/UserNameEdit";
 import DeleteStaffButton from "@/components/DeleteStaffButton";
 import AddStaffForm from "@/components/AddStaffForm";
+import UserCredentials from "@/components/UserCredentials";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,13 @@ type ProfileRow = {
 
 export default async function UsersPage() {
   const me = await getProfile();
-  // Admin-only page
-  if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) redirect("/dashboard");
+  // Managers are here for one reason — fixing a colleague's login. Roles,
+  // branches, renames, deletes and adding staff stay with Administrator and
+  // Super Admin, and those server actions already enforce it independently, so
+  // hiding the controls here is presentation rather than the security boundary.
+  const canCreds = me?.role === "Manager" || me?.role === "Administrator" || me?.role === "Super Admin";
+  if (!me || !canCreds) redirect("/dashboard");
+  const canAdmin = me.role === "Administrator" || me.role === "Super Admin";
 
   const supabase = createClient();
   const { data, error } = await supabase
@@ -42,17 +48,25 @@ export default async function UsersPage() {
     <div style={{ maxWidth: 900 }}>
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Users &amp; Roles</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Team access — roles, permissions and RBAC · {users.length} staff
+        {canAdmin
+          ? `Team access — roles, permissions and RBAC · ${users.length} staff`
+          : `Credentials — reset a password or correct an email · ${users.length} staff`}
       </p>
 
-      <AddStaffForm />
+      {canAdmin && <AddStaffForm />}
 
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load users.</b> {error.message}
         </div>
       ) : (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
+        <div style={{
+          background: "var(--card)", border: "1px solid var(--border)",
+          borderRadius: "var(--radius)", boxShadow: "var(--shadow)",
+          // not `hidden`: the Sign-in dropdown is absolutely positioned and was
+          // being clipped at the right edge of the card.
+          overflow: "visible",
+        }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
             <thead>
               <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 12 }}>
@@ -68,7 +82,9 @@ export default async function UsersPage() {
               {users.map((u) => (
                 <tr key={u.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "8px 16px" }}>
-                    <UserNameEdit id={u.id} name={u.name} isYou={u.id === me.id} />
+                    {canAdmin
+                      ? <UserNameEdit id={u.id} name={u.name} isYou={u.id === me.id} />
+                      : <b>{u.name ?? "—"}</b>}
                     {!u.staff_id && (
                       <div
                         title="This login isn't linked to a care-team directory row, so they can't be booked as a provider."
@@ -80,16 +96,23 @@ export default async function UsersPage() {
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--muted)" }}>{u.email ?? "—"}</td>
                   <td style={{ padding: "12px 16px" }}>
-                    <UserBranchSelect id={u.id} branch={u.branch} />
+                    {canAdmin
+                      ? <UserBranchSelect id={u.id} branch={u.branch} />
+                      : <span style={{ color: "var(--muted)" }}>{u.branch ?? "—"}</span>}
                   </td>
                   <td style={{ padding: "12px 16px" }}>
-                    <UserRoleSelect id={u.id} role={u.role} disabled={u.id === me.id} />
+                    {canAdmin
+                      ? <UserRoleSelect id={u.id} role={u.role} disabled={u.id === me.id} />
+                      : <span style={{ color: "var(--muted)" }}>{u.role}</span>}
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: 13, whiteSpace: "nowrap" }}>
                     {(() => { const a = accessAreas(u.role); return a === "all" ? "All areas" : `${a} areas`; })()}
                   </td>
                   <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                    {u.id !== me.id && <DeleteStaffButton id={u.id} name={u.name} />}
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "flex-start" }}>
+                      <UserCredentials id={u.id} email={u.email} name={u.name ?? u.email ?? "this user"} isSelf={u.id === me.id} />
+                      {canAdmin && u.id !== me.id && <DeleteStaffButton id={u.id} name={u.name} />}
+                    </div>
                   </td>
                 </tr>
               ))}

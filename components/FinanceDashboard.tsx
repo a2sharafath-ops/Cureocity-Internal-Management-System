@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
+import { monthTrend, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -62,6 +63,11 @@ export default async function FinanceDashboard({ name }: { name: string }) {
   const collectRate = billed ? Math.round((collected / billed) * 100) : 0;
   const spendMonth = expenses.filter((e) => (e.date ?? "").startsWith(month)).reduce((s, e) => s + Number(e.amount), 0);
   const netMonth = revenueMonth - spendMonth;
+  // Prior month was already fetched for every one of these — the invoices and
+  // expenses selects are unfiltered — it just wasn't being used.
+  const spendPrev = sumInMonth(expenses, lastMonth, (e) => e.date, (e) => Number(e.amount));
+  const netPrev = revenuePrev - spendPrev;
+  const outstandingPrev = sumInMonth(unpaid, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
 
   // revenue not yet invoiced — a package sold with no invoice against it
   let leak = 0;
@@ -130,16 +136,12 @@ export default async function FinanceDashboard({ name }: { name: string }) {
           // Slot 04. Revenue up is good, revenue down is bad — declared, not
           // inferred. Omitted entirely when there's no prior month to compare
           // against, rather than showing a meaningless ▲100%.
-          trend={revenuePrev ? {
-            delta: Math.round(((revenueMonth - revenuePrev) / revenuePrev) * 100),
-            sentiment: revenueMonth >= revenuePrev ? "good" : "bad",
-            since: `vs ${money(revenuePrev)} last month`,
-          } : undefined}
+          trend={monthTrend(revenueMonth, revenuePrev, "up-good")}
           minWidth={190}
         />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
-        <MetricCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} minWidth={170} />
-        <MetricCard label="Net this month" value={money(netMonth)} sub="revenue − spend" color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "up-bad")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
+        <MetricCard label="Spend this month" value={money(spendMonth)} sub={`${expenses.filter((e) => (e.date ?? "").startsWith(month)).length} expense${expenses.filter((e) => (e.date ?? "").startsWith(month)).length === 1 ? "" : "s"}`} trend={monthTrend(spendMonth, spendPrev, "up-bad")} minWidth={170} />
+        <MetricCard label="Net this month" value={money(netMonth)} sub="revenue − spend" trend={monthTrend(netMonth, netPrev, "up-good")} color={netMonth < 0 ? "var(--red)" : "var(--brand-text)"} minWidth={170} />
         <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
       </div>
 

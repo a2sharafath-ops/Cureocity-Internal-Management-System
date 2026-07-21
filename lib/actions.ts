@@ -288,6 +288,143 @@ export async function updateUserName(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+// ---- credentials -----------------------------------------------------------
+//
+// Changing someone else's login is the most dangerous thing on this page: it's
+// how an account takeover would look if it ever happened here. So three rules
+// hold across everything below.
+//   1. Every change writes to the audit log with the before value, because the
+//      whole point of an audit trail is answering "who moved this, and from
+//      what" months later.
+//   2. Changing an email notifies the OLD address. If the change wasn't
+//      theirs, that message is the only way they'd find out.
+//   3. Portal (client) logins are out of scope — they're managed from the
+//      client card, and letting staff admin reach them widens the blast radius
+//      for no benefit.
+
+/** Manager, Administrator and Super Admin may manage staff credentials. */
+function canManageCredentials(role: string): boolean {
+  return role === "Manager" || role === "Administrator" || role === "Super Admin";
+}
+
+export type CredState = { ok?: string; error?: string };
+
+/**
+ * Change a staff login email.
+ *
+ * Updates the auth user and the profile together — they're two tables holding
+ * the same fact, and letting them drift means someone signs in with one
+ * address while the app shows another.
+ */
+export async function updateUserEmail(_prev: CredState, formData: FormData): Promise<CredState> {
+  const me = await getProfile();
+  if (!me || !canManageCredentials(me.role)) return { error: "Not authorized." };
+
+  const id = String(formData.get("id"));
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!email) return { error: "An email address is required." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "That doesn't look like an email address." };
+
+  const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles")
+    .select("email, name, role, client_id").eq("id", id).maybeSingle();
+  if (!target) return { error: "User not found." };
+  if (target.client_id) return { error: "Portal logins are managed from the client's card." };
+  if (target.email === email) return { error: "That's already their email address." };
+
+  // Reject a collision before touching auth, so we don't half-apply the change.
+  const { data: clash } = await admin.from("profiles")
+    .select("id").eq("email", email).neq("id", id).maybeSingle();
+  if (clash) return { error: "Another account already uses that email." };
+
+  const { error } = await admin.auth.admin.updateUserById(id, { email, email_confirm: true });
+  if (error) return { error: error.message };
+  await admin.from("profiles").update({ email }).eq("id", id);
+
+  // Tell the address that just lost access. Best-effort: a bounced notice must
+  // not fail the change, or a stale address would make the account unfixable.
+  const previous = target.email;
+  if (previous) {
+    try {
+      await sendEmail(
+        previous,
+        "Your Cureocity sign-in email was changed",
+        `<p>Hello ${target.name ?? ""},</p>
+<p>The email used to sign in to Cureocity was changed from <b>${previous}</b> to <b>${email}</b> by ${me.name}.</p>
+<p>If you did not expect this, contact your administrator immediately.</p>`,
+      );
+    } catch { /* notice is best-effort; the change still stands */ }
+  }
+
+  await logAudit(me, "Login email changed", target.name ?? id, `${previous ?? "?"} → ${email}`);
+  revalidatePath("/users");
+  return { ok: `Sign-in email updated to ${email}. The previous address has been notified.` };
+}
+
+/**
+ * Send a password reset link.
+ *
+ * The default path, and the one to reach for: nobody on staff ever learns
+ * another person's password, and no password passes through this app.
+ */
+export async function sendUserPasswordReset(_prev: CredState, formData: FormData): Promise<CredState> {
+  const me = await getProfile();
+  if (!me || !canManageCredentials(me.role)) return { error: "Not authorized." };
+
+  const id = String(formData.get("id"));
+  const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles")
+    .select("email, name, client_id").eq("id", id).maybeSingle();
+  if (!target?.email) return { error: "User not found." };
+  if (target.client_id) return { error: "Portal logins are managed from the client's card." };
+
+  // Where the reset link lands. Supabase also enforces its own redirect
+  // allow-list, so an unset/incorrect value here fails closed rather than
+  // sending anyone somewhere unexpected.
+  const origin = process.env.NEXT_PUBLIC_SITE_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const { error } = await admin.auth.resetPasswordForEmail(target.email, {
+    redirectTo: `${origin}/account`,
+  });
+  if (error) return { error: error.message };
+
+  await logAudit(me, "Password reset sent", target.name ?? target.email, target.email);
+  revalidatePath("/users");
+  return { ok: `Reset link sent to ${target.email}.` };
+}
+
+/**
+ * Set a password directly.
+ *
+ * The fallback for staff whose email doesn't actually receive mail — several
+ * of the current logins are like that, so a reset-link-only design would leave
+ * them permanently locked out. Deliberately the secondary control: it means a
+ * manager briefly knows someone's password, so it's logged loudly and the
+ * person should change it at /account afterwards.
+ */
+export async function setUserPassword(_prev: CredState, formData: FormData): Promise<CredState> {
+  const me = await getProfile();
+  if (!me || !canManageCredentials(me.role)) return { error: "Not authorized." };
+
+  const id = String(formData.get("id"));
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 8) return { error: "Use at least 8 characters." };
+
+  const admin = createAdminClient();
+  const { data: target } = await admin.from("profiles")
+    .select("email, name, client_id").eq("id", id).maybeSingle();
+  if (!target) return { error: "User not found." };
+  if (target.client_id) return { error: "Portal logins are managed from the client's card." };
+
+  const { error } = await admin.auth.admin.updateUserById(id, { password });
+  if (error) return { error: error.message };
+
+  await logAudit(me, "Password set by admin", target.name ?? target.email ?? id,
+    "temporary — the user should change it at /account");
+  revalidatePath("/users");
+  return { ok: `Password set for ${target.email}. Ask them to change it at /account once they're in.` };
+}
+
 // Delete a staff login (removes the auth user + profile).
 export async function deleteStaff(formData: FormData) {
   const me = await getProfile();

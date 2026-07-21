@@ -39,15 +39,38 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       <Sidebar role={role} />
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Floating glass header.
+            The outer element is the sticky rail — transparent, full width, and
+            it owns the top offset. The inner pill is what you see. Splitting
+            them matters: a sticky element with its own margin-top jitters on
+            scroll in Safari, and backdrop-filter needs a non-transparent
+            stacking context to blur against.
+
+            `backdrop-filter` is progressively enhanced — where it isn't
+            supported the rgba background alone still reads as a light pill,
+            just without the frost. */}
         <header
           style={{
-            minHeight: 56, background: "var(--card)", borderBottom: "1px solid var(--border)",
-            display: "flex", alignItems: "center", padding: "8px 24px", position: "sticky", top: 0, zIndex: 10,
+            position: "sticky", top: 0, zIndex: 30,
+            padding: "14px 24px 6px", pointerEvents: "none",
           }}
         >
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              minHeight: 52, padding: "7px 10px 7px 20px",
+              pointerEvents: "auto",
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.72)",
+              WebkitBackdropFilter: "blur(20px) saturate(180%)",
+              backdropFilter: "blur(20px) saturate(180%)",
+              border: "1px solid rgba(255,255,255,0.7)",
+              boxShadow: "0 1px 2px rgba(20,20,25,0.04), 0 8px 28px rgba(20,20,25,0.08)",
+            }}
+          >
           <HeaderTitle />
           <span style={{ flex: 1 }} />
-          <Link href="/messages" title="Communications" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, width: 34, height: 34, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 16, marginRight: 8 }}>💬</Link>
+          <Link href="/messages" title="Communications" style={{ border: "1px solid rgba(20,20,25,0.07)", background: "rgba(255,255,255,0.55)", borderRadius: 999, width: 34, height: 34, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 15, marginRight: 2 }}>💬</Link>
           <NotificationBell items={notifs} unread={unread} />
           {(real === "Administrator" || real === "Super Admin") && <RolePreview preview={preview} profession={profession} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginLeft: 12 }}>
@@ -61,14 +84,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <form action={signOut} style={{ marginLeft: 8 }}>
               <button
                 type="submit"
-                style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}
+                style={{ border: "1px solid rgba(20,20,25,0.07)", background: "rgba(255,255,255,0.55)", borderRadius: 999, padding: "6px 13px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}
               >
                 Sign out
               </button>
             </form>
           </span>
+          </div>
         </header>
-        <main style={{ padding: "24px" }}>{children}</main>
+        {/* Pulled up under the floating header — the pill casts its blur over
+            the top of the content rather than sitting on a reserved strip. */}
+        <main style={{ padding: "10px 24px 24px" }}>{children}</main>
       </div>
     </div>
   );
