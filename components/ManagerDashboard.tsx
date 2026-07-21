@@ -179,9 +179,12 @@ export default async function ManagerDashboard({ name }: { name: string }) {
         <MetricCard value={apptsOpen.length} label="Appointments" href="/appointments"
           meter={{ of: apptsAll.length, filled: apptsOpen.length }}
           sub={apptsAll.length ? `${apptsOpen.length} of ${apptsAll.length} still to run` : "none booked"} />
-        <MetricCard value={present} label="Staff present" href="/hr?tab=attendance"
-          meter={{ of: staff.length, filled: present }}
-          sub={`of ${staff.length} on the team`} />
+                  // No attendance rows for today means nobody has marked it yet, which
+          // is not the same fact as nobody turning up. Show `—` and say so,
+          // rather than a 0 that reads as an empty centre.
+        <MetricCard value={attendance.length ? present : "—"} label="Staff present" href="/hr?tab=attendance"
+          meter={{ of: staff.length, filled: attendance.length ? present : 0 }}
+          sub={attendance.length ? `of ${staff.length} on the team` : "not marked yet today"} />
         <MetricCard value={fuToday.length} label="Follow-ups due" href="/followups"
           meter={{ of: fuToday.length || 1, filled: fuDone }}
           sub={fuToday.length ? `${fuToday.length - fuDone} overdue` : "all clear"} />

@@ -130,11 +130,12 @@ export default async function HrDashboard({ name }: { name: string }) {
       {/* 3 — TODAY */}
       <div style={sectionTitle}>Today</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, marginBottom: 20 }}>
-        <MetricCard value={present} label="Present" href="/hr?tab=attendance"
-          meter={{ of: staff.length || 1, filled: present }} sub={`of ${staff.length} on the team`} />
+        <MetricCard value={attendance.length ? present : "—"} label="Present" href="/hr?tab=attendance"
+          meter={{ of: staff.length || 1, filled: attendance.length ? present : 0 }}
+          sub={attendance.length ? `of ${staff.length} on the team` : "not marked yet today"} />
         <MetricCard value={marked} label="Attendance marked" href="/hr?tab=attendance"
           meter={{ of: staff.length || 1, filled: marked }}
-          sub={unmarked.length ? `${unmarked.length} still to mark` : "everyone accounted for"} />
+          sub={marked ? (unmarked.length ? `${unmarked.length} still to mark` : "everyone accounted for") : `${staff.length} still to mark`} />
         <MetricCard value={onLeave} label="On leave" href="/hr?tab=leave"
           meter={{ of: staff.length || 1, filled: onLeave }}
           sub={pendingLeave.length ? `${pendingLeave.length} request${pendingLeave.length === 1 ? "" : "s"} pending` : "no pending requests"} />
