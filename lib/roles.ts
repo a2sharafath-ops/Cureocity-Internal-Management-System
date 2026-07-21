@@ -260,3 +260,10 @@ export const ROLE_CAPS: Record<string, string[]> = {
   "Staff":               [],
 };
 export function roleCapabilities(role: string): string[] { return ROLE_CAPS[role] ?? []; }
+
+/**
+ * Roles that can own a lead. Deliberately narrow: leads are a front-desk and
+ * management concern, so clinicians and trainers are not offered as owners
+ * even though they are staff.
+ */
+export const LEAD_OWNER_ROLES = ["Front Desk", "Manager", "Administrator", "Super Admin"];

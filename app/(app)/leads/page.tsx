@@ -12,6 +12,7 @@ import { LeadForm, CallCell } from "@/components/LeadControls";
 import LeadFilters from "@/components/LeadFilters";
 import { matchesLeadQuery } from "@/lib/leadsearch";
 import { namesMatch } from "@/lib/staff-directory";
+import { LEAD_OWNER_ROLES } from "@/lib/roles";
 import { followupView, FOLLOWUP_TONE } from "@/lib/lead-followup";
 import { monthKey, prevMonthKey, countInMonth } from "@/lib/trend";
 import { ivrStatus } from "@/lib/ivr/config";
@@ -23,7 +24,7 @@ type Lead = {
   id: string; name: string; phone: string | null; source: string | null; campaign: string | null;
   interest: string | null; urgency: string | null; history: string | null; goals: string | null;
   location: string | null; budget: string | null; profession: string | null;
-  stage: string | null; fde: string | null; created_at: string | null;
+  stage: string | null; fde: string | null; owner_id: string | null; created_at: string | null;
   next_follow_up: string | null; follow_up_owner: string | null;
 };
 
@@ -75,6 +76,8 @@ export default async function LeadsPage({
     view?: string; stage?: string; tier?: string; q?: string; n?: string;
     /** date-wise search: created_at range, and a callback-due filter */
     from?: string; to?: string; due?: string;
+    /** "1" = only leads owned by the signed-in user */
+    mine?: string;
   };
 }) {
   // This page had no guard — any signed-in user could reach it by URL.
@@ -89,6 +92,10 @@ export default async function LeadsPage({
     ? (searchParams.tier as TierKey)
     : null;
   const q = (searchParams.q ?? "").trim();
+  // "My leads" — only offered when this login is linked to a staff row, since
+  // ownership is by staff.id. Admins without one would otherwise see an empty
+  // list and read it as data loss.
+  const mine = searchParams.mine === "1" && Boolean(me.staffId);
   const shown = Math.max(PAGE_SIZE, Number(searchParams.n) || PAGE_SIZE);
   // Date-wise search. `from`/`to` bound when the lead arrived; `due` filters on
   // the callback date, which is the question front desk actually asks in the
@@ -100,7 +107,7 @@ export default async function LeadsPage({
     ? searchParams.due! : "";
   const supabase = createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }, { data: remarkRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, created_at, next_follow_up, follow_up_owner").order("num", { ascending: true }),
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner").order("num", { ascending: true }),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     // On a CRM-only deployment there is no client page to link to, and the
     // pilot may not have client access — this lookup only powers the
@@ -108,7 +115,7 @@ export default async function LeadsPage({
     canSee(me.role, "/clients")
       ? supabase.from("clients").select("id, converted_from")
       : Promise.resolve({ data: [] }),
-    supabase.from("staff").select("name"),
+    supabase.from("staff").select("id, name, role"),
     // Newest first; we keep the first row seen per lead, which is the latest.
     supabase.from("lead_remarks")
       .select("lead_id, body, outcome, by_name, created_at")
@@ -131,6 +138,19 @@ export default async function LeadsPage({
   // Resolve the imported short name to the staff directory's full name, so the
   // column matches how the same person is named everywhere else in the app.
   const staffNames = ((staffRows ?? []) as { name: string }[]).map((s) => s.name);
+  // Who can be picked as an owner — front desk and management only.
+  const assignable = ((staffRows ?? []) as { id: string; name: string; role: string }[])
+    .filter((m) => LEAD_OWNER_ROLES.includes(m.role))
+    .map((m) => ({ id: m.id, name: m.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const byId = new Map(((staffRows ?? []) as { id: string; name: string }[]).map((m) => [m.id, m.name]));
+  // owner_id is authoritative; `fde` is the pre-0083 fallback for any row the
+  // backfill could not resolve.
+  const ownerName = (l: { owner_id?: string | null; fde: string | null }): { name: string; onTeam: boolean } | null => {
+    const byOwner = l.owner_id ? byId.get(l.owner_id) : undefined;
+    if (byOwner) return { name: byOwner, onTeam: true };
+    return fdeName(l.fde);
+  };
   const fdeName = (raw: string | null): { name: string; onTeam: boolean } | null => {
     const v = (raw ?? "").trim();
     if (!v) return null;
@@ -156,7 +176,8 @@ export default async function LeadsPage({
     if (due === "none" && l.next_follow_up) return false;
     return true;
   };
-  const matched = leads.filter((l) => (!q || matchesLeadQuery(l, q)) && matchesDates(l));
+  const matched = leads.filter((l) =>
+    (!q || matchesLeadQuery(l, q)) && matchesDates(l) && (!mine || l.owner_id === me.staffId));
   const viewCount = (k: ViewKey) => matched.filter((l) => VIEWS[k].match(l.stage ?? "")).length;
 
   // Score everything once, then narrow. Counts on the tabs and cards reflect
@@ -208,6 +229,7 @@ export default async function LeadsPage({
     if (from) p.set("from", from);
     if (to) p.set("to", to);
     if (due) p.set("due", due);
+    if (mine) p.set("mine", "1");
     const s = p.toString();
     return s ? `/leads?${s}` : "/leads";
   };
@@ -242,7 +264,7 @@ export default async function LeadsPage({
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>CRM &amp; Leads</h1>
         <span style={{ flex: 1 }} />
-        <LeadForm campaigns={campaigns} />
+        <LeadForm campaigns={campaigns} staff={assignable} />
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 12px" }}>
         Lead scoring — 7 signals, HOT / WARM / COOL / COLD tiers &amp; product match · {leads.length} lead{leads.length === 1 ? "" : "s"}
@@ -260,6 +282,29 @@ export default async function LeadsPage({
         count={q ? matched.length : null}
         clearHref={href({ stage: stageFilter, tier: tierFilter }).replace(/[?&](from|to|due)=[^&]*/g, "")}
       />
+
+      {me.staffId && (
+        <div style={{ marginBottom: 10 }}>
+          <Link
+            href={mine
+              ? href({}).replace(/[?&]mine=1/, "").replace(/\?$/, "")
+              : `${href({})}${href({}).includes("?") ? "&" : "?"}mine=1`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              border: `1px solid ${mine ? "var(--brand-fill)" : "var(--border)"}`,
+              background: mine ? "var(--brand-tint)" : "#fff",
+              color: mine ? "var(--brand-text)" : "var(--text)",
+              borderRadius: 999, padding: "5px 14px", fontSize: 12.5,
+              fontWeight: 600, textDecoration: "none",
+            }}
+          >
+            {mine ? "✓ " : ""}My leads
+            <span style={{ color: "var(--muted)", fontWeight: 500 }}>
+              {leads.filter((l) => l.owner_id === me.staffId).length}
+            </span>
+          </Link>
+        </div>
+      )}
 
       <div style={{ marginBottom: 12 }}>
         <SegTabs
@@ -324,7 +369,7 @@ export default async function LeadsPage({
                 <th style={th}>Tier</th>
                 <th style={th}>Last remark</th>
                 <th style={th}>Callback</th>
-                <th style={th}>Front desk</th>
+                <th style={th}>Owner</th>
                 <th style={th}>Stage</th>
                 <th style={th} />
               </tr>
@@ -376,7 +421,7 @@ export default async function LeadsPage({
                   </td>
                   <td style={td}>
                     {(() => {
-                      const f = fdeName(l.fde);
+                      const f = ownerName(l);
                       if (!f) return <span style={{ color: "var(--muted)" }}>—</span>;
                       return (
                         <span

@@ -667,6 +667,17 @@ export async function createLead(formData: FormData) {
   for (const f of LEAD_FIELDS) row[f] = String(formData.get(f) ?? "").trim() || null;
   row.name = name;
   row.stage = String(formData.get("stage") || "").trim() || "1-New Lead";
+
+  // Ownership. A chosen owner wins; otherwise the lead belongs to whoever
+  // created it. Leaving it blank is what produced leads nobody was accountable
+  // for — and no alert can target a null.
+  const chosenOwner = String(formData.get("owner_id") ?? "").trim();
+  row.owner_id = chosenOwner || p.staffId || null;
+  if (row.owner_id) {
+    row.owner_method = chosenOwner ? "manual" : "creator";
+    row.owner_assigned_at = new Date().toISOString();
+  }
+
   // Score at creation so a new lead is immediately filterable by tier.
   const fresh = leadScore(row as Parameters<typeof leadScore>[0]);
   row.score = fresh.total;
@@ -685,6 +696,14 @@ export async function updateLead(formData: FormData) {
   const supabase = createClient();
   const patch: Record<string, unknown> = {};
   for (const f of LEAD_FIELDS) patch[f] = String(formData.get(f) ?? "").trim() || null;
+  // Reassignment is explicit: only touch ownership when the form actually
+  // carried the field, so other edit paths can't silently clear it.
+  if (formData.has("owner_id")) {
+    const owner = String(formData.get("owner_id") ?? "").trim() || null;
+    patch.owner_id = owner;
+    patch.owner_method = owner ? "manual" : null;
+    patch.owner_assigned_at = owner ? new Date().toISOString() : null;
+  }
   const stage = String(formData.get("stage") || "").trim();
   if (stage) patch.stage = stage;
   await supabase.from("leads").update(patch).eq("id", id);
