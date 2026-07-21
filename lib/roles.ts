@@ -70,7 +70,10 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/orders": ["Administrator", "Manager", "Doctor"],
   "/claims": ["Administrator", "Manager", "Finance"],
   "/reports": ["Administrator", "Manager", "Finance"],
-  "/users": ["Administrator"],
+  // Managers see a read-only roster with the sign-in controls only; role,
+  // branch, rename, delete and add-staff remain Administrator / Super Admin
+  // and are enforced in the server actions, not just hidden in the page.
+  "/users": ["Administrator", "Manager"],
   "/compliance": ["Administrator", "Manager"],
   "/tasks": "all",
   "/hr": ["Administrator", "Manager", "HR"],
