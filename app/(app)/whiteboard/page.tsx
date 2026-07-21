@@ -34,7 +34,7 @@ export default async function WhiteboardPage() {
   const [
     { data: clientData }, { data: bpData }, { data: bloodData }, { data: sessData },
     { data: concernData }, { data: fuData }, { data: measureData }, { data: staffData },
-    { data: cardData }, { data: pastCardData },
+    { data: cardData }, { data: pastCardData }, { data: slaData },
   ] = await Promise.all([
     supabase.from("clients").select("id, code, name, dob, gender, package_id, conditions, goals"),
     supabase.from("blueprints").select("client_id, scores, generated"),
@@ -46,6 +46,11 @@ export default async function WhiteboardPage() {
     supabase.from("staff").select("id, name, role").in("role", ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"]),
     session ? supabase.from("whiteboard_cards").select("*").eq("session_id", session.id).order("position") : Promise.resolve({ data: [] }),
     supabase.from("whiteboard_cards").select("client_id, session_id, whiteboard_sessions(date)").order("created_at", { ascending: false }).limit(400),
+    // Missed turnaround commitments, either protocol. The board's whole job is
+    // surfacing clients who need attention today, and a broken promise is the
+    // strongest signal there is — stronger than a stalled blueprint, weaker
+    // only than a bad health score.
+    supabase.from("blueprint_sla_events").select("client_id, protocol").eq("kind", "breach"),
   ]);
 
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; dob: string | null; gender: string | null; package_id: string | null; conditions: string | null; goals: string[] | null }[];
@@ -66,6 +71,14 @@ export default async function WhiteboardPage() {
   }
 
   // ---- who should the team look at today ----------------------------------
+  const breachedProtocols = new Map<string, Set<string>>();
+  for (const e of (slaData ?? []) as { client_id: string; protocol: string | null }[]) {
+    const set = breachedProtocols.get(e.client_id) ?? new Set<string>();
+    set.add(e.protocol ?? "blueprint");
+    breachedProtocols.set(e.client_id, set);
+  }
+  const breached = new Set(breachedProtocols.keys());
+
   const inputs: CandidateInput[] = clients.map((c) => {
     const mine = sessions.filter((s) => s.client_id === c.id);
     const done = mine.filter((s) => s.status === "completed").map((s) => s.date).sort();
@@ -79,6 +92,7 @@ export default async function WhiteboardPage() {
       openConcerns: concerns.filter((x) => x.client_id === c.id && x.status === "Open").length,
       overdueFollowups: followups.filter((f) => f.client_id === c.id && f.status === "pending" && f.due_date < today).length,
       lastDiscussed: lastDiscussed.get(c.id) ?? null,
+      slaBreached: breached.has(c.id),
     };
   });
   const onBoard = new Set(cards.map((c) => c.client_id));

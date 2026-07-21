@@ -19,6 +19,8 @@ import { getProfile } from "@/lib/auth";
 import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
+import { getComprehensiveView } from "@/lib/actions";
 import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
@@ -121,6 +123,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { data: rxData } = await supabase.from("prescriptions")
     .select("id, status, provider, signed_date, shared_at, prescription_items(drug, dose, frequency, duration)")
     .eq("client_id", params.id).order("created_at", { ascending: false }).limit(5);
+  // null for any client not on an active Comprehensive package — the panel
+  // simply doesn't render for them.
+  const compView = await getComprehensiveView(params.id);
   const prescriptions = (rxData ?? []) as unknown as {
     id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
     prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -647,6 +652,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             </>
           )}
         </div>
+      )}
+
+      {compView && (
+        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} />
       )}
 
       {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still

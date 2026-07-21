@@ -35,7 +35,8 @@ export type CandidateInput = {
   overdueFollowups: number;
   /** ISO date this client was last discussed on a whiteboard */
   lastDiscussed: string | null;
-  /** BluePrint turnaround commitment currently breached — see lib/blueprint-sla */
+  /** A care turnaround commitment is currently breached — either protocol.
+   *  See lib/blueprint-sla and lib/comprehensive-sla. */
   slaBreached?: boolean;
 };
 
@@ -68,9 +69,11 @@ export function boardCandidates(clients: CandidateInput[], today: string): Candi
 
     if (c.openConcerns) { reasons.push(`${c.openConcerns} open concern${c.openConcerns === 1 ? "" : "s"}`); weight += 25 * c.openConcerns; }
     if (c.overdueFollowups) { reasons.push(`${c.overdueFollowups} overdue follow-up${c.overdueFollowups === 1 ? "" : "s"}`); weight += 20 * c.overdueFollowups; }
-    // A missed turnaround commitment outranks everything except a bad score:
-    // it's the one item on the board with a promise already broken.
-    if (c.slaBreached) { reasons.push("BluePrint turnaround overdue"); weight += 45; }
+    // A missed turnaround commitment sits above a stalled blueprint but below
+    // a low score. 45 would have tied with a single low score (40 + 5), which
+    // contradicts the rule at the top of this function — the meeting exists
+    // for the scores first.
+    if (c.slaBreached) { reasons.push("care turnaround overdue"); weight += 35; }
     if (c.bloodSubmitted && !c.blueprintGenerated) { reasons.push("blood report in, BluePrint not generated"); weight += 30; }
     if (!c.upcoming && c.lastSession) { reasons.push("nothing booked"); weight += 15; }
 

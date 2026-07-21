@@ -1244,6 +1244,56 @@ async function markEarliestPanelReceived(
   }
 }
 
+/**
+ * The Comprehensive protocol picture for one client — every clock, ready to
+ * render. Mirrors the shape the nightly sweep builds, so the panel a clinician
+ * looks at and the notification they receive can never disagree.
+ */
+export async function getComprehensiveView(clientId: string) {
+  const p = await getProfile();
+  if (!p || !canSee(p.role, "/clients")) return null;
+  const supabase = createClient();
+
+  const { data: proto } = await supabase.from("care_protocols")
+    .select("start_date, consolidated_at, approved_at, hold_since, hold_ms, hold_note")
+    .eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active")
+    .maybeSingle();
+  if (!proto) return null;
+
+  const [
+    { data: consults }, { data: charts }, { data: workouts },
+    { data: rx }, { data: sessions }, { data: appts }, { data: cp },
+  ] = await Promise.all([
+    supabase.from("consultations")
+      .select("kind, completed_at, approved_at, prescription_needed").eq("client_id", clientId),
+    supabase.from("diet_charts").select("drafted_at").eq("client_id", clientId).order("drafted_at").limit(1),
+    supabase.from("client_workouts").select("created_at, plan_weeks").eq("client_id", clientId).order("created_at").limit(5),
+    supabase.from("prescriptions").select("shared_at").eq("client_id", clientId).not("shared_at", "is", null).order("shared_at").limit(1),
+    supabase.from("sessions").select("status").eq("client_id", clientId).eq("status", "completed"),
+    supabase.from("appointments").select("type, date, status").eq("client_id", clientId),
+    supabase.from("client_packages").select("package_id").eq("client_id", clientId).eq("status", "active").maybeSingle(),
+  ]);
+
+  const plan = ((workouts ?? []) as { created_at: string; plan_weeks: number | null }[])
+    .find((w) => (w.plan_weeks ?? 1) >= 1);
+
+  return {
+    startDate: proto.start_date as string,
+    validityDays: (cp?.package_id === "comp12" ? 84 : 28),
+    consults: ((consults ?? []) as { kind: string; completed_at: string | null; approved_at: string | null; prescription_needed: boolean | null }[])
+      .map((c) => ({ kind: c.kind, completedAt: c.completed_at, approvedAt: c.approved_at, prescriptionNeeded: c.prescription_needed })),
+    consolidatedAt: proto.consolidated_at as string | null,
+    approvedAt: proto.approved_at as string | null,
+    dietDraftedAt: ((charts ?? [])[0] as { drafted_at: string | null } | undefined)?.drafted_at ?? null,
+    workoutPlannedAt: plan?.created_at ?? null,
+    prescriptionSharedAt: ((rx ?? [])[0] as { shared_at: string | null } | undefined)?.shared_at ?? null,
+    sessionsCompleted: (sessions ?? []).length,
+    appointments: ((appts ?? []) as { type: string | null; date: string | null; status: string }[]),
+    hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
+    holdNote: (proto.hold_note as string | null) ?? null,
+  };
+}
+
 export async function requestBlood(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;
