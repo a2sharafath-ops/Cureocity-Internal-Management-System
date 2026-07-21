@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { markAttendance, addLeave, setLeaveStatus, upsertPayroll, payPayroll } from "@/lib/actions";
 
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const chip: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, cursor: "pointer" };
 

@@ -27,6 +27,10 @@ export default function DietCharts({ charts, clients }: { charts: DietChartRow[]
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
+// Same look, but a fixed height — an <input> and a <select> do not share
+// an intrinsic height, so identical padding leaves them visibly staggered.
+// Not applied to <textarea>, which must stay free to grow.
+const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36, boxSizing: "border-box" };
   const setRow = (i: number, j: 0 | 1, v: string) => setRows((r) => r.map((row, k) => (k === i ? (j === 0 ? [v, row[1]] : [row[0], v]) : row)));
 
   return (
@@ -40,22 +44,22 @@ export default function DietCharts({ charts, clients }: { charts: DietChartRow[]
       {open && (
         <form action={addDietChart} onSubmit={() => setTimeout(() => { setOpen(false); setRows(DEFAULT_ROWS); }, 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 700 }}>Diet chart builder</div>
-          <select name="client_id" required defaultValue="" style={inp}>
+          <select name="client_id" required defaultValue="" style={inpControl}>
             <option value="" disabled>Select client…</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Meals</div>
           {rows.map((row, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "150px 1fr 30px", gap: 8 }}>
-              <input name="meal_label" value={row[0]} onChange={(e) => setRow(i, 0, e.target.value)} placeholder="Meal" style={inp} />
-              <input name="meal_detail" value={row[1]} onChange={(e) => setRow(i, 1, e.target.value)} placeholder="What to eat…" style={inp} />
+              <input name="meal_label" value={row[0]} onChange={(e) => setRow(i, 0, e.target.value)} placeholder="Meal" style={inpControl} />
+              <input name="meal_detail" value={row[1]} onChange={(e) => setRow(i, 1, e.target.value)} placeholder="What to eat…" style={inpControl} />
               <button type="button" onClick={() => setRows((r) => r.filter((_, k) => k !== i))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, cursor: "pointer", color: "var(--red-text)" }}>✕</button>
             </div>
           ))}
           <button type="button" onClick={() => setRows((r) => [...r, ["", ""]])} style={{ alignSelf: "start", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Add meal row</button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <input name="calories" type="number" placeholder="Calories (kcal/day)" style={inp} />
-            <input name="protein" placeholder="Protein target (e.g. 72 g)" style={inp} />
+            <input name="calories" type="number" placeholder="Calories (kcal/day)" style={inpControl} />
+            <input name="protein" placeholder="Protein target (e.g. 72 g)" style={inpControl} />
           </div>
           <textarea name="notes" rows={2} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
           <div><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save as draft</button></div>

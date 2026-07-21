@@ -46,6 +46,10 @@ export default function CommsHub({
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const chBadge = (ch: string) => { const [bg, c] = chColor[ch] ?? ["var(--neutral-bg)", "#64748b"]; return <span style={{ background: bg, color: c, borderRadius: 999, padding: "1px 8px", fontSize: 10, fontWeight: 700 }}>{ch}</span>; };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
+// Same look, but a fixed height — an <input> and a <select> do not share
+// an intrinsic height, so identical padding leaves them visibly staggered.
+// Not applied to <textarea>, which must stay free to grow.
+const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36, boxSizing: "border-box" };
 
   return (
     <div>
@@ -110,8 +114,8 @@ export default function CommsHub({
                 {canMsg && (
                   <form action={sendMessageStaff} onSubmit={() => setTimeout(() => setComposerText(""), 30)} style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
                     <input type="hidden" name="client_id" value={activeClient.id} />
-                    <select name="channel" value={composerCh} onChange={(e) => setComposerCh(e.target.value)} style={{ ...inp, maxWidth: 120 }}>{CHANNELS.map((o) => <option key={o}>{o}</option>)}</select>
-                    <select onChange={(e) => { const t = templates.find((x) => x.id === e.target.value); if (t) { setComposerText(fillVars(t.body, activeClient)); setComposerCh(t.channel); } e.currentTarget.selectedIndex = 0; }} style={{ ...inp, maxWidth: 150 }}>
+                    <select name="channel" value={composerCh} onChange={(e) => setComposerCh(e.target.value)} style={{ ...inpControl, maxWidth: 120 }}>{CHANNELS.map((o) => <option key={o}>{o}</option>)}</select>
+                    <select onChange={(e) => { const t = templates.find((x) => x.id === e.target.value); if (t) { setComposerText(fillVars(t.body, activeClient)); setComposerCh(t.channel); } e.currentTarget.selectedIndex = 0; }} style={{ ...inpControl, maxWidth: 150 }}>
                       <option value="">Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                     <textarea name="body" value={composerText} onChange={(e) => setComposerText(e.target.value)} placeholder="Type a message…" required rows={2} style={{ ...inp, flex: 1, minWidth: 200, resize: "vertical" }} />
@@ -130,11 +134,11 @@ export default function CommsHub({
           {newTemplate && (
             <form action={createTemplate} onSubmit={() => setTimeout(() => setNewTemplate(false), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                <input name="name" placeholder="Template name" required style={inp} />
-                <select name="channel" defaultValue="WhatsApp" style={inp}>{CHANNELS.map((o) => <option key={o}>{o}</option>)}</select>
-                <select name="category" defaultValue="Retention" style={inp}>{["Scheduling", "Onboarding", "Billing", "Retention", "Engagement", "General"].map((o) => <option key={o}>{o}</option>)}</select>
+                <input name="name" placeholder="Template name" required style={inpControl} />
+                <select name="channel" defaultValue="WhatsApp" style={inpControl}>{CHANNELS.map((o) => <option key={o}>{o}</option>)}</select>
+                <select name="category" defaultValue="Retention" style={inpControl}>{["Scheduling", "Onboarding", "Billing", "Retention", "Engagement", "General"].map((o) => <option key={o}>{o}</option>)}</select>
               </div>
-              <input name="subject" placeholder="Subject (for email)" required style={inp} />
+              <input name="subject" placeholder="Subject (for email)" required style={inpControl} />
               <textarea name="body" placeholder="Message body — use {name}, {code}…" required rows={3} style={{ ...inp, resize: "vertical" }} />
               <div><button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save template</button></div>
             </form>
@@ -168,9 +172,9 @@ export default function CommsHub({
           </div>
           {newCampaign && (
             <form action={createCampaign} onSubmit={() => setTimeout(() => setNewCampaign(false), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
-              <input name="name" placeholder="Campaign name" required style={inp} />
-              <select name="template_id" required defaultValue="" style={inp}><option value="" disabled>Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-              <select name="audience" defaultValue="all" style={inp}>{["all", "members", "subscribers", "lapsed"].map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <input name="name" placeholder="Campaign name" required style={inpControl} />
+              <select name="template_id" required defaultValue="" style={inpControl}><option value="" disabled>Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+              <select name="audience" defaultValue="all" style={inpControl}>{["all", "members", "subscribers", "lapsed"].map((o) => <option key={o} value={o}>{o}</option>)}</select>
               <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
             </form>
           )}

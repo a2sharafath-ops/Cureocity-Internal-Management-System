@@ -4,6 +4,10 @@ import { useState } from "react";
 import { createForm, assignForm, submitFormResponse } from "@/lib/actions";
 
 const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+// Same look, but a fixed height — an <input> and a <select> do not share
+// an intrinsic height, so identical padding leaves them visibly staggered.
+// Not applied to <textarea>, which must stay free to grow.
+const inputControl: React.CSSProperties = { ...input, padding: "0 10px", height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const primary: React.CSSProperties = { background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
@@ -20,13 +24,13 @@ export function FormBuilder() {
     <form action={createForm} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
       <input type="hidden" name="fields" value={JSON.stringify(clean)} />
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Form name</label><input style={input} name="name" required /></div>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue="intake"><option value="intake">Intake</option><option value="consent">Consent</option></select></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Form name</label><input style={inputControl} name="name" required /></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={inputControl} name="type" defaultValue="intake"><option value="intake">Intake</option><option value="consent">Consent</option></select></div>
       </div>
       {fields.map((f, i) => (
         <div key={i} style={{ display: "grid", gridTemplateColumns: "2fr 1fr auto", gap: 8, alignItems: "end" }}>
-          <div><label style={lbl}>Question / statement</label><input style={input} value={f.label} onChange={(e) => set(i, { label: e.target.value })} /></div>
-          <div><label style={lbl}>Answer type</label><select style={input} value={f.kind} onChange={(e) => set(i, { kind: e.target.value })}>{KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
+          <div><label style={lbl}>Question / statement</label><input style={inputControl} value={f.label} onChange={(e) => set(i, { label: e.target.value })} /></div>
+          <div><label style={lbl}>Answer type</label><select style={inputControl} value={f.kind} onChange={(e) => set(i, { kind: e.target.value })}>{KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
           <button type="button" onClick={() => setFields((fs) => fs.filter((_, idx) => idx !== i))} disabled={fields.length === 1} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 13, cursor: fields.length === 1 ? "not-allowed" : "pointer", color: "var(--muted)" }}>✕</button>
         </div>
       ))}
@@ -66,13 +70,13 @@ export function FormFill({ responseId, name, type, fields }: { responseId: strin
         <div key={i} style={{ display: "grid", gap: 4 }}>
           <label style={{ fontSize: 13 }}>{f.label}</label>
           {f.kind === "textarea" ? <textarea style={{ ...input, minHeight: 60, resize: "vertical", fontFamily: "inherit" }} onChange={(e) => set(f.label, e.target.value)} />
-            : f.kind === "yesno" ? <select style={input} onChange={(e) => set(f.label, e.target.value)} defaultValue=""><option value="" disabled>Select…</option><option>Yes</option><option>No</option></select>
+            : f.kind === "yesno" ? <select style={inputControl} onChange={(e) => set(f.label, e.target.value)} defaultValue=""><option value="" disabled>Select…</option><option>Yes</option><option>No</option></select>
             : f.kind === "checkbox" ? <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" onChange={(e) => set(f.label, e.target.checked ? "Agreed" : "")} /> I agree</label>
-            : <input style={input} onChange={(e) => set(f.label, e.target.value)} />}
+            : <input style={inputControl} onChange={(e) => set(f.label, e.target.value)} />}
         </div>
       ))}
       {type === "consent" && (
-        <div style={{ display: "grid", gap: 4 }}><label style={{ fontSize: 13 }}>Signature (type your full name)</label><input style={input} name="signed_by" required placeholder="Full name" /></div>
+        <div style={{ display: "grid", gap: 4 }}><label style={{ fontSize: 13 }}>Signature (type your full name)</label><input style={inputControl} name="signed_by" required placeholder="Full name" /></div>
       )}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="submit" style={primary}>Submit</button>

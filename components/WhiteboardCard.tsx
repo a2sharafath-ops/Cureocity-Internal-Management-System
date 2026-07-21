@@ -51,6 +51,10 @@ const STATUS = {
 } as const;
 
 const input: React.CSSProperties = { padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+// Same look, but a fixed height — an <input> and a <select> do not share
+// an intrinsic height, so identical padding leaves them visibly staggered.
+// Not applied to <textarea>, which must stay free to grow.
+const inputControl: React.CSSProperties = { ...input, padding: "0 9px", height: 34, boxSizing: "border-box" };
 const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" };
 
 export default function WhiteboardCard({ card, staff, locked }: {
@@ -150,8 +154,8 @@ export default function WhiteboardCard({ card, staff, locked }: {
                     <form action={tweakWhiteboardScore} style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
                       <input type="hidden" name="id" value={card.id} />
                       <input type="hidden" name="key" value={s.key} />
-                      <input name="score" type="number" min={0} max={100} defaultValue={s.value ?? ""} placeholder="0–100" style={{ ...input, width: 84 }} />
-                      <input name="note" defaultValue={s.note ?? ""} placeholder="why the team moved it" style={input} />
+                      <input name="score" type="number" min={0} max={100} defaultValue={s.value ?? ""} placeholder="0–100" style={{ ...inputControl, width: 84 }} />
+                      <input name="note" defaultValue={s.note ?? ""} placeholder="why the team moved it" style={inputControl} />
                       <button type="submit" style={{ ...btn, background: "var(--ink)", color: "#fff", border: "none", whiteSpace: "nowrap" }}>Save</button>
                     </form>
                   )}
@@ -192,16 +196,16 @@ export default function WhiteboardCard({ card, staff, locked }: {
                 <input type="hidden" name="card_id" value={card.id} />
                 <textarea name="body" rows={2} placeholder="What did the team conclude?" style={{ ...input, resize: "vertical" }} required />
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <select name="kind" defaultValue="insight" style={{ ...input, width: 110 }}>
+                  <select name="kind" defaultValue="insight" style={{ ...inputControl, width: 110 }}>
                     <option value="insight">Insight</option>
                     <option value="action">Action</option>
                     <option value="concern">Concern</option>
                   </select>
-                  <select name="owner_id" defaultValue="" style={{ ...input, width: 150 }}>
+                  <select name="owner_id" defaultValue="" style={{ ...inputControl, width: 150 }}>
                     <option value="">— owner —</option>
                     {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
-                  <input name="due_date" type="date" style={{ ...input, width: 150 }} />
+                  <input name="due_date" type="date" style={{ ...inputControl, width: 150 }} />
                   <button type="submit" style={{ ...btn, background: "var(--ink)", color: "#fff", border: "none" }}>Add</button>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--muted)" }}>
@@ -213,7 +217,7 @@ export default function WhiteboardCard({ card, staff, locked }: {
             {!locked && (
               <form action={setWhiteboardCardStatus} style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
                 <input type="hidden" name="id" value={card.id} />
-                <input name="headline" defaultValue={card.headline ?? ""} placeholder="One-line takeaway for the record" style={input} />
+                <input name="headline" defaultValue={card.headline ?? ""} placeholder="One-line takeaway for the record" style={inputControl} />
                 <div style={{ display: "flex", gap: 6 }}>
                   <button type="submit" name="status" value="discussed" style={{ ...btn, background: "var(--brand-fill)", color: "#fff", border: "none" }}>Mark discussed</button>
                   <button type="submit" name="status" value="deferred" style={btn}>Defer</button>

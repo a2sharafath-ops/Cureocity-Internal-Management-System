@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const GOALS = ["Fat loss", "Muscle gain", "Manage health condition", "Strength & flexibility", "General fitness", "Rehab / recovery"];
 
-const input: React.CSSProperties = { padding: "11px 13px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 15, background: "#fff", width: "100%" };
+const input: React.CSSProperties = { padding: "0 13px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 15, background: "#fff", width: "100%" , height: 46, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 13, color: "var(--muted)", margin: "12px 0 5px", display: "block", fontWeight: 500 };
 const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
 

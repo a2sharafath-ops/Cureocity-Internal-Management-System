@@ -33,7 +33,7 @@ export default function AddPackage({ clientId, packages, hasMembership }: { clie
     });
   };
 
-  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "7px 9px", fontSize: 13, background: "#fff" };
+  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "0 9px", fontSize: 13, background: "#fff", height: 34, boxSizing: "border-box" };
 
   if (!open) {
     return <button onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ Add package</button>;

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createClass } from "@/lib/actions";
 
 const HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
-const input: React.CSSProperties = { width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" };
+const input: React.CSSProperties = { width: "100%", padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" , height: 36, boxSizing: "border-box" };
 
 export default function ClassForm({
   rooms, trainers,

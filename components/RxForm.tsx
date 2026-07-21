@@ -7,7 +7,7 @@ import { screenAll } from "@/lib/rxdata";
 type Line = { drug: string; dose: string; frequency: string; route: string; duration: string; quantity: string; instructions: string };
 const blank = (): Line => ({ drug: "", dose: "", frequency: "", route: "oral", duration: "", quantity: "", instructions: "" });
 
-const input: React.CSSProperties = { padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+const input: React.CSSProperties = { padding: "0 9px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" , height: 34, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 
 export default function RxForm({ clientId, allergies, currentMeds }: { clientId: string; allergies: string[]; currentMeds: string[] }) {

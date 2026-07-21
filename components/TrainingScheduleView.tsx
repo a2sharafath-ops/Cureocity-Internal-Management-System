@@ -23,7 +23,7 @@ const TAG_STYLE: Record<string, [string, string]> = {
 function hourLabel(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${am ? "AM" : "PM"}`; }
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
 
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" , height: 36, boxSizing: "border-box" };
 
 export default function TrainingScheduleView({
   today, trainers, hours, slots, clients, staff, assessments, assessmentRecords, recovery, classes, canWrite,

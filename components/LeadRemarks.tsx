@@ -26,6 +26,10 @@ const field: React.CSSProperties = {
   border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px",
   fontSize: 12.5, background: "#fff",
 };
+// Same look, fixed height. An <input> and a <select> have different intrinsic
+// heights, so equal padding leaves them staggered in a row. Deliberately not
+// applied to the <textarea>, which must stay free to grow.
+const fieldControl: React.CSSProperties = { ...field, padding: "0 9px", height: 34, boxSizing: "border-box" };
 const btn: React.CSSProperties = {
   border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
   padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: "var(--ink)",
@@ -112,7 +116,7 @@ export default function LeadRemarks({
             style={{ ...field, width: "100%", fontSize: 13, resize: "vertical" }}
           />
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center", marginTop: 7 }}>
-            <select name="outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as RemarkOutcome)} style={field}>
+            <select name="outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as RemarkOutcome)} style={fieldControl}>
               {REMARK_OUTCOMES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
             <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Call back</label>
@@ -122,9 +126,9 @@ export default function LeadRemarks({
               // rather than leaving a stale default the user didn't choose.
               key={outcome}
               defaultValue={suggested != null ? addDays(today, suggested) : ""}
-              min={today} style={field}
+              min={today} style={fieldControl}
             />
-            <input name="next_note" placeholder="Callback note (optional)" style={{ ...field, flex: 1, minWidth: 140 }} />
+            <input name="next_note" placeholder="Callback note (optional)" style={{ ...fieldControl, flex: 1, minWidth: 140 }} />
             <Save />
           </div>
           {suggested == null && (

@@ -36,7 +36,7 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
   useEffect(() => { if (state.ok) ref.current?.reset(); }, [state.ok]);
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
+  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", fontSize: 13, background: "#fff" , height: 36, boxSizing: "border-box" };
 
   // group by folder
   const folders = new Map<string, ResourceRow[]>();

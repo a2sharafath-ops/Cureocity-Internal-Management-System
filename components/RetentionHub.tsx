@@ -35,7 +35,7 @@ export default function RetentionHub({
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 14px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "11px 14px", fontSize: 13 };
-  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
+  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", fontSize: 13, background: "#fff" , height: 36, boxSizing: "border-box" };
   const kpi = (label: string, value: string, sub: string, bg: string, color: string) => (
     <MetricCard label={label} value={value} sub={sub} badge={{ bg, color }} />
   );
