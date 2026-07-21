@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createAppointment } from "@/lib/actions";
 
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 7); // 7am..9pm

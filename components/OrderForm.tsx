@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createOrder } from "@/lib/actions";
 
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 
 const LAB = ["CBC", "Lipid panel", "HbA1c", "Fasting glucose", "TSH", "Liver function (LFT)", "Renal function (RFT)", "Vitamin D", "Vitamin B12", "Urinalysis"];

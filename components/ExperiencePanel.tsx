@@ -31,8 +31,9 @@ const btn: React.CSSProperties = {
   padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", color: "var(--ink)",
 };
 const field: React.CSSProperties = {
-  border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px",
+  border: "1px solid var(--border)", borderRadius: 8, padding: "0 9px",
   fontSize: 12.5, background: "#fff",
+  height: 34, boxSizing: "border-box",
 };
 
 const hh = (h: number | null) => {

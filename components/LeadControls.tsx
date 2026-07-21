@@ -4,6 +4,10 @@ import { useState } from "react";
 import { createLead, updateLead, initiateCall } from "@/lib/actions";
 
 const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
+// Same look, but a fixed height — an <input> and a <select> do not share
+// an intrinsic height, so identical padding leaves them visibly staggered.
+// Not applied to <textarea>, which must stay free to grow.
+const inputControl: React.CSSProperties = { ...input, padding: "0 10px", height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 
@@ -24,20 +28,20 @@ const STAGES = ["1-New Lead", "2-Discovery", "3-Product Match", "4-Visit/Trial",
 const OBJECTIONS = ["Price too high", "Timing not right now", "Location / distance", "Needs to consult family", "Comparing other gyms", "Not sure of commitment", "Medical clearance pending"];
 
 function Sel({ name, label, opts, def }: { name: string; label: string; opts: string[]; def?: string | null }) {
-  return <div style={{ display: "grid", gap: 3 }}><label style={lbl}>{label}</label><select style={input} name={name} defaultValue={def ?? ""}><option value="">—</option>{opts.map((o) => <option key={o}>{o}</option>)}</select></div>;
+  return <div style={{ display: "grid", gap: 3 }}><label style={lbl}>{label}</label><select style={inputControl} name={name} defaultValue={def ?? ""}><option value="">—</option>{opts.map((o) => <option key={o}>{o}</option>)}</select></div>;
 }
 
 export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string[] }) {
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 10 }}>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Name *</label><input style={input} name="name" required defaultValue={lead?.name ?? ""} /></div>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Phone</label><input style={input} name="phone" defaultValue={lead?.phone ?? ""} /></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Name *</label><input style={inputControl} name="name" required defaultValue={lead?.name ?? ""} /></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Phone</label><input style={inputControl} name="phone" defaultValue={lead?.phone ?? ""} /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         <Sel name="source" label="Source" opts={SOURCES} def={lead?.source} />
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Campaign</label><input style={input} name="campaign" list="lead-campaigns" defaultValue={lead?.campaign ?? ""} placeholder="e.g. Summer Shred '26" /><datalist id="lead-campaigns">{campaigns.map((c) => <option key={c} value={c} />)}</datalist></div>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Front desk (FDE)</label><input style={input} name="fde" defaultValue={lead?.fde ?? ""} /></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Campaign</label><input style={inputControl} name="campaign" list="lead-campaigns" defaultValue={lead?.campaign ?? ""} placeholder="e.g. Summer Shred '26" /><datalist id="lead-campaigns">{campaigns.map((c) => <option key={c} value={c} />)}</datalist></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Front desk (FDE)</label><input style={inputControl} name="fde" defaultValue={lead?.fde ?? ""} /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         <Sel name="interest" label="Interest" opts={INTERESTS} def={lead?.interest} />
@@ -47,10 +51,10 @@ export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         <Sel name="history" label="Fitness history" opts={HISTORY} def={lead?.history} />
         <Sel name="budget" label="Budget signal" opts={BUDGET} def={lead?.budget} />
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Location</label><input style={input} name="location" defaultValue={lead?.location ?? ""} /></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Location</label><input style={inputControl} name="location" defaultValue={lead?.location ?? ""} /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Profession</label><input style={input} name="profession" defaultValue={lead?.profession ?? ""} /></div>
+        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Profession</label><input style={inputControl} name="profession" defaultValue={lead?.profession ?? ""} /></div>
         <Sel name="stage" label="Pipeline stage" opts={STAGES} def={lead?.stage ?? "1-New Lead"} />
         <Sel name="objection" label="Objection (if raised)" opts={OBJECTIONS} def={lead?.objection} />
       </div>

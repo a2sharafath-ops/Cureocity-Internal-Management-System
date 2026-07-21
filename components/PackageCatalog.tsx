@@ -30,7 +30,7 @@ export default function PackageCatalog({
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const chip = (bg: string, c: string, t: string) => <Chip bg={bg} color={c} style={{ padding: "3px 9px" }}>{t}</Chip>;
-  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", width: "100%" };
+  const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", fontSize: 13, background: "#fff", width: "100%" , height: 36, boxSizing: "border-box" };
 
   const card = (variants: CatPkg[]) => {
     const line = variants[0].line;

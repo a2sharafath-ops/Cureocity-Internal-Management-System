@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { sellPass } from "@/lib/actions";
 
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" , height: 36, boxSizing: "border-box" };
 
 type PassType = { id: string; name: string; price: number; entries: number; valid_days: number };
 

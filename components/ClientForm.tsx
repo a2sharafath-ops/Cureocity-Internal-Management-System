@@ -13,8 +13,9 @@ const label: React.CSSProperties = {
   display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, marginTop: 12,
 };
 const input: React.CSSProperties = {
-  width: "100%", padding: "8px 10px", border: "1px solid var(--border)",
+  width: "100%", padding: "0 10px", border: "1px solid var(--border)",
   borderRadius: 8, fontSize: 14, background: "#fff",
+  height: 36, boxSizing: "border-box",
 };
 
 export default function ClientForm({

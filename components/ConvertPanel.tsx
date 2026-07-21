@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { sendLeadOtp, convertLeadVerified } from "@/lib/actions";
 
 const money = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN");
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 11, color: "var(--muted)" };
 
 export default function ConvertPanel({

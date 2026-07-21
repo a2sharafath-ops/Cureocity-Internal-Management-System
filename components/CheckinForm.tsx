@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { recordCheckin } from "@/lib/actions";
 
-const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" };
+const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14, background: "#fff" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 11, color: "var(--muted)" };
 
 export default function CheckinForm({ clients }: { clients: { id: string; name: string }[] }) {

@@ -23,8 +23,9 @@ const box: React.CSSProperties = {
   borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px", marginTop: 16,
 };
 const field: React.CSSProperties = {
-  border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px",
+  border: "1px solid var(--border)", borderRadius: 8, padding: "0 9px",
   fontSize: 12.5, background: "#fff",
+  height: 34, boxSizing: "border-box",
 };
 const btn: React.CSSProperties = {
   border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
