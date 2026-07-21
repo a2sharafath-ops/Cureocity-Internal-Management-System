@@ -12,9 +12,10 @@ const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
 const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" };
 
 export type Lead = {
-  id: string; name: string; phone: string | null; source: string | null; campaign: string | null; interest: string | null;
+  id: string; name: string; phone: string | null; email: string | null; source: string | null; campaign: string | null; interest: string | null;
   urgency: string | null; history: string | null; goals: string | null; location: string | null;
   budget: string | null; profession: string | null; fde: string | null; stage: string | null;
+  owner_id?: string | null;
   objection: string | null; notes: string | null;
 };
 
@@ -31,7 +32,9 @@ function Sel({ name, label, opts, def }: { name: string; label: string; opts: st
   return <div style={{ display: "grid", gap: 3 }}><label style={lbl}>{label}</label><select style={inputControl} name={name} defaultValue={def ?? ""}><option value="">—</option>{opts.map((o) => <option key={o}>{o}</option>)}</select></div>;
 }
 
-export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string[] }) {
+export type StaffOpt = { id: string; name: string };
+
+export function LeadFields({ lead, campaigns, staff }: { lead?: Lead; campaigns: string[]; staff: StaffOpt[] }) {
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 10 }}>
@@ -39,9 +42,23 @@ export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string
         <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Phone</label><input style={inputControl} name="phone" defaultValue={lead?.phone ?? ""} /></div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ display: "grid", gap: 3 }}>
+          <label style={lbl}>Email <span style={{ opacity: .6 }}>(optional)</span></label>
+          {/* Optional on purpose — this is a phone-first business. When given,
+              it triggers an acknowledgement email on save. */}
+          <input style={inputControl} type="email" name="email" defaultValue={lead?.email ?? ""} placeholder="name@example.com" />
+        </div>
         <Sel name="source" label="Source" opts={SOURCES} def={lead?.source} />
         <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Campaign</label><input style={inputControl} name="campaign" list="lead-campaigns" defaultValue={lead?.campaign ?? ""} placeholder="e.g. Summer Shred '26" /><datalist id="lead-campaigns">{campaigns.map((c) => <option key={c} value={c} />)}</datalist></div>
-        <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Front desk (FDE)</label><input style={inputControl} name="fde" defaultValue={lead?.fde ?? ""} /></div>
+        <div style={{ display: "grid", gap: 3 }}>
+          <label style={lbl}>Owner</label>
+          <select style={inputControl} name="owner_id" defaultValue={lead?.owner_id ?? ""}>
+            {/* Blank means "use whoever is creating this", handled server-side.
+                It is never left permanently unowned. */}
+            <option value="">— me —</option>
+            {staff.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         <Sel name="interest" label="Interest" opts={INTERESTS} def={lead?.interest} />
@@ -63,22 +80,22 @@ export function LeadFields({ lead, campaigns }: { lead?: Lead; campaigns: string
   );
 }
 
-export function LeadForm({ campaigns }: { campaigns: string[] }) {
+export function LeadForm({ campaigns, staff }: { campaigns: string[]; staff: StaffOpt[] }) {
   const [open, setOpen] = useState(false);
   if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ Add lead</button>;
   return (
     <form action={createLead} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 16, display: "grid", gap: 10, textAlign: "left" }}>
-      <LeadFields campaigns={campaigns} />
+      <LeadFields campaigns={campaigns} staff={staff} />
       <div><button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add lead</button></div>
     </form>
   );
 }
 
-export function LeadEditForm({ lead, campaigns }: { lead: Lead; campaigns: string[] }) {
+export function LeadEditForm({ lead, campaigns, staff }: { lead: Lead; campaigns: string[]; staff: StaffOpt[] }) {
   return (
     <form action={updateLead} style={{ display: "grid", gap: 10 }}>
       <input type="hidden" name="id" value={lead.id} />
-      <LeadFields lead={lead} campaigns={campaigns} />
+      <LeadFields lead={lead} campaigns={campaigns} staff={staff} />
       <div><button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save changes</button></div>
     </form>
   );

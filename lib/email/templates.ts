@@ -18,6 +18,23 @@ function shell(title: string, body: string) {
 
 export type Template = { subject: string; html: string };
 
+/**
+ * First contact with a LEAD — someone who enquired and has bought nothing.
+ *
+ * Deliberately separate from tplWelcome, which opens "Your membership is
+ * active" and would be actively wrong (and slightly alarming) sent to an
+ * enquiry. The job here is only to acknowledge and set the expectation that a
+ * human will call.
+ */
+export function tplLeadEnquiry(name: string): Template {
+  return {
+    subject: "Thanks for getting in touch — Cureocity",
+    html: shell(`Hi ${name},`,
+      `<p>Thanks for reaching out to Cureocity. One of our team will call you shortly to understand what you're looking for and answer any questions.</p>`
+      + `<p>If you'd rather reach us first, just reply to this email.</p>`),
+  };
+}
+
 export function tplWelcome(name: string): Template {
   return {
     subject: "Welcome to Cureocity",

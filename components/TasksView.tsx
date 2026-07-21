@@ -8,6 +8,8 @@ import SegTabs from "@/components/SegTabs";
 export type TaskRow = {
   id: string; title: string; type: string; priority: string; status: string;
   due_date: string | null; assignee: string | null; clientId: string | null; clientName: string | null;
+  /** a task can be about a lead instead of a client (0085) */
+  leadId?: string | null; leadName?: string | null;
 };
 
 const STATUS_LABEL: Record<string, string> = { todo: "To Do", doing: "In Progress", blocked: "Blocked", done: "Done" };
@@ -106,7 +108,15 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
                     <td style={{ ...td, color: "var(--muted)" }}>{t.assignee ?? "Unassigned"}</td>
                     <td style={{ ...td, color: "var(--muted)" }}>{fmt(t.due_date)}</td>
                     <td style={{ ...td, color: dr.overdue ? "var(--red)" : "var(--muted)", fontWeight: dr.overdue ? 600 : 400 }}>{dr.text}</td>
-                    <td style={td}>{t.clientId ? <Link href={`/clients/${t.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{t.clientName}</Link> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                    <td style={td}>
+                      {t.clientId
+                        ? <Link href={`/clients/${t.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{t.clientName}</Link>
+                        : t.leadId
+                          ? <Link href={`/leads/${t.leadId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>
+                              {t.leadName} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 11 }}>· lead</span>
+                            </Link>
+                          : <span style={{ color: "var(--muted)" }}>—</span>}
+                    </td>
                     <td style={td}>
                       <form action={setTaskStatus}>
                         <input type="hidden" name="id" value={t.id} />

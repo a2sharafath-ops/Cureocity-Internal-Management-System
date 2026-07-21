@@ -8,6 +8,8 @@ export type Profile = {
   role: string;
   /** home branch — used to scope things like the daily whiteboard */
   branch: string | null;
+  /** staff.id behind this login; null for client-portal users */
+  staffId: string | null;
 };
 
 export async function getProfile(): Promise<Profile | null> {
@@ -18,7 +20,7 @@ export async function getProfile(): Promise<Profile | null> {
   if (!user) return null;
   const { data } = await supabase
     .from("profiles")
-    .select("name, role, branch")
+    .select("name, role, branch, staff_id")
     .eq("id", user.id)
     .maybeSingle();
   return {
@@ -27,6 +29,10 @@ export async function getProfile(): Promise<Profile | null> {
     name: data?.name ?? user.email?.split("@")[0] ?? "User",
     role: data?.role ?? "Staff",
     branch: data?.branch ?? null,
+    // The staff row behind this login. Null for client portal users, and for
+    // any staff profile that was never linked. Lead ownership falls back to
+    // this when no owner is chosen explicitly.
+    staffId: (data as { staff_id?: string | null } | null)?.staff_id ?? null,
   };
 }
 

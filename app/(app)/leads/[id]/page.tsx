@@ -10,6 +10,7 @@ import ConvertPanel from "@/components/ConvertPanel";
 import ExperiencePanel from "@/components/ExperiencePanel";
 import LeadRemarks, { type Remark } from "@/components/LeadRemarks";
 import LeadOpportunity from "@/components/LeadOpportunity";
+import { LEAD_OWNER_ROLES } from "@/lib/roles";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { canWrite } from "@/lib/roles";
@@ -28,8 +29,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   if (!me || !canSee(me.role, "/leads")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: remarkRows }, { data: emailRows }, { data: msgRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner, expected_package_id, expected_value, expected_close, disqualified_at, disqualified_reason, disqualified_by").eq("id", params.id).maybeSingle(),
+  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: ownerRows }, { data: remarkRows }, { data: emailRows }, { data: msgRows }] = await Promise.all([
+    supabase.from("leads").select("id, name, phone, email, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner, expected_package_id, expected_value, expected_close, disqualified_at, disqualified_reason, disqualified_by").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     supabase.from("clients").select("id, name").order("name"),
@@ -42,6 +43,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       .eq("lead_id", params.id).order("date"),
     supabase.from("staff").select("id, name, role")
       .in("role", ["Fitness Trainer", "Health Coach"]).order("name"),
+    // Separate from trainerRows above — lead owners are front desk/management.
+    supabase.from("staff").select("id, name, role").in("role", LEAD_OWNER_ROLES).order("name"),
     supabase.from("lead_remarks")
       .select("id, body, outcome, by_name, created_at")
       .eq("lead_id", params.id).order("created_at", { ascending: false }),
@@ -144,7 +147,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       <div style={{ ...box, marginBottom: 16 }}>
         <b style={{ fontSize: 15 }}>Lead details</b>
         <div style={{ marginTop: 12 }}>
-          <LeadEditForm lead={lead} campaigns={campaigns} />
+          <LeadEditForm lead={lead} campaigns={campaigns} staff={((ownerRows ?? []) as { id: string; name: string }[]).map((m) => ({ id: m.id, name: m.name }))} />
         </div>
       </div>
 

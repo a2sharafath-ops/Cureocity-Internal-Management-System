@@ -7,6 +7,9 @@ import { notifyRoles } from "@/lib/notify";
 import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
 import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
 import { runLeadFollowups } from "@/lib/cron/lead-followups";
+import { runLeadCoverage } from "@/lib/cron/lead-coverage";
+import { runLeadIdle } from "@/lib/cron/lead-idle";
+import { runLeadStagnation } from "@/lib/cron/lead-stagnation";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -142,6 +145,14 @@ export async function runDaily() {
   const comp = await runComprehensiveSla(supabase);
   // Lead callbacks: remind the owner, escalate to management after 3 days.
   const cb = await runLeadFollowups(supabase, todayISO());
+  // Leads nobody committed to at all — the inverse of the callback sweep, and
+  // by far the larger group. One digest per owner, never per lead.
+  const cov = await runLeadCoverage(supabase, todayISO());
+  // High-value deals going quiet. Silent until leads carry an expected_value.
+  const idle = await runLeadIdle(supabase, todayISO());
+  // Leads where work is happening but nothing progresses. Silent until the
+  // 0086 stage clock has recorded real transitions.
+  const stag = await runLeadStagnation(supabase, todayISO());
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
@@ -149,16 +160,20 @@ export async function runDaily() {
       + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
       + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`
       + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`
-      + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`,
+      + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`
+      + ` · coverage digests ${cov.sent} sent to ${cov.owners} owner(s), ${cov.leads} leads with no next step`
+      + ` · idle deals ${idle.idle} flagged / ${idle.escalated} escalated of ${idle.scanned} valued`
+      + ` · stagnant ${stag.stagnant} / ${stag.escalated} stalled of ${stag.scanned} clocked, ${stag.digests} digest(s)`,
   });
   await notifyRoles(supabase, ["Administrator", "Manager"], {
     title: "Daily automation ran",
     body: `${renewed} renewals · ${reminders} reminders · ${followups} follow-ups queued`
       + (cb.escalated ? ` · ${cb.escalated} callback${cb.escalated === 1 ? "" : "s"} escalated` : "")
+      + (idle.value ? ` · ${idle.idle + idle.escalated} deal(s) worth ₹${Math.round(idle.value).toLocaleString("en-IN")} going quiet` : "")
       + (sla.breaches + comp.breaches
           ? ` · ${sla.breaches + comp.breaches} care SLA breach${sla.breaches + comp.breaches === 1 ? "" : "es"}`
           : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, sla, comp, callbacks: cb, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, comp, callbacks: cb, coverage: cov, idle, stagnation: stag, ranAt: new Date().toISOString() };
 }
