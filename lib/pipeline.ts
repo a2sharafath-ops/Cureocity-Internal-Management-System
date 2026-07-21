@@ -62,8 +62,21 @@ export type PipelineTotals = {
   counted: number;
   /** open deals with NO value set — the blind spot, shown so it can't hide */
   unvalued: number;
-  /** weighted value expected to land on or before a date */
-  weightedBy: (dueISO: string) => number;
+  /**
+   * Weighted value expected to land inside a window.
+   *
+   * `fromISO` is required and was the bug: the original took only an end date
+   * and summed every dated deal with `close <= end`. A deal whose close date
+   * has already passed therefore counted towards "could close this month",
+   * for every month thereafter, forever — the number could only grow, and
+   * silently overstated the forecast the longer the app ran.
+   *
+   * Deals whose date has slipped are not lost, but they are also not evidence
+   * about this month. They surface separately as `overdueValue`.
+   */
+  weightedBy: (fromISO: string, toISO: string) => number;
+  /** weighted value whose expected close date has already passed */
+  overdueValue: (todayISO: string) => number;
 };
 
 const amount = (v: number | string | null | undefined): number => {
@@ -91,8 +104,11 @@ export function pipelineTotals(leads: PipelineLead[]): PipelineTotals {
 
   return {
     open, weighted, counted, unvalued,
-    weightedBy: (dueISO: string) =>
-      dated.filter((d) => d.close <= dueISO).reduce((s, d) => s + d.value, 0),
+    weightedBy: (fromISO: string, toISO: string) =>
+      dated.filter((d) => d.close >= fromISO && d.close <= toISO)
+           .reduce((s, d) => s + d.value, 0),
+    overdueValue: (todayISO: string) =>
+      dated.filter((d) => d.close < todayISO).reduce((s, d) => s + d.value, 0),
   };
 }
 
