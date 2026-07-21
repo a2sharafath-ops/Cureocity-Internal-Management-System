@@ -11,6 +11,8 @@ import { canManageBlueprint } from "@/lib/roles";
 import type { BpScores } from "@/lib/blueprint";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import BlueprintSla from "@/components/BlueprintSla";
+import { SLA_KINDS } from "@/lib/blueprint-sla";
 
 export const dynamic = "force-dynamic";
 
@@ -30,16 +32,29 @@ export default async function BlueprintPage() {
   const clients = (clientData ?? []) as { id: string; name: string; code: string | null }[];
 
   const ids = clients.map((c) => c.id);
-  const [{ data: bloodData }, { data: signoffData }, { data: bpData }] = await Promise.all([
+  const [{ data: bloodData }, { data: signoffData }, { data: bpData }, { data: consultData }] = await Promise.all([
     ids.length ? supabase.from("blood_requests").select("*").in("client_id", ids) : Promise.resolve({ data: [] }),
     // security-definer RPC: booleans only, so every discipline can see the
     // 3-way sign-off status without reading other disciplines' summaries.
     supabase.rpc("blueprint_signoff"),
     ids.length ? supabase.from("blueprints").select("*").in("client_id", ids) : Promise.resolve({ data: [] }),
+    // Timestamps only — no summaries — so this stays readable by every
+    // discipline exactly like the blueprint_signoff RPC it sits beside.
+    ids.length
+      ? supabase.from("consultations")
+          .select("client_id, kind, completed_at, approved_at")
+          .in("client_id", ids).in("kind", SLA_KINDS as unknown as string[])
+      : Promise.resolve({ data: [] }),
   ]);
 
   const blood = new Map((bloodData ?? []).map((b: { client_id: string }) => [b.client_id, b]));
   const bps = new Map((bpData ?? []).map((b: { client_id: string }) => [b.client_id, b]));
+  const consultsBy = new Map<string, { kind: string; completedAt: string | null; approvedAt: string | null }[]>();
+  for (const c of (consultData ?? []) as { client_id: string; kind: string; completed_at: string | null; approved_at: string | null }[]) {
+    const list = consultsBy.get(c.client_id) ?? [];
+    list.push({ kind: c.kind, completedAt: c.completed_at, approvedAt: c.approved_at });
+    consultsBy.set(c.client_id, list);
+  }
   const signoff = new Map(
     ((signoffData ?? []) as { client_id: string; doctor: boolean; diet: boolean; trainer: boolean }[])
       .map((s) => [s.client_id, s]),
@@ -75,7 +90,11 @@ export default async function BlueprintPage() {
           <tbody>
             {clients.map((c) => {
               const appr = approvedCount(c.id);
-              const bp = bps.get(c.id) as { generated: boolean; consolidated: string | null; scores: BpScores | null } | undefined;
+              const bp = bps.get(c.id) as {
+                generated: boolean; consolidated: string | null; scores: BpScores | null;
+                consolidated_at: string | null; approved_at: string | null;
+                hold_since: string | null; hold_ms: number | null;
+              } | undefined;
               return (
                 <tr key={c.id} style={{ borderTop: "1px solid var(--border)", verticalAlign: "top" }}>
                   <td style={{ padding: "12px 16px" }}>
@@ -91,6 +110,15 @@ export default async function BlueprintPage() {
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <BlueprintGenerate clientId={c.id} generated={!!bp?.generated} ready={appr === 3} consolidated={bp?.consolidated ?? null} />
+                    <BlueprintSla
+                      clientId={c.id}
+                      consults={consultsBy.get(c.id) ?? []}
+                      consolidatedAt={bp?.consolidated_at ?? null}
+                      approvedAt={bp?.approved_at ?? null}
+                      holdSince={bp?.hold_since ?? null}
+                      holdMs={Number(bp?.hold_ms ?? 0)}
+                      canHold={canEditScores}
+                    />
                   </td>
                 </tr>
               );
