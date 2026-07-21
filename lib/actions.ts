@@ -1495,17 +1495,6 @@ export async function setLeadFollowup(formData: FormData) {
 
 // ---- opportunity + disqualification ----------------------------------------
 
-/** Reasons a lead was never a real opportunity. Distinct from LOST, which
- *  means we competed and lost. */
-export const DISQUALIFY_REASONS = [
-  { key: "unreachable",     label: "Never reachable" },
-  { key: "wrong_number",    label: "Wrong number" },
-  { key: "duplicate",       label: "Duplicate of another lead" },
-  { key: "out_of_area",     label: "Outside our area" },
-  { key: "not_our_service", label: "Wants something we don't offer" },
-  { key: "spam",            label: "Spam / test entry" },
-] as const;
-
 /**
  * Set the expected package, value and close date — the "light opportunity".
  *
