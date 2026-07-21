@@ -19,6 +19,7 @@ import { assignCareTeam } from "@/lib/care-team";
 import { notifyRoles } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
+import { leadScore } from "@/lib/leadscore";
 import {
   EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
   EXPERIENCE_TRAINING_TITLE, EXPERIENCE_SEQ,
@@ -666,6 +667,11 @@ export async function createLead(formData: FormData) {
   for (const f of LEAD_FIELDS) row[f] = String(formData.get(f) ?? "").trim() || null;
   row.name = name;
   row.stage = String(formData.get("stage") || "").trim() || "1-New Lead";
+  // Score at creation so a new lead is immediately filterable by tier.
+  const fresh = leadScore(row as Parameters<typeof leadScore>[0]);
+  row.score = fresh.total;
+  row.tier = fresh.tier;
+  row.scored_at = new Date().toISOString();
   await supabase.from("leads").insert(row);
   await logAudit(p, "Lead added", name, null);
   revalidatePath("/leads");
@@ -682,6 +688,9 @@ export async function updateLead(formData: FormData) {
   const stage = String(formData.get("stage") || "").trim();
   if (stage) patch.stage = stage;
   await supabase.from("leads").update(patch).eq("id", id);
+  // The 7 scoring signals may have changed — restore the stored score so it
+  // stays queryable rather than drifting from what the page computes.
+  await restoreLeadScore(supabase, id);
   await logAudit(p, "Lead updated", String(formData.get("name") ?? ""), null);
   revalidatePath("/leads");
 }
@@ -1479,6 +1488,126 @@ export async function setLeadFollowup(formData: FormData) {
   }).eq("id", lead_id);
   const { data: l } = await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle();
   await logAudit(p, date ? "Lead callback set" : "Lead callback cleared", l?.name, date);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+}
+
+
+// ---- opportunity + disqualification ----------------------------------------
+
+/** Reasons a lead was never a real opportunity. Distinct from LOST, which
+ *  means we competed and lost. */
+export const DISQUALIFY_REASONS = [
+  { key: "unreachable",     label: "Never reachable" },
+  { key: "wrong_number",    label: "Wrong number" },
+  { key: "duplicate",       label: "Duplicate of another lead" },
+  { key: "out_of_area",     label: "Outside our area" },
+  { key: "not_our_service", label: "Wants something we don't offer" },
+  { key: "spam",            label: "Spam / test entry" },
+] as const;
+
+/**
+ * Set the expected package, value and close date — the "light opportunity".
+ *
+ * Value defaults to the package's list price but stays editable, because
+ * discounts and part-payments are real and a forecast built on list price
+ * would be consistently optimistic.
+ */
+/** Store score + tier so they can be filtered, sorted and tracked over time.
+ *  They were derived at render and thrown away, which made "who moved from
+ *  COLD to HOT this week" unanswerable. */
+async function restoreLeadScore(
+  supabase: ReturnType<typeof createClient>,
+  leadId: string,
+) {
+  const { data } = await supabase.from("leads")
+    .select("interest, urgency, history, goals, location, budget, profession")
+    .eq("id", leadId).maybeSingle();
+  if (!data) return;
+  const { total, tier } = leadScore(data as Parameters<typeof leadScore>[0]);
+  await supabase.from("leads").update({
+    score: total, tier, scored_at: new Date().toISOString(),
+  }).eq("id", leadId);
+}
+
+export async function setLeadOpportunity(
+  _prev: { ok?: string; error?: string },
+  formData: FormData,
+): Promise<{ ok?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { error: "Not permitted." };
+
+  const lead_id = String(formData.get("lead_id") || "");
+  const pkg = String(formData.get("expected_package_id") || "") || null;
+  const rawValue = String(formData.get("expected_value") || "").trim();
+  const close = String(formData.get("expected_close") || "").trim() || null;
+  if (!lead_id) return { error: "Lead not found." };
+
+  const supabase = createClient();
+  let value: number | null = rawValue ? Number(rawValue) : null;
+  if (value != null && (!Number.isFinite(value) || value < 0)) {
+    return { error: "Expected value must be a positive number." };
+  }
+  // Fall back to list price when a package is chosen and no value typed.
+  if (value == null && pkg) {
+    const { data: row } = await supabase.from("packages").select("price").eq("id", pkg).maybeSingle();
+    value = row?.price != null ? Number(row.price) : null;
+  }
+
+  await supabase.from("leads").update({
+    expected_package_id: pkg, expected_value: value, expected_close: close,
+  }).eq("id", lead_id);
+
+  const { data: l } = await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle();
+  await logAudit(p, "Lead opportunity set", l?.name,
+    `${pkg ?? "no package"} · ${value != null ? `₹${value}` : "no value"}${close ? ` · close ${close}` : ""}`);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+  return { ok: "Opportunity saved." };
+}
+
+/**
+ * Mark a lead as never having been a real opportunity.
+ *
+ * Kept separate from LOST and from `stage`, so the stage it died in survives —
+ * that is exactly the leak-point data the sales audit asks for. A disqualified
+ * lead drops out of pipeline value and out of conversion-rate denominators.
+ */
+export async function disqualifyLead(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const lead_id = String(formData.get("lead_id") || "");
+  const reason = String(formData.get("reason") || "").trim();
+  if (!lead_id || !reason) return;
+
+  const supabase = createClient();
+  await supabase.from("leads").update({
+    disqualified_at: new Date().toISOString(),
+    disqualified_reason: reason,
+    disqualified_by: p.name,
+    next_follow_up: null,      // stop chasing someone who isn't a prospect
+    follow_up_owner: null,
+  }).eq("id", lead_id);
+
+  const { data: l } = await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle();
+  await logAudit(p, "Lead disqualified", l?.name, reason);
+  revalidatePath(`/leads/${lead_id}`);
+  revalidatePath("/leads");
+}
+
+/** Undo a disqualification — mistakes happen, and a wrong "wrong number" is a
+ *  lead silently deleted from every report. */
+export async function requalifyLead(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const lead_id = String(formData.get("lead_id") || "");
+  if (!lead_id) return;
+  const supabase = createClient();
+  await supabase.from("leads").update({
+    disqualified_at: null, disqualified_reason: null, disqualified_by: null,
+  }).eq("id", lead_id);
+  const { data: l } = await supabase.from("leads").select("name").eq("id", lead_id).maybeSingle();
+  await logAudit(p, "Lead requalified", l?.name, null);
   revalidatePath(`/leads/${lead_id}`);
   revalidatePath("/leads");
 }

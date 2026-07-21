@@ -9,6 +9,9 @@ import { LeadEditForm, CallCell, type Lead } from "@/components/LeadControls";
 import ConvertPanel from "@/components/ConvertPanel";
 import ExperiencePanel from "@/components/ExperiencePanel";
 import LeadRemarks, { type Remark } from "@/components/LeadRemarks";
+import LeadOpportunity from "@/components/LeadOpportunity";
+import ActivityTimeline from "@/components/ActivityTimeline";
+import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { canWrite } from "@/lib/roles";
 import { ivrStatus } from "@/lib/ivr/config";
 
@@ -25,8 +28,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
   if (!me || !canSee(me.role, "/leads")) redirect("/dashboard");
 
   const supabase = createClient();
-  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: remarkRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner").eq("id", params.id).maybeSingle(),
+  const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: remarkRows }, { data: emailRows }, { data: msgRows }] = await Promise.all([
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner, expected_package_id, expected_value, expected_close, disqualified_at, disqualified_reason, disqualified_by").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     supabase.from("clients").select("id, name").order("name"),
@@ -42,6 +45,8 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
     supabase.from("lead_remarks")
       .select("id, body, outcome, by_name, created_at")
       .eq("lead_id", params.id).order("created_at", { ascending: false }),
+    supabase.from("email_log").select("subject, status, created_at").eq("lead_id", params.id),
+    supabase.from("messages").select("body, sender, sender_name, created_at").eq("lead_id", params.id),
   ]);
   if (!leadRow) notFound();
   const lead = leadRow as Lead;
@@ -58,6 +63,38 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
     .map((x) => ({ ...x, providerName: staffName(x.staff) }));
   const trainers = (trainerRows ?? []) as { id: string; name: string }[];
   const remarks = (remarkRows ?? []) as Remark[];
+  const opp = leadRow as unknown as {
+    expected_package_id: string | null; expected_value: number | null; expected_close: string | null;
+    disqualified_at: string | null; disqualified_reason: string | null; disqualified_by: string | null;
+  };
+
+  // One stream from every source that can reference a lead. Assembled at read
+  // time rather than from an events table — an events table needs every write
+  // path to remember to append, and the one that forgets is the one that
+  // matters.
+  const timeline: TimelineEvent[] = buildTimeline([
+    remarks.map((r) => ({
+      at: r.created_at, kind: "remark" as const,
+      title: r.body, detail: r.outcome, by: r.by_name,
+    })),
+    experienceAppts.map((a) => ({
+      at: atDay(a.date) ?? "", kind: "appointment" as const,
+      title: a.type ?? "Appointment",
+      detail: a.providerName ? `with ${a.providerName}` : null,
+      pending: a.status === "scheduled",
+    })),
+    experienceSessions.map((x) => ({
+      at: atDay(x.date) ?? "", kind: "session" as const,
+      title: "Trial training session",
+      detail: x.providerName ? `with ${x.providerName}` : null,
+      pending: x.status === "scheduled",
+    })),
+    ((emailRows ?? []) as { subject: string | null; status: string | null; created_at: string }[])
+      .map((e) => ({ at: e.created_at, kind: "email" as const, title: e.subject ?? "Email", detail: e.status })),
+    ((msgRows ?? []) as { body: string; sender: string; sender_name: string | null; created_at: string }[])
+      .map((m) => ({ at: m.created_at, kind: "message" as const, title: m.body, by: m.sender_name ?? m.sender })),
+  ]);
+
   const fu = leadRow as unknown as { next_follow_up: string | null; next_follow_up_note: string | null; follow_up_owner: string | null };
 
   const { total, tier } = leadScore(lead);
@@ -115,6 +152,25 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       <div style={{ ...box, background: "#f0fdf9" }}>
         <b style={{ fontSize: 15 }}>Convert to client</b>
         <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 14px" }}>Pick a package &amp; offer, record referral, capture consent, and verify by OTP. On success the client, sessions and package invoice are created and you're taken to billing.</p>
+        <LeadOpportunity
+          leadId={lead.id}
+          stage={lead.stage}
+          packages={packages.map((x) => ({ id: x.id, name: x.name, price: x.price }))}
+          expectedPackageId={opp.expected_package_id}
+          expectedValue={opp.expected_value == null ? null : Number(opp.expected_value)}
+          expectedClose={opp.expected_close}
+          disqualifiedAt={opp.disqualified_at}
+          disqualifiedReason={opp.disqualified_reason}
+          disqualifiedBy={opp.disqualified_by}
+          canWrite={canWrite(me.role)}
+        />
+
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>📜 Activity</div>
+          <ActivityTimeline events={timeline} today={todayISO()} max={30}
+            emptyLabel="No activity yet — log a remark or book an experience session." />
+        </div>
+
         <LeadRemarks
           leadId={lead.id}
           remarks={remarks}

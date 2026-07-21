@@ -20,6 +20,8 @@ import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
+import ActivityTimeline from "@/components/ActivityTimeline";
+import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { getComprehensiveView } from "@/lib/actions";
 import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
@@ -156,6 +158,37 @@ export default async function ClientDetailPage({ params, searchParams }: { param
     trainer_id: string; staff: { name: string } | null;
   }[];
   const done = sess.filter((s) => s.status === "completed").length;
+
+  // One activity stream. Assembled from rows the page already fetches, so it
+  // costs nothing extra — the data was always here, it was just displayed as
+  // six independently-sorted tables.
+  const activity: TimelineEvent[] = buildTimeline([
+    sess.map((x) => ({
+      at: atDay(x.date) ?? "", kind: "session" as const,
+      title: `Strength session ${x.seq ?? ""}`.trim(),
+      detail: x.status, pending: x.status === "scheduled",
+    })),
+    consults.map((c) => ({
+      at: atDay(null) ?? new Date().toISOString(), kind: "consultation" as const,
+      title: `${c.kind} consultation`, detail: c.status,
+      pending: c.status !== "completed",
+    })),
+    invoices.map((i) => ({
+      at: atDay(i.issued_date) ?? "", kind: "invoice" as const,
+      title: `${i.description ?? "Invoice"} — ₹${Number(i.amount).toLocaleString("en-IN")}`,
+      detail: i.status, pending: i.status === "Unpaid",
+    })),
+    prescriptions.map((r) => ({
+      at: atDay(r.signed_date) ?? "", kind: "note" as const,
+      title: "Prescription issued",
+      detail: r.shared_at ? "in client portal" : "not yet shared",
+      pending: !r.shared_at,
+    })),
+    workouts.map((w) => ({
+      at: w.created_at, kind: "note" as const,
+      title: `Workout assigned — ${w.name}`, by: w.assigned_by,
+    })),
+  ]);
 
   // ---- Client Journey milestones (Service Timeline) ----
   const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed");
@@ -312,6 +345,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </>)}
 
       {tab === "timeline" && (<>
+      {/* The actual timeline — everything that happened, newest first. The
+          Client Journey below it stays: it answers a different question
+          ("is onboarding complete?") that a chronological stream doesn't. */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>📜 Activity</div>
+        <ActivityTimeline events={activity} today={todayISO()} max={40}
+          emptyLabel="No activity recorded yet." />
+      </div>
+
       {/* Client Journey */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>

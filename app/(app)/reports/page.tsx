@@ -4,6 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
+import { pipelineTotals, pipelineByStage, targetOutlook } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function ReportsPage() {
   const days30Ago = new Date(nowMs - 30 * 86400000).toISOString().slice(0, 10);
   const [{ data: invData }, { data: leadData }, { data: clientData }, sessTotal, sessDone, { data: subData }, { data: recentSess }] = await Promise.all([
     supabase.from("invoices").select("amount, status, paid_date"),
-    supabase.from("leads").select("stage"),
+    supabase.from("leads").select("stage, expected_value, expected_close, disqualified_at"),
     supabase.from("clients").select("package_id, joined"),
     supabase.from("sessions").select("id", { count: "exact", head: true }),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("status", "completed"),
@@ -133,6 +134,22 @@ export default async function ReportsPage() {
     { label: "Converted (clients)", value: clients.length },
   ];
 
+  // The forward-looking half. Everything above this line is realised revenue;
+  // this is what could still land. Weighted, because the raw sum assumes every
+  // open deal closes and would make the forecast a wish.
+  const pipe = pipelineTotals(leads as unknown as Parameters<typeof pipelineTotals>[0]);
+  const byStage = pipelineByStage(leads as unknown as Parameters<typeof pipelineByStage>[0]);
+  const monthEnd = (() => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+  })();
+  const closingThisMonth = pipe.weightedBy(monthEnd);
+  const thisMonthRevenue = revByMonth.get(months[months.length - 1].key) ?? 0;
+  const { data: targetRow } = await supabase.from("sales_targets")
+    .select("revenue_target").eq("month", months[months.length - 1].key).maybeSingle();
+  const target = Number(targetRow?.revenue_target ?? 0);
+  const outlook = target > 0 ? targetOutlook(target, thisMonthRevenue, closingThisMonth) : null;
+
   const kpi = (label: string, value: string, sub?: string) => (
     <MetricCard label={label} value={value} sub={sub} minWidth={170} />
   );
@@ -148,6 +165,58 @@ export default async function ReportsPage() {
         {kpi("Outstanding", money(outstanding), "unpaid")}
         {kpi("Active clients", String(clients.length))}
         {kpi("Session completion", `${completionRate}%`, `${completedSessions} of ${totalSessions}`)}
+      </div>
+
+      {/* Pipeline — the number Sales Targets could never show, because no lead
+          carried an amount until now. */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+        {kpi("Open pipeline", money(pipe.open), `${pipe.counted} deal${pipe.counted === 1 ? "" : "s"} with a value`)}
+        {kpi("Weighted pipeline", money(pipe.weighted), "adjusted for stage close rates")}
+        {kpi("Could close this month", money(closingThisMonth), `by ${monthEnd}`)}
+        {kpi("No value set", String(pipe.unvalued), pipe.unvalued ? "not in the forecast" : "all deals valued")}
+      </div>
+
+      {outlook && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 16px", marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <b style={{ fontSize: 14 }}>This month&apos;s target</b>
+            <span style={{
+              background: outlook.canMake ? "var(--green-bg)" : "var(--amber-bg)",
+              color: outlook.canMake ? "var(--green-text)" : "var(--amber-text)",
+              borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700,
+            }}>
+              {outlook.canMake ? "On track" : `${money(outlook.gap)} short`}
+            </span>
+          </div>
+          <div style={{ fontSize: 13, marginTop: 6 }}>
+            {money(thisMonthRevenue)} booked of {money(target)} — {outlook.attained}% attained.
+            {" "}Plus {money(closingThisMonth)} weighted pipeline closing this month
+            {" "}= <b>{money(outlook.projected)} projected</b>.
+          </div>
+          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>
+            Pipeline is weighted by stage close rate, so this is an expectation rather than a best case.
+          </div>
+        </div>
+      )}
+
+      {/* Money by stage — the funnel that counts rupees rather than heads. */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 16px", marginBottom: 18 }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>Pipeline by stage</div>
+        {byStage.map((r) => (
+          <div key={r.stage} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderTop: "1px solid var(--border)", fontSize: 12.5 }}>
+            <span style={{ minWidth: 130 }}>{r.stage}</span>
+            <span style={{ color: "var(--muted)", minWidth: 60 }}>{r.count} lead{r.count === 1 ? "" : "s"}</span>
+            <span style={{ minWidth: 90, textAlign: "right" }}>{money(r.value)}</span>
+            <span style={{ color: "var(--muted)", minWidth: 46, textAlign: "right" }}>{Math.round(r.probability * 100)}%</span>
+            <span style={{ flex: 1 }} />
+            <b>{money(r.weighted)}</b>
+          </div>
+        ))}
+        {byStage.every((r) => r.value === 0) && (
+          <div style={{ color: "var(--muted)", fontSize: 12.5, paddingTop: 8 }}>
+            No expected values set yet — open a lead and fill in the Opportunity panel.
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
