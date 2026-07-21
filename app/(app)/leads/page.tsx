@@ -332,13 +332,17 @@ export default async function LeadsPage({
         </div>
       )}
 
+      {/* Ten columns don't fit a laptop viewport. `overflow: hidden` clipped
+          the last one — the Open button was unreachable rather than merely
+          off-screen. `overflowX: auto` lets it scroll; minWidth stops the
+          browser crushing columns to unreadable widths first. */}
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load leads.</b> {error.message}
         </div>
       ) : (
-        <div style={{ ...box, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ ...box, overflowX: "auto", overflowY: "hidden" }}>
+          <table style={{ width: "100%", minWidth: 1120, borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={th}>Lead</th>
