@@ -25,16 +25,22 @@ type Lead = {
   interest: string | null; urgency: string | null; history: string | null; goals: string | null;
   location: string | null; budget: string | null; profession: string | null;
   stage: string | null; fde: string | null; owner_id: string | null; created_at: string | null;
+  disqualified_at: string | null;
   next_follow_up: string | null; follow_up_owner: string | null;
 };
 
 // Broad slices, kept because the owner dashboard's Growth cards link straight
 // in with one of these. They compose with the stage and tier filters below.
+type Viewable = { stage: string | null; disqualified_at: string | null };
 const VIEWS = {
-  all: { label: "All leads", match: () => true },
-  open: { label: "In pipeline", match: (s: string) => !s.startsWith("5") && s !== "LOST" },
-  won: { label: "Converted", match: (s: string) => s.startsWith("5") },
-  lost: { label: "Lost", match: (s: string) => s === "LOST" },
+  all:  { label: "All leads",   match: () => true },
+  // Disqualified is NOT pipeline — that distinction is the entire point of
+  // 0082. Counting "never was a lead" as in-play understates every conversion
+  // rate, because it inflates the denominator.
+  open: { label: "In pipeline", match: (l: Viewable) =>
+            !l.disqualified_at && !(l.stage ?? "").startsWith("5") && (l.stage ?? "") !== "LOST" },
+  won:  { label: "Converted",   match: (l: Viewable) => (l.stage ?? "").startsWith("5") },
+  lost: { label: "Lost",        match: (l: Viewable) => (l.stage ?? "") === "LOST" || Boolean(l.disqualified_at) },
 } as const;
 type ViewKey = keyof typeof VIEWS;
 
@@ -107,7 +113,7 @@ export default async function LeadsPage({
     ? searchParams.due! : "";
   const supabase = createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }, { data: remarkRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner").order("num", { ascending: true }),
+    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner, disqualified_at").order("num", { ascending: true }),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     // On a CRM-only deployment there is no client page to link to, and the
     // pilot may not have client access — this lookup only powers the
@@ -178,13 +184,13 @@ export default async function LeadsPage({
   };
   const matched = leads.filter((l) =>
     (!q || matchesLeadQuery(l, q)) && matchesDates(l) && (!mine || l.owner_id === me.staffId));
-  const viewCount = (k: ViewKey) => matched.filter((l) => VIEWS[k].match(l.stage ?? "")).length;
+  const viewCount = (k: ViewKey) => matched.filter((l) => VIEWS[k].match(l)).length;
 
   // Score everything once, then narrow. Counts on the tabs and cards reflect
   // the *other* filters that are active, so they always tell you how many rows
   // clicking would actually give you.
   const all = matched.map((l) => ({ lead: l, ...leadScore(l) }));
-  const inView = all.filter((s) => VIEWS[view].match(s.lead.stage ?? ""));
+  const inView = all.filter((s) => VIEWS[view].match(s.lead));
 
   const matchesTier = (s: (typeof all)[number]) =>
     !tierFilter || (tierFilter === "converting" ? isConverting(s.lead.stage) : s.tier === tierFilter);

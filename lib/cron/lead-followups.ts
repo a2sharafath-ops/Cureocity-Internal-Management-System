@@ -13,9 +13,14 @@
 // teaches everyone to ignore escalations. Three days is long enough that the
 // owner has genuinely dropped it rather than had a busy morning.
 //
-// Idempotency: a `lead_id|status|date` key in blueprint_sla_events. Without it
+// Idempotency: a `lead_id|status|date` key in automation_events. Without it
 // an escalated lead would notify management every night until someone acted,
 // which is exactly how a useful alert becomes noise.
+//
+// This used blueprint_sla_events until 0084. That table's client_id is
+// `not null references clients(id)`, and a lead id is not a client id, so every
+// insert here would have thrown a foreign-key violation. It was never seen
+// because the query below requires a callback date and no lead had one.
 
 import { followupView } from "@/lib/lead-followup";
 import { notifyRoles } from "@/lib/notify";
@@ -48,16 +53,16 @@ export async function runLeadFollowups(supabase: Sb, today: string): Promise<Lea
 
   const ids = open.map((l) => l.id);
   const { data: seen } = await supabase
-    .from("blueprint_sla_events")
-    .select("client_id, gate, kind")
+    .from("automation_events")
+    .select("subject_id, gate, kind")
     .eq("protocol", PROTOCOL)
-    .in("client_id", ids);
+    .in("subject_id", ids);
   const already = new Set(
-    ((seen ?? []) as { client_id: string; gate: string; kind: string }[])
-      .map((e) => `${e.client_id}|${e.gate}|${e.kind}`),
+    ((seen ?? []) as { subject_id: string; gate: string; kind: string }[])
+      .map((e) => `${e.subject_id}|${e.gate}|${e.kind}`),
   );
 
-  const events: { client_id: string; protocol: string; gate: string; kind: string; due_at: string }[] = [];
+  const events: { subject_id: string; subject_kind: string; protocol: string; gate: string; kind: string; due_at: string }[] = [];
   let due = 0, late = 0, escalated = 0;
 
   for (const l of open) {
@@ -93,14 +98,14 @@ export async function runLeadFollowups(supabase: Sb, today: string): Promise<Lea
     });
 
     events.push({
-      client_id: l.id, protocol: PROTOCOL, gate, kind: v.status,
+      subject_id: l.id, subject_kind: "lead", protocol: PROTOCOL, gate, kind: v.status,
       due_at: `${l.next_follow_up}T00:00:00Z`,
     });
   }
 
   if (events.length) {
-    await supabase.from("blueprint_sla_events")
-      .upsert(events, { onConflict: "client_id,protocol,gate,kind", ignoreDuplicates: true });
+    await supabase.from("automation_events")
+      .upsert(events, { onConflict: "subject_id,protocol,gate,kind", ignoreDuplicates: true });
   }
 
   return { due, late, escalated };
