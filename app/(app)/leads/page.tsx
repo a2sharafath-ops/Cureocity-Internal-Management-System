@@ -6,10 +6,10 @@ import LeadStageSelect from "@/components/LeadStageSelect";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
 import SegTabs from "@/components/SegTabs";
-import { leadScore, leadProduct, TIER_STYLE, type Tier } from "@/lib/leadscore";
+import { leadScore, TIER_STYLE, type Tier } from "@/lib/leadscore";
 import Link from "next/link";
 import { LeadForm, CallCell } from "@/components/LeadControls";
-import LeadSearch from "@/components/LeadSearch";
+import LeadFilters from "@/components/LeadFilters";
 import { matchesLeadQuery } from "@/lib/leadsearch";
 import { namesMatch } from "@/lib/staff-directory";
 import { followupView, FOLLOWUP_TONE } from "@/lib/lead-followup";
@@ -162,7 +162,7 @@ export default async function LeadsPage({
   // Score everything once, then narrow. Counts on the tabs and cards reflect
   // the *other* filters that are active, so they always tell you how many rows
   // clicking would actually give you.
-  const all = matched.map((l) => ({ lead: l, ...leadScore(l), product: leadProduct(l) }));
+  const all = matched.map((l) => ({ lead: l, ...leadScore(l) }));
   const inView = all.filter((s) => VIEWS[view].match(s.lead.stage ?? ""));
 
   const matchesTier = (s: (typeof all)[number]) =>
@@ -249,44 +249,17 @@ export default async function LeadsPage({
         {" · "}Call: {ivr.configured ? `IVR (${ivr.provider})` : "device dialer"}
       </p>
 
-      <LeadSearch
-        initial={q}
-        params={{ view, stage: stageFilter ?? undefined, tier: tierFilter ?? undefined }}
+      <LeadFilters
+        q={q}
+        from={from}
+        to={to}
+        due={due}
+        view={view}
+        stage={stageFilter ?? undefined}
+        tier={tierFilter ?? undefined}
         count={q ? matched.length : null}
+        clearHref={href({ stage: stageFilter, tier: tierFilter }).replace(/[?&](from|to|due)=[^&]*/g, "")}
       />
-
-      {/* Date-wise search. `from`/`to` bound when the lead arrived; the
-          callback chips answer "what do I owe today?", which is the question
-          front desk actually opens this page with. */}
-      <form method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        {view !== "all" && <input type="hidden" name="view" value={view} />}
-        {stageFilter && <input type="hidden" name="stage" value={stageFilter} />}
-        {tierFilter && <input type="hidden" name="tier" value={tierFilter} />}
-        {q && <input type="hidden" name="q" value={q} />}
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>Added</span>
-        <input type="date" name="from" defaultValue={from} aria-label="Added from"
-          style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" }} />
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>to</span>
-        <input type="date" name="to" defaultValue={to} aria-label="Added to"
-          style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" }} />
-        <select name="due" defaultValue={due} aria-label="Callback due"
-          style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" }}>
-          <option value="">Any callback</option>
-          <option value="today">Due today</option>
-          <option value="overdue">Overdue</option>
-          <option value="week">Next 7 days</option>
-          <option value="none">No callback set</option>
-        </select>
-        <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-          Apply
-        </button>
-        {(from || to || due) && (
-          <Link href={href({ stage: stageFilter, tier: tierFilter }).replace(/[?&](from|to|due)=[^&]*/g, "")}
-            style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>
-            Clear dates
-          </Link>
-        )}
-      </form>
 
       <div style={{ marginBottom: 12 }}>
         <SegTabs
@@ -342,14 +315,13 @@ export default async function LeadsPage({
         </div>
       ) : (
         <div style={{ ...box, overflowX: "auto", overflowY: "hidden" }}>
-          <table style={{ width: "100%", minWidth: 1120, borderCollapse: "collapse" }}>
+          <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={th}>Lead</th>
                 <th style={th}>Interest</th>
                 <th style={th}>Score</th>
                 <th style={th}>Tier</th>
-                <th style={th}>Best-fit product</th>
                 <th style={th}>Last remark</th>
                 <th style={th}>Callback</th>
                 <th style={th}>Front desk</th>
@@ -358,7 +330,7 @@ export default async function LeadsPage({
               </tr>
             </thead>
             <tbody>
-              {visible.map(({ lead: l, total, tier, product }) => (
+              {visible.map(({ lead: l, total, tier }) => (
                 <tr key={l.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={td}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -370,7 +342,6 @@ export default async function LeadsPage({
                   <td style={{ ...td, color: "var(--muted)" }}>{l.interest ?? "—"}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
-                  <td style={{ ...td, color: "var(--muted)" }}>{product}</td>
                   <td style={{ ...td, maxWidth: 240 }}>
                     {(() => {
                       const r = lastRemark.get(l.id);
