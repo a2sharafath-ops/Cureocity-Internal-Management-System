@@ -23,22 +23,24 @@ into the **Value** box (not Note), Production ticked, then redeploy.
 
 | Variable | What it is |
 |---|---|
-| `WATI_WEBHOOK_SECRET` | Any random string you choose. You'll put it in Wati's webhook as an `Authorization` header. |
+| `WATI_WEBHOOK_SECRET` | Any random string you choose. Wati's webhook UI has no header field, so it goes in the webhook **URL** as `?token=…`. |
 | `WATI_LEAD_OWNER` | `s1,thamanna-nazer` — who owns WhatsApp leads, least-loaded rotation. |
 
 ## 2. Add the webhook in Wati
 
 Wati → **Connectors → Webhooks → Add Webhook**:
 
-- **URL:** `https://cureocity-internal-management-syste.vercel.app/api/leads/wati`
+- **URL** (include the token — this is the credential, keep the URL private):
+  `https://cureocity-internal-management-syste.vercel.app/api/leads/wati?token=<the WATI_WEBHOOK_SECRET value>`
 - **Status:** Enabled
-- **Event:** **New Contact Message** (only this one is needed for lead capture).
-- **Headers:** add a header —
-  - Key: `Authorization`
-  - Value: `Bearer <the WATI_WEBHOOK_SECRET value>`
+- **Event:** **New Contact Message** if your plan offers it; otherwise
+  **Message Received** works too. The endpoint handles both, and dedupe means
+  only the *first* message from a new number becomes a lead — later messages are
+  ignored.
 
-Wati requires a 200 response; this endpoint always returns 200 once the header
-is valid, so Wati won't disable it.
+Wati's simplified webhook dialog has no custom-header option, which is why the
+secret rides in the URL. Wati requires a 200 response; this endpoint always
+returns 200 once the token is valid, so Wati won't disable it.
 
 ## 3. Test
 
@@ -46,7 +48,8 @@ From another phone, send a **first-time** WhatsApp message to your business
 number (a number Wati has never seen before). Within a few seconds it should
 appear in CRM & Leads with source **WhatsApp** (or **WhatsApp Ad** if it came
 through a Click-to-WhatsApp ad) and an owner, plus a "Call … — new whatsapp
-lead" task on the Tasks page.
+lead" task on the Tasks page. The first message text is saved into the lead's
+notes.
 
 ## What lands in the CRM
 

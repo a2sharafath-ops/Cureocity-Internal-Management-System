@@ -1,24 +1,25 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestLead, pickOwner, validate } from "@/lib/ingest-lead";
-import { isNewContactEvent, mapWatiContact, type WatiWebhook } from "@/lib/wati-leads";
+import { isLeadEvent, mapWatiContact, type WatiWebhook } from "@/lib/wati-leads";
 
 export const dynamic = "force-dynamic";
 
 // Wati (WhatsApp) lead capture webhook.
 //
 //   Wati → Connectors → Webhooks → Add Webhook
-//   URL:     https://<domain>/api/leads/wati
-//   Event:   "New Contact Message"
-//   Header:  Authorization = Bearer <WATI_WEBHOOK_SECRET>
+//   URL:     https://<domain>/api/leads/wati?token=<WATI_WEBHOOK_SECRET>
+//   Event:   "New Contact Message" (or "Message Received" — both handled)
 //
-// When a brand-new contact messages your WhatsApp for the first time (including
-// via Click-to-WhatsApp ads), Wati POSTs here and the lead lands in CRM & Leads
-// — deduped, scored, owner-assigned, with a call task waiting. Same pipeline as
-// the website and Meta endpoints, different front door.
+// Wati's simple webhook UI has no custom-header field, so the secret travels as
+// a `token` query param instead of an Authorization header (the header is still
+// accepted if a plan offers it). Keep the URL private — it is the credential.
 //
-// Fails closed: without WATI_WEBHOOK_SECRET set, every request is rejected. An
-// unsecured public insert endpoint is a spam faucet into the CRM.
+// When someone messages your WhatsApp (including via Click-to-WhatsApp ads),
+// Wati POSTs here and the lead lands in CRM & Leads — deduped, scored,
+// owner-assigned, with a call task. Same pipeline as the website/Meta endpoints.
+//
+// Fails closed: without WATI_WEBHOOK_SECRET set, every request is rejected.
 
 /** Constant-time compare so the secret can't be recovered by timing. */
 function safeEqual(a: string, b: string): boolean {
@@ -31,9 +32,12 @@ function safeEqual(a: string, b: string): boolean {
 function authorised(req: Request): boolean {
   const secret = process.env.WATI_WEBHOOK_SECRET;
   if (!secret) return false;
-  // Accept "Bearer <secret>" (what you set in Wati's header) or the bare secret.
+  // Primary: ?token=<secret> in the URL (Wati has no header field).
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  if (token && safeEqual(token, secret)) return true;
+  // Fallback: Authorization: Bearer <secret>, if the plan supports headers.
   const header = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  return safeEqual(header, secret);
+  return Boolean(header) && safeEqual(header, secret);
 }
 
 export async function POST(req: Request) {
@@ -48,10 +52,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "body must be JSON" }, { status: 400 });
   }
 
-  // Wati fires several event types on one webhook; we only create a lead for a
-  // genuinely new contact. Everything else is acknowledged and ignored — a
-  // non-200 makes Wati retry and eventually disable the webhook.
-  if (!isNewContactEvent(body)) {
+  // Wati fires several event types; we only act on a new inbound enquiry.
+  // Everything else (delivery/read receipts, outbound messages) is acknowledged
+  // and ignored — a non-200 makes Wati retry and eventually disable the webhook.
+  if (!isLeadEvent(body)) {
     return NextResponse.json({ ok: true, status: "ignored", event: body?.eventType ?? null }, { status: 200 });
   }
 
@@ -80,7 +84,7 @@ export async function POST(req: Request) {
 
 export async function GET() {
   return NextResponse.json(
-    { ok: false, error: "POST Wati webhook events here with an Authorization: Bearer <secret> header." },
+    { ok: false, error: "POST Wati webhook events here with ?token=<secret> in the URL." },
     { status: 405 },
   );
 }
