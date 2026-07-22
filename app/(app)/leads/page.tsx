@@ -84,6 +84,8 @@ export default async function LeadsPage({
     from?: string; to?: string; due?: string;
     /** "1" = only leads owned by the signed-in user */
     mine?: string;
+    /** filter to a single owner (staff id) */
+    owner?: string;
   };
 }) {
   // This page had no guard — any signed-in user could reach it by URL.
@@ -149,6 +151,12 @@ export default async function LeadsPage({
     .filter((m) => LEAD_OWNER_ROLES.includes(m.role))
     .map((m) => ({ id: m.id, name: m.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Owner filter — validated against real staff ids so a junk value can't
+  // strand the page on an empty list. "none" is the reserved unowned value.
+  const ownerFilter = searchParams.owner === "none"
+    ? "none"
+    : (assignable.some((m) => m.id === searchParams.owner) ? searchParams.owner! : null);
   const byId = new Map(((staffRows ?? []) as { id: string; name: string }[]).map((m) => [m.id, m.name]));
   // owner_id is authoritative; `fde` is the pre-0083 fallback for any row the
   // backfill could not resolve.
@@ -183,7 +191,9 @@ export default async function LeadsPage({
     return true;
   };
   const matched = leads.filter((l) =>
-    (!q || matchesLeadQuery(l, q)) && matchesDates(l) && (!mine || l.owner_id === me.staffId));
+    (!q || matchesLeadQuery(l, q)) && matchesDates(l)
+    && (!mine || l.owner_id === me.staffId)
+    && (!ownerFilter || (ownerFilter === "none" ? !l.owner_id : l.owner_id === ownerFilter)));
   const viewCount = (k: ViewKey) => matched.filter((l) => VIEWS[k].match(l)).length;
 
   // Score everything once, then narrow. Counts on the tabs and cards reflect
@@ -236,6 +246,7 @@ export default async function LeadsPage({
     if (to) p.set("to", to);
     if (due) p.set("due", due);
     if (mine) p.set("mine", "1");
+    if (ownerFilter) p.set("owner", ownerFilter);
     const s = p.toString();
     return s ? `/leads?${s}` : "/leads";
   };
@@ -285,8 +296,10 @@ export default async function LeadsPage({
         view={view}
         stage={stageFilter ?? undefined}
         tier={tierFilter ?? undefined}
+        owners={assignable}
+        owner={ownerFilter ?? ""}
         count={q ? matched.length : null}
-        clearHref={href({ stage: stageFilter, tier: tierFilter }).replace(/[?&](from|to|due)=[^&]*/g, "")}
+        clearHref={href({ stage: stageFilter, tier: tierFilter }).replace(/[?&](from|to|due|owner)=[^&]*/g, "")}
       />
 
       {me.staffId && (
@@ -370,7 +383,6 @@ export default async function LeadsPage({
             <thead>
               <tr>
                 <th style={th}>Lead</th>
-                <th style={th}>Interest</th>
                 <th style={th}>Score</th>
                 <th style={th}>Tier</th>
                 <th style={th}>Last remark</th>
@@ -390,7 +402,6 @@ export default async function LeadsPage({
                     </div>
                     <div style={{ color: "var(--muted)", fontSize: 12 }}>{l.phone ?? "—"}{l.source ? ` · ${l.source}` : ""}</div>
                   </td>
-                  <td style={{ ...td, color: "var(--muted)" }}>{l.interest ?? "—"}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                   <td style={{ ...td, maxWidth: 240 }}>
