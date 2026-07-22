@@ -8,7 +8,7 @@ already owned, with a call task waiting for whoever owns it.
 | Variable | What it does | If unset |
 |---|---|---|
 | `WEBSITE_LEAD_SECRET` | Shared key the website sends in the `X-Cureocity-Key` header | Endpoint rejects everything (401) |
-| `WEBSITE_LEAD_OWNER` | `staff.id` who owns website leads — e.g. `s1` | Lead still captured, but arrives unowned |
+| `WEBSITE_LEAD_OWNER` | Who owns website leads. One staff id (`s1`), or several comma-separated to share them out (`s1,thamanna-nazer`) | Lead still captured, but arrives unowned |
 | `CRON_SECRET` | Unrelated to this form, but see the warning below | **All** nightly automation is dead |
 
 Generate the secret with something like `openssl rand -hex 32`. It is not a
@@ -96,9 +96,16 @@ Delete the test lead afterwards.
    because coming back is a real signal, not a duplicate.
 3. **Scored** using the same 7-signal rubric as a lead typed in by hand, so it
    arrives with a HOT/WARM/COOL/COLD tier.
-4. **Assigned** to `WEBSITE_LEAD_OWNER`. This matters more than it looks: an
-   unowned lead is invisible to the daily no-next-step digest and the callback
-   sweep.
+4. **Assigned** from `WEBSITE_LEAD_OWNER`. With several names listed, the lead
+   goes to whoever currently holds **fewer open leads** — not strict
+   alternation. Alternation looks fairer but isn't: if someone is off for a
+   week, it still drops half the leads into a queue nobody is working.
+   Counting live open leads self-corrects, and someone returning from leave
+   catches up naturally. Won, lost and disqualified leads don't count as
+   workload, so converting well never penalises you with more work.
+
+   This matters more than it looks: an unowned lead is invisible to the daily
+   no-next-step digest and the callback sweep.
 5. **Tasked** — a high-priority "Call {name}" task, due today, linked to the
    lead, assigned to its owner.
 
