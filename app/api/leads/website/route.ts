@@ -93,7 +93,19 @@ export async function POST(req: Request) {
 
 // A GET is almost always someone pasting the URL into a browser to see if it
 // works. Tell them plainly rather than returning a confusing 405.
-export async function GET() {
+//
+// TEMPORARY diagnostic: ?debug=1 reports whether the secret is configured and
+// its length — never the value itself. Remove once capture is confirmed live.
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  if (url.searchParams.get("debug") === "1") {
+    const secret = process.env.WEBSITE_LEAD_SECRET ?? "";
+    return NextResponse.json({
+      secretConfigured: Boolean(secret),
+      secretLength: secret.length,
+      ownerConfigured: Boolean(process.env.WEBSITE_LEAD_OWNER),
+    });
+  }
   return NextResponse.json(
     { ok: false, error: "POST JSON to this endpoint with an X-Cureocity-Key header." },
     { status: 405 },
