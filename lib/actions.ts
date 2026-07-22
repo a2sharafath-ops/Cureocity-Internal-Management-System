@@ -2768,6 +2768,21 @@ export async function payReimbursement(formData: FormData) {
   revalidatePath("/expenses");
 }
 
+// ---- petty cash imprest float ----------------------------------------------
+
+export async function setPettyFloat(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return;   // Admin / Manager / Finance
+  const float_amount = Math.max(0, Number(formData.get("float_amount")) || 0);
+  const low_threshold = Math.max(0, Number(formData.get("low_threshold")) || 0);
+  const supabase = createClient();
+  await supabase.from("petty_cash_config")
+    .update({ float_amount, low_threshold, updated_by: p.name, updated_at: new Date().toISOString() })
+    .eq("id", true);
+  await logAudit(p, "Petty cash float set", null, `float ₹${float_amount} · low ₹${low_threshold}`);
+  revalidatePath("/finsheets");
+}
+
 // ---- operating expenses ----------------------------------------------------
 
 export async function addExpense(formData: FormData) {

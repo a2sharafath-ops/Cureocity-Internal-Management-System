@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addPayable, addEstimate, addLedgerEntry, submitReimbursement } from "@/lib/actions";
+import { addPayable, addEstimate, addLedgerEntry, submitReimbursement, setPettyFloat } from "@/lib/actions";
 
 const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
@@ -65,6 +65,35 @@ export function ReimbursementForm({ staff }: { staff: { id: string; name: string
       <button type="submit" style={primary}>Submit</button>
       <div style={{ gridColumn: "1 / 4" }}><Field label="What was it for?"><input style={input} name="description" required /></Field></div>
       <div style={{ gridColumn: "4 / 6" }}><Field label="Receipt (optional)"><input style={{ ...input, paddingTop: 6 }} name="receipt" type="file" accept="image/*,application/pdf" /></Field></div>
+    </form>
+  );
+}
+
+// Record a petty-cash top-up: money moved from bank into the cash box. It is a
+// normal cash receipt, tagged kind="Top-up" so it reads as a float refill.
+export function TopUpForm() {
+  const [open, setOpen] = useState(false);
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ ...primary, borderRadius: 10, padding: "7px 13px", fontSize: 12 }}>+ Record top-up</button>;
+  return (
+    <form action={addLedgerEntry} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "flex", gap: 8, alignItems: "end" }}>
+      <input type="hidden" name="account" value="cash" />
+      <input type="hidden" name="direction" value="in" />
+      <input type="hidden" name="kind" value="Top-up" />
+      <input type="hidden" name="party" value="Bank → petty cash" />
+      <Field label="Top-up amount (₹)"><input style={{ ...input, width: 140 }} name="amount" type="number" min={0} required autoFocus /></Field>
+      <button type="submit" style={{ ...primary, padding: "9px 14px" }}>Add</button>
+    </form>
+  );
+}
+
+export function EditFloatForm({ float, threshold }: { float: number; threshold: number }) {
+  const [open, setOpen] = useState(false);
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, cursor: "pointer" }}>Set float</button>;
+  return (
+    <form action={setPettyFloat} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "flex", gap: 8, alignItems: "end" }}>
+      <Field label="Float (₹)"><input style={{ ...input, width: 110 }} name="float_amount" type="number" min={0} defaultValue={float} required /></Field>
+      <Field label="Low at (₹)"><input style={{ ...input, width: 110 }} name="low_threshold" type="number" min={0} defaultValue={threshold} required /></Field>
+      <button type="submit" style={{ ...primary, padding: "9px 14px" }}>Save</button>
     </form>
   );
 }
