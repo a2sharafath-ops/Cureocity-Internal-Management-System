@@ -186,13 +186,17 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
         return (
           <>
             {/* imprest float + cash-in-hand panel */}
-            <div style={{ ...box, padding: 16, marginBottom: 14, display: "flex", flexWrap: "wrap", gap: 20, alignItems: "center" }}>
-              <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Cash in hand</div><div style={{ fontSize: 22, fontWeight: 700, color: low ? "var(--red)" : "var(--brand-text)" }}>{money(inHand)}</div></div>
-              <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Float (imprest)</div><div style={{ fontSize: 18, fontWeight: 600 }}>{money(floatAmount)}</div></div>
+            <div style={{ ...box, padding: 16, marginBottom: 14, display: "flex", flexWrap: "wrap", gap: 28, alignItems: "center" }}>
+              <div><div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 2 }}>Cash in hand</div><div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: low ? "var(--red)" : "var(--brand-text)" }}>{money(inHand)}</div></div>
+              <div><div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 2 }}>Cash float</div><div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: "var(--ink)" }}>{money(floatAmount)}</div></div>
               {low && <div style={{ background: "var(--amber-bg)", color: "var(--amber-text-soft)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>⚠ Low — top up {money(topUpNeeded)} to restore float</div>}
               <span style={{ flex: 1 }} />
-              {canManageFinance && <EditFloatForm float={floatAmount} threshold={lowThreshold} />}
-              {canManageFinance && <TopUpForm />}
+              {canManageFinance && (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <EditFloatForm float={floatAmount} threshold={lowThreshold} />
+                  <TopUpForm />
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>

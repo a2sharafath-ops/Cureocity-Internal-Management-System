@@ -91,7 +91,7 @@ export function EditFloatForm({ float, threshold }: { float: number; threshold: 
   if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 12, cursor: "pointer" }}>Set float</button>;
   return (
     <form action={setPettyFloat} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ display: "flex", gap: 8, alignItems: "end" }}>
-      <Field label="Float (₹)"><input style={{ ...input, width: 110 }} name="float_amount" type="number" min={0} defaultValue={float} required /></Field>
+      <Field label="Cash float (₹)"><input style={{ ...input, width: 110 }} name="float_amount" type="number" min={0} defaultValue={float} required /></Field>
       <Field label="Low at (₹)"><input style={{ ...input, width: 110 }} name="low_threshold" type="number" min={0} defaultValue={threshold} required /></Field>
       <button type="submit" style={{ ...primary, padding: "9px 14px" }}>Save</button>
     </form>
