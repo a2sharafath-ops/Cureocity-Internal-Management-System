@@ -194,6 +194,15 @@ export function canClaims(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
 }
 
+// Reimbursements: the accountant (Finance) and admins raise a claim; only
+// Super Admin approves and pays it (keeps the money-out decision with one role).
+export function canReimburseSubmit(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Finance"].includes(role);
+}
+export function canReimburseApprove(role: string): boolean {
+  return role === "Super Admin";
+}
+
 // Who can access compliance & governance (consent, breach, retention).
 export function canCompliance(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager"].includes(role);

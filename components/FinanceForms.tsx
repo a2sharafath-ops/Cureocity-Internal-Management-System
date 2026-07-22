@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addPayable, addEstimate, addLedgerEntry } from "@/lib/actions";
+import { addPayable, addEstimate, addLedgerEntry, submitReimbursement } from "@/lib/actions";
 
 const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" , height: 36, boxSizing: "border-box" };
 const lbl: React.CSSProperties = { fontSize: 10, color: "var(--muted)" };
@@ -36,6 +36,35 @@ export function EstimateForm() {
       <Field label="Amount (₹)"><input style={input} name="amount" type="number" min={0} required /></Field>
       <Field label="Status"><select style={input} name="status" defaultValue="Sent"><option>Draft</option><option>Sent</option><option>Accepted</option><option>Expired</option></select></Field>
       <button type="submit" style={primary}>Add</button>
+    </form>
+  );
+}
+
+export function ReimbursementForm({ staff }: { staff: { id: string; name: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const [payee, setPayee] = useState("");   // "id|name" or "" for free-text
+  if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ ...primary, borderRadius: 10, padding: "9px 15px" }}>+ New claim</button>;
+  const [pid, pname] = payee.split("|");
+  return (
+    <form action={submitReimbursement} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ ...panel, display: "grid", gridTemplateColumns: "1.3fr 1fr 0.8fr 0.9fr auto", gap: 10, alignItems: "end" }}>
+      <input type="hidden" name="payee_staff" value={pid && pid !== "other" ? pid : ""} />
+      <input type="hidden" name="payee_name" value={payee === "" ? "" : (pname ?? "")} />
+      <Field label="Paid by (staff)">
+        <select style={input} value={payee} onChange={(e) => setPayee(e.target.value)} required>
+          <option value="" disabled>Choose…</option>
+          {staff.map((s) => <option key={s.id} value={`${s.id}|${s.name}`}>{s.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Category">
+        <select style={input} name="category" defaultValue="Other">
+          <option>Travel</option><option>Meals</option><option>Supplies</option><option>Client care</option><option>Other</option>
+        </select>
+      </Field>
+      <Field label="Amount (₹)"><input style={input} name="amount" type="number" min={0} required /></Field>
+      <Field label="Date incurred"><input style={input} name="incurred_date" type="date" /></Field>
+      <button type="submit" style={primary}>Submit</button>
+      <div style={{ gridColumn: "1 / 4" }}><Field label="What was it for?"><input style={input} name="description" required /></Field></div>
+      <div style={{ gridColumn: "4 / 6" }}><Field label="Receipt (optional)"><input style={{ ...input, paddingTop: 6 }} name="receipt" type="file" accept="image/*,application/pdf" /></Field></div>
     </form>
   );
 }
