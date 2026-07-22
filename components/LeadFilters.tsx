@@ -20,7 +20,7 @@ import Link from "next/link";
 import LeadSearch from "./LeadSearch";
 
 export default function LeadFilters({
-  q, from, to, due, view, stage, tier, count, clearHref,
+  q, from, to, due, view, stage, tier, owner, owners, count, clearHref,
 }: {
   q: string;
   from: string;
@@ -29,10 +29,14 @@ export default function LeadFilters({
   view: string;
   stage?: string;
   tier?: string;
+  /** currently selected owner staff id, "none" for unowned, or "" for any */
+  owner: string;
+  /** owners offered in the dropdown */
+  owners: { id: string; name: string }[];
   count: number | null;
   clearHref: string;
 }) {
-  const activeCount = (from || to ? 1 : 0) + (due ? 1 : 0);
+  const activeCount = (from || to ? 1 : 0) + (due ? 1 : 0) + (owner ? 1 : 0);
   const [open, setOpen] = useState(activeCount > 0);
 
   const label: React.CSSProperties = {
@@ -117,6 +121,15 @@ export default function LeadFilters({
               <option value="today">Due today</option>
               <option value="week">Due in next 7 days</option>
               <option value="none">None scheduled</option>
+            </select>
+          </div>
+
+          <div>
+            <div style={label}>Owner</div>
+            <select name="owner" defaultValue={owner} aria-label="Owner" style={{ ...field, minWidth: 168 }}>
+              <option value="">Anyone</option>
+              {owners.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              <option value="none">— Unowned —</option>
             </select>
           </div>
 
