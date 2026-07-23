@@ -149,7 +149,16 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
   const clientPackages = (cpRows ?? []) as { id: string; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
   const pkgList = (allPkgs ?? []) as { id: string; name: string; price: number; is_facility: boolean }[];
-  const activeMembership = clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
+  // A client's membership can live in either place: the newer client_packages
+  // table, or the legacy single `package_id` on the client record (surfaced as
+  // client.packages). Count both, so a client whose only membership is the
+  // legacy facility package isn't wrongly shown as "no active membership" —
+  // which would also block PT/Comprehensive sales. The 0089 backfill copies
+  // legacy packages into client_packages; this fallback covers anything not yet
+  // migrated and stays correct afterwards.
+  const legacyFacilityMembership = Boolean((client as { packages: { is_facility: boolean } | null }).packages?.is_facility);
+  const activeMembership = legacyFacilityMembership
+    || clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
   const clientAge = ageOf(c0.dob);
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
