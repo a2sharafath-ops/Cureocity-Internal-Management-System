@@ -1435,6 +1435,73 @@ export async function getComprehensiveView(clientId: string) {
 }
 
 
+/**
+ * The PT protocol picture for one client — the trainer-track counterpart of
+ * getComprehensiveView. Null for any client not on an active PT package.
+ */
+export async function getPTView(clientId: string) {
+  const p = await getProfile();
+  if (!p || !canSee(p.role, "/clients")) return null;
+  const supabase = createClient();
+
+  const { data: proto } = await supabase.from("care_protocols")
+    .select("start_date, hold_since, hold_ms, hold_note")
+    .eq("client_id", clientId).eq("protocol", PT_CATEGORY).eq("status", "active")
+    .maybeSingle();
+  if (!proto) return null;
+
+  const [{ data: consults }, { data: workouts }, { data: sessions }, { data: appts }, { data: cp }] = await Promise.all([
+    supabase.from("consultations").select("kind, completed_at, approved_at").eq("client_id", clientId).eq("kind", "Trainer"),
+    supabase.from("client_workouts").select("created_at, plan_weeks").eq("client_id", clientId).order("created_at").limit(5),
+    supabase.from("sessions").select("status").eq("client_id", clientId).eq("status", "completed"),
+    supabase.from("appointments").select("type, date, status").eq("client_id", clientId),
+    supabase.from("client_packages").select("package_id").eq("client_id", clientId).eq("category", PT_CATEGORY).eq("status", "active").maybeSingle(),
+  ]);
+
+  const fit = ((consults ?? []) as { completed_at: string | null; approved_at: string | null }[])
+    .filter((c) => c.completed_at)
+    .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)))[0] ?? null;
+  const plan = ((workouts ?? []) as { created_at: string; plan_weeks: number | null }[]).find((w) => (w.plan_weeks ?? 1) >= 1);
+
+  return {
+    startDate: proto.start_date as string,
+    validityDays: (cp?.package_id === "pt12" ? 84 : 28),
+    fitnessCompletedAt: fit?.completed_at ?? null,
+    fitnessApprovedAt: fit?.approved_at ?? null,
+    workoutPlannedAt: plan?.created_at ?? null,
+    sessionsCompleted: (sessions ?? []).length,
+    appointments: ((appts ?? []) as { type: string | null; date: string | null; status: string }[]),
+    hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
+    holdNote: (proto.hold_note as string | null) ?? null,
+  };
+}
+
+/** Pause or resume the PT clocks for one client. Mirrors toggleComprehensiveHold. */
+export async function togglePTHold(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const supabase = createClient();
+
+  const { data: row } = await supabase.from("care_protocols")
+    .select("id, hold_since, hold_ms")
+    .eq("client_id", client_id).eq("protocol", PT_CATEGORY).eq("status", "active")
+    .maybeSingle();
+  if (!row) return;
+
+  const now = Date.now();
+  const open = row.hold_since ? new Date(row.hold_since).getTime() : null;
+  const patch = open
+    ? { hold_since: null, hold_ms: Math.max(0, Number(row.hold_ms ?? 0)) + Math.max(0, now - open), hold_note: null }
+    : { hold_since: new Date(now).toISOString(), hold_note: note };
+
+  await supabase.from("care_protocols").update(patch).eq("id", row.id);
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, open ? "PT SLA resumed" : "PT SLA held", c?.name, note);
+  revalidatePath(`/clients/${client_id}`);
+}
+
 // ---- free experience sessions (pre-sale) -----------------------------------
 
 /**

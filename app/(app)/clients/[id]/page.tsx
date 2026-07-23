@@ -20,9 +20,10 @@ import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
+import PTProtocol from "@/components/PTProtocol";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
-import { getComprehensiveView } from "@/lib/actions";
+import { getComprehensiveView, getPTView } from "@/lib/actions";
 import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
@@ -128,6 +129,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // null for any client not on an active Comprehensive package — the panel
   // simply doesn't render for them.
   const compView = await getComprehensiveView(params.id);
+  const ptView = await getPTView(params.id);
   const prescriptions = (rxData ?? []) as unknown as {
     id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
     prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -707,6 +709,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {compView && (
         <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} />
+      )}
+
+      {ptView && (
+        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} />
       )}
 
       {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
