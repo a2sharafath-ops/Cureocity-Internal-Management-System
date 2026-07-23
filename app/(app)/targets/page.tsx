@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee, canSetTargets } from "@/lib/roles";
+import { selectAll } from "@/lib/select-all";
 import { todayISO } from "@/lib/today";
 import { pipelineTotals, targetOutlook } from "@/lib/pipeline";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -31,10 +32,9 @@ export default async function TargetsPage() {
     // identically. Previously this page compared booked revenue to target and
     // ignored the pipeline entirely, so the two screens disagreed about
     // whether the month was on track.
-    // Explicit high limit: an unbounded select is capped at 1000 rows by
-    // PostgREST, which would silently undercount the pipeline once the book
-    // passes 1000 leads.
-    supabase.from("leads").select("stage, expected_value, expected_close, disqualified_at").limit(20000),
+    // Page through all leads — the server caps a single response at 1000 rows,
+    // which would silently undercount the pipeline once the book passes 1000.
+    selectAll((f, t) => supabase.from("leads").select("stage, expected_value, expected_close, disqualified_at").range(f, t)),
   ]);
 
   const target = (targetRow ?? { revenue_target: 0, new_clients_target: 0, renewals_target: 0, set_by: null }) as { revenue_target: number; new_clients_target: number; renewals_target: number; set_by: string | null };

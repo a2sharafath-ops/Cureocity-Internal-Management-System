@@ -11,6 +11,7 @@ import Link from "next/link";
 import { LeadForm, CallCell } from "@/components/LeadControls";
 import LeadFilters from "@/components/LeadFilters";
 import { matchesLeadQuery } from "@/lib/leadsearch";
+import { selectAll } from "@/lib/select-all";
 import { namesMatch } from "@/lib/staff-directory";
 import { LEAD_OWNER_ROLES } from "@/lib/roles";
 import { followupView, FOLLOWUP_TONE } from "@/lib/lead-followup";
@@ -115,12 +116,12 @@ export default async function LeadsPage({
     ? searchParams.due! : "";
   const supabase = createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }, { data: remarkRows }] = await Promise.all([
-    // Newest first, and an explicit high limit: PostgREST caps an unbounded
-    // select at 1000 rows, so once the book passed 1000 leads the most recent
-    // ones (num 1001+, e.g. every externally-captured lead) fell outside the
-    // window — invisible to the list, the search, and the counts even though
-    // they were in the database. Order desc so new leads surface at the top.
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner, disqualified_at").order("num", { ascending: false }).limit(20000),
+    // Page through every lead (newest first). The server caps a single response
+    // at 1000 rows, so once the book passed 1000 leads the most recent ones
+    // (num 1001+, e.g. every externally-captured Instagram/WhatsApp lead) fell
+    // outside the window — invisible to the list, search and counts even though
+    // they were in the database. selectAll walks the rows in 1000-row pages.
+    selectAll((f, t) => supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner, disqualified_at").order("num", { ascending: false }).range(f, t)),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     // On a CRM-only deployment there is no client page to link to, and the
     // pilot may not have client access — this lookup only powers the
