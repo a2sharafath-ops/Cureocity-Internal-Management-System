@@ -66,7 +66,7 @@ export default async function ReportsPage() {
   const days30Ago = new Date(nowMs - 30 * 86400000).toISOString().slice(0, 10);
   const [{ data: invData }, { data: leadData }, { data: clientData }, sessTotal, sessDone, { data: subData }, { data: recentSess }] = await Promise.all([
     supabase.from("invoices").select("amount, status, paid_date"),
-    supabase.from("leads").select("stage, expected_value, expected_close, disqualified_at"),
+    supabase.from("leads").select("stage, expected_value, expected_close, disqualified_at").limit(20000),
     supabase.from("clients").select("package_id, joined"),
     supabase.from("sessions").select("id", { count: "exact", head: true }),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("status", "completed"),

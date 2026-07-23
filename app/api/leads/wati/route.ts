@@ -76,7 +76,6 @@ export async function POST(req: Request) {
   const ownerId = await pickOwner(supabase, configured);
 
   const result = await ingestLead(supabase, checked.value, { ownerId });
-  console.log("[wati] ingest:", JSON.stringify({ waId: body.waId, ownerId, status: result.status, reason: "reason" in result ? result.reason : undefined }));
 
   // Always 200 to Wati once authorised, even on duplicate/rejected — retries
   // would only produce the same outcome and risk the webhook being disabled.
