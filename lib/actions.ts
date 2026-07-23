@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -2666,6 +2666,120 @@ export async function addLedgerEntry(formData: FormData) {
     amount, created_by: p.name,
   });
   await logAudit(p, `${account} entry`, null, `${formData.get("direction")} ₹${amount}`);
+  revalidatePath("/finsheets");
+}
+
+// ---- staff reimbursements --------------------------------------------------
+
+export async function submitReimbursement(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReimburseSubmit(p.role)) return;
+  const description = String(formData.get("description") ?? "").trim();
+  const payee_name = String(formData.get("payee_name") ?? "").trim();
+  if (!description || !payee_name) return;
+  const supabase = createClient();
+
+  // Optional receipt image → private finance bucket. A failed upload must not
+  // sink the claim; the receipt is evidence, not the record.
+  let receipt_bucket: string | null = null;
+  let receipt_path: string | null = null;
+  const file = formData.get("receipt");
+  if (file instanceof File && file.size > 0 && file.size <= 10 * 1024 * 1024) {
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `reimbursements/${crypto.randomUUID()}-${safe}`;
+    const { error } = await supabase.storage.from("finance").upload(path, file, { contentType: file.type || undefined, upsert: false });
+    if (!error) { receipt_bucket = "finance"; receipt_path = path; }
+  }
+
+  const payee_staff = String(formData.get("payee_staff") ?? "").trim() || null;
+  await supabase.from("reimbursements").insert({
+    payee_staff, payee_name, description,
+    category: String(formData.get("category") || "Other"),
+    amount: Number(formData.get("amount")) || 0,
+    incurred_date: String(formData.get("incurred_date") || todayISO()),
+    status: "Submitted", receipt_bucket, receipt_path, submitted_by: p.name,
+  });
+  await logAudit(p, "Reimbursement submitted", payee_name, `₹${Number(formData.get("amount")) || 0}`);
+  revalidatePath("/finsheets");
+}
+
+export async function approveReimbursement(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReimburseApprove(p.role)) return;
+  const supabase = createClient();
+  const id = String(formData.get("id"));
+  // Only a Submitted claim can be approved.
+  await supabase.from("reimbursements")
+    .update({ status: "Approved", approved_by: p.name, approved_at: new Date().toISOString() })
+    .eq("id", id).eq("status", "Submitted");
+  await logAudit(p, "Reimbursement approved", null, null);
+  revalidatePath("/finsheets");
+}
+
+export async function rejectReimbursement(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReimburseApprove(p.role)) return;
+  const supabase = createClient();
+  const id = String(formData.get("id"));
+  await supabase.from("reimbursements")
+    .update({ status: "Rejected", reject_reason: String(formData.get("reason") ?? "").trim() || null, approved_by: p.name, approved_at: new Date().toISOString() })
+    .eq("id", id).eq("status", "Submitted");
+  await logAudit(p, "Reimbursement rejected", null, null);
+  revalidatePath("/finsheets");
+}
+
+export async function payReimbursement(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReimburseApprove(p.role)) return;
+  const supabase = createClient();
+  const id = String(formData.get("id"));
+  const account = String(formData.get("account") || "bank") === "cash" ? "cash" : "bank";
+
+  // Load the claim and refuse to pay twice (idempotent by status + expense_id).
+  const { data: r } = await supabase.from("reimbursements")
+    .select("id, payee_name, description, category, amount, incurred_date, status, expense_id")
+    .eq("id", id).maybeSingle();
+  if (!r || r.status !== "Approved" || r.expense_id) return;
+
+  // Book the cost (P&L) — feeds "Spend this month".
+  const { data: exp } = await supabase.from("expenses").insert({
+    description: `Reimbursement — ${r.payee_name}: ${r.description}`,
+    category: "Reimbursement",
+    amount: Number(r.amount) || 0,
+    date: todayISO(),
+    created_by: p.name,
+  }).select("id").single();
+
+  // Book the cash leaving (bank/cash statement) — moves the balance.
+  const { data: led } = await supabase.from("ledger").insert({
+    account, date: todayISO(), ref: "REIMB", party: r.payee_name,
+    kind: account === "cash" ? "Cash" : "NEFT", direction: "out",
+    amount: Number(r.amount) || 0, created_by: p.name,
+  }).select("id").single();
+
+  await supabase.from("reimbursements").update({
+    status: "Paid", pay_account: account,
+    expense_id: exp?.id ?? null, ledger_id: led?.id ?? null,
+    paid_by: p.name, paid_at: new Date().toISOString(),
+  }).eq("id", id).eq("status", "Approved");
+
+  await logAudit(p, "Reimbursement paid", r.payee_name, `${account} · ₹${Number(r.amount) || 0}`);
+  revalidatePath("/finsheets");
+  revalidatePath("/expenses");
+}
+
+// ---- petty cash imprest float ----------------------------------------------
+
+export async function setPettyFloat(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canClaims(p.role)) return;   // Admin / Manager / Finance
+  const float_amount = Math.max(0, Number(formData.get("float_amount")) || 0);
+  const low_threshold = Math.max(0, Number(formData.get("low_threshold")) || 0);
+  const supabase = createClient();
+  await supabase.from("petty_cash_config")
+    .update({ float_amount, low_threshold, updated_by: p.name, updated_at: new Date().toISOString() })
+    .eq("id", true);
+  await logAudit(p, "Petty cash float set", null, `float ₹${float_amount} · low ₹${low_threshold}`);
   revalidatePath("/finsheets");
 }
 

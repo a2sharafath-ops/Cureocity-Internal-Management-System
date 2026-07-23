@@ -183,16 +183,35 @@ export async function ingestLead(
     row.owner_assigned_at = new Date().toISOString();
   }
 
-  const { data: created, error } = await supabase.from("leads").insert(row).select("id").maybeSingle();
-  if (error || !created) return { status: "rejected", reason: "insert failed" };
+  let { data: created, error } = await supabase.from("leads").insert(row).select("id").maybeSingle();
+
+  // If assignment failed (e.g. the configured owner env var isn't a real
+  // staff id, so owner_id violates its foreign key), don't drop the lead —
+  // losing an enquiry is far worse than an unowned one. Retry once without the
+  // owner; it will then surface in the "unowned" alerts instead of vanishing.
+  if ((error || !created) && row.owner_id) {
+    console.error("[ingestLead] insert with owner failed, retrying unowned:", error?.message, error?.details, error?.hint);
+    delete row.owner_id;
+    delete row.owner_method;
+    delete row.owner_assigned_at;
+    ({ data: created, error } = await supabase.from("leads").insert(row).select("id").maybeSingle());
+  }
+  if (error || !created) {
+    console.error("[ingestLead] insert rejected:", JSON.stringify({ message: error?.message, details: error?.details, hint: error?.hint, code: error?.code }));
+    return { status: "rejected", reason: error?.message ?? "insert failed" };
+  }
   const leadId = (created as { id: string }).id;
+  // Whether the owner actually stuck (null if we fell back to unowned above).
+  const assignedOwner = (row.owner_id as string | undefined) ?? null;
 
   // ---- first response ------------------------------------------------------
   // Same promise the in-app form makes: somebody owns this and owes a call.
-  if (opts.ownerId) {
+  // Only when an owner actually stuck — a task assigned to an invalid staff id
+  // would fail the same way the lead insert did.
+  if (assignedOwner) {
     await supabase.from("tasks").insert({
       title: `Call ${input.name} — new ${input.source.toLowerCase()} lead`,
-      assignee_id: opts.ownerId,
+      assignee_id: assignedOwner,
       lead_id: leadId,
       type: "Follow-up",
       priority: "High",

@@ -11,6 +11,8 @@ import Link from "next/link";
 import { LeadForm, CallCell } from "@/components/LeadControls";
 import LeadFilters from "@/components/LeadFilters";
 import { matchesLeadQuery } from "@/lib/leadsearch";
+import { selectAll } from "@/lib/select-all";
+import LeadSort from "@/components/LeadSort";
 import { namesMatch } from "@/lib/staff-directory";
 import { LEAD_OWNER_ROLES } from "@/lib/roles";
 import { followupView, FOLLOWUP_TONE } from "@/lib/lead-followup";
@@ -86,6 +88,8 @@ export default async function LeadsPage({
     mine?: string;
     /** filter to a single owner (staff id) */
     owner?: string;
+    /** list order: score (default) | new | old | az | za */
+    sort?: string;
   };
 }) {
   // This page had no guard — any signed-in user could reach it by URL.
@@ -115,7 +119,12 @@ export default async function LeadsPage({
     ? searchParams.due! : "";
   const supabase = createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }, { data: remarkRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner, disqualified_at").order("num", { ascending: true }),
+    // Page through every lead (newest first). The server caps a single response
+    // at 1000 rows, so once the book passed 1000 leads the most recent ones
+    // (num 1001+, e.g. every externally-captured Instagram/WhatsApp lead) fell
+    // outside the window — invisible to the list, search and counts even though
+    // they were in the database. selectAll walks the rows in 1000-row pages.
+    selectAll((f, t) => supabase.from("leads").select("id, name, phone, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, created_at, next_follow_up, follow_up_owner, disqualified_at").order("num", { ascending: false }).range(f, t)),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     // On a CRM-only deployment there is no client page to link to, and the
     // pilot may not have client access — this lookup only powers the
@@ -227,9 +236,21 @@ export default async function LeadsPage({
     return prev ? `${now} new this month · ${prev} last` : `${now} new this month`;
   };
 
+  // List order is user-chosen (LeadSort). Score high→low stays the default
+  // because that's the "work the best leads first" view; the others are for
+  // finding a lead by arrival time or name.
+  const sortKey = ["new", "old", "az", "za", "score"].includes(searchParams.sort ?? "") ? searchParams.sort! : "score";
+  const ts = (s: string | null | undefined) => (s ? Date.parse(s) : 0);
+  const comparators: Record<string, (a: (typeof all)[number], b: (typeof all)[number]) => number> = {
+    score: (a, b) => (b.total ?? -1) - (a.total ?? -1),
+    new: (a, b) => ts(b.lead.created_at) - ts(a.lead.created_at),
+    old: (a, b) => ts(a.lead.created_at) - ts(b.lead.created_at),
+    az: (a, b) => (a.lead.name ?? "").localeCompare(b.lead.name ?? ""),
+    za: (a, b) => (b.lead.name ?? "").localeCompare(a.lead.name ?? ""),
+  };
   const scored = inView
     .filter((s) => matchesStage(s) && matchesTier(s))
-    .sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
+    .sort(comparators[sortKey]);
   const visible = scored.slice(0, shown);
 
   // Build a URL that toggles one filter and preserves the rest.
@@ -247,6 +268,7 @@ export default async function LeadsPage({
     if (due) p.set("due", due);
     if (mine) p.set("mine", "1");
     if (ownerFilter) p.set("owner", ownerFilter);
+    if (sortKey !== "score") p.set("sort", sortKey);
     const s = p.toString();
     return s ? `/leads?${s}` : "/leads";
   };
@@ -276,7 +298,7 @@ export default async function LeadsPage({
   };
 
   return (
-    <div style={{ maxWidth: 1120 }}>
+    <div style={{ maxWidth: 1280 }}>
       <RealtimeRefresh tables={["leads"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>CRM &amp; Leads</h1>
@@ -373,18 +395,25 @@ export default async function LeadsPage({
           the last one — the Open button was unreachable rather than merely
           off-screen. `overflowX: auto` lets it scroll; minWidth stops the
           browser crushing columns to unreadable widths first. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>{scored.length} shown</span>
+        <span style={{ flex: 1 }} />
+        <LeadSort value={sortKey} />
+      </div>
+
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load leads.</b> {error.message}
         </div>
       ) : (
         <div style={{ ...box, overflowX: "auto", overflowY: "hidden" }}>
-          <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse" }}>
+          <table style={{ width: "100%", minWidth: 1120, borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={th}>Lead</th>
                 <th style={th}>Score</th>
                 <th style={th}>Tier</th>
+                <th style={th}>Added</th>
                 <th style={th}>Last remark</th>
                 <th style={th}>Callback</th>
                 <th style={th}>Owner</th>
@@ -404,6 +433,14 @@ export default async function LeadsPage({
                   </td>
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                  <td style={{ ...td, whiteSpace: "nowrap" }}>
+                    {l.created_at ? (
+                      <>
+                        <div style={{ fontSize: 12.5 }}>{new Date(l.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+                        <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>{new Date(l.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })}</div>
+                      </>
+                    ) : <span style={{ color: "var(--muted)" }}>—</span>}
+                  </td>
                   <td style={{ ...td, maxWidth: 240 }}>
                     {(() => {
                       const r = lastRemark.get(l.id);

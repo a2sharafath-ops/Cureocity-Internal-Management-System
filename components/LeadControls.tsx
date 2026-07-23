@@ -17,6 +17,7 @@ export type Lead = {
   budget: string | null; profession: string | null; fde: string | null; stage: string | null;
   owner_id?: string | null;
   objection: string | null; notes: string | null;
+  created_at?: string | null;
 };
 
 const SOURCES = ["Walk-in", "Instagram", "Facebook", "Google / Search", "WhatsApp", "Referral", "Website", "Event / Camp", "Phone enquiry", "Other"];
