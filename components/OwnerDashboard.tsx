@@ -118,7 +118,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const upcoming = mine.filter((s) => s.status === "scheduled" && s.date >= today);
     const lastDone = mine.filter((s) => s.status === "completed").map((s) => s.date).sort().pop();
     if (upcoming.length === 0) {
-      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/clients/${c.id}`, cta: "Book" });
+      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book" });
     } else if (lastDone && lastDone < quietSince) {
       flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "Reach out" });
     }
