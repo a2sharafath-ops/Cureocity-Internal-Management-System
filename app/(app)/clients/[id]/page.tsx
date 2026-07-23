@@ -21,6 +21,7 @@ import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PTProtocol from "@/components/PTProtocol";
+import RepairJourneyButton from "@/components/RepairJourneyButton";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { getComprehensiveView, getPTView } from "@/lib/actions";
@@ -161,6 +162,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const legacyFacilityMembership = Boolean((client as { packages: { is_facility: boolean } | null }).packages?.is_facility);
   const activeMembership = legacyFacilityMembership
     || clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
+  // Does this client hold a package whose care journey should have been kicked
+  // off (booking tasks, blood request, care team)? Used to offer the repair.
+  const hasJourneyPkg = clientPackages.some((r) => ["blueprint", "training", "comprehensive"].includes(r.category));
   const clientAge = ageOf(c0.dob);
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
@@ -333,7 +337,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           </div>
         )}
 
-        {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
+          {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} />}
+        </div>
 
         {showBilling && invoices.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>

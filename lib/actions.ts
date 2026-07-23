@@ -1502,6 +1502,53 @@ export async function togglePTHold(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
+/**
+ * (Re)start the care journey for a client who holds a BluePrint / PT /
+ * Comprehensive package but never had it kicked off — typically a client
+ * seeded or imported straight into the database with the package attached,
+ * bypassing the sale flow that normally queues the booking tasks, blood
+ * request and care-team assignment.
+ *
+ * Runs the same journey a real sale would, for each journey-eligible package
+ * the client holds. Every journey is idempotent (blood request upserts, tasks
+ * skip when an open one with the same title exists, protocol rows upsert), so
+ * this is safe on a client who is already partway through.
+ */
+export async function repairClientJourney(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return;
+  const supabase = createClient();
+
+  const { data: c } = await supabase.from("clients").select("id, name, package_id, joined").eq("id", client_id).maybeSingle();
+  if (!c) return;
+
+  const JOURNEY = ["blueprint", "training", "comprehensive"];
+  const jobs: { category: string; start: string }[] = [];
+
+  const { data: cps } = await supabase.from("client_packages")
+    .select("category, start_date").eq("client_id", client_id).eq("status", "active");
+  for (const r of (cps ?? []) as { category: string; start_date: string | null }[]) {
+    if (JOURNEY.includes(r.category)) jobs.push({ category: r.category, start: r.start_date ?? c.joined ?? todayISO() });
+  }
+  // Legacy fallback: a client with only the old package_id and no client_packages row.
+  if (!jobs.length && c.package_id) {
+    const { data: pkg } = await supabase.from("packages").select("is_facility").eq("id", c.package_id).maybeSingle();
+    const cat = packageCategory(c.package_id, pkg?.is_facility ?? false);
+    if (JOURNEY.includes(cat)) jobs.push({ category: cat, start: c.joined ?? todayISO() });
+  }
+  if (!jobs.length) return;
+
+  for (const j of jobs) {
+    if (j.category === "blueprint") await startBlueprintJourney(supabase, client_id, c.name, p.name);
+    else if (j.category === "comprehensive") await startComprehensiveJourney(supabase, client_id, c.name, j.start, p.name);
+    else if (j.category === "training") await startPTJourney(supabase, client_id, c.name, j.start, p.name);
+  }
+  await logAudit(p, "Care journey repaired", c.name, jobs.map((j) => j.category).join(", "));
+  revalidatePath(`/clients/${client_id}`);
+}
+
 // ---- free experience sessions (pre-sale) -----------------------------------
 
 /**
