@@ -209,11 +209,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed");
   const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind);
   const consultState = (kind: string): "done" | "progress" | "pending" => hasConsult(kind) ? "done" : scheduledConsult(kind) ? "progress" : "pending";
-  const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string }[] = [
+  const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string; bookDisc?: string }[] = [
     { label: "Package Purchase", state: pkg ? "done" : "pending", detail: pkg?.name ?? "No package yet", when: client.joined ?? "—" },
-    { label: "Initial Doctor Consultation", state: consultState("Doctor"), detail: "Doctor Consultation", when: hasConsult("Doctor") ? "Completed" : scheduledConsult("Doctor") ? "Scheduled" : "Not scheduled" },
-    { label: "Initial Diet Consultation", state: consultState("Diet"), detail: "Diet Consultation", when: hasConsult("Diet") ? "Completed" : scheduledConsult("Diet") ? "Scheduled" : "Not scheduled" },
-    { label: "Initial Fitness Assessment", state: consultState("Trainer"), detail: "Fitness Services", when: hasConsult("Trainer") ? "Completed" : scheduledConsult("Trainer") ? "Scheduled" : "Not scheduled" },
+    { label: "Initial Doctor Consultation", state: consultState("Doctor"), detail: "Doctor Consultation", when: hasConsult("Doctor") ? "Completed" : scheduledConsult("Doctor") ? "Scheduled" : "Not scheduled", bookDisc: "Doctor" },
+    { label: "Initial Diet Consultation", state: consultState("Diet"), detail: "Diet Consultation", when: hasConsult("Diet") ? "Completed" : scheduledConsult("Diet") ? "Scheduled" : "Not scheduled", bookDisc: "Dietitian" },
+    { label: "Initial Fitness Assessment", state: consultState("Trainer"), detail: "Fitness Services", when: hasConsult("Trainer") ? "Completed" : scheduledConsult("Trainer") ? "Scheduled" : "Not scheduled", bookDisc: "Fitness Trainer" },
     { label: "BluePrint (PHB) Generated", state: bp?.generated ? "done" : "pending", detail: bp?.generated ? "Ready to download" : "Pending consultations", when: bp?.generated_date ?? "—" },
   ];
   for (const f of followups.filter((x) => x.kind === "onboarding")) {
@@ -387,6 +387,12 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.detail}</div>
                 <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>🕐 {m.when}</div>
               </div>
+              {m.bookDisc && m.state === "pending" && !ro && canWrite(me?.role ?? "") && (
+                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}`}
+                  style={{ alignSelf: "center", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+                  Book →
+                </a>
+              )}
             </div>
           ))}
         </div>

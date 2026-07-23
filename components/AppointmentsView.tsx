@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createAppointment } from "@/lib/actions";
 import AppointmentActions from "@/components/AppointmentActions";
 import SegTabs from "@/components/SegTabs";
@@ -29,8 +30,18 @@ export default function AppointmentsView({
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records">("calendar");
-  const [disc, setDisc] = useState("All");
-  const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string }>({ open: false, date: today, hour: 10, provider: "" });
+  // Deep-link from a client's "Book →": ?client=<id>&disc=<discipline> opens the
+  // booking form pre-filled with that patient and filters the clinician list to
+  // the discipline, so front desk lands straight on date/slot/provider.
+  const params = useSearchParams();
+  const preClient = params.get("client") ?? "";
+  const preDisc = params.get("disc") ?? "";
+  const [disc, setDisc] = useState(DISCIPLINES.includes(preDisc) ? preDisc : "All");
+  const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string; client: string }>(
+    preClient
+      ? { open: true, date: today, hour: 10, provider: "", client: preClient }
+      : { open: false, date: today, hour: 10, provider: "", client: "" },
+  );
 
   const provMap = new Map(providers.map((p) => [p.id, p]));
   const provDisc = (pid: string | null) => (pid ? provMap.get(pid)?.discipline ?? null : null);
@@ -49,7 +60,7 @@ export default function AppointmentsView({
     return <span style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{s.replace("_", " ")}</span>;
   };
 
-  const openBooking = (date: string, hour: number) => setBooking({ open: true, date, hour, provider: "" });
+  const openBooking = (date: string, hour: number) => setBooking({ open: true, date, hour, provider: "", client: "" });
   const sorted = [...visible].sort((a, b) => a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1);
   const upcoming = sorted.filter((a) => a.date >= today && a.status === "scheduled");
   const records = sorted.filter((a) => a.status === "completed" || a.date < today);
@@ -64,7 +75,7 @@ export default function AppointmentsView({
           <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Calendar · tracker · list · records — consultations, assessments &amp; follow-ups</p>
         </div>
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "" })} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
+        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "", client: "" })} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
       </div>
 
       {/* week nav */}
@@ -102,10 +113,10 @@ export default function AppointmentsView({
 
       {/* inline booking form */}
       {booking.open && (
-        <form action={createAppointment} onSubmit={() => setTimeout(() => setBooking((b) => ({ ...b, open: false })), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue=""><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider</label><select style={input} name="provider_id" defaultValue={booking.provider}><option value="">— any —</option>{providers.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue="Consultation"><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
+        <form key={booking.client} action={createAppointment} onSubmit={() => setTimeout(() => setBooking((b) => ({ ...b, open: false })), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue={booking.client}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" defaultValue={booking.provider}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue={disc === "Fitness Trainer" ? "Assessment" : "Consultation"}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required defaultValue={booking.date} /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time</label><select style={input} name="hour" defaultValue={String(booking.hour)}>{hours.map((h) => <option key={h} value={h}>{hourLabelFull(h)}</option>)}</select></div>
