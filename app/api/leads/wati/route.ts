@@ -79,7 +79,10 @@ export async function POST(req: Request) {
 
   // Always 200 to Wati once authorised, even on duplicate/rejected — retries
   // would only produce the same outcome and risk the webhook being disabled.
-  return NextResponse.json({ ok: true, status: result.status }, { status: 200 });
+  // Surface the reason on rejection so a failed insert is visible in Wati's
+  // webhook log (rather than a silent 200 that looks fine).
+  const reason = result.status === "rejected" || result.status === "duplicate" ? result.reason : undefined;
+  return NextResponse.json({ ok: true, status: result.status, owner: ownerId, reason }, { status: 200 });
 }
 
 export async function GET() {
