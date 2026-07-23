@@ -12,6 +12,7 @@ import { LeadForm, CallCell } from "@/components/LeadControls";
 import LeadFilters from "@/components/LeadFilters";
 import { matchesLeadQuery } from "@/lib/leadsearch";
 import { selectAll } from "@/lib/select-all";
+import LeadSort from "@/components/LeadSort";
 import { namesMatch } from "@/lib/staff-directory";
 import { LEAD_OWNER_ROLES } from "@/lib/roles";
 import { followupView, FOLLOWUP_TONE } from "@/lib/lead-followup";
@@ -87,6 +88,8 @@ export default async function LeadsPage({
     mine?: string;
     /** filter to a single owner (staff id) */
     owner?: string;
+    /** list order: score (default) | new | old | az | za */
+    sort?: string;
   };
 }) {
   // This page had no guard — any signed-in user could reach it by URL.
@@ -233,9 +236,21 @@ export default async function LeadsPage({
     return prev ? `${now} new this month · ${prev} last` : `${now} new this month`;
   };
 
+  // List order is user-chosen (LeadSort). Score high→low stays the default
+  // because that's the "work the best leads first" view; the others are for
+  // finding a lead by arrival time or name.
+  const sortKey = ["new", "old", "az", "za", "score"].includes(searchParams.sort ?? "") ? searchParams.sort! : "score";
+  const ts = (s: string | null | undefined) => (s ? Date.parse(s) : 0);
+  const comparators: Record<string, (a: (typeof all)[number], b: (typeof all)[number]) => number> = {
+    score: (a, b) => (b.total ?? -1) - (a.total ?? -1),
+    new: (a, b) => ts(b.lead.created_at) - ts(a.lead.created_at),
+    old: (a, b) => ts(a.lead.created_at) - ts(b.lead.created_at),
+    az: (a, b) => (a.lead.name ?? "").localeCompare(b.lead.name ?? ""),
+    za: (a, b) => (b.lead.name ?? "").localeCompare(a.lead.name ?? ""),
+  };
   const scored = inView
     .filter((s) => matchesStage(s) && matchesTier(s))
-    .sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
+    .sort(comparators[sortKey]);
   const visible = scored.slice(0, shown);
 
   // Build a URL that toggles one filter and preserves the rest.
@@ -253,6 +268,7 @@ export default async function LeadsPage({
     if (due) p.set("due", due);
     if (mine) p.set("mine", "1");
     if (ownerFilter) p.set("owner", ownerFilter);
+    if (sortKey !== "score") p.set("sort", sortKey);
     const s = p.toString();
     return s ? `/leads?${s}` : "/leads";
   };
@@ -262,6 +278,10 @@ export default async function LeadsPage({
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "12px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 14 };
+  // "23 Jul 2026, 11:49 AM" — the moment the lead arrived (created_at).
+  const fmtAdded = (s: string | null) => s
+    ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })
+    : "—";
   // A stat card that filters the list. Clicking the active one clears it, so
   // the cards behave like toggles rather than a one-way trip.
   const statLink = (label: string, value: number, tier: TierKey, color: string, sub?: string) => {
@@ -379,18 +399,25 @@ export default async function LeadsPage({
           the last one — the Open button was unreachable rather than merely
           off-screen. `overflowX: auto` lets it scroll; minWidth stops the
           browser crushing columns to unreadable widths first. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>{scored.length} shown</span>
+        <span style={{ flex: 1 }} />
+        <LeadSort value={sortKey} />
+      </div>
+
       {error ? (
         <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load leads.</b> {error.message}
         </div>
       ) : (
         <div style={{ ...box, overflowX: "auto", overflowY: "hidden" }}>
-          <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse" }}>
+          <table style={{ width: "100%", minWidth: 1120, borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={th}>Lead</th>
                 <th style={th}>Score</th>
                 <th style={th}>Tier</th>
+                <th style={th}>Added</th>
                 <th style={th}>Last remark</th>
                 <th style={th}>Callback</th>
                 <th style={th}>Owner</th>
@@ -410,6 +437,7 @@ export default async function LeadsPage({
                   </td>
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                  <td style={{ ...td, color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{fmtAdded(l.created_at)}</td>
                   <td style={{ ...td, maxWidth: 240 }}>
                     {(() => {
                       const r = lastRemark.get(l.id);

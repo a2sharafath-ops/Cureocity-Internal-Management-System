@@ -30,7 +30,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
 
   const supabase = createClient();
   const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: ownerRows }, { data: remarkRows }, { data: emailRows }, { data: msgRows }] = await Promise.all([
-    supabase.from("leads").select("id, name, phone, email, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner, expected_package_id, expected_value, expected_close, disqualified_at, disqualified_reason, disqualified_by").eq("id", params.id).maybeSingle(),
+    supabase.from("leads").select("id, name, phone, email, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner, expected_package_id, expected_value, expected_close, disqualified_at, disqualified_reason, disqualified_by, created_at").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),
     supabase.from("campaigns").select("name").order("created_at", { ascending: false }).limit(30),
     supabase.from("clients").select("id, name").order("name"),
@@ -115,6 +115,11 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         <div>
           <h1 style={{ fontSize: 22, margin: "0 0 2px" }}>{lead.name}</h1>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>{lead.phone ?? "—"}{lead.source ? ` · ${lead.source}` : ""}{lead.campaign ? ` · ${lead.campaign}` : ""} · {lead.stage ?? "1-New Lead"}</div>
+          {lead.created_at && (
+            <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 3 }}>
+              Added {new Date(lead.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
+            </div>
+          )}
         </div>
         <span style={{ flex: 1 }} />
         <CallCell phone={lead.phone} ivrConfigured={ivr.configured} />
