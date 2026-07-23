@@ -5,7 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
-import AppointmentsView, { type ViewAppt, type Provider } from "@/components/AppointmentsView";
+import AppointmentsView, { type ViewAppt, type Provider, type Unsched } from "@/components/AppointmentsView";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +38,12 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const supabase = createClient();
-  const [apptsR, clientsR, staffR] = await Promise.all([
+  const [apptsR, clientsR, staffR, tasksR] = await Promise.all([
     supabase.from("appointments").select("id, client_id, type, title, date, hour, duration_min, status, provider_id, clients(id, name), staff(name)").gte("date", weekStart).lte("date", weekEnd).order("hour"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("staff").select("id, name, designation, department, color, is_trainer").order("name"),
+    // Open "Book …" tasks = appointments that are due but not yet on the diary.
+    supabase.from("tasks").select("id, client_id, title, due_date").neq("status", "done").ilike("title", "Book %").order("due_date").limit(2000),
   ]);
   const raw = (apptsR.data ?? []) as unknown as Appt[];
   const clients = (clientsR.data ?? []) as { id: string; name: string }[];
@@ -57,6 +59,31 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     date: a.date, hour: a.hour, duration_min: a.duration_min, status: a.status, provider_id: a.provider_id, providerName: a.staff?.name ?? null,
   }));
 
+  // Unscheduled = open "Book …" tasks that map to a bookable discipline (the
+  // "Book 12 strength sessions" task is a session, not an appointment, so it's
+  // dropped here — sessions live on the Training Schedule).
+  const nameById = new Map(clients.map((c) => [c.id, c.name]));
+  const taskDiscipline = (title: string): string | null => {
+    const t = title.toLowerCase();
+    if (t.includes("doctor")) return "Doctor";
+    if (t.includes("diet")) return "Dietitian";
+    if (t.includes("psych")) return "Psychologist";
+    if (t.includes("coach")) return "Health Coach";
+    if (t.includes("fitness") || t.includes("reassess")) return "Fitness Trainer";
+    return null;
+  };
+  const unscheduled: Unsched[] = ((tasksR.data ?? []) as { id: string; client_id: string | null; title: string; due_date: string | null }[])
+    .map((t) => ({ t, disc: taskDiscipline(t.title) }))
+    .filter((x): x is { t: { id: string; client_id: string | null; title: string; due_date: string | null }; disc: string } => Boolean(x.disc && x.t.client_id))
+    .map(({ t, disc }) => ({
+      id: t.id,
+      clientId: t.client_id as string,
+      clientName: nameById.get(t.client_id as string) ?? "—",
+      label: t.title.replace(/^Book\s+/i, "").replace(/\s+—\s+.*$/, ""),
+      disc,
+      due: t.due_date,
+    }));
+
   const weekLabel = `${new Date(weekStart + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} – ${new Date(weekEnd + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
 
   return (
@@ -64,7 +91,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
       <RealtimeRefresh tables={["appointments"]} />
 
       <AppointmentsView
-        today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients}
+        today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} unscheduled={unscheduled}
         weekLabel={weekLabel} prevHref={`/appointments?week=${offset - 1}`} nextHref={`/appointments?week=${offset + 1}`} isThisWeek={offset === 0}
       />
 

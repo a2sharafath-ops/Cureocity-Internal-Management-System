@@ -3454,6 +3454,10 @@ export async function createAppointment(formData: FormData) {
     slot: { date, hour: Number(formData.get("hour")) || 9 }, actor: p.name,
   });
 
+  // Booked from the "To book" list? Close the prompting task so it drops off.
+  const taskId = String(formData.get("task_id") || "");
+  if (taskId) await supabase.from("tasks").update({ status: "done" }).eq("id", taskId);
+
   await logAudit(p, "Appointment booked", await clientName(supabase, client_id), date);
   revalidatePath("/appointments");
   revalidatePath("/clients");

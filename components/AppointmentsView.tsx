@@ -12,6 +12,7 @@ export type ViewAppt = {
   date: string; hour: number; duration_min: number; status: string; provider_id: string | null; providerName: string | null;
 };
 export type Provider = { id: string; name: string; color: string; discipline: string };
+export type Unsched = { id: string; clientId: string; clientName: string; label: string; disc: string; due: string | null };
 
 const DISCIPLINES = ["All", "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"];
 
@@ -22,14 +23,14 @@ function dayNum(iso: string) { return new Date(iso + "T00:00:00Z").getUTCDate();
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
 
 export default function AppointmentsView({
-  today, days, hours, appts, providers, clients, weekLabel, prevHref, nextHref, isThisWeek,
+  today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek,
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
-  providers: Provider[]; clients: { id: string; name: string }[];
+  providers: Provider[]; clients: { id: string; name: string }[]; unscheduled?: Unsched[];
   weekLabel: string; prevHref: string; nextHref: string; isThisWeek: boolean;
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
-  const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records">("calendar");
+  const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records" | "unscheduled">("calendar");
   // Deep-link from a client's "Book →": ?client=<id>&disc=<discipline> opens the
   // booking form pre-filled with that patient and filters the clinician list to
   // the discipline, so front desk lands straight on date/slot/provider.
@@ -37,7 +38,7 @@ export default function AppointmentsView({
   const preClient = params.get("client") ?? "";
   const preDisc = params.get("disc") ?? "";
   const [disc, setDisc] = useState(DISCIPLINES.includes(preDisc) ? preDisc : "All");
-  const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string; client: string }>(
+  const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string; client: string; taskId?: string }>(
     preClient
       ? { open: true, date: today, hour: 10, provider: "", client: preClient }
       : { open: false, date: today, hour: 10, provider: "", client: "" },
@@ -61,6 +62,13 @@ export default function AppointmentsView({
   };
 
   const openBooking = (date: string, hour: number) => setBooking({ open: true, date, hour, provider: "", client: "" });
+  const visibleUnsched = unscheduled.filter((u) => disc === "All" || u.disc === disc);
+  // Book one of the "to book" items: pre-fill the form with its client and
+  // filter clinicians to its discipline, then open it.
+  const bookUnsched = (u: Unsched) => {
+    setDisc(DISCIPLINES.includes(u.disc) ? u.disc : "All");
+    setBooking({ open: true, date: today, hour: 10, provider: "", client: u.clientId, taskId: u.id });
+  };
   const sorted = [...visible].sort((a, b) => a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1);
   const upcoming = sorted.filter((a) => a.date >= today && a.status === "scheduled");
   const records = sorted.filter((a) => a.status === "completed" || a.date < today);
@@ -91,6 +99,7 @@ export default function AppointmentsView({
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
           { key: "calendar", label: "📅 Calendar" },
           { key: "tracker", label: "⏳ Tracker" },
+          { key: "unscheduled", label: `🔖 To book${visibleUnsched.length ? ` · ${visibleUnsched.length}` : ""}` },
           { key: "list", label: "📋 List" },
           { key: "records", label: "🗂 Records" },
         ]} />
@@ -113,7 +122,8 @@ export default function AppointmentsView({
 
       {/* inline booking form */}
       {booking.open && (
-        <form key={booking.client} action={createAppointment} onSubmit={() => setTimeout(() => setBooking((b) => ({ ...b, open: false })), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
+        <form key={`${booking.client}|${booking.taskId ?? ""}`} action={createAppointment} onSubmit={() => setTimeout(() => setBooking((b) => ({ ...b, open: false })), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
+          {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue={booking.client}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" defaultValue={booking.provider}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue={disc === "Fitness Trainer" ? "Assessment" : "Consultation"}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
@@ -175,7 +185,7 @@ export default function AppointmentsView({
       {tab === "tracker" && (
         <div>
           <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-            {([["Scheduled", counts.scheduled, "var(--blue-text)"], ["Completed", counts.completed, "var(--green-text)"], ["No-shows", counts.no_show, "var(--red-text)"]] as const).map(([k, v, c]) => (
+            {([["Scheduled", counts.scheduled, "var(--blue-text)"], ["Completed", counts.completed, "var(--green-text)"], ["No-shows", counts.no_show, "var(--red-text)"], ["To book", visibleUnsched.length, "var(--amber-text)"]] as const).map(([k, v, c]) => (
               <div key={k} style={{ ...box, padding: "14px 18px", minWidth: 130 }}>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{k}</div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: c }}>{v}</div>
@@ -193,6 +203,25 @@ export default function AppointmentsView({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {tab === "unscheduled" && (
+        <div style={{ ...box, padding: "14px 18px" }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Not yet booked ({visibleUnsched.length}){disc !== "All" ? ` · ${disc}` : ""}</div>
+          {visibleUnsched.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>Everything due is booked. 🎉</div>
+          ) : visibleUnsched.map((u) => (
+            <div key={u.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--amber-text)", flexShrink: 0 }} />
+              <b style={{ minWidth: 96 }}>{u.due ?? "—"}</b>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <Link href={`/clients/${u.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{u.clientName}</Link>
+                <span style={{ color: "var(--muted)" }}> · {u.label} · {u.disc}</span>
+              </span>
+              <button type="button" onClick={() => bookUnsched(u)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Book →</button>
+            </div>
+          ))}
         </div>
       )}
 
