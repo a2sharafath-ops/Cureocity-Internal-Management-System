@@ -85,7 +85,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
   // ---- exception queue: every rupee that hasn't landed ---------------------
   const flags: Flag[] = [];
   for (const u of unbilled) {
-    flags.push({ sev: "high", title: `${u.client} — no invoice raised`, detail: `${u.pkg} · ${money(u.amount)} never billed`, href: `/clients/${u.id}`, cta: "Raise" });
+    flags.push({ sev: "high", title: `${u.client} — no invoice raised`, detail: `${u.pkg} · ${money(u.amount)} never billed`, href: `/clients/${u.id}`, cta: "Raise invoice", raiseInvoiceClientId: u.id });
   }
   for (const i of unpaid) {
     const age = ageDays(i.issued_date, today);

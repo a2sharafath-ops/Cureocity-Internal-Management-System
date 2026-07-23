@@ -2075,6 +2075,44 @@ export async function createInvoice(formData: FormData) {
   if (client_id) revalidatePath(`/clients/${client_id}`);
 }
 
+/**
+ * One-click "Raise invoice" from the dashboard exception queue: bill a client's
+ * package that has no invoice against it. Reads the price off the package so the
+ * amount can't be fudged from the client, and refuses to double-invoice — if any
+ * invoice already exists for the client it no-ops (the flag would already be
+ * gone), so a double-click can't create two.
+ */
+export async function raiseInvoiceForClient(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageInvoices(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return;
+  const supabase = createClient();
+
+  const { data: c } = await supabase.from("clients").select("id, name, email, package_id").eq("id", client_id).maybeSingle();
+  if (!c?.package_id) return;
+
+  const { data: existing } = await supabase.from("invoices").select("id").eq("client_id", client_id).limit(1);
+  if (existing && existing.length) { revalidatePath("/dashboard"); return; }
+
+  const { data: pkg } = await supabase.from("packages").select("name, price").eq("id", c.package_id).maybeSingle();
+  if (!pkg) return;
+
+  const amount = Number(pkg.price ?? 0);
+  const description = `${pkg.name} package`;
+  const num = await nextInvoiceNum(supabase);
+  await supabase.from("invoices").insert({
+    num, client_id, description, amount, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
+  });
+  await logAudit(p, "Invoice raised", description, `₹${amount}`);
+  if (c.email) {
+    await notifyEmail({ supabase, to: c.email, clientId: client_id, template: "invoice", tpl: tplInvoiceCreated(c.name ?? "there", `INV-${String(num).padStart(3, "0")}`, amount, description), actor: p.name });
+  }
+  revalidatePath("/dashboard");
+  revalidatePath("/billing");
+  revalidatePath(`/clients/${client_id}`);
+}
+
 export async function markInvoicePaid(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageInvoices(p.role)) return;

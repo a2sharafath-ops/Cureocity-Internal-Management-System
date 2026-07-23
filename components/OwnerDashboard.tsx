@@ -80,7 +80,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (p && Number(p.price) > 0 && !invByClient.get(c.id)) {
       leak += Number(p.price);
-      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "Raise invoice" });
+      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "Raise invoice", raiseInvoiceClientId: c.id });
     }
   }
 
