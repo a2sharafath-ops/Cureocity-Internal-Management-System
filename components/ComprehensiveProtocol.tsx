@@ -42,7 +42,7 @@ const day = (iso: string | null) => {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 };
 
-function Row({ g, dateOnly }: { g: Gate; dateOnly?: boolean }) {
+function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?: string | null }) {
   const tone = SLA_TONE[g.clock.status];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 0", fontSize: 12.5, borderTop: "1px solid var(--border)" }}>
@@ -55,22 +55,35 @@ function Row({ g, dateOnly }: { g: Gate; dateOnly?: boolean }) {
           ? "—"
           : `${formatLeft(g.clock.msLeft)} · ${dateOnly ? day(g.clock.dueAt) : when(g.clock.dueAt)}`}
       </span>
+      {bookHref
+        ? <a href={bookHref} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Book →</a>
+        : <span style={{ width: 52 }} />}
     </div>
   );
 }
 
+const OWNER_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach" };
+
 export default function ComprehensiveProtocol({
-  clientId, view, canHold,
-}: { clientId: string; view: View; canHold: boolean }) {
+  clientId, view, canHold, canBook,
+}: { clientId: string; view: View; canHold: boolean; canBook?: boolean }) {
   const r = comprehensiveSla(view);
   const held = Boolean(view.hold.holdSince);
+
+  // A milestone that's an appointment (not the strength-session block) and isn't
+  // done yet gets a one-click "Book →" that pre-fills the calendar with this
+  // client and the owning discipline.
+  const bookHref = (g: Gate): string | null =>
+    canBook && g.gate.startsWith("milestone:") && !["met", "late"].includes(g.clock.status)
+      ? `/appointments?client=${clientId}&disc=${encodeURIComponent(OWNER_DISC[g.owner] ?? "")}`
+      : null;
 
   const section = (title: string, gates: Gate[], dateOnly?: boolean) => (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 2 }}>
         {title}
       </div>
-      {gates.map((g) => <Row key={g.gate} g={g} dateOnly={dateOnly} />)}
+      {gates.map((g) => <Row key={g.gate} g={g} dateOnly={dateOnly} bookHref={dateOnly ? bookHref(g) : null} />)}
     </div>
   );
 

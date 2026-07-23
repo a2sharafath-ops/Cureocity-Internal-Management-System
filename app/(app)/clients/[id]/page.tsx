@@ -721,11 +721,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       )}
 
       {compView && (
-        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} />
+        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
       )}
 
       {ptView && (
-        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} />
+        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
       )}
 
       {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
