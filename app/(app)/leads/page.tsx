@@ -278,10 +278,6 @@ export default async function LeadsPage({
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "12px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 14 };
-  // "23 Jul 2026, 11:49 AM" — the moment the lead arrived (created_at).
-  const fmtAdded = (s: string | null) => s
-    ? new Date(s).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })
-    : "—";
   // A stat card that filters the list. Clicking the active one clears it, so
   // the cards behave like toggles rather than a one-way trip.
   const statLink = (label: string, value: number, tier: TierKey, color: string, sub?: string) => {
@@ -302,7 +298,7 @@ export default async function LeadsPage({
   };
 
   return (
-    <div style={{ maxWidth: 1120 }}>
+    <div style={{ maxWidth: 1280 }}>
       <RealtimeRefresh tables={["leads"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>CRM &amp; Leads</h1>
@@ -437,7 +433,14 @@ export default async function LeadsPage({
                   </td>
                   <td style={{ ...td, fontWeight: 700 }}>{total ?? "—"}</td>
                   <td style={td}>{tier ? <span style={{ background: TIER_STYLE[tier].bg, color: TIER_STYLE[tier].color, borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 700 }}>{tier}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
-                  <td style={{ ...td, color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{fmtAdded(l.created_at)}</td>
+                  <td style={{ ...td, whiteSpace: "nowrap" }}>
+                    {l.created_at ? (
+                      <>
+                        <div style={{ fontSize: 12.5 }}>{new Date(l.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+                        <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>{new Date(l.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })}</div>
+                      </>
+                    ) : <span style={{ color: "var(--muted)" }}>—</span>}
+                  </td>
                   <td style={{ ...td, maxWidth: 240 }}>
                     {(() => {
                       const r = lastRemark.get(l.id);
