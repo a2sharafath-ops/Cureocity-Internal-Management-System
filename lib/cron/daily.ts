@@ -6,6 +6,7 @@ import { buildFollowupRows } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
 import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
+import { runPtSla } from "@/lib/cron/pt-sla";
 import { runLeadFollowups } from "@/lib/cron/lead-followups";
 import { runLeadCoverage } from "@/lib/cron/lead-coverage";
 import { runLeadIdle } from "@/lib/cron/lead-idle";
@@ -143,6 +144,8 @@ export async function runDaily() {
   const sla = await runBlueprintSla(supabase);
   // Comprehensive turnarounds + day-offset milestones.
   const comp = await runComprehensiveSla(supabase);
+  // PT: fitness-reassessment booking prompts + session-cycle deadlines.
+  const pt = await runPtSla(supabase);
   // Lead callbacks: remind the owner, escalate to management after 3 days.
   const cb = await runLeadFollowups(supabase, todayISO());
   // Leads nobody committed to at all — the inverse of the callback sweep, and
@@ -160,6 +163,7 @@ export async function runDaily() {
       + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
       + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`
       + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`
+      + ` · PT SLA ${pt.scanned} scanned / ${pt.booked} reassess booked / ${pt.overdueSessions} sessions behind`
       + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`
       + ` · coverage digests ${cov.sent} sent to ${cov.owners} owner(s), ${cov.leads} leads with no next step`
       + ` · idle deals ${idle.idle} flagged / ${idle.escalated} escalated of ${idle.scanned} valued`

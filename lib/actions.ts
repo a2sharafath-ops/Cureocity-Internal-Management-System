@@ -28,6 +28,12 @@ import {
   INITIAL_BOOKINGS, PT_BOOKING_LABEL, BOOKING_DUE_DAYS,
   BLOOD_PANEL, COMPREHENSIVE_CATEGORY,
 } from "@/lib/comprehensive";
+import {
+  PT_CATEGORY,
+  INITIAL_BOOKINGS as PT_INITIAL_BOOKINGS,
+  PT_BOOKING_LABEL as PT_SESSIONS_LABEL,
+  BOOKING_DUE_DAYS as PT_BOOKING_DUE_DAYS,
+} from "@/lib/pt";
 import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
 import { ivrConfig } from "@/lib/ivr/config";
@@ -863,16 +869,23 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
 
   if (inserted && package_id) {
     const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
+    const cat0 = packageCategory(package_id, pkg?.is_facility ?? false);
 
     // Assign the care team: doctor/dietitian/psychologist follow whoever the
     // client was booked with; health coach and trainer come off the rotation.
+    // A PT package is a fitness-only track — scope it to trainer + coach.
     const slotHour = Number(formData.get("slot_hour")) || 9;
     const team = await assignCareTeam(supabase, inserted.id, {
       slot: { date: joined, hour: slotHour }, actor: p.name,
+      ...(cat0 === PT_CATEGORY ? { disciplines: ["trainer", "coach"] } : {}),
     });
     const trainerId = team.find((t) => t.discipline === "trainer")?.staff_id ?? null;
 
-    if (pkg && !pkg.is_facility && pkg.sessions > 0 && trainerId) {
+    // PT and Comprehensive sessions are booked by front desk (prompted), not
+    // auto-scheduled — their journeys queue a "Book 12 strength sessions" task.
+    // Everything else with session credits still auto-builds.
+    const autoBuildSessions = cat0 !== PT_CATEGORY && cat0 !== COMPREHENSIVE_CATEGORY;
+    if (pkg && !pkg.is_facility && pkg.sessions > 0 && trainerId && autoBuildSessions) {
       await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: trainerId, hour: slotHour, session: "PT" });
       await supabase.from("sessions").insert(buildSessions(inserted.id, trainerId, slotHour, joined, pkg.sessions));
     }
@@ -890,11 +903,12 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
         end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
         price: amount, status: "active", created_by: p.name,
       });
-      const cat0 = packageCategory(package_id, pkg.is_facility);
       if (cat0 === "blueprint") {
         await startBlueprintJourney(supabase, inserted.id, lead.name, p.name);
       } else if (cat0 === COMPREHENSIVE_CATEGORY) {
         await startComprehensiveJourney(supabase, inserted.id, lead.name, joined, p.name);
+      } else if (cat0 === PT_CATEGORY) {
+        await startPTJourney(supabase, inserted.id, lead.name, joined, p.name);
       }
     }
   }
@@ -969,15 +983,18 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     num, client_id, description: `${pkg.name} package${discount > 0 ? ` (offer −₹${discount.toLocaleString("en-IN")})` : ""}`,
     amount, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
   });
-  if (!pkg.is_facility && pkg.sessions > 0) {
+  // PT and Comprehensive sessions are booked by front desk (their journeys
+  // queue the prompt); everything else with credits still auto-builds.
+  if (!pkg.is_facility && pkg.sessions > 0 && cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY) {
     await supabase.from("enrollments").insert({ client_id, trainer_id: "t0", hour: 9, session: "PT" });
     await supabase.from("sessions").insert(buildSessions(client_id, "t0", 9, start, pkg.sessions));
   }
-  if (cat === "blueprint" || cat === COMPREHENSIVE_CATEGORY) {
+  if (cat === "blueprint" || cat === COMPREHENSIVE_CATEGORY || cat === PT_CATEGORY) {
     const { data: cli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
     const who = cli?.name ?? "Client";
     if (cat === "blueprint") await startBlueprintJourney(supabase, client_id, who, p.name);
-    else await startComprehensiveJourney(supabase, client_id, who, start, p.name);
+    else if (cat === COMPREHENSIVE_CATEGORY) await startComprehensiveJourney(supabase, client_id, who, start, p.name);
+    else await startPTJourney(supabase, client_id, who, start, p.name);
   }
   await logAudit(p, "Package purchased", pkg.name, client_id);
   revalidatePath(`/clients/${client_id}`);
@@ -1254,6 +1271,57 @@ async function startComprehensiveJourney(
     body: `${clientName} — blood panel requested, care team assigned, ${rows.length} booking${rows.length === 1 ? "" : "s"} to make.`,
     href: `/clients/${clientId}`,
     icon: "\u{1FA7A}",
+  });
+}
+
+/**
+ * Everything that must happen the moment a client buys a PT package. The
+ * trainer-only counterpart of startComprehensiveJourney — no blood panel, no
+ * doctor/dietitian, no consolidated report.
+ *
+ * Day 0:
+ *   1. assign the care team, scoped to trainer + health coach only;
+ *   2. open the `training` protocol row that anchors the reassessment milestone
+ *      and holds the client-side pause;
+ *   3. queue two front-desk bookings: the initial fitness assessment and the 12
+ *      strength sessions (prompted, never auto-scheduled).
+ *
+ * Idempotent: the protocol row is unique per (client, protocol, start) and
+ * tasks are skipped when an open one with the same title already exists.
+ */
+async function startPTJourney(
+  supabase: ReturnType<typeof createClient>,
+  clientId: string,
+  clientName: string,
+  startDate: string,
+  actor: string,
+) {
+  await assignCareTeam(supabase, clientId, { actor, disciplines: ["trainer", "coach"] });
+
+  await supabase.from("care_protocols").upsert(
+    { client_id: clientId, protocol: PT_CATEGORY, start_date: startDate, status: "active", created_by: actor },
+    { onConflict: "client_id,protocol,start_date", ignoreDuplicates: true },
+  );
+
+  const wanted = [
+    ...PT_INITIAL_BOOKINGS.map((b) => `${b.label} — ${clientName}`),
+    `${PT_SESSIONS_LABEL} — ${clientName}`,
+  ];
+  const { data: existing } = await supabase.from("tasks")
+    .select("title").eq("client_id", clientId).neq("status", "done").in("title", wanted);
+  const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+
+  const rows = wanted.filter((t) => !taken.has(t)).map((title) => ({
+    title, client_id: clientId, type: "Ops", priority: "High", status: "todo",
+    due_date: addDaysISO(todayISO(), PT_BOOKING_DUE_DAYS), created_by: actor,
+  }));
+  if (rows.length) await supabase.from("tasks").insert(rows);
+
+  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+    title: "PT started",
+    body: `${clientName} — trainer & coach assigned, ${rows.length} booking${rows.length === 1 ? "" : "s"} to make.`,
+    href: `/clients/${clientId}`,
+    icon: "\u{1F3CB}",
   });
 }
 

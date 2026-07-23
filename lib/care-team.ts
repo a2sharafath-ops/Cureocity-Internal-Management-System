@@ -45,7 +45,7 @@ export async function loadPool(supabase: DB, branch?: string | null): Promise<Re
 export async function assignCareTeam(
   supabase: DB,
   clientId: string,
-  opts: { slot?: { date: string; hour: number } | null; actor?: string; reassign?: boolean } = {},
+  opts: { slot?: { date: string; hour: number } | null; actor?: string; reassign?: boolean; disciplines?: string[] } = {},
 ): Promise<Assignment[]> {
   const { data: client } = await supabase
     .from("clients").select("id, branch").eq("id", clientId).maybeSingle();
@@ -66,7 +66,14 @@ export async function assignCareTeam(
   );
 
   const pool = await loadPool(supabase, client.branch);
-  const planned = planCareTeam({ bookings, pool, busy, slot: opts.slot ?? null });
+  let planned = planCareTeam({ bookings, pool, busy, slot: opts.slot ?? null });
+
+  // Scope to a subset of disciplines when asked — a PT package, for instance,
+  // only wants a trainer and a health coach, not the full clinical team.
+  if (opts.disciplines) {
+    const want = new Set<string>(opts.disciplines);
+    planned = planned.filter((a) => want.has(a.discipline));
+  }
 
   const toWrite = opts.reassign ? planned : planned.filter((a) => !existing.has(a.discipline));
   if (!toWrite.length) return [];
