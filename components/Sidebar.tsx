@@ -23,12 +23,9 @@ const SECTIONS: NavSection[] = [
       { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
     ],
   },
-  {
-    title: "Clinical",
-    items: [
-      { href: "/careteam", label: "Care Team", icon: "🤝" },
-    ],
-  },
+  // The "Care Team" hub link was removed from the sidebar. The /careteam page
+  // stays live — clinicians reach its tools via My Workspace, and the workspace
+  // "Integrated Dashboard" tab + BackLinks still point at it.
   {
     title: "Front Desk",
     items: [
