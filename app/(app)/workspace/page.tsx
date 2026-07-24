@@ -78,7 +78,12 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   const allClients = (clientData ?? []) as unknown as ClientRow[];
   const trainingIds = new Set(((enrollData ?? []) as { client_id: string }[]).map((e) => e.client_id));
-  const scoped = scopeClients(roleKey, allClients, trainingIds);
+  // Clients whose care team includes this workspace's discipline — the source of
+  // truth, so PT/Comprehensive clients show for their assigned trainer/coach.
+  const wsDiscKey = ({ doctor: "doctor", diet: "dietitian", trainer: "trainer", coach: "coach", psych: "psychologist" } as Record<string, string>)[roleKey];
+  const { data: asgData } = await supabase.from("client_assignments").select("client_id").eq("discipline", wsDiscKey);
+  const assignedIds = new Set(((asgData ?? []) as { client_id: string }[]).map((a) => a.client_id));
+  const scoped = scopeClients(roleKey, allClients, trainingIds, assignedIds);
   const rosterRows: WsClientRow[] = scoped.map((c) => ({
     id: c.id, name: c.name, code: c.code,
     pkg: (c as ClientRow).packages?.name ?? c.package_id,

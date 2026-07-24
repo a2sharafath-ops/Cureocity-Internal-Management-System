@@ -27,6 +27,7 @@ import FreezeToggle from "@/components/FreezeToggle";
 import BloodActions from "@/components/BloodActions";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
+import ScheduleSessionsForm from "@/components/ScheduleSessionsForm";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { getComprehensiveView, getPTView } from "@/lib/actions";
@@ -188,6 +189,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const currentMembershipPkgId = clientPackages.find((r) => r.category === "membership" && r.status === "active")?.package_id
     ?? clientPackages.find((r) => r.category === "membership")?.package_id ?? null;
   const isFrozen = Boolean(c0.frozen);
+  // PT / Comprehensive strength sessions: offer guided scheduling until booked.
+  const isPtOrComp = clientPackages.some((r) => ["training", "comprehensive"].includes(r.category));
+  const hasScheduledSessions = ((sessions ?? []) as { status: string }[]).some((s) => s.status === "scheduled");
+  const assignedTrainerId = assignByDisc.get("trainer") ?? null;
   // Role-aware status badge (same value shown everywhere this client appears).
   const detailStatus = clientStatus((await loadClientStatuses(supabase, [params.id], todayISO())).get(params.id), disciplineForRole(me?.role));
   // Blood report status — shown prominently for BluePrint / Comprehensive
@@ -374,6 +379,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
           {!ro && canBill(me?.role ?? "") && holdsMembership && <RenewMembership clientId={params.id} packages={pkgList} currentPackageId={currentMembershipPkgId} />}
           {!ro && canWrite(me?.role ?? "") && holdsMembership && <FreezeToggle clientId={params.id} frozen={isFrozen} />}
+          {!ro && canWrite(me?.role ?? "") && isPtOrComp && !hasScheduledSessions && <ScheduleSessionsForm clientId={params.id} trainers={trainers} defaultTrainerId={assignedTrainerId} />}
           {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} started={journeyStarted} />}
         </div>
 

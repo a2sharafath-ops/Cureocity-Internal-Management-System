@@ -1052,6 +1052,65 @@ export async function renewMembership(formData: FormData): Promise<{ ok: boolean
   return { ok: true };
 }
 
+/**
+ * Book the strength-session block for a PT / Comprehensive client. The package
+ * prompts "Book 12 strength sessions" but never seeds them (front desk picks the
+ * trainer & cadence) — this is that booking. Writes real dated rows to the
+ * `sessions` table (every 2 days), closes the prompt, and flips the onboarding
+ * "sessions scheduled" step + the SLA session count.
+ */
+export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return { ok: false, error: "Not permitted" };
+  const client_id = String(formData.get("client_id") || "");
+  const trainer_id = String(formData.get("trainer_id") || "");
+  const start = String(formData.get("start_date") || todayISO());
+  const hour = Number(formData.get("hour")) || 9;
+  const count = Math.min(24, Math.max(1, Number(formData.get("count")) || 12));
+  if (!client_id || !trainer_id) return { ok: false, error: "Pick a trainer" };
+
+  const supabase = createClient();
+  const { data: existing } = await supabase.from("sessions").select("id").eq("client_id", client_id).eq("status", "scheduled").limit(1);
+  if (existing && existing.length) return { ok: false, error: "This client already has scheduled sessions. Reschedule the existing ones instead." };
+
+  await supabase.from("sessions").insert(buildSessions(client_id, trainer_id, hour, start, count));
+
+  // Close the "Book … strength sessions" prompt so it drops off the board.
+  const { data: tks } = await supabase.from("tasks").select("id").eq("client_id", client_id).neq("status", "done").ilike("title", "Book %session%");
+  const ids = ((tks ?? []) as { id: string }[]).map((t) => t.id);
+  if (ids.length) await supabase.from("tasks").update({ status: "done" }).in("id", ids);
+
+  await logAudit(p, "Strength sessions scheduled", await clientName(supabase, client_id), `${count} sessions`);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/onboarding");
+  revalidatePath("/sessions");
+  return { ok: true };
+}
+
+/**
+ * Approve a Comprehensive client's consolidated summary — the doctor's sign-off
+ * once all three initial consults (doctor, diet, trainer) are complete. Writes
+ * care_protocols.consolidated_at + approved_at, which stops the 48h consolidated
+ * clock (it otherwise has no writer and perpetually breaches).
+ */
+export async function approveComprehensive(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return;
+  const supabase = createClient();
+  const { data: cons } = await supabase.from("consultations").select("kind, status").eq("client_id", client_id);
+  const done = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
+  if (!(done.has("Doctor") && done.has("Diet") && done.has("Trainer"))) return; // not ready
+  const now = new Date().toISOString();
+  await supabase.from("care_protocols")
+    .update({ consolidated_at: now, approved: true, approved_at: now, approved_by: p.name })
+    .eq("client_id", client_id).eq("protocol", "comprehensive").eq("status", "active");
+  await logAudit(p, "Comprehensive consolidated summary approved", await clientName(supabase, client_id), null);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/", "layout");
+}
+
 // ---- consultations (professional workspace) --------------------------------
 
 export async function createConsultation(formData: FormData) {

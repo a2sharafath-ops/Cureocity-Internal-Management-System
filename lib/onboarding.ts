@@ -82,12 +82,12 @@ function stepsFor(i: ClientInput): Step[] {
         consultStep("Doctor consultation", i.doctor, "Doctor", id),
         consultStep("Diet consultation", i.diet, "Dietitian", id),
         consultStep("Fitness assessment", i.trainer, "Fitness Trainer", id),
-        { label: "Strength sessions scheduled", done: i.sessionScheduled, action: { cta: "Book", href: `/sessions?client=${id}` } },
+        { label: "Strength sessions scheduled", done: i.sessionScheduled, action: { cta: "Schedule", href: `/clients/${id}` } },
       ];
     case "training":
       return [
         consultStep("Fitness assessment", i.trainer, "Fitness Trainer", id),
-        { label: "12 sessions scheduled", done: i.sessionScheduled, action: { cta: "Book", href: `/sessions?client=${id}` } },
+        { label: "12 sessions scheduled", done: i.sessionScheduled, action: { cta: "Schedule", href: `/clients/${id}` } },
       ];
     case "membership":
       return [

@@ -14,7 +14,7 @@
 // precision and a needless client bundle, and the page already refreshes on
 // Realtime changes.
 
-import { toggleComprehensiveHold } from "@/lib/actions";
+import { toggleComprehensiveHold, approveComprehensive } from "@/lib/actions";
 import { comprehensiveSla, formatLeft, SLA_TONE, type Gate } from "@/lib/comprehensive-sla";
 import type { Hold } from "@/lib/sla-clock";
 
@@ -69,6 +69,10 @@ export default function ComprehensiveProtocol({
 }: { clientId: string; view: View; canHold: boolean; canBook?: boolean }) {
   const r = comprehensiveSla(view);
   const held = Boolean(view.hold.holdSince);
+  // Once all three initial consults are done, the doctor can approve the
+  // consolidated summary — which stops the 48h clock.
+  const threeDone = ["Doctor", "Diet", "Trainer"].every((k) => view.consults.find((c) => c.kind === k)?.completedAt);
+  const canApproveConsolidated = canHold && threeDone && !view.approvedAt;
 
   // A milestone that's an appointment (not the strength-session block) and isn't
   // done yet gets a one-click "Book →" that pre-fills the calendar with this
@@ -101,7 +105,16 @@ export default function ComprehensiveProtocol({
             Commitment missed
           </span>
         )}
+        {view.approvedAt && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>✓ Consolidated approved</span>}
         <span style={{ flex: 1 }} />
+        {canApproveConsolidated && (
+          <form action={approveComprehensive}>
+            <input type="hidden" name="client_id" value={clientId} />
+            <button type="submit" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              Approve consolidated summary
+            </button>
+          </form>
+        )}
         {canHold && (
           <form action={toggleComprehensiveHold}>
             <input type="hidden" name="client_id" value={clientId} />
