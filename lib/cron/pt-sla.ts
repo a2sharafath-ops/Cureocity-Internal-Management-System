@@ -27,10 +27,10 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
 
   const { data: protoRows } = await supabase
     .from("care_protocols")
-    .select("client_id, start_date")
+    .select("client_id, start_date, hold_since")
     .eq("protocol", PT_CATEGORY)
     .eq("status", "active");
-  const protos = (protoRows ?? []) as { client_id: string; start_date: string }[];
+  const protos = (protoRows ?? []) as { client_id: string; start_date: string; hold_since: string | null }[];
   if (!protos.length) return { scanned: 0, booked: 0, overdueSessions: 0 };
 
   const ids = protos.map((p) => p.client_id);
@@ -71,6 +71,9 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
   let booked = 0, overdueSessions = 0;
 
   for (const p of protos) {
+    // Client-side hold pauses the clocks — don't prompt or flag a paused client
+    // (mirrors the Comprehensive sweep).
+    if (p.hold_since) continue;
     const name = nameOf.get(p.client_id) ?? "Client";
     const appts = apptsBy.get(p.client_id) ?? [];
     const cycles = cyclesFor(validityByClient.get(p.client_id) ?? 28);
