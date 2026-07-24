@@ -28,7 +28,7 @@ function disciplineOf(s: StaffRow): string {
   return "Other";
 }
 
-export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string } }) {
+export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string; client?: string; disc?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/appointments")) redirect("/dashboard");
 
@@ -114,9 +114,25 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const statusByClient: Record<string, ClientStatus> = {};
   for (const id of statusIds) statusByClient[id] = clientStatus(statusMap.get(id), statusDisc);
 
+  // When front desk arrives here from a client's Service Timeline "Book" link,
+  // give them a one-click way back to finish the rest of that client's bookings.
+  const focusClientId = searchParams.client || null;
+  const focusClientName = focusClientId ? (clients.find((c) => c.id === focusClientId)?.name ?? null) : null;
+
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["appointments"]} />
+
+      {focusClientId && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 14 }}>
+          <Link href={`/clients/${focusClientId}?tab=timeline`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+            ← Back to Service Timeline
+          </Link>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+            Booking for <b style={{ color: "var(--ink)" }}>{focusClientName ?? "this client"}</b> — schedule this appointment, then head back to book the rest of their journey.
+          </span>
+        </div>
+      )}
 
       <AppointmentsView
         today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} unscheduled={unscheduled}
