@@ -72,11 +72,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const ageOf = (dob: unknown): number | null =>
     typeof dob === "string" ? ageFromDob(dob) : null;
 
-  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }] = await Promise.all([
+  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }, { data: apptData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("care_protocols").select("id").eq("client_id", params.id).limit(1),
+    // Booked consults live in `appointments`; a `consultations` row only appears
+    // once the clinician hits Start. So the journey must read appointments too,
+    // or a booked-but-not-started consult looks "not scheduled".
+    supabase.from("appointments").select("type, status, staff(role)").eq("client_id", params.id).neq("status", "cancelled"),
   ]);
   // Has this client's care journey already been kicked off? If so, the primary
   // "Start" action is done — we only offer a quiet re-run for repairs.
@@ -240,8 +244,20 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   ]);
 
   // ---- Client Journey milestones (Service Timeline) ----
-  const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed");
-  const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind);
+  // Booked (and completed) initial consults per discipline, derived from
+  // appointments — a booked-but-not-started consult has no `consultations` row,
+  // so relying on that table alone made a scheduled consult read "not scheduled".
+  const A_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
+  const INITIAL_APPT_TYPES = ["Consultation", "Assessment"];
+  const apptSched = new Set<string>();
+  const apptDone = new Set<string>();
+  for (const a of (apptData ?? []) as unknown as { type: string | null; status: string; staff: { role: string } | null }[]) {
+    const kind = A_ROLE_TO_KIND[a.staff?.role ?? ""];
+    if (!kind || !INITIAL_APPT_TYPES.includes(a.type ?? "Consultation")) continue;
+    if (a.status === "completed") apptDone.add(kind); else apptSched.add(kind);
+  }
+  const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed") || apptDone.has(kind);
+  const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind) || apptSched.has(kind) || apptDone.has(kind);
   const consultState = (kind: string): "done" | "progress" | "pending" => hasConsult(kind) ? "done" : scheduledConsult(kind) ? "progress" : "pending";
   const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string; bookDisc?: string }[] = [
     { label: "Package Purchase", state: pkg ? "done" : "pending", detail: pkg?.name ?? "No package yet", when: client.joined ?? "—" },
