@@ -96,6 +96,33 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   const todayList = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; clients: { name: string } | null }[];
 
+  // Experience (pre-sale trial) bookings assigned to *me*, matched by provider —
+  // NOT by client roster. A free assessment/training for a lead has client_id
+  // null, so every roster-scoped query above filters it out. Matching on the
+  // staff id is how a trial reaches whoever is actually rostered to run it.
+  type ExpItem = { id: string; kind: "assessment" | "training"; lead_id: string | null; lead_name: string | null; date: string | null; hour: number | null; status: string };
+  let myExperience: ExpItem[] = [];
+  if (me.staffId && !readOnly) {
+    const [{ data: ea }, { data: es }] = await Promise.all([
+      supabase.from("appointments").select("id, lead_id, date, hour, status").eq("provider_id", me.staffId).eq("is_experience", true).neq("status", "cancelled"),
+      supabase.from("sessions").select("id, lead_id, date, hour, status").eq("trainer_id", me.staffId).eq("is_experience", true).neq("status", "cancelled"),
+    ]);
+    const rawA = (ea ?? []) as { id: string; lead_id: string | null; date: string | null; hour: number | null; status: string }[];
+    const rawS = (es ?? []) as { id: string; lead_id: string | null; date: string | null; hour: number | null; status: string }[];
+    const leadIds = Array.from(new Set([...rawA, ...rawS].map((r) => r.lead_id).filter(Boolean))) as string[];
+    const leadName = new Map<string, string>();
+    if (leadIds.length) {
+      const { data: ln } = await supabase.from("leads").select("id, name").in("id", leadIds);
+      for (const l of (ln ?? []) as { id: string; name: string }[]) leadName.set(l.id, l.name);
+    }
+    const nameOf = (id: string | null) => (id ? leadName.get(id) ?? null : null);
+    myExperience = [
+      ...rawA.map((r) => ({ id: r.id, kind: "assessment" as const, lead_id: r.lead_id, lead_name: nameOf(r.lead_id), date: r.date, hour: r.hour, status: r.status })),
+      ...rawS.map((r) => ({ id: r.id, kind: "training" as const, lead_id: r.lead_id, lead_name: nameOf(r.lead_id), date: r.date, hour: r.hour, status: r.status })),
+    ];
+  }
+  const myExperienceToday = myExperience.filter((e) => e.date === today && e.status !== "cancelled");
+
   type CJoin = { clients: { name: string } | null };
   const concerns: ConcernRow[] = ((concernData ?? []) as unknown as (ConcernRow & CJoin)[]).map((r) => ({
     id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null,
@@ -181,6 +208,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     apptRows = ((ap ?? []) as unknown as (ApptRow & { clients: { name: string } | null })[]).map((a) => ({
       id: a.id, client_id: a.client_id, provider_id: a.provider_id, client_name: a.clients?.name ?? null, date: a.date, hour: a.hour, type: a.type, title: a.title, status: a.status,
     }));
+    // Fold in my pre-sale trial bookings (lead-based, no client_id) so they
+    // aren't invisible on the board that's supposed to show my day.
+    const expAsAppt: ApptRow[] = myExperience.map((e) => ({
+      id: e.id, client_id: null, provider_id: me.staffId ?? null, client_name: e.lead_name ?? "Lead",
+      date: e.date ?? today, hour: e.hour,
+      type: e.kind === "assessment" ? "Free fitness assessment" : "Free trial training session",
+      title: null, status: e.status, is_experience: true, lead_id: e.lead_id,
+    }));
+    apptRows = [...apptRows, ...expAsAppt];
   }
 
   // Follow-ups board (coach) — role-scoped to this workspace's clients.
@@ -259,7 +295,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
             <MetricCard label="My clients" value={scoped.length} />
-            <MetricCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length} />
+            <MetricCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length + myExperienceToday.length} />
             <MetricCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" />
             <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} />
             <MetricCard label="MDT updates" value={mdtNotes.length} />
@@ -268,7 +304,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
             <div style={{ ...box, overflow: "hidden" }}>
               <div style={{ padding: "12px 16px", fontWeight: 700 }}>📅 Today — {todayLabel()}</div>
-              {todayList.length ? todayList.map((a) => (
+              {todayList.map((a) => (
                 <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderTop: "1px solid var(--border)" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <b style={{ fontSize: 13 }}>{a.clients?.name ?? "—"}</b>
@@ -276,7 +312,23 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                   </div>
                   <b style={{ fontSize: 13 }}>{fmtHour(a.hour)}</b>
                 </div>
-              )) : <div style={{ padding: "18px 16px", color: "var(--muted)", fontSize: 13, borderTop: "1px solid var(--border)" }}>Nothing scheduled today.</div>}
+              ))}
+              {/* Pre-sale trial bookings assigned to me — shown here so a lead's
+                  free assessment/training isn't invisible just because they're
+                  not a client yet. */}
+              {myExperienceToday.map((e) => (
+                <div key={`exp-${e.id}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: 13 }}>{e.lead_name ?? "Lead"}</b>
+                    <span style={{ marginLeft: 7, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Trial</span>
+                    <div style={{ color: "var(--muted)", fontSize: 12 }}>{e.kind === "assessment" ? "Free fitness assessment" : "Free trial training session"}</div>
+                  </div>
+                  <b style={{ fontSize: 13 }}>{fmtHour(e.hour)}</b>
+                </div>
+              ))}
+              {todayList.length === 0 && myExperienceToday.length === 0 && (
+                <div style={{ padding: "18px 16px", color: "var(--muted)", fontSize: 13, borderTop: "1px solid var(--border)" }}>Nothing scheduled today.</div>
+              )}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

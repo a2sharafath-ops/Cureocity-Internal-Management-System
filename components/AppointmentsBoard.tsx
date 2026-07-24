@@ -14,6 +14,9 @@ export type ApptRow = {
   type: string | null;
   title: string | null;
   status: string;
+  /** a pre-sale trial booking (lead, not a client) */
+  is_experience?: boolean;
+  lead_id?: string | null;
 };
 
 const STATUS: Record<string, [string, string, string]> = {
@@ -76,19 +79,23 @@ export default function AppointmentsBoard({ appts, today, myStaffId = null }: { 
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ fontSize: 13 }}>{a.client_name ?? "—"}</b>
+                {a.is_experience && <span style={{ marginLeft: 7, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Trial</span>}
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{a.title || a.type || "Consultation"}</div>
               </div>
               {chip(s[0], s[1], s[2])}
-              {a.status === "scheduled" && !!myStaffId && a.provider_id === myStaffId && (
+              {/* Trials are pre-sale: they're marked Attended/No-show on the lead
+                  record, not "started" as a client consultation. */}
+              {!a.is_experience && a.status === "scheduled" && !!myStaffId && a.provider_id === myStaffId && (
                 <form action={startConsultFromAppointment} style={{ margin: 0 }}>
                   <input type="hidden" name="appointment_id" value={a.id} />
                   <button type="submit" style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</button>
                 </form>
               )}
               {a.client_id && <Link href={`/clients/${a.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Card</Link>}
+              {a.is_experience && a.lead_id && <Link href={`/leads/${a.lead_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Lead</Link>}
             </div>
           );
-        }) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {view} appointments for your clients.</div>}
+        }) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {view} appointments.</div>}
       </div>
     </div>
   );
