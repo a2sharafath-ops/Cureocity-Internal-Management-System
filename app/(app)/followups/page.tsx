@@ -6,6 +6,7 @@ import { todayISO } from "@/lib/today";
 import { generateFollowups } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import FollowupsQueue, { type FuRow } from "@/components/FollowupsQueue";
+import { loadClientStatuses, clientStatus, disciplineForRole, type ClientStatus } from "@/lib/client-status";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,12 @@ export default async function FollowupsPage() {
     token: f.token, reminder_sent: !!f.reminder_sent, no_answer: !!f.no_answer, priority: f.priority,
   }));
 
+  const fuIds = Array.from(new Set(items.map((i) => i.clientId).filter(Boolean))) as string[];
+  const fuStatuses = await loadClientStatuses(supabase, fuIds, today);
+  const fuDisc = disciplineForRole(me.role);
+  const statusByClient: Record<string, ClientStatus> = {};
+  for (const id of fuIds) statusByClient[id] = clientStatus(fuStatuses.get(id), fuDisc);
+
   return (
     <div style={{ maxWidth: 1120 }}>
       <RealtimeRefresh tables={["followups"]} />
@@ -46,7 +53,7 @@ export default async function FollowupsPage() {
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Smart scheduler — Day 2 / 10 / 21 / 28 protocol &amp; renewals. Call → send link → consultant review → close.</p>
 
-      <FollowupsQueue items={items} today={today} canWrite={writer} />
+      <FollowupsQueue items={items} today={today} canWrite={writer} statusByClient={statusByClient} />
     </div>
   );
 }

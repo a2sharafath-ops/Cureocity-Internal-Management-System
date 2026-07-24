@@ -6,6 +6,8 @@ import {
   fuSendQuestionnaire, fuSendReminder, fuNoAnswer, fuBookInPerson, fuNoConsult, fuMarkReceived, fuCompleteReview,
 } from "@/lib/actions";
 import Chip from "@/components/Chip";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type FuRow = {
   id: string; clientId: string | null; clientName: string | null; label: string; category: string | null;
@@ -24,7 +26,7 @@ const STAGE_STYLE: Record<string, [string, string, string]> = {
 
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
 
-export default function FollowupsQueue({ items, today, canWrite }: { items: FuRow[]; today: string; canWrite: boolean }) {
+export default function FollowupsQueue({ items, today, canWrite, statusByClient = {} }: { items: FuRow[]; today: string; canWrite: boolean; statusByClient?: Record<string, ClientStatus> }) {
   const [cat, setCat] = useState("All");
   const [review, setReview] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
@@ -90,7 +92,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
             const [sb, sc, st] = STAGE_STYLE[f.stage] ?? ["var(--neutral-bg)", "#64748b", f.stage];
             return (
               <tr key={f.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}{f.clientId && statusByClient[f.clientId] ? <div style={{ marginTop: 3, fontWeight: 400 }}><ClientStatusBadge status={statusByClient[f.clientId]} size="sm" /></div> : null}</td>
                 <td style={td}>{f.label}{f.token && <div style={{ fontSize: 11, color: "var(--muted)" }}>token {f.token}</div>}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{f.category ?? "—"}</td>
                 <td style={td}>{f.day != null ? `Day ${f.day}` : "—"}</td>
