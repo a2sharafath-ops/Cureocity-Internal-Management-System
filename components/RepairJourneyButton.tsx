@@ -7,6 +7,7 @@
 // showing a call-to-action.
 
 import { repairClientJourney } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export default function RepairJourneyButton({ clientId, started = false }: { clientId: string; started?: boolean }) {
   const label = started ? "Re-run setup" : "Start journey";
@@ -23,7 +24,7 @@ export default function RepairJourneyButton({ clientId, started = false }: { cli
       onSubmit={(e) => { if (!confirm(confirmMsg)) e.preventDefault(); }}
     >
       <input type="hidden" name="client_id" value={clientId} />
-      <button type="submit" style={style}>{label}</button>
+      <SubmitButton pendingLabel={started ? "Re-running…" : "Starting…"} doneLabel="✓ Done" style={style}>{label}</SubmitButton>
     </form>
   );
 }

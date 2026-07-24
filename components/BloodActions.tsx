@@ -1,6 +1,7 @@
 "use client";
 
 import { requestBlood, markBloodReceived } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 type Blood = { requested_at: string | null; submitted: boolean; submitted_date: string | null } | null;
 
@@ -12,9 +13,9 @@ export default function BloodActions({ clientId, blood }: { clientId: string; bl
         <div style={{ marginBottom: 4 }}>
           <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>Request: not sent</span>
         </div>
-        <button type="submit" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
+        <SubmitButton pendingLabel="Sending…" doneLabel="✓ Sent" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
           🩸 Send request
-        </button>
+        </SubmitButton>
       </form>
     );
   }
@@ -34,9 +35,9 @@ export default function BloodActions({ clientId, blood }: { clientId: string; bl
       </div>
       <form action={markBloodReceived}>
         <input type="hidden" name="client_id" value={clientId} />
-        <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
+        <SubmitButton pendingLabel="Saving…" doneLabel="✓ Received" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
           Mark received
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

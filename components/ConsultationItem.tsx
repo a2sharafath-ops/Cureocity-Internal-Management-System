@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { completeConsultation, toggleConsultFlag } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export type Consult = {
   id: string;
@@ -43,17 +44,17 @@ export default function ConsultationItem({ c }: { c: Consult }) {
               <input type="hidden" name="id" value={c.id} />
               <input type="hidden" name="field" value="approved" />
               <input type="hidden" name="value" value={String(c.approved)} />
-              <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
+              <SubmitButton pendingLabel="Saving…" doneLabel="✓ Saved" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
                 {c.approved ? "Unapprove" : "Approve"}
-              </button>
+              </SubmitButton>
             </form>
             <form action={toggleConsultFlag}>
               <input type="hidden" name="id" value={c.id} />
               <input type="hidden" name="field" value="shared" />
               <input type="hidden" name="value" value={String(c.shared)} />
-              <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
+              <SubmitButton pendingLabel="Saving…" doneLabel="✓ Saved" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer" }}>
                 {c.shared ? "Unshare" : "Share with client"}
-              </button>
+              </SubmitButton>
             </form>
           </>
         )}
@@ -66,7 +67,7 @@ export default function ConsultationItem({ c }: { c: Consult }) {
       )}
 
       {open && c.status !== "completed" && (
-        <form action={completeConsultation} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ marginTop: 10 }}>
+        <form action={completeConsultation} style={{ marginTop: 10 }}>
           <input type="hidden" name="id" value={c.id} />
           <textarea
             name="summary" rows={3} required
@@ -91,9 +92,9 @@ export default function ConsultationItem({ c }: { c: Consult }) {
               </div>
             </div>
           )}
-          <button type="submit" style={{ marginTop: 10, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <SubmitButton pendingLabel="Saving…" doneLabel="✓ Completed" style={{ marginTop: 10, background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Save &amp; complete
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

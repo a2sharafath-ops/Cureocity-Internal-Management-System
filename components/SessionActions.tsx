@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { rescheduleSession, markSessionComplete } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17];
 
@@ -30,12 +31,12 @@ export default function SessionActions({
         <form action={markSessionComplete}>
           <input type="hidden" name="id" value={id} />
           <input type="hidden" name="client_id" value={clientId} />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingLabel="Saving…" doneLabel="✓ Done"
             style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}
           >
             ✓ Mark done
-          </button>
+          </SubmitButton>
         </form>
       </div>
 

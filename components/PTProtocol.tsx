@@ -4,6 +4,7 @@
 // clocks are computed once at render.
 
 import { togglePTHold } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 import { ptSla, formatLeft, SLA_TONE, type Gate } from "@/lib/pt-sla";
 import type { Hold } from "@/lib/sla-clock";
 
@@ -74,9 +75,9 @@ export default function PTProtocol({ clientId, view, canHold, canBook }: { clien
           <form action={togglePTHold}>
             <input type="hidden" name="client_id" value={clientId} />
             {!held && <input type="hidden" name="note" value="Waiting on client" />}
-            <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>
+            <SubmitButton pendingLabel="Saving…" doneLabel="✓ Done" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>
               {held ? "Resume clocks" : "Hold — waiting on client"}
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>

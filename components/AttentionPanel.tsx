@@ -7,6 +7,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { RingMeter } from "@/components/Meters";
 import { raiseInvoiceForClient } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export type Flag = {
   sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string;
@@ -121,11 +122,11 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
                 onSubmit={(e) => { if (!confirm(`Raise invoice?\n\n${f.title}\n${f.detail}`)) e.preventDefault(); }}
               >
                 <input type="hidden" name="client_id" value={f.raiseInvoiceClientId} />
-                <button type="submit" style={{
+                <SubmitButton pendingLabel="Raising…" doneLabel="✓ Raised" style={{
                   border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
                   padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
                   color: "var(--brand-text)", whiteSpace: "nowrap",
-                }}>{f.cta}</button>
+                }}>{f.cta}</SubmitButton>
               </form>
             ) : (
               <Link href={f.href} style={{

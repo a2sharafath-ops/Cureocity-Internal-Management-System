@@ -15,6 +15,7 @@
 // Realtime changes.
 
 import { toggleComprehensiveHold, approveComprehensive } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 import { comprehensiveSla, formatLeft, SLA_TONE, type Gate } from "@/lib/comprehensive-sla";
 import type { Hold } from "@/lib/sla-clock";
 
@@ -110,18 +111,18 @@ export default function ComprehensiveProtocol({
         {canApproveConsolidated && (
           <form action={approveComprehensive}>
             <input type="hidden" name="client_id" value={clientId} />
-            <button type="submit" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            <SubmitButton pendingLabel="Approving…" doneLabel="✓ Approved" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
               Approve consolidated summary
-            </button>
+            </SubmitButton>
           </form>
         )}
         {canHold && (
           <form action={toggleComprehensiveHold}>
             <input type="hidden" name="client_id" value={clientId} />
             {!held && <input type="hidden" name="note" value="Waiting on client" />}
-            <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>
+            <SubmitButton pendingLabel="Saving…" doneLabel="✓ Done" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>
               {held ? "Resume clocks" : "Hold — waiting on client"}
-            </button>
+            </SubmitButton>
           </form>
         )}
       </div>

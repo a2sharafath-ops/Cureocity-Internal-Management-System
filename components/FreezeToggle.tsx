@@ -4,6 +4,7 @@
 // paused days so the paid term slides forward by exactly the time on hold.
 
 import { togglePackageFreeze } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export default function FreezeToggle({ clientId, frozen }: { clientId: string; frozen: boolean }) {
   const msg = frozen
@@ -12,13 +13,13 @@ export default function FreezeToggle({ clientId, frozen }: { clientId: string; f
   return (
     <form action={togglePackageFreeze} onSubmit={(e) => { if (!confirm(msg)) e.preventDefault(); }}>
       <input type="hidden" name="client_id" value={clientId} />
-      <button type="submit" style={{
+      <SubmitButton pendingLabel={frozen ? "Resuming…" : "Pausing…"} doneLabel="✓ Done" style={{
         border: "1px solid var(--border)", background: frozen ? "var(--amber-bg)" : "#fff",
         borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
         color: frozen ? "var(--amber-text)" : "var(--ink)",
       }}>
         {frozen ? "▶ Resume packages" : "⏸ Pause / freeze"}
-      </button>
+      </SubmitButton>
     </form>
   );
 }
