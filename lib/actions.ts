@@ -1833,6 +1833,46 @@ export async function setExperienceStatus(formData: FormData) {
 }
 
 /**
+ * Mark a trial's outcome from the *assigned clinician's* workspace.
+ *
+ * A narrow carve-out from `setExperienceStatus` (which is front-desk-only): the
+ * provider actually rostered to run the assessment/training can record whether
+ * it happened, without any wider lead/CRM access. Ownership is verified against
+ * the booking's own provider/trainer id — you can only act on your own trial.
+ */
+export async function markExperienceOutcome(formData: FormData): Promise<void> {
+  const p = await getProfile();
+  if (!p) return;
+
+  const kind = String(formData.get("kind") || "");        // assessment | training
+  const id = String(formData.get("id") || "");
+  const status = String(formData.get("status") || "");    // completed | no_show
+  if (!id || !["completed", "no_show"].includes(status)) return;
+  if (kind !== "assessment" && kind !== "training") return;
+
+  const supabase = createClient();
+  const table = kind === "training" ? "sessions" : "appointments";
+  const ownerCol = kind === "training" ? "trainer_id" : "provider_id";
+
+  // Ownership: front desk / admin may always act; a clinician only on their own.
+  const { data: row } = await supabase.from(table).select(`id, ${ownerCol}, lead_id, is_experience`).eq("id", id).maybeSingle();
+  const r = row as { [k: string]: unknown; lead_id?: string | null; is_experience?: boolean | null } | null;
+  if (!r || !r.is_experience) return;
+  const owns = p.staffId && r[ownerCol] === p.staffId;
+  if (!canWrite(p.role) && !owns) return;
+
+  // `sessions` has no no_show state — record it as cancelled there.
+  const value = table === "sessions" && status === "no_show" ? "cancelled" : status;
+  await supabase.from(table).update({ status: value }).eq("id", id);
+
+  await logAudit(p, "Trial outcome recorded", kind, status);
+  revalidatePath("/workspace");
+  if (r.lead_id) revalidatePath(`/leads/${r.lead_id}`);
+  revalidatePath("/leads");
+  revalidatePath("/appointments");
+}
+
+/**
  * Move a converting lead's experience bookings onto their new client record.
  *
  * Without this the history is orphaned: the assessment that sold them the

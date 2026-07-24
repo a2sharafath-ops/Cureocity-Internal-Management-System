@@ -18,6 +18,7 @@ import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
+import TrialOutcomeActions from "@/components/TrialOutcomeActions";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
@@ -214,7 +215,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       id: e.id, client_id: null, provider_id: me.staffId ?? null, client_name: e.lead_name ?? "Lead",
       date: e.date ?? today, hour: e.hour,
       type: e.kind === "assessment" ? "Free fitness assessment" : "Free trial training session",
-      title: null, status: e.status, is_experience: true, lead_id: e.lead_id,
+      title: null, status: e.status, is_experience: true, exp_kind: e.kind, lead_id: e.lead_id,
     }));
     apptRows = [...apptRows, ...expAsAppt];
   }
@@ -324,6 +325,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                     <div style={{ color: "var(--muted)", fontSize: 12 }}>{e.kind === "assessment" ? "Free fitness assessment" : "Free trial training session"}</div>
                   </div>
                   <b style={{ fontSize: 13 }}>{fmtHour(e.hour)}</b>
+                  {!readOnly && <TrialOutcomeActions id={e.id} kind={e.kind} status={e.status} />}
                 </div>
               ))}
               {todayList.length === 0 && myExperienceToday.length === 0 && (

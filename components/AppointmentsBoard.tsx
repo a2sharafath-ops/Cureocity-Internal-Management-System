@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { startConsultFromAppointment } from "@/lib/actions";
+import TrialOutcomeActions from "@/components/TrialOutcomeActions";
 
 export type ApptRow = {
   id: string;
@@ -16,6 +17,7 @@ export type ApptRow = {
   status: string;
   /** a pre-sale trial booking (lead, not a client) */
   is_experience?: boolean;
+  exp_kind?: "assessment" | "training";
   lead_id?: string | null;
 };
 
@@ -82,9 +84,11 @@ export default function AppointmentsBoard({ appts, today, myStaffId = null }: { 
                 {a.is_experience && <span style={{ marginLeft: 7, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Trial</span>}
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{a.title || a.type || "Consultation"}</div>
               </div>
-              {chip(s[0], s[1], s[2])}
-              {/* Trials are pre-sale: they're marked Attended/No-show on the lead
-                  record, not "started" as a client consultation. */}
+              {a.is_experience && a.exp_kind
+                ? <TrialOutcomeActions id={a.id} kind={a.exp_kind} status={a.status} />
+                : chip(s[0], s[1], s[2])}
+              {/* Trials are pre-sale: the assigned clinician marks them
+                  Attended/No-show above, not "started" as a client consultation. */}
               {!a.is_experience && a.status === "scheduled" && !!myStaffId && a.provider_id === myStaffId && (
                 <form action={startConsultFromAppointment} style={{ margin: 0 }}>
                   <input type="hidden" name="appointment_id" value={a.id} />
