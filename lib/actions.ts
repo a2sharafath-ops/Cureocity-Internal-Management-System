@@ -789,7 +789,11 @@ export async function convertLeadWithPackage(formData: FormData) {
 
   if (inserted && package_id) {
     const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
-    if (pkg && !pkg.is_facility && pkg.sessions > 0) {
+    // Diagnostic (BluePrint) and front-desk-booked tracks (PT / Comprehensive)
+    // don't auto-schedule strength workouts.
+    const cat = packageCategory(package_id, pkg?.is_facility ?? false);
+    const autoBuildSessions = cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY && cat !== "blueprint";
+    if (pkg && !pkg.is_facility && pkg.sessions > 0 && autoBuildSessions) {
       await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
       await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
     }
@@ -891,8 +895,10 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
 
     // PT and Comprehensive sessions are booked by front desk (prompted), not
     // auto-scheduled — their journeys queue a "Book 12 strength sessions" task.
-    // Everything else with session credits still auto-builds.
-    const autoBuildSessions = cat0 !== PT_CATEGORY && cat0 !== COMPREHENSIVE_CATEGORY;
+    // BluePrint is diagnostic (blood panel + consultations + report) and has no
+    // strength workout, so it's excluded too. Everything else with session
+    // credits still auto-builds.
+    const autoBuildSessions = cat0 !== PT_CATEGORY && cat0 !== COMPREHENSIVE_CATEGORY && cat0 !== "blueprint";
     if (pkg && !pkg.is_facility && pkg.sessions > 0 && trainerId && autoBuildSessions) {
       await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: trainerId, hour: slotHour, session: "PT" });
       await supabase.from("sessions").insert(buildSessions(inserted.id, trainerId, slotHour, joined, pkg.sessions));
