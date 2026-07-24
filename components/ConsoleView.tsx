@@ -19,7 +19,7 @@ export default function ConsoleView({
   kind: string;
   label: string;
   icon: string;
-  client: { id: string; name: string; code: string | null };
+  client: { id: string; name: string; code: string | null; isLead?: boolean };
   questions: string[];
   answers: [string, string][];
   flags: Flag[];
@@ -152,7 +152,7 @@ export default function ConsoleView({
             </div>
           </div>
           <div style={{ ...box, padding: "12px 16px" }}>
-            <Link href={`/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>📋 Open full client card →</Link>
+            <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "📋 Open lead record →" : "📋 Open full client card →"}</Link>
           </div>
         </div>
       </form>

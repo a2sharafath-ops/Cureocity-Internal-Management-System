@@ -14,7 +14,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   const supabase = createClient();
   const { data } = await supabase
     .from("consultations")
-    .select("id, kind, status, summary, answers, flags, client_id, clients(name, code)")
+    .select("id, kind, status, summary, answers, flags, client_id, lead_id, clients(name, code), leads(name)")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) notFound();
@@ -22,9 +22,16 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   const row = data as unknown as {
     id: string; kind: string; status: string; summary: string | null;
     answers: [string, string][] | null; flags: { text: string; severity: string }[] | null;
-    client_id: string; clients: { name: string; code: string | null } | null;
+    client_id: string | null; lead_id: string | null;
+    clients: { name: string; code: string | null } | null; leads: { name: string } | null;
   };
   const q = consultQ(row.kind);
+
+  // A consultation is on a client or (for a pre-sale trial) a lead. Render the
+  // right subject and point the "open card" link at the right record.
+  const subject = row.client_id
+    ? { id: row.client_id, name: row.clients?.name ?? "Client", code: row.clients?.code ?? null, isLead: false }
+    : { id: row.lead_id ?? "", name: row.leads?.name ?? "Lead", code: null, isLead: true };
 
   return (
     <ConsoleView
@@ -32,7 +39,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       kind={row.kind}
       label={q.label}
       icon={q.icon}
-      client={{ id: row.client_id, name: row.clients?.name ?? "Client", code: row.clients?.code ?? null }}
+      client={subject}
       questions={q.questions}
       answers={(row.answers ?? []) as [string, string][]}
       flags={(row.flags ?? []) as { text: string; severity: string }[]}

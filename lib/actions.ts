@@ -1174,8 +1174,9 @@ export async function startConsultFromAppointment(formData: FormData) {
   const supabase = createClient();
 
   const { data: appt } = await supabase.from("appointments")
-    .select("id, client_id, provider_id, status").eq("id", appointment_id).maybeSingle();
-  if (!appt || !appt.client_id) return;
+    .select("id, client_id, lead_id, provider_id, status").eq("id", appointment_id).maybeSingle();
+  // Either a client booking or a pre-sale trial booked against a lead.
+  if (!appt || (!appt.client_id && !appt.lead_id)) return;
 
   const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
   // A real clinician may only open their own booking; admins/managers may open any.
@@ -1192,14 +1193,16 @@ export async function startConsultFromAppointment(formData: FormData) {
   let consultId = (existing as { id: string } | null)?.id ?? null;
   if (!consultId) {
     const { data: row } = await supabase.from("consultations").insert({
-      client_id: appt.client_id, kind, status: "scheduled",
+      client_id: appt.client_id, lead_id: appt.lead_id, kind, status: "scheduled",
       by_name: p.name, by_role: p.role, started_at: new Date().toISOString(),
       appointment_id,
     }).select("id").maybeSingle();
     consultId = (row as { id: string } | null)?.id ?? null;
   }
-  const { data: c } = await supabase.from("clients").select("name").eq("id", appt.client_id).maybeSingle();
-  await logAudit(p, "Consultation started", c?.name, kind);
+  const subjName = appt.client_id
+    ? (await supabase.from("clients").select("name").eq("id", appt.client_id).maybeSingle()).data?.name
+    : (await supabase.from("leads").select("name").eq("id", appt.lead_id).maybeSingle()).data?.name;
+  await logAudit(p, "Consultation started", subjName, kind);
   if (consultId) redirect(`/console/${consultId}`);
   redirect("/pro");
 }
@@ -1887,6 +1890,10 @@ async function carryExperienceToClient(
   await supabase.from("appointments")
     .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
   await supabase.from("sessions")
+    .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
+  // The trial assessment's consultation + summary move too, so the assessment
+  // that sold them the package becomes part of their client record.
+  await supabase.from("consultations")
     .update({ client_id: clientId, lead_id: null }).eq("lead_id", leadId);
 }
 
