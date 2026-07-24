@@ -237,10 +237,10 @@ export default async function LeadsPage({
     return prev ? `${now} new this month · ${prev} last` : `${now} new this month`;
   };
 
-  // List order is user-chosen (LeadSort). Score high→low stays the default
-  // because that's the "work the best leads first" view; the others are for
-  // finding a lead by arrival time or name.
-  const sortKey = ["new", "old", "az", "za", "score"].includes(searchParams.sort ?? "") ? searchParams.sort! : "score";
+  // List order is user-chosen (LeadSort). Newest-first is the default so a
+  // freshly-opened page shows the leads that just came in at the top; score,
+  // oldest and name orders are opt-in via the Sort control.
+  const sortKey = ["new", "old", "az", "za", "score"].includes(searchParams.sort ?? "") ? searchParams.sort! : "new";
   const ts = (s: string | null | undefined) => (s ? Date.parse(s) : 0);
   const comparators: Record<string, (a: (typeof all)[number], b: (typeof all)[number]) => number> = {
     score: (a, b) => (b.total ?? -1) - (a.total ?? -1),
@@ -269,7 +269,7 @@ export default async function LeadsPage({
     if (due) p.set("due", due);
     if (mine) p.set("mine", "1");
     if (ownerFilter) p.set("owner", ownerFilter);
-    if (sortKey !== "score") p.set("sort", sortKey);
+    if (sortKey !== "new") p.set("sort", sortKey);
     const s = p.toString();
     return s ? `/leads?${s}` : "/leads";
   };
@@ -515,7 +515,7 @@ export default async function LeadsPage({
               matters. Loading the rest is opt-in rather than the default. */}
           {scored.length > visible.length && (
             <div style={{ borderTop: "1px solid var(--border)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12, fontSize: 12.5, color: "var(--muted)" }}>
-              <span>Showing the top <b style={{ color: "var(--ink)" }}>{visible.length}</b> of {scored.length} by score</span>
+              <span>Showing the top <b style={{ color: "var(--ink)" }}>{visible.length}</b> of {scored.length}</span>
               <span style={{ flex: 1 }} />
               <Link href={href({}) + (href({}).includes("?") ? "&" : "?") + `n=${visible.length + PAGE_SIZE}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>
                 Show {Math.min(PAGE_SIZE, scored.length - visible.length)} more
