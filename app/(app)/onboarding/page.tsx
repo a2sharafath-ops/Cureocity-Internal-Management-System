@@ -34,7 +34,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
       supabase.from("consultations").select("client_id, kind, status"),
       supabase.from("sessions").select("client_id, status").eq("status", "scheduled"),
       supabase.from("staff").select("id, name, role"),
-      supabase.from("appointments").select("id, client_id, provider_id, status").eq("status", "scheduled"),
+      supabase.from("appointments").select("id, client_id, provider_id, status").neq("status", "cancelled"),
       supabase.from("client_assignments").select("client_id, discipline, staff_id"),
     ]);
 
@@ -65,11 +65,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
   }
   const cs = (clientId: string, kind: string): ConsultState => consult.get(clientId)?.[kind] ?? { scheduled: false, completed: false };
 
-  // scheduled appointments per client (for booked-state + cancel)
-  const apptsByClient = new Map<string, { id: string; provider_id: string | null }[]>();
-  for (const a of (apptD ?? []) as { id: string; client_id: string | null; provider_id: string | null }[]) {
+  // non-cancelled appointments per client (for booked/done state + cancel)
+  const apptsByClient = new Map<string, { id: string; provider_id: string | null; status: string }[]>();
+  for (const a of (apptD ?? []) as { id: string; client_id: string | null; provider_id: string | null; status: string }[]) {
     if (!a.client_id) continue;
-    (apptsByClient.get(a.client_id) ?? apptsByClient.set(a.client_id, []).get(a.client_id)!).push({ id: a.id, provider_id: a.provider_id });
+    (apptsByClient.get(a.client_id) ?? apptsByClient.set(a.client_id, []).get(a.client_id)!).push({ id: a.id, provider_id: a.provider_id, status: a.status });
   }
   // care-team assignments per client: discipline -> staff_id
   const assignByClient = new Map<string, Record<string, string>>();
@@ -87,14 +87,20 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
   const csFull = (clientId: string, kind: string, disc: string): ConsultState => {
     const base = consult.get(clientId)?.[kind] ?? { scheduled: false, completed: false };
     const role = KIND_ROLE[kind];
-    const match = (apptsByClient.get(clientId) ?? []).find((a) => a.provider_id && staffRole.get(a.provider_id) === role);
+    const mine = (apptsByClient.get(clientId) ?? []).filter((a) => a.provider_id && staffRole.get(a.provider_id) === role);
+    // A completed appointment of the discipline means the consult is done, even
+    // when it never became a `consultations` row (e.g. a fitness assessment
+    // marked ✓ on the calendar).
+    const completedAppt = mine.find((a) => a.status === "completed") ?? null;
+    const scheduledAppt = mine.find((a) => a.status === "scheduled") ?? null;
+    const match = scheduledAppt ?? completedAppt;
     const assignedStaffId = assignByClient.get(clientId)?.[disc] ?? null;
     const providerName = match?.provider_id ? (staffName.get(match.provider_id) ?? null) : null;
     return {
-      scheduled: base.scheduled || Boolean(match),
-      completed: base.completed,
+      scheduled: base.scheduled || Boolean(scheduledAppt),
+      completed: base.completed || Boolean(completedAppt),
       assignedName: providerName ?? (assignedStaffId ? (staffName.get(assignedStaffId) ?? null) : null),
-      apptId: match?.id ?? null,
+      apptId: scheduledAppt?.id ?? null,
     };
   };
 

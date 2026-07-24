@@ -89,7 +89,7 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
     supabase.from("blueprints").select("client_id, generated").in("client_id", ids),
     supabase.from("consultations").select("client_id, kind, status").in("client_id", ids),
     supabase.from("sessions").select("client_id, status").in("client_id", ids).eq("status", "scheduled"),
-    supabase.from("appointments").select("client_id, provider_id, status, date, hour").in("client_id", ids).eq("status", "scheduled"),
+    supabase.from("appointments").select("client_id, provider_id, status, date, hour").in("client_id", ids).neq("status", "cancelled"),
     supabase.from("staff").select("id, role"),
   ]);
 
@@ -116,13 +116,13 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
     if (c.status === "completed") (consultDone.get(c.client_id) ?? consultDone.set(c.client_id, new Set()).get(c.client_id)!).add(c.kind);
     else (consultBooked.get(c.client_id) ?? consultBooked.set(c.client_id, new Set()).get(c.client_id)!).add(c.kind);
   }
-  // scheduled appointments per client, by discipline (from provider role)
-  const apptByClient = new Map<string, { disc: string; when: string }[]>();
-  for (const a of (apptD ?? []) as { client_id: string; provider_id: string | null; date: string; hour: number }[]) {
+  // non-cancelled appointments per client, by discipline (from provider role)
+  const apptByClient = new Map<string, { disc: string; when: string; status: string }[]>();
+  for (const a of (apptD ?? []) as { client_id: string; provider_id: string | null; date: string; hour: number; status: string }[]) {
     const role = a.provider_id ? staffRole.get(a.provider_id) : null;
     const disc = Object.entries(ROLE_OF_DISC).find(([, r]) => r === role)?.[0] ?? null;
     if (!disc) continue;
-    (apptByClient.get(a.client_id) ?? apptByClient.set(a.client_id, []).get(a.client_id)!).push({ disc, when: whenLabel(a.date, a.hour) });
+    (apptByClient.get(a.client_id) ?? apptByClient.set(a.client_id, []).get(a.client_id)!).push({ disc, when: whenLabel(a.date, a.hour), status: a.status });
   }
 
   for (const c of (clientsD ?? []) as { id: string; name: string; package_id: string | null; frozen: string | null }[]) {
@@ -139,10 +139,15 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
     const consults: Record<string, DiscState> = {};
     for (const d of DISCS) {
       const kind = KIND_OF_DISC[d];
-      const appt = appts.find((a) => a.disc === d) ?? null;
+      const mine = appts.filter((a) => a.disc === d);
+      const completedAppt = mine.find((a) => a.status === "completed") ?? null;
+      const scheduledAppt = mine.find((a) => a.status === "scheduled") ?? null;
+      const appt = scheduledAppt ?? completedAppt;
       consults[d] = {
-        completed: done.has(kind),
-        booked: booked.has(kind) || Boolean(appt),
+        // A completed appointment counts as the consult done, even without a
+        // matching `consultations` row.
+        completed: done.has(kind) || Boolean(completedAppt),
+        booked: booked.has(kind) || Boolean(scheduledAppt),
         when: appt?.when ?? null,
       };
     }
