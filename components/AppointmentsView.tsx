@@ -26,11 +26,16 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 
 export default function AppointmentsView({
   today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek, statusByClient = {},
+  providerKind = {}, bookedKinds = {},
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
   providers: Provider[]; clients: { id: string; name: string }[]; unscheduled?: Unsched[];
   weekLabel: string; prevHref: string; nextHref: string; isThisWeek: boolean;
   statusByClient?: Record<string, ClientStatus>;
+  /** staff id → consultation kind, and per-client kinds already booked — used to
+   *  disable Book for a duplicate initial consult before the server rejects it. */
+  providerKind?: Record<string, string>;
+  bookedKinds?: Record<string, string[]>;
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records" | "unscheduled">("calendar");
@@ -47,6 +52,7 @@ export default function AppointmentsView({
       : { open: false, date: today, hour: 10, provider: "", client: "" },
   );
   const [bookErr, setBookErr] = useState<string | null>(null);
+  const [apptType, setApptType] = useState<string>(preDisc === "Fitness Trainer" ? "Assessment" : "Consultation");
   const [booking2, startBooking] = useTransition();
   const submitBooking = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -94,6 +100,15 @@ export default function AppointmentsView({
     setBooking({ open: true, date: today, hour: 10, provider: "", client: u.clientId, taskId: u.id });
   };
   const sorted = [...visible].sort((a, b) => a.date === b.date ? a.hour - b.hour : a.date < b.date ? -1 : 1);
+
+  // Proactive one-initial-consult-per-discipline guard for the booking form,
+  // mirroring the createAppointment rule so Book is disabled up front instead of
+  // erroring on submit. Only bites for an initial type (Consultation/Assessment)
+  // with a provider whose discipline the client already has booked.
+  const selKind = booking.provider ? (providerKind[booking.provider] ?? null) : null;
+  const isInitialType = apptType === "Consultation" || apptType === "Assessment";
+  const dupConsult = Boolean(selKind && isInitialType && (bookedKinds[booking.client] ?? []).includes(selKind));
+  const dupLabel = selKind === "Diet" ? "dietitian" : selKind === "Trainer" ? "fitness" : (selKind ?? "").toLowerCase();
   const upcoming = sorted.filter((a) => a.date >= today && a.status === "scheduled");
   const records = sorted.filter((a) => a.status === "completed" || a.date < today);
   const counts = { scheduled: visible.filter((a) => a.status === "scheduled").length, completed: visible.filter((a) => a.status === "completed").length, no_show: visible.filter((a) => a.status === "no_show").length };
@@ -150,16 +165,17 @@ export default function AppointmentsView({
           {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue={booking.client}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" value={booking.provider} onChange={(e) => setBooking((b) => ({ ...b, provider: e.target.value }))}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue={disc === "Fitness Trainer" ? "Assessment" : "Consultation"}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required value={booking.date} onChange={(e) => setBooking((b) => ({ ...b, date: e.target.value }))} /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time{booking.provider && takenHours.size > 0 ? " · booked slots greyed" : ""}</label><select style={input} name="hour" value={String(booking.hour)} onChange={(e) => setBooking((b) => ({ ...b, hour: Number(e.target.value) }))}>{hours.map((h) => <option key={h} value={h} disabled={takenHours.has(h)}>{hourLabelFull(h)}{takenHours.has(h) ? " · booked" : ""}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Duration</label><select style={input} name="duration_min" defaultValue="30"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" disabled={booking2 || (!!booking.provider && takenHours.has(booking.hour))} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: booking2 ? "default" : "pointer", opacity: (!!booking.provider && takenHours.has(booking.hour)) ? 0.5 : 1 }}>{booking2 ? "Booking…" : "Book"}</button>
+            <button type="submit" disabled={booking2 || dupConsult || (!!booking.provider && takenHours.has(booking.hour))} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: (booking2 || dupConsult) ? "default" : "pointer", opacity: (dupConsult || (!!booking.provider && takenHours.has(booking.hour))) ? 0.5 : 1 }}>{booking2 ? "Booking…" : "Book"}</button>
             <button type="button" onClick={() => { setBookErr(null); setBooking((b) => ({ ...b, open: false })); }} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
-          {!!booking.provider && takenHours.has(booking.hour) && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>That provider is already booked at this time — pick another slot.</div>}
+          {dupConsult && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>This client already has a {dupLabel} consultation for this package — the initial consult is one per package. Change Type to <b>Follow-up</b> to book another, or cancel the existing one first.</div>}
+          {!!booking.provider && takenHours.has(booking.hour) && !dupConsult && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>That provider is already booked at this time — pick another slot.</div>}
           {bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--red-text)", background: "var(--red-bg)", borderRadius: 8, padding: "8px 10px" }}>{bookErr}</div>}
         </form>
       )}

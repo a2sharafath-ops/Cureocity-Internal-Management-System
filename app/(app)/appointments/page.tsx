@@ -15,7 +15,13 @@ function addDays(iso: string, days: number) { const d = new Date(iso + "T00:00:0
 function mondayOf(iso: string) { const d = new Date(iso + "T00:00:00Z"); const dow = (d.getUTCDay() + 6) % 7; return addDays(iso, -dow); }
 
 type Appt = { id: string; client_id: string; type: string | null; title: string | null; date: string; hour: number; duration_min: number; status: string; provider_id: string | null; clients: { id: string; name: string } | null; staff: { name: string } | null };
-type StaffRow = { id: string; name: string; designation: string | null; department: string | null; color: string | null; is_trainer: boolean };
+type StaffRow = { id: string; name: string; designation: string | null; department: string | null; color: string | null; is_trainer: boolean; role: string | null };
+
+// Login role → consultation kind (matches the createAppointment guard).
+const ROLE_TO_KIND: Record<string, string> = {
+  Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer",
+  "Health Coach": "Coach", Psychologist: "Psychologist",
+};
 
 // Map a care-team member to a booking discipline.
 function disciplineOf(s: StaffRow): string {
@@ -42,7 +48,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const [apptsR, clientsR, staffR, tasksR, assignsR] = await Promise.all([
     supabase.from("appointments").select("id, client_id, type, title, date, hour, duration_min, status, provider_id, clients(id, name), staff(name)").gte("date", weekStart).lte("date", weekEnd).order("hour"),
     supabase.from("clients").select("id, name").order("name"),
-    supabase.from("staff").select("id, name, designation, department, color, is_trainer").order("name"),
+    supabase.from("staff").select("id, name, designation, department, color, is_trainer, role").order("name"),
     // Open "Book …" tasks = appointments that are due but not yet on the diary.
     supabase.from("tasks").select("id, client_id, title, due_date").neq("status", "done").ilike("title", "Book %").order("due_date").limit(2000),
     supabase.from("client_assignments").select("client_id, discipline, staff_id"),
@@ -73,6 +79,22 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     id: a.id, client_id: a.client_id, clientName: a.clients?.name ?? null, type: a.type, title: a.title,
     date: a.date, hour: a.hour, duration_min: a.duration_min, status: a.status, provider_id: a.provider_id, providerName: a.staff?.name ?? null,
   }));
+
+  // One-initial-consult-per-discipline rule, surfaced proactively in the form.
+  // Which consultation kinds each client already has (non-cancelled), mirroring
+  // the createAppointment guard so the UI can disable Book up front instead of
+  // letting front desk submit into an error.
+  const providerKind: Record<string, string> = {};
+  for (const s of staffRows) { const k = ROLE_TO_KIND[s.role ?? ""]; if (k) providerKind[s.id] = k; }
+  const { data: initR } = await supabase.from("appointments")
+    .select("client_id, provider_id, type").in("type", ["Consultation", "Assessment"]).neq("status", "cancelled");
+  const bookedKinds: Record<string, string[]> = {};
+  for (const a of (initR ?? []) as { client_id: string; provider_id: string | null; type: string | null }[]) {
+    const k = a.provider_id ? providerKind[a.provider_id] : null;
+    if (!k) continue;
+    (bookedKinds[a.client_id] ??= []);
+    if (!bookedKinds[a.client_id].includes(k)) bookedKinds[a.client_id].push(k);
+  }
 
   // Unscheduled = open "Book …" tasks that map to a bookable discipline (the
   // "Book 12 strength sessions" task is a session, not an appointment, so it's
@@ -138,6 +160,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} unscheduled={unscheduled}
         weekLabel={weekLabel} prevHref={`/appointments?week=${offset - 1}`} nextHref={`/appointments?week=${offset + 1}`} isThisWeek={offset === 0}
         statusByClient={statusByClient}
+        providerKind={providerKind} bookedKinds={bookedKinds}
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>
