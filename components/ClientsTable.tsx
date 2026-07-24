@@ -6,6 +6,8 @@ import ClientQuickDrawer from "@/components/ClientQuickDrawer";
 import { setClientOwner } from "@/lib/actions";
 import { BRANCHES } from "@/lib/branches";
 import SegTabs from "@/components/SegTabs";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type ClientRow = {
   id: string; code: string | null; name: string; phone: string | null; email: string | null;
@@ -13,6 +15,7 @@ export type ClientRow = {
   package_name: string | null; is_facility: boolean; package_sessions: number;
   is_blueprint: boolean; status: string; coach: string | null; owner: string | null;
   journey: { steps: { label: string; done: boolean }[]; done: number; total: number; stage: string };
+  careStatus?: ClientStatus | null;
 };
 
 export default function ClientsTable({ clients, staff, writer }: { clients: ClientRow[]; staff: { id: string; name: string }[]; writer: boolean }) {
@@ -89,7 +92,10 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                         <span key={i} style={{ width: 18, height: 6, borderRadius: 3, background: s.done ? "var(--green)" : "#e2e8f0" }} />
                       ))}
                     </div>
-                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{c.journey.done}/{c.journey.total} · {c.journey.stage}</div>
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--muted)", fontSize: 11 }}>{c.journey.done}/{c.journey.total}</span>
+                      {c.careStatus ? <ClientStatusBadge status={c.careStatus} size="sm" /> : <span style={{ color: "var(--muted)", fontSize: 11 }}>· {c.journey.stage}</span>}
+                    </div>
                   </td>
                   <td style={td}>{statusChip(c.status)}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.coach ?? "—"}</td>

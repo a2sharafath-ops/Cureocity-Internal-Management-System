@@ -8,10 +8,12 @@ import {
   createAssessment, markAssessmentBooked, completeAssessment, toggleAssessmentShared, addRecoverySession, completeRecoverySession,
 } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type Trainer = { id: string; name: string; color: string };
 export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null };
-export type AssessmentRow = { id: string; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; shared?: boolean; trainerName: string | null };
+export type AssessmentRow = { id: string; client_id?: string | null; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; shared?: boolean; trainerName: string | null };
 
 function assessLabel(kind: string) { return kind === "reassessment" ? "Fitness Reassessment" : "Fitness Assessment"; }
 export type RecoveryRow = { id: string; clientName: string | null; kind: string; date: string; hour: number | null; staffName: string | null; status: string };
@@ -27,10 +29,11 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" , height: 36, boxSizing: "border-box" };
 
 export default function TrainingScheduleView({
-  today, trainers, hours, slots, clients, staff, assessments, assessmentRecords, recovery, classes, canWrite,
+  today, trainers, hours, slots, clients, staff, assessments, assessmentRecords, recovery, classes, canWrite, statusByClient = {},
 }: {
   today: string; trainers: Trainer[]; hours: number[]; slots: Slot[]; clients: { id: string; name: string }[];
   staff: { id: string; name: string }[]; assessments: AssessmentRow[]; assessmentRecords: AssessmentRow[]; recovery: RecoveryRow[]; classes: ClassRow[]; canWrite: boolean;
+  statusByClient?: Record<string, ClientStatus>;
 }) {
   // Deep-link from a client's "Book" (unbooked session): ?client=<id> opens the
   // assign-client form with that client pre-selected, so front desk just picks a
@@ -195,7 +198,7 @@ export default function TrainingScheduleView({
                 <tbody>
                   {assessments.map((a) => (
                     <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}{a.client_id && statusByClient[a.client_id] ? <span style={{ marginLeft: 6, fontWeight: 400 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></span> : null}</td>
                       <td style={td}>{assessLabel(a.kind)}{a.trainerName ? <span style={{ color: "var(--muted)" }}> · {a.trainerName}</span> : ""}</td>
                       <td style={td}>{fmtDate(a.due_date)}</td>
                       <td style={td}>{dueBadge(a)}</td>
@@ -229,7 +232,7 @@ export default function TrainingScheduleView({
                 <tbody>
                   {assessmentRecords.map((a) => (
                     <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}{a.client_id && statusByClient[a.client_id] ? <span style={{ marginLeft: 6, fontWeight: 400 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></span> : null}</td>
                       <td style={td}>{assessLabel(a.kind)}</td>
                       <td style={td}>{a.trainerName ?? "—"}</td>
                       <td style={td}>{a.scheduled_date ? fmtDate(a.scheduled_date) : fmtDate(a.due_date)}</td>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
+import { loadClientStatuses, clientStatus, disciplineForRole, type ClientStatus } from "@/lib/client-status";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -38,16 +39,30 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const supabase = createClient();
-  const [apptsR, clientsR, staffR, tasksR] = await Promise.all([
+  const [apptsR, clientsR, staffR, tasksR, assignsR] = await Promise.all([
     supabase.from("appointments").select("id, client_id, type, title, date, hour, duration_min, status, provider_id, clients(id, name), staff(name)").gte("date", weekStart).lte("date", weekEnd).order("hour"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("staff").select("id, name, designation, department, color, is_trainer").order("name"),
     // Open "Book …" tasks = appointments that are due but not yet on the diary.
     supabase.from("tasks").select("id, client_id, title, due_date").neq("status", "done").ilike("title", "Book %").order("due_date").limit(2000),
+    supabase.from("client_assignments").select("client_id, discipline, staff_id"),
   ]);
   const raw = (apptsR.data ?? []) as unknown as Appt[];
   const clients = (clientsR.data ?? []) as { id: string; name: string }[];
   const staffRows = (staffR.data ?? []) as StaffRow[];
+  const staffName = new Map(staffRows.map((s) => [s.id, s.name]));
+
+  // Assigned care-team clinician per client per discipline — the "Owner" shown
+  // against each due item, matched to the item's discipline.
+  const assignByClient = new Map<string, Record<string, string>>();
+  for (const a of (assignsR.data ?? []) as { client_id: string; discipline: string; staff_id: string | null }[]) {
+    if (!a.staff_id) continue;
+    const rec = assignByClient.get(a.client_id) ?? {};
+    rec[a.discipline] = a.staff_id;
+    assignByClient.set(a.client_id, rec);
+  }
+  const DISC_KEY: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", Psychologist: "psychologist", "Health Coach": "coach", "Fitness Trainer": "trainer" };
+  const CATEGORY_OF: Record<string, string> = { Doctor: "Doctor Consultation", Dietitian: "Diet Consultation", Psychologist: "Counselling", "Health Coach": "Coaching", "Fitness Trainer": "Fitness Services" };
 
   // Providers = care-team members that map to a booking discipline.
   const providers: Provider[] = staffRows
@@ -75,16 +90,29 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const unscheduled: Unsched[] = ((tasksR.data ?? []) as { id: string; client_id: string | null; title: string; due_date: string | null }[])
     .map((t) => ({ t, disc: taskDiscipline(t.title) }))
     .filter((x): x is { t: { id: string; client_id: string | null; title: string; due_date: string | null }; disc: string } => Boolean(x.disc && x.t.client_id))
-    .map(({ t, disc }) => ({
-      id: t.id,
-      clientId: t.client_id as string,
-      clientName: nameById.get(t.client_id as string) ?? "—",
-      label: t.title.replace(/^Book\s+/i, "").replace(/\s+—\s+.*$/, ""),
-      disc,
-      due: t.due_date,
-    }));
+    .map(({ t, disc }) => {
+      const cid = t.client_id as string;
+      const ownerId = assignByClient.get(cid)?.[DISC_KEY[disc] ?? ""] ?? null;
+      return {
+        id: t.id,
+        clientId: cid,
+        clientName: nameById.get(cid) ?? "—",
+        label: t.title.replace(/^Book\s+/i, "").replace(/\s+—\s+.*$/, ""),
+        disc,
+        due: t.due_date,
+        owner: ownerId ? (staffName.get(ownerId) ?? null) : null,
+        category: CATEGORY_OF[disc] ?? disc,
+      };
+    });
 
   const weekLabel = `${new Date(weekStart + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} – ${new Date(weekEnd + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
+
+  // Role-aware client status, keyed by client, for the appointment rows.
+  const statusIds = Array.from(new Set(raw.map((a) => a.client_id).filter(Boolean))) as string[];
+  const statusMap = await loadClientStatuses(supabase, statusIds, today);
+  const statusDisc = disciplineForRole(me.role);
+  const statusByClient: Record<string, ClientStatus> = {};
+  for (const id of statusIds) statusByClient[id] = clientStatus(statusMap.get(id), statusDisc);
 
   return (
     <div style={{ maxWidth: 1180 }}>
@@ -93,6 +121,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
       <AppointmentsView
         today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} unscheduled={unscheduled}
         weekLabel={weekLabel} prevHref={`/appointments?week=${offset - 1}`} nextHref={`/appointments?week=${offset + 1}`} isThisWeek={offset === 0}
+        statusByClient={statusByClient}
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>

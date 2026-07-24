@@ -1,4 +1,3 @@
-import WorkspaceTabs from "@/components/WorkspaceTabs";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -77,7 +76,6 @@ export default async function TrainerPage() {
   return (
     <div style={{ maxWidth: 900 }}>
       <RealtimeRefresh tables={["sessions"]} />
-      <WorkspaceTabs active="trainer" />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Trainer</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Session board · today {todayLabel()}

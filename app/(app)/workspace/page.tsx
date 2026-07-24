@@ -5,6 +5,7 @@ import { getProfile, getViewRole } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
+import { loadClientStatuses, clientStatus } from "@/lib/client-status";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SegTabs from "@/components/SegTabs";
 import MetricCard from "@/components/MetricCard";
@@ -83,6 +84,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     pkg: (c as ClientRow).packages?.name ?? c.package_id,
     conditions: c.conditions, goals: c.goals ?? [],
   }));
+  // Role-aware status for this clinician's own discipline, shown on every roster row.
+  const wsDisc = ({ doctor: "doctor", diet: "dietitian", trainer: "trainer", coach: "coach", psych: "psychologist" } as Record<string, string>)[roleKey] ?? null;
+  const wsStatuses = await loadClientStatuses(supabase, scoped.map((c) => c.id), today);
+  for (const r of rosterRows) r.careStatus = clientStatus(wsStatuses.get(r.id), wsDisc);
 
   const todayList = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; clients: { name: string } | null }[];
 
@@ -166,10 +171,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   if (tab === "appts") {
     const scopedIds = scoped.map((c) => c.id);
     const { data: ap } = scopedIds.length
-      ? await supabase.from("appointments").select("id, client_id, date, hour, type, title, status, clients(name)").in("client_id", scopedIds).order("date", { ascending: false }).limit(200)
+      ? await supabase.from("appointments").select("id, client_id, provider_id, date, hour, type, title, status, clients(name)").in("client_id", scopedIds).order("date", { ascending: false }).limit(200)
       : { data: [] as unknown[] };
     apptRows = ((ap ?? []) as unknown as (ApptRow & { clients: { name: string } | null })[]).map((a) => ({
-      id: a.id, client_id: a.client_id, client_name: a.clients?.name ?? null, date: a.date, hour: a.hour, type: a.type, title: a.title, status: a.status,
+      id: a.id, client_id: a.client_id, provider_id: a.provider_id, client_name: a.clients?.name ?? null, date: a.date, hour: a.hour, type: a.type, title: a.title, status: a.status,
     }));
   }
 
@@ -303,7 +308,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} linkQuery={roQuery} />}
 
       {/* ---- APPOINTMENTS ---- */}
-      {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} />}
+      {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} />}
 
       {/* ---- FOLLOW-UPS (coach) ---- */}
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}

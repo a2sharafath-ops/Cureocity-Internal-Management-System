@@ -8,6 +8,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { band } from "@/lib/blueprint";
 import type { ScoreTweaks } from "@/lib/whiteboard";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 import {
   setWhiteboardCardStatus, tweakWhiteboardScore, addWhiteboardNote,
   toggleWhiteboardNote, removeWhiteboardCard,
@@ -36,6 +38,7 @@ export type CardData = {
   notes: Note[];
   facts: { label: string; value: string }[];
   blueprintGenerated: boolean;
+  careStatus?: ClientStatus | null;
 };
 
 const KIND = {
@@ -82,6 +85,7 @@ export default function WhiteboardCard({ card, staff, locked }: {
               <b style={{ fontSize: 14 }}>{card.name}</b>
               <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{card.code}{card.age != null ? ` · ${card.age} yrs` : ""}</span>
               <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700 }}>{st.label}</span>
+              {card.careStatus && <ClientStatusBadge status={card.careStatus} size="sm" />}
               {card.origin === "flagged" && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>auto</span>}
             </div>
             <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>

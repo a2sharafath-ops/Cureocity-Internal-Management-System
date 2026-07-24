@@ -5,6 +5,8 @@ import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ageFromDob } from "@/lib/dob";
+import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
+import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +66,11 @@ export default async function ClientsPage() {
       journey: { steps, done: doneCount, total: steps.length, stage: nextStep ? `Next: ${nextStep.label}` : "Fully onboarded" },
     };
   });
+
+  // Role-aware "where is this client / next action" badge, consistent everywhere.
+  const statusMap = await loadClientStatuses(supabase, clients.map((c) => c.id), todayISO());
+  const viewerDisc = disciplineForRole(profile?.role);
+  for (const c of clients) c.careStatus = clientStatus(statusMap.get(c.id), viewerDisc);
 
   return (
     <div style={{ maxWidth: 1120 }}>

@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -725,6 +725,14 @@ export async function createLead(formData: FormData) {
     }
   }
 
+  // Alert the front desk / management that a new lead has landed.
+  await notifyRoles(supabase, LEAD_OWNER_ROLES, {
+    title: "New lead",
+    body: `${name}${row.source ? ` · ${row.source}` : ""}${row.phone ? ` · ${row.phone}` : ""}`,
+    href: "/leads?view=open",
+    icon: "✦",
+  });
+
   await logAudit(p, "Lead added", name, null);
   revalidatePath("/leads");
 }
@@ -1001,6 +1009,49 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
   return { ok: true };
 }
 
+/**
+ * Renew a client's membership. Front desk picks the same package or a different
+ * one (a longer/shorter facility package = a different duration). The new term
+ * continues from the current membership's end date so no paid days are lost;
+ * if the membership has already lapsed it starts today. Raises an unpaid invoice.
+ */
+export async function renewMembership(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return { ok: false, error: "Not permitted" };
+  const client_id = String(formData.get("client_id") || "");
+  const package_id = String(formData.get("package_id") || "");
+  if (!client_id || !package_id) return { ok: false, error: "Missing client or package" };
+
+  const supabase = createClient();
+  const { data: pkg } = await supabase.from("packages")
+    .select("name, price, validity, is_facility").eq("id", package_id).maybeSingle();
+  if (!pkg) return { ok: false, error: "Package not found" };
+  if (!pkg.is_facility) return { ok: false, error: "Pick a membership package to renew." };
+
+  // Continue from the latest active membership end date, else start today.
+  const { data: mem } = await supabase.from("client_packages")
+    .select("end_date").eq("client_id", client_id).eq("category", "membership").eq("status", "active");
+  const ends = ((mem ?? []) as { end_date: string | null }[]).map((r) => r.end_date).filter(Boolean) as string[];
+  const latestEnd = ends.sort().at(-1) ?? null;
+  const today = todayISO();
+  const start = latestEnd && latestEnd >= today ? addDaysISO(latestEnd, 1) : today;
+  const end = pkg.validity ? addDaysISO(start, pkg.validity) : null;
+  const amount = Math.max(0, Number(pkg.price ?? 0));
+
+  await supabase.from("client_packages").insert({
+    client_id, package_id, package_name: pkg.name, category: "membership",
+    start_date: start, end_date: end, price: amount, status: "active", created_by: p.name,
+  });
+  const num = await nextInvoiceNum(supabase);
+  await supabase.from("invoices").insert({
+    num, client_id, description: `${pkg.name} — membership renewal`,
+    amount, status: "Unpaid", issued_date: today, created_by: p.name,
+  });
+  await logAudit(p, "Membership renewed", pkg.name, `${start} → ${end ?? "—"}`);
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
 // ---- consultations (professional workspace) --------------------------------
 
 export async function createConsultation(formData: FormData) {
@@ -1038,6 +1089,62 @@ export async function startConsult(formData: FormData) {
   redirect("/workspace?tab=summaries");
 }
 
+// Which consultation kind a staff role conducts.
+const ROLE_TO_KIND: Record<string, string> = {
+  Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer",
+  "Health Coach": "Coach", Psychologist: "Psychologist",
+};
+// Keywords that mark a "Book …" task as belonging to a discipline — used to
+// close the right prompt when a slot is booked directly.
+const DISC_KEYWORDS: Record<string, string[]> = {
+  Doctor: ["doctor"], Diet: ["diet", "nutrition"],
+  Trainer: ["fitness", "reassess", "training"], Coach: ["coach"],
+  Psychologist: ["psych", "counsel"],
+};
+
+/**
+ * Start (or resume) the consultation for a booked appointment and jump into the
+ * console. Only the assigned clinician — or an admin/manager supervising — may
+ * open it. Idempotent: reuses the consult already linked to this appointment.
+ */
+export async function startConsultFromAppointment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const appointment_id = String(formData.get("appointment_id") || "");
+  if (!appointment_id) return;
+  const supabase = createClient();
+
+  const { data: appt } = await supabase.from("appointments")
+    .select("id, client_id, provider_id, status").eq("id", appointment_id).maybeSingle();
+  if (!appt || !appt.client_id) return;
+
+  const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
+  // A real clinician may only open their own booking; admins/managers may open any.
+  if (!adminish && p.staffId && appt.provider_id && p.staffId !== appt.provider_id) return;
+
+  let kind = "Doctor";
+  if (appt.provider_id) {
+    const { data: st } = await supabase.from("staff").select("role").eq("id", appt.provider_id).maybeSingle();
+    kind = ROLE_TO_KIND[(st as { role?: string } | null)?.role ?? ""] ?? "Doctor";
+  }
+
+  const { data: existing } = await supabase.from("consultations")
+    .select("id").eq("appointment_id", appointment_id).maybeSingle();
+  let consultId = (existing as { id: string } | null)?.id ?? null;
+  if (!consultId) {
+    const { data: row } = await supabase.from("consultations").insert({
+      client_id: appt.client_id, kind, status: "scheduled",
+      by_name: p.name, by_role: p.role, started_at: new Date().toISOString(),
+      appointment_id,
+    }).select("id").maybeSingle();
+    consultId = (row as { id: string } | null)?.id ?? null;
+  }
+  const { data: c } = await supabase.from("clients").select("name").eq("id", appt.client_id).maybeSingle();
+  await logAudit(p, "Consultation started", c?.name, kind);
+  if (consultId) redirect(`/console/${consultId}`);
+  redirect("/pro");
+}
+
 // Save the console session — intake answers + scribe summary, optionally complete.
 export async function saveConsultSession(formData: FormData) {
   const p = await getProfile();
@@ -1052,12 +1159,25 @@ export async function saveConsultSession(formData: FormData) {
   const answers = questions.map((q, i) => [q, String(formData.get("a_" + i) ?? "").trim()]).filter(([, a]) => a);
   const summary = String(formData.get("summary") ?? "").trim() || null;
   const duration = Number(formData.get("duration_min")) || null;
+  // Medical flags raised in-session (clinician-added; AI copilot may add later).
+  let flags: { text: string; severity: string }[] = [];
+  try {
+    flags = (JSON.parse(String(formData.get("flags") || "[]")) as { text?: string; severity?: string }[])
+      .filter((f) => f && f.text && f.text.trim())
+      .map((f) => ({ text: String(f.text).trim(), severity: String(f.severity || "info") }));
+  } catch { flags = []; }
   const supabase = createClient();
   await supabase.from("consultations").update({
-    answers, summary, ...(complete ? { status: "completed" } : {}), ...(duration ? { duration_min: duration } : {}),
+    answers, summary, flags, ...(complete ? { status: "completed", completed_at: new Date().toISOString() } : {}), ...(duration ? { duration_min: duration } : {}),
   }).eq("id", id);
+  if (complete) {
+    const { data: link } = await supabase.from("consultations").select("appointment_id").eq("id", id).maybeSingle();
+    const apptId = (link as { appointment_id?: string | null } | null)?.appointment_id ?? null;
+    if (apptId) await supabase.from("appointments").update({ status: "completed" }).eq("id", apptId);
+  }
   await logAudit(p, complete ? "Consultation completed" : "Consultation session saved", kind, null);
   revalidatePath("/workspace");
+  revalidatePath("/appointments");
   if (complete) redirect("/workspace?tab=summaries");
   revalidatePath(`/console/${id}`);
 }
@@ -1073,7 +1193,7 @@ export async function completeConsultation(formData: FormData) {
   const rxRaw = formData.get("prescription_needed");
   const rxNeeded = rxRaw == null ? null : String(rxRaw) === "true";
   const supabase = createClient();
-  const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
+  const { data: row } = await supabase.from("consultations").select("kind, appointment_id").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   // Starts this clinician's 24h sign-off clock, and — once all three
   // disciplines are complete — the 48h delivery clock. See lib/blueprint-sla.
@@ -1083,7 +1203,11 @@ export async function completeConsultation(formData: FormData) {
       ...(row.kind === "Doctor" && rxNeeded !== null ? { prescription_needed: rxNeeded } : {}),
     })
     .eq("id", id);
+  // Keep the booked appointment's "done" state in step with the consultation.
+  const apptId = (row as { appointment_id?: string | null }).appointment_id ?? null;
+  if (apptId) await supabase.from("appointments").update({ status: "completed" }).eq("id", apptId);
   revalidatePath("/pro");
+  revalidatePath("/appointments");
   revalidatePath("/", "layout");
 }
 
@@ -1134,6 +1258,7 @@ async function startBlueprintJourney(
   clientId: string,
   clientName: string,
   actor: string,
+  notify = true,
 ) {
   await supabase.from("blood_requests").upsert(
     { client_id: clientId, panel: BP_PANEL, requested_at: todayISO(), submitted: false },
@@ -1161,10 +1286,10 @@ async function startBlueprintJourney(
     }));
   if (rows.length) await supabase.from("tasks").insert(rows);
 
-  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+  if (notify) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
     title: "BluePrint started",
     body: `${clientName} — blood report requested, ${rows.length} appointment${rows.length === 1 ? "" : "s"} to book.`,
-    href: "/blueprint",
+    href: "/onboarding",
     icon: "🧬",
   });
 }
@@ -1233,6 +1358,7 @@ async function startComprehensiveJourney(
   clientName: string,
   startDate: string,
   actor: string,
+  notify = true,
 ) {
   await supabase.from("blood_requests").upsert(
     { client_id: clientId, panel: BLOOD_PANEL, requested_at: todayISO(), submitted: false },
@@ -1266,10 +1392,10 @@ async function startComprehensiveJourney(
   }));
   if (rows.length) await supabase.from("tasks").insert(rows);
 
-  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+  if (notify) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
     title: "Comprehensive started",
     body: `${clientName} — blood panel requested, care team assigned, ${rows.length} booking${rows.length === 1 ? "" : "s"} to make.`,
-    href: `/clients/${clientId}`,
+    href: "/onboarding",
     icon: "\u{1FA7A}",
   });
 }
@@ -1295,6 +1421,7 @@ async function startPTJourney(
   clientName: string,
   startDate: string,
   actor: string,
+  notify = true,
 ) {
   await assignCareTeam(supabase, clientId, { actor, disciplines: ["trainer", "coach"] });
 
@@ -1317,10 +1444,10 @@ async function startPTJourney(
   }));
   if (rows.length) await supabase.from("tasks").insert(rows);
 
-  await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+  if (notify) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
     title: "PT started",
     body: `${clientName} — trainer & coach assigned, ${rows.length} booking${rows.length === 1 ? "" : "s"} to make.`,
-    href: `/clients/${clientId}`,
+    href: "/onboarding",
     icon: "\u{1F3CB}",
   });
 }
@@ -1541,12 +1668,16 @@ export async function repairClientJourney(formData: FormData) {
   if (!jobs.length) return;
 
   for (const j of jobs) {
-    if (j.category === "blueprint") await startBlueprintJourney(supabase, client_id, c.name, p.name);
-    else if (j.category === "comprehensive") await startComprehensiveJourney(supabase, client_id, c.name, j.start, p.name);
-    else if (j.category === "training") await startPTJourney(supabase, client_id, c.name, j.start, p.name);
+    // Repair re-seeds silently: no "… started" notification on a re-run, so the
+    // bell doesn't fill with duplicates every time someone clicks Repair.
+    if (j.category === "blueprint") await startBlueprintJourney(supabase, client_id, c.name, p.name, false);
+    else if (j.category === "comprehensive") await startComprehensiveJourney(supabase, client_id, c.name, j.start, p.name, false);
+    else if (j.category === "training") await startPTJourney(supabase, client_id, c.name, j.start, p.name, false);
   }
   await logAudit(p, "Care journey repaired", c.name, jobs.map((j) => j.category).join(", "));
   revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/onboarding");
+  revalidatePath("/appointments");
 }
 
 // ---- free experience sessions (pre-sale) -----------------------------------
@@ -3429,19 +3560,61 @@ export async function toggleHabitSelf(formData: FormData) {
 
 // ---- appointments / calendar -----------------------------------------------
 
-export async function createAppointment(formData: FormData) {
+export async function createAppointment(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const p = await getProfile();
-  if (!p || !canAppointments(p.role)) return;
+  if (!p || !canAppointments(p.role)) return { ok: false, error: "Not permitted" };
   const client_id = String(formData.get("client_id"));
   const date = String(formData.get("date") || "");
-  if (!client_id || !date) return;
+  if (!client_id || !date) return { ok: false, error: "Missing client or date" };
   const supabase = createClient();
+  const provider_id = String(formData.get("provider_id") || "") || null;
+
+  // The discipline this booking is for (from the provider's role) — used both to
+  // guard duplicates and to close the matching "Book …" prompt afterwards.
+  let newDisc: string | null = null;
+  if (provider_id) {
+    const { data: np } = await supabase.from("staff").select("role").eq("id", provider_id).maybeSingle();
+    newDisc = ROLE_TO_KIND[(np as { role?: string } | null)?.role ?? ""] ?? null;
+  }
+
+  // Guard: one INITIAL consultation per discipline per package. A package
+  // includes a single doctor / dietitian / trainer consult, so refuse a second
+  // "Consultation"/"Assessment" of the same discipline while any non-cancelled
+  // one exists (scheduled OR completed). Follow-ups use a different type and are
+  // not limited here.
+  const INITIAL_TYPES = ["Consultation", "Assessment"];
+  const newType = String(formData.get("type") || "Consultation");
+  if (newDisc && INITIAL_TYPES.includes(newType)) {
+    const { data: existing } = await supabase.from("appointments")
+      .select("type, staff(role)").eq("client_id", client_id).neq("status", "cancelled");
+    const dup = ((existing ?? []) as unknown as { type: string | null; staff: { role: string } | null }[])
+      .some((a) => ROLE_TO_KIND[a.staff?.role ?? ""] === newDisc && INITIAL_TYPES.includes(a.type ?? "Consultation"));
+    if (dup) {
+      const label = newDisc === "Diet" ? "dietitian" : newDisc === "Trainer" ? "fitness" : newDisc.toLowerCase();
+      return { ok: false, error: `This client already has a ${label} consultation for this package. Cancel it first, or book a follow-up instead.` };
+    }
+  }
+
+  const hour = Number(formData.get("hour")) || 9;
+
+  // Slot clash: the same provider (or the same client) can't be booked twice at
+  // the same date & time.
+  const { data: sameSlot } = await supabase.from("appointments")
+    .select("provider_id, client_id").eq("date", date).eq("hour", hour).eq("status", "scheduled");
+  const slotRows = (sameSlot ?? []) as { provider_id: string | null; client_id: string | null }[];
+  if (provider_id && slotRows.some((r) => r.provider_id === provider_id)) {
+    return { ok: false, error: "That time is already booked for this provider. Pick another slot." };
+  }
+  if (slotRows.some((r) => r.client_id === client_id)) {
+    return { ok: false, error: "This client already has an appointment at that time." };
+  }
+
   await supabase.from("appointments").insert({
     client_id,
-    provider_id: String(formData.get("provider_id") || "") || null,
+    provider_id,
     type: String(formData.get("type") || "Consultation"),
     title: String(formData.get("title") ?? "").trim() || null,
-    date, hour: Number(formData.get("hour")) || 9,
+    date, hour,
     duration_min: Number(formData.get("duration_min")) || 30,
     location: String(formData.get("location") ?? "").trim() || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
@@ -3458,9 +3631,24 @@ export async function createAppointment(formData: FormData) {
   const taskId = String(formData.get("task_id") || "");
   if (taskId) await supabase.from("tasks").update({ status: "done" }).eq("id", taskId);
 
+  // Also close any OTHER open "Book …" prompt for this client in the same
+  // discipline — so booking a slot directly (not via the prompt) still clears
+  // the to-book list instead of leaving a stale, un-bookable item.
+  if (newDisc) {
+    const kw = DISC_KEYWORDS[newDisc] ?? [];
+    const { data: openTasks } = await supabase.from("tasks")
+      .select("id, title").eq("client_id", client_id).neq("status", "done").ilike("title", "Book %");
+    const toClose = ((openTasks ?? []) as { id: string; title: string }[])
+      .filter((t) => kw.some((k) => t.title.toLowerCase().includes(k)))
+      .map((t) => t.id);
+    if (toClose.length) await supabase.from("tasks").update({ status: "done" }).in("id", toClose);
+  }
+
   await logAudit(p, "Appointment booked", await clientName(supabase, client_id), date);
   revalidatePath("/appointments");
   revalidatePath("/clients");
+  revalidatePath("/onboarding");
+  return { ok: true };
 }
 
 export async function setAppointmentStatus(formData: FormData) {
@@ -3475,6 +3663,24 @@ export async function setAppointmentStatus(formData: FormData) {
   revalidatePath("/appointments");
 }
 
+// Cancel a booking made in error. Marks the appointment cancelled, which the
+// Onboarding board reads as "no longer booked" — so the step reverts to Book
+// and the slot/clinician can be picked again. The care-team assignment is kept.
+export async function cancelBooking(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canAppointments(p.role)) return;
+  const id = String(formData.get("appt_id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  const { data: appt } = await supabase.from("appointments").select("client_id").eq("id", id).maybeSingle();
+  await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
+  const cid = (appt as { client_id: string | null } | null)?.client_id ?? null;
+  if (cid) await logAudit(p, "Booking cancelled", await clientName(supabase, cid), null);
+  revalidatePath("/onboarding");
+  revalidatePath("/appointments");
+  revalidatePath("/clients");
+}
+
 export async function rescheduleAppointment(formData: FormData) {
   const p = await getProfile();
   if (!p || !canAppointments(p.role)) return;
@@ -3484,11 +3690,31 @@ export async function rescheduleAppointment(formData: FormData) {
   const patch: Record<string, unknown> = {};
   if (date) patch.date = date;
   if (!Number.isNaN(hour)) patch.hour = hour;
-  if (Object.keys(patch).length === 0) return;
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to change" };
   const supabase = createClient();
+
+  // Don't reschedule into a clash: same provider or same client already booked
+  // at the target date & time.
+  const { data: cur } = await supabase.from("appointments").select("provider_id, client_id, date, hour").eq("id", id).maybeSingle();
+  if (cur) {
+    const nd = (patch.date as string) ?? cur.date;
+    const nh = (patch.hour as number) ?? cur.hour;
+    const { data: sameSlot } = await supabase.from("appointments")
+      .select("id, provider_id, client_id").eq("date", nd).eq("hour", nh).eq("status", "scheduled").neq("id", id);
+    const rows = (sameSlot ?? []) as { id: string; provider_id: string | null; client_id: string | null }[];
+    if (cur.provider_id && rows.some((r) => r.provider_id === cur.provider_id)) {
+      return { ok: false, error: "That time is already booked for this provider." };
+    }
+    if (rows.some((r) => r.client_id === cur.client_id)) {
+      return { ok: false, error: "This client already has an appointment at that time." };
+    }
+  }
+
   await supabase.from("appointments").update(patch).eq("id", id);
   await logAudit(p, "Appointment rescheduled", null, date);
   revalidatePath("/appointments");
+  revalidatePath("/onboarding");
+  return { ok: true };
 }
 
 // ---- email notifications (key-ready scaffold) ------------------------------

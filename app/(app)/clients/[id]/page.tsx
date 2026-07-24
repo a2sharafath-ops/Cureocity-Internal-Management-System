@@ -22,6 +22,11 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
+import RenewMembership from "@/components/RenewMembership";
+import FreezeToggle from "@/components/FreezeToggle";
+import BloodActions from "@/components/BloodActions";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { getComprehensiveView, getPTView } from "@/lib/actions";
@@ -66,11 +71,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const ageOf = (dob: unknown): number | null =>
     typeof dob === "string" ? ageFromDob(dob) : null;
 
-  const [{ data: sessions }, { data: trainerData }, { data: consultData }] = await Promise.all([
+  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+    supabase.from("care_protocols").select("id").eq("client_id", params.id).limit(1),
   ]);
+  // Has this client's care journey already been kicked off? If so, the primary
+  // "Start" action is done — we only offer a quiet re-run for repairs.
+  const journeyStarted = ((protoData ?? []) as unknown[]).length > 0;
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
   const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
 
@@ -138,19 +147,26 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
   // owner / coach names, blueprint status, onboarding journey follow-ups, packages held
-  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }] = await Promise.all([
+  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }, { data: assignRows }, { data: bloodRows }] = await Promise.all([
     supabase.from("staff").select("id, name"),
     supabase.from("blueprints").select("generated, generated_date, scores").eq("client_id", params.id).maybeSingle(),
     supabase.from("followups").select("label, due_date, status, kind").eq("client_id", params.id).order("due_date"),
-    supabase.from("client_packages").select("id, package_name, category, start_date, end_date, price, status").eq("client_id", params.id).order("start_date", { ascending: false }),
+    supabase.from("client_packages").select("id, package_id, package_name, category, start_date, end_date, price, status").eq("client_id", params.id).order("start_date", { ascending: false }),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("price"),
+    supabase.from("client_assignments").select("discipline, staff_id").eq("client_id", params.id),
+    supabase.from("blood_requests").select("requested_at, submitted, submitted_date, panel").eq("client_id", params.id),
   ]);
   const staffMap = new Map(((staffAll ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
   const ownerName = c0.owner ? (staffMap.get(String(c0.owner)) ?? null) : null;
-  const coachName = c0.pro_id ? (staffMap.get(String(c0.pro_id)) ?? null) : null;
+  // The Health Coach is the coach-discipline care-team member — NOT clients.pro_id,
+  // which is the denormalised primary pro (doctor-first) and would mislabel the
+  // doctor as the coach.
+  const assignByDisc = new Map(((assignRows ?? []) as { discipline: string; staff_id: string | null }[]).map((r) => [r.discipline, r.staff_id]));
+  const coachId = assignByDisc.get("coach");
+  const coachName = coachId ? (staffMap.get(String(coachId)) ?? null) : null;
   const bp = (bpRow ?? null) as { generated: boolean; generated_date: string | null; scores: Record<string, number> | null } | null;
   const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
-  const clientPackages = (cpRows ?? []) as { id: string; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
+  const clientPackages = (cpRows ?? []) as { id: string; package_id: string | null; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
   const pkgList = (allPkgs ?? []) as { id: string; name: string; price: number; is_facility: boolean }[];
   // A client's membership can live in either place: the newer client_packages
   // table, or the legacy single `package_id` on the client record (surfaced as
@@ -165,6 +181,19 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // Does this client hold a package whose care journey should have been kicked
   // off (booking tasks, blood request, care team)? Used to offer the repair.
   const hasJourneyPkg = clientPackages.some((r) => ["blueprint", "training", "comprehensive"].includes(r.category));
+  // Membership controls (front-desk supervised): shown for any client who holds
+  // a membership — active or lapsed — so it can be renewed. Default the renew
+  // dropdown to the current membership's package.
+  const holdsMembership = legacyFacilityMembership || clientPackages.some((r) => r.category === "membership");
+  const currentMembershipPkgId = clientPackages.find((r) => r.category === "membership" && r.status === "active")?.package_id
+    ?? clientPackages.find((r) => r.category === "membership")?.package_id ?? null;
+  const isFrozen = Boolean(c0.frozen);
+  // Role-aware status badge (same value shown everywhere this client appears).
+  const detailStatus = clientStatus((await loadClientStatuses(supabase, [params.id], todayISO())).get(params.id), disciplineForRole(me?.role));
+  // Blood report status — shown prominently for BluePrint / Comprehensive
+  // clients (whose journey requests a panel). One row per client; take the first.
+  const bloodRow = ((bloodRows ?? []) as { requested_at: string | null; submitted: boolean; submitted_date: string | null; panel: string | null }[])[0] ?? null;
+  const needsBlood = clientPackages.some((r) => ["blueprint", "comprehensive"].includes(r.category)) || Boolean(bloodRow);
   const clientAge = ageOf(c0.dob);
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
@@ -237,8 +266,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions"]} />
-      <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments"]} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
+            <ClientStatusBadge status={detailStatus} />
+          </div>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
           </div>
@@ -299,6 +331,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
             {activeMembership ? "✔ Active membership" : "No active membership"}
           </span>
+          {isFrozen && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>⏸ Paused since {String(c0.frozen).slice(0, 10)}</span>}
         </div>
 
         {/* Packages held (membership + PT + …) */}
@@ -339,7 +372,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
-          {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} />}
+          {!ro && canBill(me?.role ?? "") && holdsMembership && <RenewMembership clientId={params.id} packages={pkgList} currentPackageId={currentMembershipPkgId} />}
+          {!ro && canWrite(me?.role ?? "") && holdsMembership && <FreezeToggle clientId={params.id} frozen={isFrozen} />}
+          {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} started={journeyStarted} />}
         </div>
 
         {showBilling && invoices.length > 0 && (
@@ -359,6 +394,19 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
         {canInvoice && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
       </div>
+
+      {/* Blood report — prominent for BluePrint / Comprehensive clients */}
+      {needsBlood && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>🩸 Blood report</div>
+            {bloodRow?.submitted && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>Received ✓</span>}
+          </div>
+          {ro
+            ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{bloodRow ? (bloodRow.submitted ? `Received ${bloodRow.submitted_date ?? ""}` : `Requested ${bloodRow.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
+            : <BloodActions clientId={params.id} blood={bloodRow} />}
+        </div>
+      )}
 
       </>)}
 

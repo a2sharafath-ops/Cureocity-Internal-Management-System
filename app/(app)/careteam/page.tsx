@@ -5,6 +5,8 @@ import { getProfile } from "@/lib/auth";
 import { canSee, canEmr } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,20 @@ export default async function CareTeamPage() {
   const apptsToday = { count: c0?.appts_today ?? 0 };
   const mealsToday = { count: c0?.meals_today ?? 0 };
 
+  // A clinician's own clients + their current status for this discipline, so the
+  // "where is each of my clients" view is the same here as everywhere else.
+  const viewerDisc = disciplineForRole(me.role);
+  let myClients: { id: string; name: string; status: ReturnType<typeof clientStatus> }[] = [];
+  if (viewerDisc && me.staffId) {
+    const { data: asg } = await supabase.from("client_assignments").select("client_id").eq("staff_id", me.staffId).eq("discipline", viewerDisc);
+    const ids = ((asg ?? []) as { client_id: string }[]).map((r) => r.client_id);
+    if (ids.length) {
+      const { data: cl } = await supabase.from("clients").select("id, name").in("id", ids);
+      const statuses = await loadClientStatuses(supabase, ids, today);
+      myClients = ((cl ?? []) as { id: string; name: string }[]).map((c) => ({ id: c.id, name: c.name, status: clientStatus(statuses.get(c.id), viewerDisc) }));
+    }
+  }
+
   const card = (icon: string, title: string, sub: string, count: number | null, countLabel: string, href: string, color: string) => (
     <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", height: "100%" }}>
@@ -50,6 +66,20 @@ export default async function CareTeamPage() {
       <RealtimeRefresh tables={["consultations", "sessions", "orders", "blood_requests", "appointments", "meal_logs"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Care Team Hub</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Every clinical tool in one place — records, orders, blueprint, telehealth &amp; more.</p>
+
+      {myClients.length > 0 && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "14px 18px", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Your clients · {myClients.length}</div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {myClients.map((c) => (
+              <Link key={c.id} href={`/clients/${c.id}`} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit", padding: "4px 0" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, minWidth: 160 }}>{c.name}</span>
+                <ClientStatusBadge status={c.status} size="sm" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
         {card("🧠", "Whiteboard", "Daily team meeting", null, "clients on the board", "/whiteboard", "var(--purple-bg)")}

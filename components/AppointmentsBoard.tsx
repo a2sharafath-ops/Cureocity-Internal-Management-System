@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { startConsultFromAppointment } from "@/lib/actions";
 
 export type ApptRow = {
   id: string;
   client_id: string | null;
+  provider_id: string | null;
   client_name: string | null;
   date: string;
   hour: number | null;
@@ -30,7 +32,7 @@ function fmtDate(d: string) {
   return new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 }
 
-export default function AppointmentsBoard({ appts, today }: { appts: ApptRow[]; today: string }) {
+export default function AppointmentsBoard({ appts, today, myStaffId = null }: { appts: ApptRow[]; today: string; myStaffId?: string | null }) {
   const [view, setView] = useState<"upcoming" | "past">("upcoming");
   const upcoming = appts.filter((a) => a.status === "scheduled" && a.date >= today).sort((a, b) => (a.date + a.hour).localeCompare(b.date + String(b.hour)));
   const past = appts.filter((a) => !(a.status === "scheduled" && a.date >= today)).sort((a, b) => (b.date).localeCompare(a.date));
@@ -77,6 +79,12 @@ export default function AppointmentsBoard({ appts, today }: { appts: ApptRow[]; 
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{a.title || a.type || "Consultation"}</div>
               </div>
               {chip(s[0], s[1], s[2])}
+              {a.status === "scheduled" && !!myStaffId && a.provider_id === myStaffId && (
+                <form action={startConsultFromAppointment} style={{ margin: 0 }}>
+                  <input type="hidden" name="appointment_id" value={a.id} />
+                  <button type="submit" style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</button>
+                </form>
+              )}
               {a.client_id && <Link href={`/clients/${a.client_id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)" }}>Card</Link>}
             </div>
           );

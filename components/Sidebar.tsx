@@ -34,6 +34,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/leads", label: "CRM & Leads", icon: "✦" },
       { href: "/clients", label: "Clients", icon: "◉" },
+      { href: "/onboarding", label: "Onboarding", icon: "🚀" },
       { href: "/appointments", label: "Appointment Calendar", icon: "📅" },
       { href: "/sessions", label: "Training Schedule", icon: "🏋" },
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },

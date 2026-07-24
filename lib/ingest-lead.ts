@@ -14,6 +14,8 @@
 
 import { leadScore } from "@/lib/leadscore";
 import { todayISO } from "@/lib/today";
+import { notifyRoles } from "@/lib/notify";
+import { LEAD_OWNER_ROLES } from "@/lib/roles";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -220,6 +222,18 @@ export async function ingestLead(
       created_by: "auto",
     });
   }
+
+  // Alert the front desk / management — the same "new lead" ping the in-app
+  // form sends, so externally-captured leads (website / WhatsApp / walk-in
+  // syncs) aren't missed. Best-effort: never fail the ingest over a notification.
+  try {
+    await notifyRoles(supabase as Parameters<typeof notifyRoles>[0], LEAD_OWNER_ROLES, {
+      title: "New lead",
+      body: `${input.name} · ${input.source}${input.phone ? ` · ${input.phone}` : ""}`,
+      href: "/leads?view=open",
+      icon: "✦",
+    });
+  } catch { /* notification is best-effort */ }
 
   return { status: "created", leadId, num };
 }

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type WsClientRow = {
   id: string;
@@ -10,6 +12,7 @@ export type WsClientRow = {
   pkg: string | null;
   conditions: string | null;
   goals: string[];
+  careStatus?: ClientStatus | null;
 };
 
 function initials(name: string) {
@@ -83,7 +86,7 @@ export default function WorkspaceClients({
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: color, color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>{initials(x.name)}</div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.name}</div>
-                <div style={{ fontSize: 11, color: "var(--muted)" }}>{x.code ?? x.pkg ?? "—"}</div>
+                {x.careStatus ? <div style={{ marginTop: 2 }}><ClientStatusBadge status={x.careStatus} size="sm" /></div> : <div style={{ fontSize: 11, color: "var(--muted)" }}>{x.code ?? x.pkg ?? "—"}</div>}
               </div>
             </button>
           ))}
@@ -100,6 +103,7 @@ export default function WorkspaceClients({
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{[c.code, c.pkg].filter(Boolean).join(" · ") || "—"}</div>
               </div>
               <span style={{ flex: 1 }} />
+              {c.careStatus && <ClientStatusBadge status={c.careStatus} />}
               {c.conditions && chip("var(--amber-bg)", "var(--amber-text)", "⚠️ Condition")}
               <Link href={`/clients/${c.id}${linkQuery}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>📋 Open full client card</Link>
             </div>

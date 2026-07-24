@@ -14,14 +14,15 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   const supabase = createClient();
   const { data } = await supabase
     .from("consultations")
-    .select("id, kind, status, summary, answers, client_id, clients(name, code)")
+    .select("id, kind, status, summary, answers, flags, client_id, clients(name, code)")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) notFound();
 
   const row = data as unknown as {
     id: string; kind: string; status: string; summary: string | null;
-    answers: [string, string][] | null; client_id: string; clients: { name: string; code: string | null } | null;
+    answers: [string, string][] | null; flags: { text: string; severity: string }[] | null;
+    client_id: string; clients: { name: string; code: string | null } | null;
   };
   const q = consultQ(row.kind);
 
@@ -34,8 +35,10 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       client={{ id: row.client_id, name: row.clients?.name ?? "Client", code: row.clients?.code ?? null }}
       questions={q.questions}
       answers={(row.answers ?? []) as [string, string][]}
+      flags={(row.flags ?? []) as { text: string; severity: string }[]}
       summary={row.summary}
       status={row.status}
+      canTools={row.kind === "Doctor"}
     />
   );
 }

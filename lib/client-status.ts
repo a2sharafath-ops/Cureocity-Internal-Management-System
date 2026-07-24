@@ -1,0 +1,175 @@
+// One source of truth for "where is this client right now, and what's the next
+// action" — so the same status shows wherever a client appears. Role-aware: a
+// clinician sees their own discipline's state for the client; ops roles see the
+// overall onboarding / membership state.
+
+import { onboardingRow, type ClientInput } from "@/lib/onboarding";
+import { packageCategory } from "@/lib/packages";
+
+export type StatusTone = "neutral" | "info" | "warn" | "good" | "action";
+export type ClientStatus = { label: string; tone: StatusTone; href?: string };
+
+type DiscState = { booked: boolean; completed: boolean; when: string | null };
+export type StatusInput = {
+  category: string;                 // blueprint | comprehensive | training | membership | other
+  membershipActive: boolean;
+  frozen: boolean;
+  onboardComplete: boolean;
+  onboardNext: string | null;
+  bloodRequested: boolean;
+  bloodSubmitted: boolean;
+  consults: Record<string, DiscState>;  // keys: doctor | dietitian | trainer | coach | psychologist
+};
+
+const ROLE_DISC: Record<string, string> = {
+  Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer",
+  "Health Coach": "coach", Psychologist: "psychologist",
+};
+/** The discipline a staff role works in, or null for non-clinical (ops) roles. */
+export function disciplineForRole(role: string | null | undefined): string | null {
+  return role ? (ROLE_DISC[role] ?? null) : null;
+}
+
+const DISC_LABEL: Record<string, string> = {
+  doctor: "Doctor", dietitian: "Diet", trainer: "Fitness", coach: "Coaching", psychologist: "Psychology",
+};
+
+/** The single status to show for a client, from the viewer's perspective. */
+export function clientStatus(i: StatusInput | undefined, viewerDiscipline: string | null): ClientStatus {
+  if (!i) return { label: "—", tone: "neutral" };
+
+  // Clinician: this client's state for the viewer's own discipline.
+  if (viewerDiscipline) {
+    const c = i.consults[viewerDiscipline];
+    if (!c) return { label: "—", tone: "neutral" };
+    if (c.completed) return { label: `${DISC_LABEL[viewerDiscipline]} consult done`, tone: "good" };
+    if (c.booked) return { label: c.when ? `Ready to start · ${c.when}` : "Ready to start", tone: "action", href: "/pro" };
+    if ((viewerDiscipline === "doctor" || viewerDiscipline === "dietitian") && i.bloodRequested && !i.bloodSubmitted)
+      return { label: "Awaiting blood report", tone: "warn" };
+    return { label: "Awaiting booking", tone: "neutral" };
+  }
+
+  // Ops: overall onboarding / membership state.
+  if (i.category === "membership") {
+    if (i.frozen) return { label: "Paused", tone: "warn" };
+    return i.membershipActive ? { label: "Active member", tone: "good" } : { label: "Membership lapsed", tone: "warn" };
+  }
+  if (i.category === "other") return { label: i.frozen ? "Paused" : "—", tone: i.frozen ? "warn" : "neutral" };
+  if (i.onboardComplete) return { label: "Onboarded", tone: "good" };
+  return { label: i.onboardNext ?? "In progress", tone: "action", href: "/onboarding" };
+}
+
+// ---- bulk data loader ------------------------------------------------------
+
+type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+const KIND_OF_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Diet", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
+const ROLE_OF_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach", psychologist: "Psychologist" };
+const PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
+const DISCS = ["doctor", "dietitian", "trainer", "coach", "psychologist"];
+
+function whenLabel(date: string, hour: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  const day = d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
+  const am = hour < 12, hr = hour % 12 === 0 ? 12 : hour % 12;
+  return `${day} ${hr}${am ? "am" : "pm"}`;
+}
+
+/** Load status inputs for a set of clients in bulk (one query per table). */
+export async function loadClientStatuses(supabase: Sb, clientIds: string[], todayISO: string): Promise<Map<string, StatusInput>> {
+  const out = new Map<string, StatusInput>();
+  const ids = Array.from(new Set(clientIds.filter(Boolean)));
+  if (!ids.length) return out;
+
+  const [{ data: clientsD }, { data: pkgsD }, { data: cpsD }, { data: invD }, { data: bloodD }, { data: bpD }, { data: consultD }, { data: sessD }, { data: apptD }, { data: staffD }] = await Promise.all([
+    supabase.from("clients").select("id, name, package_id, frozen").in("id", ids),
+    supabase.from("packages").select("id, name, is_facility"),
+    supabase.from("client_packages").select("client_id, category, package_name, status").in("client_id", ids).eq("status", "active"),
+    supabase.from("invoices").select("client_id").in("client_id", ids),
+    supabase.from("blood_requests").select("client_id, submitted").in("client_id", ids),
+    supabase.from("blueprints").select("client_id, generated").in("client_id", ids),
+    supabase.from("consultations").select("client_id, kind, status").in("client_id", ids),
+    supabase.from("sessions").select("client_id, status").in("client_id", ids).eq("status", "scheduled"),
+    supabase.from("appointments").select("client_id, provider_id, status, date, hour").in("client_id", ids).eq("status", "scheduled"),
+    supabase.from("staff").select("id, role"),
+  ]);
+
+  const pkgById = new Map(((pkgsD ?? []) as { id: string; name: string; is_facility: boolean }[]).map((p) => [p.id, p]));
+  const staffRole = new Map(((staffD ?? []) as { id: string; role: string }[]).map((s) => [s.id, s.role]));
+  const hasInvoice = new Set(((invD ?? []) as { client_id: string | null }[]).map((r) => r.client_id).filter(Boolean) as string[]);
+  const blood = new Map<string, boolean>();
+  const bloodReq = new Set<string>();
+  for (const b of (bloodD ?? []) as { client_id: string; submitted: boolean }[]) { bloodReq.add(b.client_id); blood.set(b.client_id, Boolean(b.submitted)); }
+  const bpGen = new Set(((bpD ?? []) as { client_id: string; generated: boolean }[]).filter((b) => b.generated).map((b) => b.client_id));
+  const sessSched = new Set(((sessD ?? []) as { client_id: string | null }[]).map((s) => s.client_id).filter(Boolean) as string[]);
+
+  const catsByClient = new Map<string, string[]>();
+  const cpName = new Map<string, string>();
+  for (const cp of (cpsD ?? []) as { client_id: string; category: string; package_name: string | null }[]) {
+    (catsByClient.get(cp.client_id) ?? catsByClient.set(cp.client_id, []).get(cp.client_id)!).push(cp.category);
+    if (cp.package_name) cpName.set(`${cp.client_id}|${cp.category}`, cp.package_name);
+  }
+
+  // consultation completion per client per kind
+  const consultDone = new Map<string, Set<string>>();       // client -> set of completed kinds
+  const consultBooked = new Map<string, Set<string>>();     // client -> set of scheduled kinds
+  for (const c of (consultD ?? []) as { client_id: string; kind: string; status: string }[]) {
+    if (c.status === "completed") (consultDone.get(c.client_id) ?? consultDone.set(c.client_id, new Set()).get(c.client_id)!).add(c.kind);
+    else (consultBooked.get(c.client_id) ?? consultBooked.set(c.client_id, new Set()).get(c.client_id)!).add(c.kind);
+  }
+  // scheduled appointments per client, by discipline (from provider role)
+  const apptByClient = new Map<string, { disc: string; when: string }[]>();
+  for (const a of (apptD ?? []) as { client_id: string; provider_id: string | null; date: string; hour: number }[]) {
+    const role = a.provider_id ? staffRole.get(a.provider_id) : null;
+    const disc = Object.entries(ROLE_OF_DISC).find(([, r]) => r === role)?.[0] ?? null;
+    if (!disc) continue;
+    (apptByClient.get(a.client_id) ?? apptByClient.set(a.client_id, []).get(a.client_id)!).push({ disc, when: whenLabel(a.date, a.hour) });
+  }
+
+  for (const c of (clientsD ?? []) as { id: string; name: string; package_id: string | null; frozen: string | null }[]) {
+    const cats = catsByClient.get(c.id) ?? [];
+    const legacy = c.package_id ? packageCategory(c.package_id, pkgById.get(c.package_id)?.is_facility ?? false) : "other";
+    const category = PRIORITY.find((p) => cats.includes(p)) ?? (PRIORITY.includes(legacy) ? legacy : cats[0] ?? legacy);
+    const membershipActive = category === "membership" || cats.includes("membership") || (pkgById.get(c.package_id ?? "")?.is_facility ?? false);
+    const submitted = blood.get(c.id) ?? false;
+    const requested = bloodReq.has(c.id);
+
+    const done = consultDone.get(c.id) ?? new Set<string>();
+    const booked = consultBooked.get(c.id) ?? new Set<string>();
+    const appts = apptByClient.get(c.id) ?? [];
+    const consults: Record<string, DiscState> = {};
+    for (const d of DISCS) {
+      const kind = KIND_OF_DISC[d];
+      const appt = appts.find((a) => a.disc === d) ?? null;
+      consults[d] = {
+        completed: done.has(kind),
+        booked: booked.has(kind) || Boolean(appt),
+        when: appt?.when ?? null,
+      };
+    }
+
+    // Overall onboarding state via the shared engine (ops view).
+    let onboardComplete = false, onboardNext: string | null = null;
+    if (["blueprint", "comprehensive", "training", "membership"].includes(category)) {
+      const input: ClientInput = {
+        clientId: c.id, clientName: c.name, category,
+        packageName: cpName.get(`${c.id}|${category}`) ?? pkgById.get(c.package_id ?? "")?.name ?? "—",
+        ownerName: null, hasInvoice: hasInvoice.has(c.id),
+        bloodRequested: requested, bloodSubmitted: submitted,
+        doctor: { scheduled: consults.doctor.booked, completed: consults.doctor.completed },
+        diet: { scheduled: consults.dietitian.booked, completed: consults.dietitian.completed },
+        trainer: { scheduled: consults.trainer.booked, completed: consults.trainer.completed },
+        blueprintGenerated: bpGen.has(c.id),
+        sessionScheduled: sessSched.has(c.id),
+      };
+      const row = onboardingRow(input);
+      onboardComplete = row.complete;
+      onboardNext = row.nextLabel;
+    }
+
+    out.set(c.id, {
+      category, membershipActive, frozen: Boolean(c.frozen),
+      onboardComplete, onboardNext, bloodRequested: requested, bloodSubmitted: submitted, consults,
+    });
+  }
+  return out;
+}

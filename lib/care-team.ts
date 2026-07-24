@@ -3,11 +3,30 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  DISCIPLINES, ROLE_FOR, planCareTeam, primaryPro,
+  DISCIPLINES, ROLE_FOR, planCareTeam, primaryPro, disciplinesForCategory,
   type Assignment, type Candidate, type Discipline, type Booking, type Busy,
 } from "@/lib/assignment";
+import { packageCategory } from "@/lib/packages";
 
 type DB = SupabaseClient<any, any, any>;
+
+const CATEGORY_PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
+
+/** The client's package category, by the same priority the Onboarding board uses. */
+async function resolveCategory(supabase: DB, clientId: string): Promise<string> {
+  const { data: cps } = await supabase
+    .from("client_packages").select("category").eq("client_id", clientId).eq("status", "active");
+  const cats = ((cps ?? []) as { category: string }[]).map((r) => r.category);
+  const hit = CATEGORY_PRIORITY.find((p) => cats.includes(p));
+  if (hit) return hit;
+  const { data: c } = await supabase.from("clients").select("package_id").eq("id", clientId).maybeSingle();
+  const pkgId = (c as { package_id: string | null } | null)?.package_id ?? null;
+  if (pkgId) {
+    const { data: pk } = await supabase.from("packages").select("is_facility").eq("id", pkgId).maybeSingle();
+    return packageCategory(pkgId, (pk as { is_facility: boolean } | null)?.is_facility ?? false);
+  }
+  return "other";
+}
 
 /**
  * Build the candidate pool for every discipline, with each staff member's
@@ -68,12 +87,13 @@ export async function assignCareTeam(
   const pool = await loadPool(supabase, client.branch);
   let planned = planCareTeam({ bookings, pool, busy, slot: opts.slot ?? null });
 
-  // Scope to a subset of disciplines when asked — a PT package, for instance,
-  // only wants a trainer and a health coach, not the full clinical team.
-  if (opts.disciplines) {
-    const want = new Set<string>(opts.disciplines);
-    planned = planned.filter((a) => want.has(a.discipline));
-  }
+  // Scope to the disciplines this package actually needs. An explicit
+  // `disciplines` override wins; otherwise it's derived from the client's
+  // package category — BluePrint/Comprehensive get the full clinical team,
+  // PT gets trainer + coach, membership gets none.
+  const disciplines = opts.disciplines ?? disciplinesForCategory(await resolveCategory(supabase, clientId));
+  const want = new Set<string>(disciplines);
+  planned = planned.filter((a) => want.has(a.discipline));
 
   const toWrite = opts.reassign ? planned : planned.filter((a) => !existing.has(a.discipline));
   if (!toWrite.length) return [];

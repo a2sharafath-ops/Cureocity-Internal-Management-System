@@ -1,18 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createAppointment } from "@/lib/actions";
 import AppointmentActions from "@/components/AppointmentActions";
 import SegTabs from "@/components/SegTabs";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type ViewAppt = {
   id: string; client_id: string; clientName: string | null; type: string | null; title: string | null;
   date: string; hour: number; duration_min: number; status: string; provider_id: string | null; providerName: string | null;
 };
 export type Provider = { id: string; name: string; color: string; discipline: string };
-export type Unsched = { id: string; clientId: string; clientName: string; label: string; disc: string; due: string | null };
+export type Unsched = { id: string; clientId: string; clientName: string; label: string; disc: string; due: string | null; owner?: string | null; category?: string };
 
 const DISCIPLINES = ["All", "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"];
 
@@ -23,11 +25,12 @@ function dayNum(iso: string) { return new Date(iso + "T00:00:00Z").getUTCDate();
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
 
 export default function AppointmentsView({
-  today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek,
+  today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek, statusByClient = {},
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
   providers: Provider[]; clients: { id: string; name: string }[]; unscheduled?: Unsched[];
   weekLabel: string; prevHref: string; nextHref: string; isThisWeek: boolean;
+  statusByClient?: Record<string, ClientStatus>;
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records" | "unscheduled">("calendar");
@@ -43,10 +46,31 @@ export default function AppointmentsView({
       ? { open: true, date: today, hour: 10, provider: "", client: preClient }
       : { open: false, date: today, hour: 10, provider: "", client: "" },
   );
+  const [bookErr, setBookErr] = useState<string | null>(null);
+  const [booking2, startBooking] = useTransition();
+  const submitBooking = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    setBookErr(null);
+    startBooking(async () => {
+      const r = await createAppointment(fd);
+      if (r?.ok) setBooking((b) => ({ ...b, open: false }));
+      else setBookErr(r?.error ?? "Could not book");
+    });
+  };
 
   const provMap = new Map(providers.map((p) => [p.id, p]));
   const provDisc = (pid: string | null) => (pid ? provMap.get(pid)?.discipline ?? null : null);
   const provColor = (pid: string | null) => (pid ? provMap.get(pid)?.color ?? "#e11f34" : "#e11f34");
+
+  // Hours already taken for the chosen provider on the chosen date — greyed out
+  // in the time picker so front desk can't pick a clashing slot. (The server
+  // enforces this for any date; this UI covers the loaded week.)
+  const takenHours = new Set<number>(
+    booking.provider
+      ? appts.filter((a) => a.status === "scheduled" && a.provider_id === booking.provider && a.date === booking.date).map((a) => a.hour)
+      : [],
+  );
 
   const visible = appts.filter((a) => a.status !== "cancelled" && (disc === "All" || provDisc(a.provider_id) === disc));
   const cells = new Map<string, ViewAppt[]>();
@@ -122,19 +146,21 @@ export default function AppointmentsView({
 
       {/* inline booking form */}
       {booking.open && (
-        <form key={`${booking.client}|${booking.taskId ?? ""}`} action={createAppointment} onSubmit={() => setTimeout(() => setBooking((b) => ({ ...b, open: false })), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
+        <form key={`${booking.client}|${booking.taskId ?? ""}`} onSubmit={submitBooking} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
           {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue={booking.client}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" defaultValue={booking.provider}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" value={booking.provider} onChange={(e) => setBooking((b) => ({ ...b, provider: e.target.value }))}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" defaultValue={disc === "Fitness Trainer" ? "Assessment" : "Consultation"}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required defaultValue={booking.date} /></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time</label><select style={input} name="hour" defaultValue={String(booking.hour)}>{hours.map((h) => <option key={h} value={h}>{hourLabelFull(h)}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required value={booking.date} onChange={(e) => setBooking((b) => ({ ...b, date: e.target.value }))} /></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time{booking.provider && takenHours.size > 0 ? " · booked slots greyed" : ""}</label><select style={input} name="hour" value={String(booking.hour)} onChange={(e) => setBooking((b) => ({ ...b, hour: Number(e.target.value) }))}>{hours.map((h) => <option key={h} value={h} disabled={takenHours.has(h)}>{hourLabelFull(h)}{takenHours.has(h) ? " · booked" : ""}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Duration</label><select style={input} name="duration_min" defaultValue="30"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Book</button>
-            <button type="button" onClick={() => setBooking((b) => ({ ...b, open: false }))} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <button type="submit" disabled={booking2 || (!!booking.provider && takenHours.has(booking.hour))} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: booking2 ? "default" : "pointer", opacity: (!!booking.provider && takenHours.has(booking.hour)) ? 0.5 : 1 }}>{booking2 ? "Booking…" : "Book"}</button>
+            <button type="button" onClick={() => { setBookErr(null); setBooking((b) => ({ ...b, open: false })); }} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
+          {!!booking.provider && takenHours.has(booking.hour) && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>That provider is already booked at this time — pick another slot.</div>}
+          {bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--red-text)", background: "var(--red-bg)", borderRadius: 8, padding: "8px 10px" }}>{bookErr}</div>}
         </form>
       )}
 
@@ -168,7 +194,7 @@ export default function AppointmentsView({
                                 {a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "inherit", textDecoration: "none" }}>{a.clientName}</Link> : "—"}
                               </div>
                               <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{a.title ?? a.type}{a.providerName ? ` · ${a.providerName}` : ""}</div>
-                              <AppointmentActions id={a.id} status={a.status} />
+                              <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} />
                             </div>
                           );
                         })}
@@ -198,32 +224,76 @@ export default function AppointmentsView({
               <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                 <span style={{ width: 10, height: 10, borderRadius: "50%", background: provColor(a.provider_id) }} />
                 <b style={{ minWidth: 120 }}>{fmtDate(a.date)} · {hourLabel(a.hour)}</b>
-                <span style={{ flex: 1 }}>{a.clientName ?? "—"} <span style={{ color: "var(--muted)" }}>· {a.title ?? a.type} · {a.providerName ?? "any"}</span></span>
-                <AppointmentActions id={a.id} status={a.status} />
+                <span style={{ flex: 1 }}>{a.clientName ?? "—"} <span style={{ color: "var(--muted)" }}>· {a.title ?? a.type} · {a.providerName ?? "any"}</span>{a.client_id && statusByClient[a.client_id] ? <span style={{ marginLeft: 6 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></span> : null}</span>
+                <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {tab === "unscheduled" && (
-        <div style={{ ...box, padding: "14px 18px" }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Not yet booked ({visibleUnsched.length}){disc !== "All" ? ` · ${disc}` : ""}</div>
-          {visibleUnsched.length === 0 ? (
-            <div style={{ color: "var(--muted)", fontSize: 13 }}>Everything due is booked. 🎉</div>
-          ) : visibleUnsched.map((u) => (
-            <div key={u.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-              <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--amber-text)", flexShrink: 0 }} />
-              <b style={{ minWidth: 96 }}>{u.due ?? "—"}</b>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <Link href={`/clients/${u.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{u.clientName}</Link>
-                <span style={{ color: "var(--muted)" }}> · {u.label} · {u.disc}</span>
-              </span>
-              <button type="button" onClick={() => bookUnsched(u)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Book →</button>
-            </div>
-          ))}
-        </div>
-      )}
+      {tab === "unscheduled" && (() => {
+        const dayDiff = (iso: string) => Math.round((Date.parse(iso + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
+        const upcoming2 = visibleUnsched.filter((u) => !u.due || dayDiff(u.due) >= 0).sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
+        const overdue2 = visibleUnsched.filter((u) => u.due && dayDiff(u.due) < 0).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
+
+        const cellH: React.CSSProperties = { padding: "9px 14px", textAlign: "left", color: "var(--muted)", fontSize: 10.5, fontWeight: 700, letterSpacing: ".4px", textTransform: "uppercase" };
+        const cell: React.CSSProperties = { padding: "11px 14px", fontSize: 13, verticalAlign: "middle" };
+        const bookBtn: React.CSSProperties = { background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
+        const badge = (bg: string, fg: string, text: string) => <span style={{ background: bg, color: fg, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{text}</span>;
+        const dueBadge = (due: string | null) => {
+          if (!due) return <span style={{ color: "var(--muted)" }}>—</span>;
+          const d = dayDiff(due);
+          if (d < 0) return badge("var(--red-bg)", "var(--red-text)", `${-d}d overdue`);
+          if (d === 0) return badge("var(--amber-bg, #fef3c7)", "var(--amber-text, #92400e)", "Due today");
+          return badge("var(--amber-bg, #fef3c7)", "var(--amber-text, #92400e)", `Due in ${d}d`);
+        };
+        const ownerPill = (name?: string | null) => name
+          ? <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>{name}</span>
+          : <span style={{ color: "var(--muted)" }}>Unassigned</span>;
+        const header = (icon: string, title: string, count: number, tone: string) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>{icon} {title}</span>
+            <span style={{ background: tone, color: "#fff", borderRadius: 999, minWidth: 20, height: 20, padding: "0 6px", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700 }}>{count}</span>
+          </div>
+        );
+
+        const unschedTable = (rows: Unsched[], overdue: boolean) => (
+          <div style={{ ...box, overflow: "auto", marginBottom: 20 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+              <thead><tr style={{ background: "var(--neutral-bg, #fafafa)" }}>
+                <th style={cellH}>Client</th><th style={cellH}>Owner</th><th style={cellH}>Service Type</th><th style={cellH}>Category</th>
+                <th style={cellH}>{overdue ? "Was due" : "Due"}</th><th style={cellH}>{overdue ? "Overdue" : "Status"}</th><th style={cellH}>Action</th>
+              </tr></thead>
+              <tbody>
+                {rows.map((u) => (
+                  <tr key={u.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ ...cell, fontWeight: 600 }}><Link href={`/clients/${u.clientId}`} style={{ color: "var(--ink)", textDecoration: "none" }}>{u.clientName}</Link></td>
+                    <td style={cell}>{ownerPill(u.owner)}</td>
+                    <td style={cell}>{u.label}</td>
+                    <td style={{ ...cell, color: "var(--muted)" }}>{u.category ?? u.disc}</td>
+                    <td style={cell}>{u.due ? fmtDate(u.due) : "Set on booking"}</td>
+                    <td style={cell}>{dueBadge(u.due)}</td>
+                    <td style={cell}><button type="button" onClick={() => bookUnsched(u)} style={bookBtn}>Book</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+
+        return (
+          <div>
+            {header("📅", "Upcoming", upcoming2.length, "var(--blue-text, #2563eb)")}
+            {upcoming2.length ? unschedTable(upcoming2, false)
+              : <div style={{ ...box, padding: "18px", textAlign: "center", color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Nothing upcoming</div>}
+
+            {header("⚠️", "Due by Service Schedule", overdue2.length, "var(--red-text, #dc2626)")}
+            {overdue2.length ? unschedTable(overdue2, true)
+              : <div style={{ ...box, padding: "18px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Nothing overdue 🎉</div>}
+          </div>
+        );
+      })()}
 
       {(tab === "list" || tab === "records") && (
         <div style={{ ...box, overflow: "auto" }}>
@@ -240,11 +310,11 @@ export default function AppointmentsView({
                 <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
                   <td style={{ padding: "10px 14px" }}>{fmtDate(a.date)}</td>
                   <td style={{ padding: "10px 14px" }}>{hourLabel(a.hour)}</td>
-                  <td style={{ padding: "10px 14px" }}>{a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{a.clientName}</Link> : "—"}</td>
+                  <td style={{ padding: "10px 14px" }}>{a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{a.clientName}</Link> : "—"}{a.client_id && statusByClient[a.client_id] ? <div style={{ marginTop: 3 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></div> : null}</td>
                   <td style={{ padding: "10px 14px" }}>{a.title ?? a.type ?? "—"}</td>
                   <td style={{ padding: "10px 14px" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: provColor(a.provider_id) }} />{a.providerName ?? "—"}</span></td>
                   <td style={{ padding: "10px 14px" }}>{statusChip(a.status)}</td>
-                  <td style={{ padding: "10px 14px", textAlign: "right" }}><AppointmentActions id={a.id} status={a.status} /></td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}><AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} /></td>
                 </tr>
               ))}
               {(tab === "list" ? sorted : records).length === 0 && (
