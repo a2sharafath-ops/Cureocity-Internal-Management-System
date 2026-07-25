@@ -38,34 +38,44 @@ function fmtDate(d: string) {
 }
 
 export default function AppointmentsBoard({ appts, today, myStaffId = null, canStartAny = false }: { appts: ApptRow[]; today: string; myStaffId?: string | null; canStartAny?: boolean }) {
-  const [view, setView] = useState<"upcoming" | "past">("upcoming");
+  const [view, setView] = useState<"upcoming" | "today" | "completed" | "past">("upcoming");
   const upcoming = appts.filter((a) => a.status === "scheduled" && a.date >= today).sort((a, b) => (a.date + a.hour).localeCompare(b.date + String(b.hour)));
+  const todayList = appts.filter((a) => a.date === today && a.status !== "cancelled").sort((a, b) => (a.hour ?? 0) - (b.hour ?? 0));
+  const completed = appts.filter((a) => a.status === "completed").sort((a, b) => b.date.localeCompare(a.date));
   const past = appts.filter((a) => !(a.status === "scheduled" && a.date >= today)).sort((a, b) => (b.date).localeCompare(a.date));
-  const todayCount = appts.filter((a) => a.date === today && a.status !== "cancelled").length;
-  const list = view === "past" ? past : upcoming;
+  const list = view === "today" ? todayList : view === "completed" ? completed : view === "past" ? past : upcoming;
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const chip = (bg: string, c: string, t: string) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{t}</span>;
-  const seg = (k: "upcoming" | "past", label: string, n: number) => (
-    <button type="button" onClick={() => setView(k)} style={{
-      padding: "7px 14px", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "none",
-      background: view === k ? "var(--card)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)",
-      boxShadow: view === k ? "var(--shadow)" : "none",
-    }}>{label} <span style={{ background: view === k ? "var(--brand-tint)" : "#e7e7ea", color: view === k ? "var(--brand-text)" : "var(--muted)", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 700 }}>{n}</span></button>
-  );
+  // The three stat cards double as the filter — click one to drill into that list.
+  const statCard = (k: "upcoming" | "today" | "completed", label: string, n: number) => {
+    const on = view === k;
+    return (
+      <button type="button" onClick={() => setView(k)} aria-pressed={on} style={{
+        flex: 1, minWidth: 130, textAlign: "left", cursor: "pointer",
+        background: on ? "var(--brand-tint)" : "var(--card)", boxShadow: "var(--shadow)",
+        border: on ? "2px solid var(--brand-fill)" : "1px solid var(--border)", borderRadius: "var(--radius)", padding: on ? "11px 15px" : "12px 16px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--muted)", fontSize: 12, fontWeight: 600 }}>{label}<span style={{ color: "var(--brand-text)", fontSize: 12 }}>{on ? "● showing" : "view →"}</span></div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: on ? "var(--brand-text)" : "var(--ink)" }}>{n}</div>
+      </button>
+    );
+  };
 
   return (
     <div>
       <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ ...box, padding: "12px 16px", flex: 1, minWidth: 130 }}><div style={{ color: "var(--muted)", fontSize: 12 }}>Upcoming</div><div style={{ fontSize: 22, fontWeight: 800 }}>{upcoming.length}</div></div>
-        <div style={{ ...box, padding: "12px 16px", flex: 1, minWidth: 130 }}><div style={{ color: "var(--muted)", fontSize: 12 }}>Today</div><div style={{ fontSize: 22, fontWeight: 800 }}>{todayCount}</div></div>
-        <div style={{ ...box, padding: "12px 16px", flex: 1, minWidth: 130 }}><div style={{ color: "var(--muted)", fontSize: 12 }}>Completed</div><div style={{ fontSize: 22, fontWeight: 800 }}>{appts.filter((a) => a.status === "completed").length}</div></div>
+        {statCard("upcoming", "Upcoming", upcoming.length)}
+        {statCard("today", "Today", todayList.length)}
+        {statCard("completed", "Completed", completed.length)}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12 }}>
-          {seg("upcoming", "Upcoming", upcoming.length)}{seg("past", "Past", past.length)}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, textTransform: "capitalize" }}>{view} · {list.length}</span>
+        <button type="button" onClick={() => setView("past")} style={{
+          border: "1px solid var(--border)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          background: view === "past" ? "var(--brand-fill)" : "#fff", color: view === "past" ? "#fff" : "var(--muted)",
+        }}>Past · {past.length}</button>
         <span style={{ flex: 1 }} />
         <Link href="/appointments" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>Full calendar &amp; booking →</Link>
       </div>
