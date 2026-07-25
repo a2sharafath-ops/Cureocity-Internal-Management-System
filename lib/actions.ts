@@ -2200,25 +2200,84 @@ export async function submitBloodSelf() {
   revalidatePath("/portal");
 }
 
-export async function generateBlueprint(formData: FormData) {
+// discipline (client_assignments) ↔ consultation kind.
+const BP_DISC_TO_KIND: Record<string, string> = { doctor: "Doctor", dietitian: "Diet", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
+const BP_ROLE_TO_DISC: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer", "Health Coach": "coach", Psychologist: "psychologist" };
+
+/**
+ * Author / edit the CONSOLIDATED summary for a BluePrint client (does NOT
+ * generate). Assigned clinicians and admins can write it; each clinician then
+ * signs off separately via signoffConsolidated.
+ */
+export async function saveConsolidatedSummary(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManageBlueprint(p.role)) return;
+  if (!p || !canConsult(p.role)) return; // clinicians + admins
   const client_id = String(formData.get("client_id"));
   const consolidated = String(formData.get("consolidated") ?? "").trim() || null;
+  if (!client_id) return;
   const supabase = createClient();
-  const now = new Date().toISOString();
-  // One click still does both halves — writing the consolidated summary and
-  // approving the blueprint — but they're stamped separately so the 48h
-  // delivery clock can be measured, and so the two can be split into distinct
-  // gates later without another migration.
-  await supabase.from("blueprints").upsert({
-    client_id, consolidated, status: "generated", generated: true, generated_date: todayISO(),
-    consolidated_at: now, approved: true, approved_at: now, approved_by: p.name,
-    updated_at: now,
-  });
-  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
-  await logAudit(p, "Blueprint generated", c?.name, null);
+  await supabase.from("blueprints").upsert({ client_id, consolidated, updated_at: new Date().toISOString() });
+  await logAudit(p, "Consolidated summary saved", await clientName(supabase, client_id), null);
+  revalidatePath("/workspace");
   revalidatePath("/blueprint");
+}
+
+/**
+ * One clinician signs off the consolidated summary. When EVERY discipline
+ * assigned to the client (from client_assignments) has signed, the Blueprint
+ * auto-generates. Replaces the old single-click generate — no one clinician can
+ * finish it alone.
+ */
+export async function signoffConsolidated(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return;
+  const client_id = String(formData.get("client_id"));
+  if (!client_id) return;
+  const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
+  // A clinician signs off their own discipline; an admin/persona may pass one.
+  const disc = adminish ? String(formData.get("discipline") || "") : (BP_ROLE_TO_DISC[p.role] ?? "");
+  if (!disc || !BP_DISC_TO_KIND[disc]) return;
+
+  const supabase = createClient();
+  // Must be on this client's care team (admins may sign any).
+  const { data: asg } = await supabase.from("client_assignments").select("discipline").eq("client_id", client_id);
+  const assigned = new Set(((asg ?? []) as { discipline: string }[]).map((a) => a.discipline).filter((d) => BP_DISC_TO_KIND[d]));
+  if (!assigned.has(disc) && !adminish) return;
+
+  // The consolidated summary must exist and not be generated yet.
+  const { data: bp } = await supabase.from("blueprints").select("consolidated, generated").eq("client_id", client_id).maybeSingle();
+  const bpRow = bp as { consolidated: string | null; generated: boolean } | null;
+  if (!bpRow?.consolidated || bpRow.generated) return;
+
+  // Gate 1: if this discipline has a consultation, its own summary must be
+  // approved before signing the consolidated.
+  const kind = BP_DISC_TO_KIND[disc];
+  const { data: cons } = await supabase.from("consultations").select("approved").eq("client_id", client_id).eq("kind", kind);
+  const consRows = (cons ?? []) as { approved: boolean }[];
+  if (consRows.length > 0 && !consRows.some((c) => c.approved) && !adminish) return;
+
+  await supabase.from("blueprint_signoffs").upsert({ client_id, discipline: disc, by_name: p.name, by_role: p.role, signed_at: new Date().toISOString() });
+  await logAudit(p, "Consolidated summary signed off", await clientName(supabase, client_id), disc);
+
+  // All assigned disciplines signed? → generate.
+  const required = [...assigned];
+  const { data: signs } = await supabase.from("blueprint_signoffs").select("discipline").eq("client_id", client_id);
+  const signed = new Set(((signs ?? []) as { discipline: string }[]).map((s) => s.discipline));
+  if (required.length > 0 && required.every((d) => signed.has(d))) {
+    const now = new Date().toISOString();
+    await supabase.from("blueprints").update({
+      status: "generated", generated: true, generated_date: todayISO(),
+      consolidated_at: now, approved: true, approved_at: now, approved_by: p.name, updated_at: now,
+    }).eq("client_id", client_id);
+    await logAudit(p, "Blueprint generated (all sign-offs complete)", await clientName(supabase, client_id), null);
+    await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+      title: "BluePrint generated", body: `${await clientName(supabase, client_id)} — all clinicians signed off.`, href: "/blueprint", icon: "🧬",
+    });
+  }
+
+  revalidatePath("/workspace");
+  revalidatePath("/blueprint");
+  revalidatePath(`/clients/${client_id}`);
   revalidatePath("/", "layout");
 }
 

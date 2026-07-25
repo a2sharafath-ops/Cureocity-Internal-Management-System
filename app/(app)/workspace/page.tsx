@@ -204,24 +204,46 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   if (tab === "summaries") {
     const bpClients = allClients.filter((c) => c.package_id === "bp1");
     const bpIds = bpClients.map((c) => c.id);
-    const [{ data: cs }, signoffRes, bpRes] = await Promise.all([
+    const [{ data: cs }, signoffRes, bpRes, asgRes, signRes] = await Promise.all([
       supabase.from("consultations").select("id, client_id, summary, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),
-      // booleans-only RPC — every discipline can see the 3-way sign-off status
+      // per-discipline INDIVIDUAL-approval status (security-definer RPC)
       supabase.rpc("blueprint_signoff"),
       bpIds.length ? supabase.from("blueprints").select("client_id, generated, consolidated").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; generated: boolean; consolidated: string | null }[] }),
+      // who's assigned (required signers) + who has signed the consolidated
+      bpIds.length ? supabase.from("client_assignments").select("client_id, discipline").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; discipline: string }[] }),
+      bpIds.length ? supabase.from("blueprint_signoffs").select("client_id, discipline").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; discipline: string }[] }),
     ]);
     consultSummaries = ((cs ?? []) as unknown as (ConsultSummary & { clients: { name: string } | null })[]).map((r) => ({
       id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, summary: r.summary, status: r.status, approved: r.approved, shared: r.shared, created_at: r.created_at,
     }));
-    const signoff = new Map(
-      ((signoffRes.data ?? []) as { client_id: string; doctor: boolean; diet: boolean; trainer: boolean }[])
-        .map((s) => [s.client_id, s]),
-    );
+    // Individual-summary approval per discipline (from the RPC).
+    const KINDS = ["doctor", "diet", "trainer", "coach", "psych"] as const;
+    const KIND2DISC: Record<string, string> = { doctor: "doctor", diet: "dietitian", trainer: "trainer", coach: "coach", psych: "psychologist" };
+    const approvedByDisc = new Map<string, Record<string, boolean>>();
+    for (const s of (signoffRes.data ?? []) as Record<string, unknown>[]) {
+      const cid = String(s.client_id);
+      const rec: Record<string, boolean> = {};
+      for (const k of KINDS) rec[KIND2DISC[k]] = Boolean(s[k]);
+      approvedByDisc.set(cid, rec);
+    }
+    const requiredByClient = new Map<string, string[]>();
+    for (const a of (asgRes.data ?? []) as { client_id: string; discipline: string }[]) {
+      if (!["doctor", "dietitian", "trainer", "coach", "psychologist"].includes(a.discipline)) continue;
+      (requiredByClient.get(a.client_id) ?? requiredByClient.set(a.client_id, []).get(a.client_id)!).push(a.discipline);
+    }
+    const signedByClient = new Map<string, Set<string>>();
+    for (const s of (signRes.data ?? []) as { client_id: string; discipline: string }[]) {
+      (signedByClient.get(s.client_id) ?? signedByClient.set(s.client_id, new Set()).get(s.client_id)!).add(s.discipline);
+    }
     const bpMap = new Map(((bpRes.data ?? []) as { client_id: string; generated: boolean; consolidated: string | null }[]).map((b) => [b.client_id, b]));
     consolidated = bpClients.map((c) => {
       const bp = bpMap.get(c.id);
-      const s = signoff.get(c.id);
-      return { client_id: c.id, name: c.name, code: c.code, doctor: s?.doctor ?? false, diet: s?.diet ?? false, trainer: s?.trainer ?? false, generated: bp?.generated ?? false, consolidated: bp?.consolidated ?? null };
+      const required = requiredByClient.get(c.id) ?? [];
+      const approved = approvedByDisc.get(c.id) ?? {};
+      const signedSet = signedByClient.get(c.id) ?? new Set<string>();
+      const signedByDisc: Record<string, boolean> = {};
+      for (const d of required) signedByDisc[d] = signedSet.has(d);
+      return { client_id: c.id, name: c.name, code: c.code, required, approvedByDisc: approved, signedByDisc, generated: bp?.generated ?? false, consolidated: bp?.consolidated ?? null };
     });
   }
 
@@ -430,7 +452,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
-      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} />}
+      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />}
 
       {/* ---- CONCERNS ---- */}
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
