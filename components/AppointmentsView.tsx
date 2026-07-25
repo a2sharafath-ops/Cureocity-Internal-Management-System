@@ -69,14 +69,18 @@ export default function AppointmentsView({
   const provDisc = (pid: string | null) => (pid ? provMap.get(pid)?.discipline ?? null : null);
   const provColor = (pid: string | null) => (pid ? provMap.get(pid)?.color ?? "#e11f34" : "#e11f34");
 
-  // Hours already taken for the chosen provider on the chosen date — greyed out
-  // in the time picker so front desk can't pick a clashing slot. (The server
-  // enforces this for any date; this UI covers the loaded week.)
-  const takenHours = new Set<number>(
-    booking.provider
-      ? appts.filter((a) => a.status === "scheduled" && a.provider_id === booking.provider && a.date === booking.date).map((a) => a.hour)
-      : [],
-  );
+  // Hours already taken on the chosen date — greyed out in the time picker so
+  // front desk can't pick a clashing slot. Two kinds of clash, both enforced by
+  // the server: the chosen provider is busy, OR the chosen client is already
+  // booked (with anyone). (This UI covers the loaded week; the server covers any date.)
+  const providerTakenHours = booking.provider
+    ? appts.filter((a) => a.status === "scheduled" && a.provider_id === booking.provider && a.date === booking.date).map((a) => a.hour)
+    : [];
+  const clientTakenHours = booking.client
+    ? appts.filter((a) => a.status === "scheduled" && a.client_id === booking.client && a.date === booking.date).map((a) => a.hour)
+    : [];
+  const takenHours = new Set<number>([...providerTakenHours, ...clientTakenHours]);
+  const clientClash = clientTakenHours.includes(booking.hour);
 
   const visible = appts.filter((a) => a.status !== "cancelled" && (disc === "All" || provDisc(a.provider_id) === disc));
   const cells = new Map<string, ViewAppt[]>();
@@ -163,19 +167,19 @@ export default function AppointmentsView({
       {booking.open && (
         <form key={`${booking.client}|${booking.taskId ?? ""}`} onSubmit={submitBooking} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
           {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required defaultValue={booking.client}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required value={booking.client} onChange={(e) => setBooking((b) => ({ ...b, client: e.target.value }))}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" value={booking.provider} onChange={(e) => setBooking((b) => ({ ...b, provider: e.target.value }))}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required value={booking.date} onChange={(e) => setBooking((b) => ({ ...b, date: e.target.value }))} /></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time{booking.provider && takenHours.size > 0 ? " · booked slots greyed" : ""}</label><select style={input} name="hour" value={String(booking.hour)} onChange={(e) => setBooking((b) => ({ ...b, hour: Number(e.target.value) }))}>{hours.map((h) => <option key={h} value={h} disabled={takenHours.has(h)}>{hourLabelFull(h)}{takenHours.has(h) ? " · booked" : ""}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time{takenHours.size > 0 ? " · booked slots greyed" : ""}</label><select style={input} name="hour" value={String(booking.hour)} onChange={(e) => setBooking((b) => ({ ...b, hour: Number(e.target.value) }))}>{hours.map((h) => <option key={h} value={h} disabled={takenHours.has(h)}>{hourLabelFull(h)}{takenHours.has(h) ? " · booked" : ""}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Duration</label><select style={input} name="duration_min" defaultValue="30"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" disabled={booking2 || dupConsult || (!!booking.provider && takenHours.has(booking.hour))} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: (booking2 || dupConsult) ? "default" : "pointer", opacity: (dupConsult || (!!booking.provider && takenHours.has(booking.hour))) ? 0.5 : 1 }}>{booking2 ? "Booking…" : "Book"}</button>
+            <button type="submit" disabled={booking2 || dupConsult || takenHours.has(booking.hour)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: (booking2 || dupConsult || takenHours.has(booking.hour)) ? "default" : "pointer", opacity: (dupConsult || takenHours.has(booking.hour)) ? 0.5 : 1 }}>{booking2 ? "Booking…" : "Book"}</button>
             <button type="button" onClick={() => { setBookErr(null); setBooking((b) => ({ ...b, open: false })); }} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
           </div>
           {dupConsult && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>This client already has a {dupLabel} consultation for this package — the initial consult is one per package. Change Type to <b>Follow-up</b> to book another, or cancel the existing one first.</div>}
-          {!!booking.provider && takenHours.has(booking.hour) && !dupConsult && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>That provider is already booked at this time — pick another slot.</div>}
+          {takenHours.has(booking.hour) && !dupConsult && !bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "8px 10px" }}>{clientClash ? "This client already has an appointment at this time — pick another slot." : "That provider is already booked at this time — pick another slot."}</div>}
           {bookErr && <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--red-text)", background: "var(--red-bg)", borderRadius: 8, padding: "8px 10px" }}>{bookErr}</div>}
         </form>
       )}
