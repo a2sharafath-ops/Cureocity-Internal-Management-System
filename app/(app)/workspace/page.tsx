@@ -399,7 +399,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} linkQuery={roQuery} />}
 
       {/* ---- APPOINTMENTS ---- */}
-      {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} />}
+      {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} canStartAny={["Super Admin", "Administrator", "Manager"].includes(me.role) && !readOnly} />}
 
       {/* ---- FOLLOW-UPS (coach) ---- */}
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}

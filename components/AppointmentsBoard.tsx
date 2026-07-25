@@ -37,7 +37,7 @@ function fmtDate(d: string) {
   return new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 }
 
-export default function AppointmentsBoard({ appts, today, myStaffId = null }: { appts: ApptRow[]; today: string; myStaffId?: string | null }) {
+export default function AppointmentsBoard({ appts, today, myStaffId = null, canStartAny = false }: { appts: ApptRow[]; today: string; myStaffId?: string | null; canStartAny?: boolean }) {
   const [view, setView] = useState<"upcoming" | "past">("upcoming");
   const upcoming = appts.filter((a) => a.status === "scheduled" && a.date >= today).sort((a, b) => (a.date + a.hour).localeCompare(b.date + String(b.hour)));
   const past = appts.filter((a) => !(a.status === "scheduled" && a.date >= today)).sort((a, b) => (b.date).localeCompare(a.date));
@@ -89,7 +89,7 @@ export default function AppointmentsBoard({ appts, today, myStaffId = null }: { 
                 : chip(s[0], s[1], s[2])}
               {/* Trials are pre-sale: the assigned clinician marks them
                   Attended/No-show above, not "started" as a client consultation. */}
-              {!a.is_experience && a.status === "scheduled" && !!myStaffId && a.provider_id === myStaffId && (
+              {!a.is_experience && a.status === "scheduled" && (canStartAny || (!!myStaffId && a.provider_id === myStaffId)) && (
                 <form action={startConsultFromAppointment} style={{ margin: 0 }}>
                   <input type="hidden" name="appointment_id" value={a.id} />
                   <button type="submit" style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</button>
