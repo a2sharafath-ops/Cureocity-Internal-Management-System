@@ -370,13 +370,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
               <div style={{ ...box, padding: "14px 16px" }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>⚡ Quick actions</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <Link href={`/workspace?role=${roleKey}&tab=summaries`} style={qa}>📝 Consultations</Link>
-                  <Link href="/appointments" style={qa}>📅 Appointments</Link>
+                  <Link href={`/workspace?role=${roleKey}&tab=summaries`} style={qa}>📝 Summaries</Link>
+                  <Link href="/appointments" style={qa}>📅 Appointment Calendar</Link>
                   <Link href="/blueprint" style={qa}>🧬 BluePrint</Link>
-                  {roleKey === "diet" && <Link href="/meals" style={qa}>🍽️ Meal follow-ups</Link>}
-                  {roleKey === "trainer" && <Link href="/trainer" style={qa}>🎽 Session board</Link>}
+                  {roleKey === "diet" && <Link href="/meals" style={qa}>🍽️ Meal Monitoring</Link>}
+                  {roleKey === "trainer" && <Link href="/trainer" style={qa}>🎽 Trainer Workspace</Link>}
                   {roleKey === "coach" && <Link href="/followups" style={qa}>📞 Follow-ups</Link>}
-                  {roleKey === "doctor" && <Link href="/emr" style={qa}>🩺 Patient records</Link>}
+                  {roleKey === "doctor" && <Link href="/emr" style={qa}>🩺 Patient Records</Link>}
                 </div>
               </div>
               )}
