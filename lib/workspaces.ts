@@ -92,12 +92,12 @@ function commonTabs(): WsTab[] {
     { key: "clients", label: "My Clients", live: true },
     { key: "appts", label: "📅 Appointments", live: true },
     { key: "summaries", label: "📝 Summaries", live: true },
-    { key: "bp", label: "🧬 Blueprint", href: "/blueprint" },
+    { key: "bp", label: "🧬 BluePrint", href: "/blueprint" },
     // The daily team meeting — every discipline takes part, so it sits in the
     // common set rather than any one workspace's role tabs.
     { key: "whiteboard", label: "🧠 Whiteboard", href: "/whiteboard" },
     { key: "concerns", label: "⚠️ Concerns", live: true },
-    { key: "team", label: "Integrated Dashboard", href: "/careteam" },
+    { key: "team", label: "Care Team Hub", href: "/careteam" },
     { key: "monitor", label: "Client Monitoring", live: true },
     { key: "library", label: "Resource Library", live: true },
     { key: "board", label: "MDT", live: true },
@@ -115,7 +115,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   doctor: withRoleTabs([]),
   psych: withRoleTabs([]),
   diet: withRoleTabs([
-    { key: "meals", label: "🍽️ Meal Follow-ups", href: "/meals" },
+    { key: "meals", label: "🍽️ Meal Monitoring", href: "/meals" },
     { key: "charts", label: "Diet Charts", live: true },
     { key: "recipes", label: "Recipes", live: true },
   ]),
