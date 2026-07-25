@@ -84,7 +84,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   ]);
   // Has this client's care journey already been kicked off? If so, the primary
   // "Start" action is done — we only offer a quiet re-run for repairs.
-  const journeyStarted = ((protoData ?? []) as unknown[]).length > 0;
+  // care_protocols covers PT/Comprehensive; BluePrint doesn't create one, so its
+  // evidence (a blueprints row + blood request) is folded in below via `bp` /
+  // `bloodRow` so the button doesn't keep offering "Start journey".
+  const hasProtocol = ((protoData ?? []) as unknown[]).length > 0;
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
   const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
 
@@ -203,6 +206,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // clients (whose journey requests a panel). One row per client; take the first.
   const bloodRow = ((bloodRows ?? []) as { requested_at: string | null; submitted: boolean; submitted_date: string | null; panel: string | null }[])[0] ?? null;
   const needsBlood = clientPackages.some((r) => ["blueprint", "comprehensive"].includes(r.category)) || Boolean(bloodRow);
+  // Journey is live if the protocol exists (PT/Comprehensive) or BluePrint's
+  // artefacts do (blueprints row / blood request). Keeps the Start-journey button
+  // from re-appearing after it's already been run.
+  const journeyStarted = hasProtocol || Boolean(bp) || Boolean(bloodRow);
   const clientAge = ageOf(c0.dob);
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
