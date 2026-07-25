@@ -19,6 +19,9 @@ import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/com
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
 import TrialOutcomeActions from "@/components/TrialOutcomeActions";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import SubmitButton from "@/components/SubmitButton";
+import { startConsultFromAppointment } from "@/lib/actions";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
@@ -77,8 +80,8 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     supabase.from("enrollments").select("client_id"),
     supabase.from("consultations").select("id", { count: "exact", head: true }).eq("kind", role.kind).eq("approved", false),
     isTrainer
-      ? supabase.from("sessions").select("id, hour, status, trainer_id, clients(name)").eq("date", today).order("hour")
-      : supabase.from("appointments").select("id, hour, type, title, status, provider_id, clients(name), staff(role)").eq("date", today).eq("status", "scheduled").order("hour"),
+      ? supabase.from("sessions").select("id, hour, status, trainer_id, client_id, clients(name)").eq("date", today).order("hour")
+      : supabase.from("appointments").select("id, hour, type, title, status, provider_id, client_id, clients(name), staff(role)").eq("date", today).eq("status", "scheduled").order("hour"),
     supabase.from("concerns").select("id, client_id, category, body, raised_by, status, created_at, clients(name)").in("role", [roleKey, "general"]).order("created_at", { ascending: false }),
     supabase.from("mdt_notes").select("id, client_id, author, body, escalated, to_role, status, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
   ]);
@@ -101,7 +104,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const wsStatuses = await loadClientStatuses(supabase, scoped.map((c) => c.id), today);
   for (const r of rosterRows) r.careStatus = clientStatus(wsStatuses.get(r.id), wsDisc);
 
-  const todayRaw = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; provider_id?: string | null; trainer_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[];
+  const todayRaw = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; provider_id?: string | null; trainer_id?: string | null; client_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[];
   // Scope "today" to this clinician: their own bookings (real login) or their
   // discipline (admin persona preview). Previously it showed every clinician's.
   const todayList = todayRaw.filter((a) => {
@@ -307,25 +310,42 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "dash" && (
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-            <MetricCard label="My clients" value={scoped.length} />
-            <MetricCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length + myExperienceToday.length} />
-            <MetricCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" />
-            <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} />
-            <MetricCard label="MDT updates" value={mdtNotes.length} />
+            <MetricCard label="My clients" value={scoped.length} href={`/workspace?role=${roleKey}&tab=clients`} />
+            <MetricCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length + myExperienceToday.length} href={`/workspace?role=${roleKey}&tab=appts`} />
+            <MetricCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" href={`/workspace?role=${roleKey}&tab=summaries`} />
+            <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} href={`/workspace?role=${roleKey}&tab=concerns`} />
+            <MetricCard label="MDT updates" value={mdtNotes.length} href={`/workspace?role=${roleKey}&tab=board`} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
             <div style={{ ...box, overflow: "hidden" }}>
               <div style={{ padding: "12px 16px", fontWeight: 700 }}>📅 Today — {todayLabel()}</div>
-              {todayList.map((a) => (
-                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderTop: "1px solid var(--border)" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <b style={{ fontSize: 13 }}>{a.clients?.name ?? "—"}</b>
-                    <div style={{ color: "var(--muted)", fontSize: 12 }}>{a.title || a.type || (isTrainer ? "Training session" : "Consultation")}</div>
+              {todayList.map((a) => {
+                const st = a.client_id ? clientStatus(wsStatuses.get(a.client_id), wsDisc) : null;
+                const detail = isTrainer
+                  ? "Training session"
+                  : `${role.short} · ${a.type || "Consultation"}${a.title ? ` — ${a.title}` : ""}`;
+                return (
+                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderTop: "1px solid var(--border)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                        {a.client_id
+                          ? <Link href={`/clients/${a.client_id}${roQuery}`} style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", textDecoration: "none" }}>{a.clients?.name ?? "—"}</Link>
+                          : <b style={{ fontSize: 13 }}>{a.clients?.name ?? "—"}</b>}
+                        {st && <ClientStatusBadge status={st} size="sm" />}
+                      </div>
+                      <div style={{ color: "var(--muted)", fontSize: 12 }}>{detail}</div>
+                    </div>
+                    <b style={{ fontSize: 13 }}>{fmtHour(a.hour)}</b>
+                    {!readOnly && !isTrainer && a.status === "scheduled" && a.client_id && (
+                      <form action={startConsultFromAppointment} style={{ margin: 0 }}>
+                        <input type="hidden" name="appointment_id" value={a.id} />
+                        <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
+                      </form>
+                    )}
                   </div>
-                  <b style={{ fontSize: 13 }}>{fmtHour(a.hour)}</b>
-                </div>
-              ))}
+                );
+              })}
               {/* Pre-sale trial bookings assigned to me — shown here so a lead's
                   free assessment/training isn't invisible just because they're
                   not a client yet. */}
