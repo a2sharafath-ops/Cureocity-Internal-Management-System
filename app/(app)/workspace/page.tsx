@@ -214,14 +214,28 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     });
   }
 
-  // Appointments board (role-scoped to this workspace's clients).
+  // Appointments board. Shows this workspace's roster clients' bookings PLUS any
+  // booking where this clinician is the provider — a clinician runs the
+  // appointments they're booked for even if that client isn't formally in their
+  // roster (e.g. a fitness assessment booked with them). Merge + dedupe.
   let apptRows: ApptRow[] = [];
   if (tab === "appts") {
     const scopedIds = scoped.map((c) => c.id);
-    const { data: ap } = scopedIds.length
-      ? await supabase.from("appointments").select("id, client_id, provider_id, date, hour, type, title, status, clients(name)").in("client_id", scopedIds).order("date", { ascending: false }).limit(200)
-      : { data: [] as unknown[] };
-    apptRows = ((ap ?? []) as unknown as (ApptRow & { clients: { name: string } | null })[]).map((a) => ({
+    const cols = "id, client_id, provider_id, date, hour, type, title, status, is_experience, clients(name)";
+    const [rosterRes, mineRes] = await Promise.all([
+      scopedIds.length
+        ? supabase.from("appointments").select(cols).in("client_id", scopedIds).order("date", { ascending: false }).limit(200)
+        : Promise.resolve({ data: [] as unknown[] }),
+      me.staffId
+        ? supabase.from("appointments").select(cols).eq("provider_id", me.staffId).order("date", { ascending: false }).limit(200)
+        : Promise.resolve({ data: [] as unknown[] }),
+    ]);
+    const merged = new Map<string, ApptRow & { clients: { name: string } | null; is_experience?: boolean | null }>();
+    for (const a of [...(rosterRes.data ?? []), ...(mineRes.data ?? [])] as unknown as (ApptRow & { clients: { name: string } | null; is_experience?: boolean | null })[]) {
+      if (a.is_experience) continue; // pre-sale trials are folded in separately below
+      merged.set(a.id, a);
+    }
+    apptRows = [...merged.values()].map((a) => ({
       id: a.id, client_id: a.client_id, provider_id: a.provider_id, client_name: a.clients?.name ?? null, date: a.date, hour: a.hour, type: a.type, title: a.title, status: a.status,
     }));
     // Fold in my pre-sale trial bookings (lead-based, no client_id) so they

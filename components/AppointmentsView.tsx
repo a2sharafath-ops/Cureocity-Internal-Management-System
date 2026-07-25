@@ -87,7 +87,23 @@ export default function AppointmentsView({
   for (const a of visible) { const k = `${a.date}|${a.hour}`; (cells.get(k) ?? cells.set(k, []).get(k)!).push(a); }
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const statusStyle = (s: string): React.CSSProperties => s === "completed" ? { opacity: 0.6 } : s === "no_show" ? { opacity: 0.6, textDecoration: "line-through" } : {};
+  const statusStyle = (s: string): React.CSSProperties => s === "completed" ? { opacity: 0.75 } : s === "no_show" ? { opacity: 0.6, textDecoration: "line-through" } : {};
+  // Small colour + label so completed vs not-completed reads at a glance on the grid.
+  const STATUS_MARK: Record<string, { color: string; label: string }> = {
+    scheduled: { color: "var(--blue-text)", label: "Scheduled" },
+    completed: { color: "var(--green-text)", label: "✓ Completed" },
+    no_show: { color: "var(--red-text)", label: "No-show" },
+    cancelled: { color: "#64748b", label: "Cancelled" },
+  };
+  const statusMark = (s: string) => {
+    const m = STATUS_MARK[s] ?? STATUS_MARK.scheduled;
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 700, color: m.color }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.color, display: "inline-block" }} />
+        {m.label}
+      </span>
+    );
+  };
   const chip = (active: boolean): React.CSSProperties => ({ padding: "6px 13px", borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid var(--border)", background: active ? "var(--brand-fill)" : "#fff", color: active ? "#fff" : "var(--muted)" });
   const statusChip = (s: string) => {
     const m: Record<string, [string, string]> = { scheduled: ["var(--blue-bg)", "var(--blue-text)"], completed: ["var(--green-bg)", "var(--green-text)"], no_show: ["var(--red-bg)", "var(--red-text)"], cancelled: ["var(--neutral-bg)", "#64748b"] };
@@ -214,6 +230,7 @@ export default function AppointmentsView({
                                 {a.clientName ? <Link href={`/clients/${a.client_id}`} style={{ color: "inherit", textDecoration: "none" }}>{a.clientName}</Link> : "—"}
                               </div>
                               <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{a.title ?? a.type}{a.providerName ? ` · ${a.providerName}` : ""}</div>
+                              <div style={{ marginTop: 2 }}>{statusMark(a.status)}</div>
                               <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} />
                             </div>
                           );
