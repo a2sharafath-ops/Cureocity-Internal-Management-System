@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
-import { canSee } from "@/lib/roles";
+import { canSee, isClinician } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
@@ -65,14 +65,20 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const supabase = createClient();
   const today = todayISO();
   const isTrainer = roleKey === "trainer";
+  // "Today" is this clinician's own day, not the whole clinic's. A real
+  // clinician login scopes to their own bookings (provider = their staff id);
+  // an admin previewing a persona scopes to the discipline instead (there's no
+  // single staff), which still hides other disciplines' appointments.
+  const WS_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
+  const scopeToStaff = Boolean(me.staffId) && isClinician(me.role);
 
   const [{ data: clientData }, { data: enrollData }, { count: pendingSummaries }, todayRes, { data: concernData }, { data: mdtData }] = await Promise.all([
     supabase.from("clients").select("id, name, code, package_id, pro_id, conditions, goals, used, packages(name, sessions)").order("name"),
     supabase.from("enrollments").select("client_id"),
     supabase.from("consultations").select("id", { count: "exact", head: true }).eq("kind", role.kind).eq("approved", false),
     isTrainer
-      ? supabase.from("sessions").select("id, hour, status, clients(name)").eq("date", today).order("hour")
-      : supabase.from("appointments").select("id, hour, type, title, status, clients(name)").eq("date", today).eq("status", "scheduled").order("hour"),
+      ? supabase.from("sessions").select("id, hour, status, trainer_id, clients(name)").eq("date", today).order("hour")
+      : supabase.from("appointments").select("id, hour, type, title, status, provider_id, clients(name), staff(role)").eq("date", today).eq("status", "scheduled").order("hour"),
     supabase.from("concerns").select("id, client_id, category, body, raised_by, status, created_at, clients(name)").in("role", [roleKey, "general"]).order("created_at", { ascending: false }),
     supabase.from("mdt_notes").select("id, client_id, author, body, escalated, to_role, status, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
   ]);
@@ -95,7 +101,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const wsStatuses = await loadClientStatuses(supabase, scoped.map((c) => c.id), today);
   for (const r of rosterRows) r.careStatus = clientStatus(wsStatuses.get(r.id), wsDisc);
 
-  const todayList = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; clients: { name: string } | null }[];
+  const todayRaw = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; provider_id?: string | null; trainer_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[];
+  // Scope "today" to this clinician: their own bookings (real login) or their
+  // discipline (admin persona preview). Previously it showed every clinician's.
+  const todayList = todayRaw.filter((a) => {
+    if (isTrainer) return scopeToStaff ? a.trainer_id === me.staffId : true;
+    return scopeToStaff ? a.provider_id === me.staffId : WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind;
+  });
 
   // Experience (pre-sale trial) bookings assigned to *me*, matched by provider —
   // NOT by client roster. A free assessment/training for a lead has client_id
