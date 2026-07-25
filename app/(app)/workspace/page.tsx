@@ -79,9 +79,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     supabase.from("clients").select("id, name, code, package_id, pro_id, conditions, goals, used, packages(name, sessions)").order("name"),
     supabase.from("enrollments").select("client_id"),
     supabase.from("consultations").select("id", { count: "exact", head: true }).eq("kind", role.kind).eq("approved", false),
-    isTrainer
-      ? supabase.from("sessions").select("id, hour, status, trainer_id, client_id, clients(name)").eq("date", today).order("hour")
-      : supabase.from("appointments").select("id, hour, type, title, status, provider_id, client_id, clients(name), staff(role)").eq("date", today).eq("status", "scheduled").order("hour"),
+    // Everyone's today = their appointments (consultations / assessments). The
+    // trainer additionally gets their strength sessions, fetched + merged below.
+    supabase.from("appointments").select("id, hour, type, title, status, provider_id, client_id, clients(name), staff(role)").eq("date", today).eq("status", "scheduled").order("hour"),
     supabase.from("concerns").select("id, client_id, category, body, raised_by, status, created_at, clients(name)").in("role", [roleKey, "general"]).order("created_at", { ascending: false }),
     supabase.from("mdt_notes").select("id, client_id, author, body, escalated, to_role, status, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
   ]);
@@ -104,13 +104,24 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const wsStatuses = await loadClientStatuses(supabase, scoped.map((c) => c.id), today);
   for (const r of rosterRows) r.careStatus = clientStatus(wsStatuses.get(r.id), wsDisc);
 
-  const todayRaw = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; provider_id?: string | null; trainer_id?: string | null; client_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[];
-  // Scope "today" to this clinician: their own bookings (real login) or their
-  // discipline (admin persona preview). Previously it showed every clinician's.
-  const todayList = todayRaw.filter((a) => {
-    if (isTrainer) return scopeToStaff ? a.trainer_id === me.staffId : true;
-    return scopeToStaff ? a.provider_id === me.staffId : WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind;
-  });
+  // Today's appointments, scoped to this clinician: their own bookings (real
+  // login) or their discipline (admin persona preview) — so a trainer sees the
+  // fitness assessments they run, a doctor their consults, etc.
+  type TodayItem = { id: string; hour: number | null; client_id: string | null; client_name: string | null; type?: string | null; title?: string | null; status: string; provider_id: string | null; isSession: boolean };
+  const apptRaw = (todayRes.data ?? []) as unknown as { id: string; hour: number | null; type?: string; title?: string | null; status?: string; provider_id?: string | null; client_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[];
+  const apptToday: TodayItem[] = apptRaw
+    .filter((a) => scopeToStaff ? a.provider_id === me.staffId : WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind)
+    .map((a) => ({ id: a.id, hour: a.hour, client_id: a.client_id ?? null, client_name: a.clients?.name ?? null, type: a.type ?? null, title: a.title ?? null, status: a.status ?? "scheduled", provider_id: a.provider_id ?? null, isSession: false }));
+
+  // Trainer also has strength sessions (workouts) today.
+  let sessToday: TodayItem[] = [];
+  if (isTrainer) {
+    const { data: sd } = await supabase.from("sessions").select("id, hour, status, trainer_id, client_id, clients(name)").eq("date", today).eq("status", "scheduled").order("hour");
+    sessToday = ((sd ?? []) as unknown as { id: string; hour: number | null; status: string; trainer_id: string | null; client_id: string | null; clients: { name: string } | null }[])
+      .filter((s) => scopeToStaff ? s.trainer_id === me.staffId : true)
+      .map((s) => ({ id: s.id, hour: s.hour, client_id: s.client_id, client_name: s.clients?.name ?? null, status: s.status, provider_id: s.trainer_id, isSession: true }));
+  }
+  const todayList: TodayItem[] = [...sessToday, ...apptToday].sort((x, y) => (x.hour ?? 0) - (y.hour ?? 0));
 
   // Experience (pre-sale trial) bookings assigned to *me*, matched by provider —
   // NOT by client roster. A free assessment/training for a lead has client_id
@@ -325,7 +336,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
         <>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
             <MetricCard label="My clients" value={scoped.length} href={`/workspace?role=${roleKey}&tab=clients`} />
-            <MetricCard label={isTrainer ? "Sessions today" : "Appointments today"} value={todayList.length + myExperienceToday.length} href={`/workspace?role=${roleKey}&tab=appts`} />
+            <MetricCard label={isTrainer ? "Scheduled today" : "Appointments today"} value={todayList.length + myExperienceToday.length} href={`/workspace?role=${roleKey}&tab=appts`} />
             <MetricCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" href={`/workspace?role=${roleKey}&tab=summaries`} />
             <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} href={`/workspace?role=${roleKey}&tab=concerns`} />
             <MetricCard label="MDT updates" value={mdtNotes.length} href={`/workspace?role=${roleKey}&tab=board`} />
@@ -336,7 +347,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
               <div style={{ padding: "12px 16px", fontWeight: 700 }}>📅 Today — {todayLabel()}</div>
               {todayList.map((a) => {
                 const st = a.client_id ? clientStatus(wsStatuses.get(a.client_id), wsDisc) : null;
-                const detail = isTrainer
+                const detail = a.isSession
                   ? "Training session"
                   : `${role.short} · ${a.type || "Consultation"}${a.title ? ` — ${a.title}` : ""}`;
                 return (
@@ -344,14 +355,14 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                         {a.client_id
-                          ? <Link href={`/clients/${a.client_id}${roQuery}`} style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", textDecoration: "none" }}>{a.clients?.name ?? "—"}</Link>
-                          : <b style={{ fontSize: 13 }}>{a.clients?.name ?? "—"}</b>}
+                          ? <Link href={`/clients/${a.client_id}${roQuery}`} style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", textDecoration: "none" }}>{a.client_name ?? "—"}</Link>
+                          : <b style={{ fontSize: 13 }}>{a.client_name ?? "—"}</b>}
                         {st && <ClientStatusBadge status={st} size="sm" />}
                       </div>
                       <div style={{ color: "var(--muted)", fontSize: 12 }}>{detail}</div>
                     </div>
                     <b style={{ fontSize: 13 }}>{fmtHour(a.hour)}</b>
-                    {!readOnly && !isTrainer && a.status === "scheduled" && a.client_id && (
+                    {!readOnly && !a.isSession && a.status === "scheduled" && a.client_id && (
                       <form action={startConsultFromAppointment} style={{ margin: 0 }}>
                         <input type="hidden" name="appointment_id" value={a.id} />
                         <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
