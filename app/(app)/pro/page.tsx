@@ -21,6 +21,13 @@ export default async function ProPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/pro")) redirect("/dashboard");
 
+  // Folded into the workspace: anyone with a discipline workspace (clinicians +
+  // admins) manages consultations there — the Summaries tab replicates this
+  // page's start-consult form, list and approve/share, and the Appointments tab
+  // covers "ready to start". Only Managers (who have no workspace) still land on
+  // this standalone review list.
+  if (canSee(me.role, "/workspace")) redirect("/workspace?tab=summaries");
+
   // If an admin has stepped into a professional persona, focus this workspace
   // on that discipline (Doctor / Coach / Psychologist).
   const { profession } = await getViewRole();

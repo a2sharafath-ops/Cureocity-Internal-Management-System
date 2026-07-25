@@ -370,7 +370,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
               <div style={{ ...box, padding: "14px 16px" }}>
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>⚡ Quick actions</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <Link href="/pro" style={qa}>📝 Consultations</Link>
+                  <Link href={`/workspace?role=${roleKey}&tab=summaries`} style={qa}>📝 Consultations</Link>
                   <Link href="/appointments" style={qa}>📅 Appointments</Link>
                   <Link href="/blueprint" style={qa}>🧬 BluePrint</Link>
                   {roleKey === "diet" && <Link href="/meals" style={qa}>🍽️ Meal follow-ups</Link>}
