@@ -1011,6 +1011,12 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     else await startPTJourney(supabase, client_id, who, start, p.name);
   }
   await logAudit(p, "Package purchased", pkg.name, client_id);
+  const { data: pcli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk", "Super Admin"], {
+    title: "Package purchased",
+    body: `${pcli?.name ?? "Client"} · ${pkg.name} · ₹${amount.toLocaleString("en-IN")}${discount > 0 ? ` (−₹${discount.toLocaleString("en-IN")})` : ""}`,
+    href: `/clients/${client_id}`, icon: "🛒",
+  });
   revalidatePath(`/clients/${client_id}`);
   return { ok: true };
 }
@@ -1056,6 +1062,12 @@ export async function renewPackage(formData: FormData): Promise<{ ok: boolean; e
     amount, status: "Unpaid", issued_date: today, created_by: p.name,
   });
   await logAudit(p, "Package renewed", pkg.name, `${category} · ${start} → ${end ?? "—"}`);
+  const { data: rcli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk", "Super Admin"], {
+    title: "Package renewed",
+    body: `${rcli?.name ?? "Client"} · ${pkg.name} · ₹${amount.toLocaleString("en-IN")} → ${end ?? "—"}`,
+    href: `/clients/${client_id}`, icon: "↻",
+  });
   revalidatePath(`/clients/${client_id}`);
   revalidatePath("/", "layout");
   return { ok: true };
