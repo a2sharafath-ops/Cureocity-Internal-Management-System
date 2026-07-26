@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { BP_SCORES, type BpScores } from "@/lib/blueprint";
 import { RingMeter, Gauge } from "@/components/Meters";
@@ -247,6 +248,7 @@ export default async function PortalHome() {
           {bp?.generated ? (
             <div style={{ fontSize: 13 }}>
               🧬 <b style={{ color: "var(--green-text)" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
+              {" "}<Link href="/portal/blueprint" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>View full report →</Link>
               {bp.consolidated && <div style={{ marginTop: 6, color: "var(--muted)" }}>{bp.consolidated}</div>}
               {bp.scores && (() => {
                 const vals = BP_SCORES.map((s) => bp.scores![s.key]).filter((v): v is number => typeof v === "number");

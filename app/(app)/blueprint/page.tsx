@@ -109,6 +109,9 @@ export default async function BlueprintPage() {
                     <BlueprintScores clientId={c.id} scores={bp?.scores ?? null} canEdit={canEditScores} />
                   </td>
                   <td style={{ padding: "12px 16px" }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <Link href={`/blueprint/${c.id}`} style={{ color: "var(--brand-text)", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>View report →</Link>
+                    </div>
                     <BlueprintGenerate clientId={c.id} generated={!!bp?.generated} ready={appr === 3} consolidated={bp?.consolidated ?? null} />
                     <BlueprintSla
                       clientId={c.id}

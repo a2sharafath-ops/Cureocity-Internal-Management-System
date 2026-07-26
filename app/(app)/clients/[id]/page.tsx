@@ -624,6 +624,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <div style={{ fontWeight: 700 }}>🧬 BluePrint</div>
           <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
           <span style={{ flex: 1 }} />
+          {Boolean(bp) && <Link href={`/blueprint/${params.id}`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600, borderRadius: 8, padding: "4px 11px" }}>View report →</Link>}
           {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
         </div>
         {!bp?.generated && bpRequired.length > 0 && (
