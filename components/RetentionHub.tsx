@@ -49,9 +49,9 @@ export default function RetentionHub({
     <div>
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "risk", label: "⚠️ At-Risk", count: kpis.high || undefined },
-          { key: "nps", label: "📊 NPS & Feedback" },
-          { key: "referrals", label: "🎁 Referrals & Loyalty" },
+          { key: "risk", label: "At-Risk", count: kpis.high || undefined },
+          { key: "nps", label: "NPS & Feedback" },
+          { key: "referrals", label: "Referrals & Loyalty" },
         ]} />
       </div>
 

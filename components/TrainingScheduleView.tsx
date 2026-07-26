@@ -73,9 +73,9 @@ export default function TrainingScheduleView({
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "slots", label: "🏋 Slots & Assessments" },
-          { key: "studio", label: "🧘 Group Studio" },
-          { key: "recovery", label: "💆 Recovery" },
+          { key: "slots", label: "Slots & Assessments" },
+          { key: "studio", label: "Group Studio" },
+          { key: "recovery", label: "Recovery" },
         ]} />
         <span style={{ flex: 1 }} />
         {canWrite && <button type="button" onClick={() => { setTab("slots"); setNewAssess(true); }} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Assessment</button>}
@@ -86,7 +86,7 @@ export default function TrainingScheduleView({
       {tab === "slots" && (
         <>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>📝 Weekly trainer schedule</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Weekly trainer schedule</div>
             <span style={{ color: "var(--muted)", fontSize: 12 }}>1:1 PT &amp; fitness assessments · click a cell to assign / set availability</span>
           </div>
           <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 10px" }}>
@@ -177,7 +177,7 @@ export default function TrainingScheduleView({
           {/* Assessments due */}
           <div style={{ ...box, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={{ fontWeight: 700 }}>📋 Assessments due</div>
+              <div style={{ fontWeight: 700 }}>Assessments due</div>
               {countBadge(assessments.length)}
               <span style={{ flex: 1 }} />
               {canWrite && <button type="button" onClick={() => setNewAssess((v) => !v)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{newAssess ? "Cancel" : "+ New Assessment"}</button>}
@@ -223,7 +223,7 @@ export default function TrainingScheduleView({
           {/* Recent assessment records */}
           <div style={{ ...box, padding: "16px 18px", marginTop: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <div style={{ fontWeight: 700 }}>🗂 Recent assessment records</div>
+              <div style={{ fontWeight: 700 }}>Recent assessment records</div>
               {countBadge(assessmentRecords.length)}
             </div>
             <div style={{ overflow: "auto" }}>
@@ -240,7 +240,7 @@ export default function TrainingScheduleView({
                         {canWrite ? (
                           <form action={toggleAssessmentShared}>
                             <input type="hidden" name="id" value={a.id} /><input type="hidden" name="shared" value={String(!!a.shared)} />
-                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "🔓 Shared" : "🔒 Private"}</button>
+                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "Shared" : "Private"}</button>
                           </form>
                         ) : <span style={{ color: "var(--muted)", fontSize: 12 }}>{a.shared ? "Shared" : "Private"}</span>}
                       </td>
@@ -258,7 +258,7 @@ export default function TrainingScheduleView({
       {tab === "studio" && (
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>🧘 Group Studio</div>
+            <div style={{ fontWeight: 700 }}>Group Studio</div>
             <span style={{ flex: 1 }} />
             <Link href="/classes" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Manage classes →</Link>
           </div>
@@ -286,7 +286,7 @@ export default function TrainingScheduleView({
       {tab === "recovery" && (
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>💆 Recovery</div>
+            <div style={{ fontWeight: 700 }}>Recovery</div>
             <span style={{ flex: 1 }} />
             {canWrite && <button type="button" onClick={() => setNewRecovery((v) => !v)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{newRecovery ? "Cancel" : "+ Book recovery"}</button>}
           </div>

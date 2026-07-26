@@ -105,7 +105,7 @@ export default async function TargetsPage() {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {goal("💰 Revenue Target", revenue, target.revenue_target, money,
+        {goal("Revenue Target", revenue, target.revenue_target, money,
           `${((paidInv ?? []) as unknown[]).length} payments collected this month`,
           // Booked revenue alone only ever says how far behind you are. The
           // weighted pipeline says whether the month is still reachable —
@@ -117,8 +117,8 @@ export default async function TargetsPage() {
             : outlook
               ? "No pipeline with an expected close date this month, so this is booked revenue only."
               : null)}
-        {goal("👥 New Clients", newClients, target.new_clients_target, (x) => String(x), `clients joined in ${monthLabel}`)}
-        {goal("🔄 Renewals", renewals, target.renewals_target, (x) => String(x), "renewal invoices raised this month")}
+        {goal("New Clients", newClients, target.new_clients_target, (x) => String(x), `clients joined in ${monthLabel}`)}
+        {goal("Renewals", renewals, target.renewals_target, (x) => String(x), "renewal invoices raised this month")}
         <div style={card}>
           <b style={{ fontSize: 14 }}>This month</b>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 12, fontSize: 14 }}>

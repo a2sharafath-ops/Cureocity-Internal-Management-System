@@ -366,7 +366,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
             <div style={{ ...box, overflow: "hidden" }}>
-              <div style={{ padding: "12px 16px", fontWeight: 700 }}>📅 Today — {todayLabel()}</div>
+              <div style={{ padding: "12px 16px", fontWeight: 700 }}>Today — {todayLabel()}</div>
               {todayList.map((a) => {
                 const st = a.client_id ? clientStatus(wsStatuses.get(a.client_id), wsDisc) : null;
                 const detail = a.isSession
@@ -415,15 +415,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {!readOnly && (
               <div style={{ ...box, padding: "14px 16px" }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>⚡ Quick actions</div>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>Quick actions</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  <Link href={`/workspace?role=${roleKey}&tab=summaries`} style={qa}>📝 Summaries</Link>
-                  <Link href="/appointments" style={qa}>📅 Appointment Calendar</Link>
-                  <Link href="/blueprint" style={qa}>🧬 BluePrint</Link>
-                  {roleKey === "diet" && <Link href="/meals" style={qa}>🍽️ Meal Monitoring</Link>}
-                  {roleKey === "trainer" && <Link href="/trainer" style={qa}>🎽 Session Board</Link>}
-                  {roleKey === "coach" && <Link href="/followups" style={qa}>📞 Follow-ups</Link>}
-                  {roleKey === "doctor" && <Link href="/emr" style={qa}>🩺 Patient Records</Link>}
+                  <Link href={`/workspace?role=${roleKey}&tab=summaries`} style={qa}>Summaries</Link>
+                  <Link href="/appointments" style={qa}>Appointment Calendar</Link>
+                  <Link href="/blueprint" style={qa}>BluePrint</Link>
+                  {roleKey === "diet" && <Link href="/meals" style={qa}>Meal Monitoring</Link>}
+                  {roleKey === "trainer" && <Link href="/trainer" style={qa}>Session Board</Link>}
+                  {roleKey === "coach" && <Link href="/followups" style={qa}>Follow-ups</Link>}
+                  {roleKey === "doctor" && <Link href="/emr" style={qa}>Patient Records</Link>}
                 </div>
               </div>
               )}

@@ -156,11 +156,11 @@ export default function AppointmentsView({
       {/* sub-view tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "calendar", label: "📅 Calendar" },
-          { key: "tracker", label: "⏳ Tracker" },
-          { key: "unscheduled", label: `🔖 To book${visibleUnsched.length ? ` · ${visibleUnsched.length}` : ""}` },
-          { key: "list", label: "📋 List" },
-          { key: "records", label: "🗂 Records" },
+          { key: "calendar", label: "Calendar" },
+          { key: "tracker", label: "Tracker" },
+          { key: "unscheduled", label: `To book${visibleUnsched.length ? ` · ${visibleUnsched.length}` : ""}` },
+          { key: "list", label: "List" },
+          { key: "records", label: "Records" },
         ]} />
       </div>
 

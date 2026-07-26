@@ -55,9 +55,9 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "inbox", label: "💬 Inbox" },
-          { key: "templates", label: "📝 Templates" },
-          { key: "campaigns", label: "⚡ Campaigns" },
+          { key: "inbox", label: "Inbox" },
+          { key: "templates", label: "Templates" },
+          { key: "campaigns", label: "Campaigns" },
         ]} />
         <span style={{ flex: 1 }} />
         {tab === "templates" && canCamp && <button type="button" onClick={() => setNewTemplate((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{newTemplate ? "Cancel" : "+ New Template"}</button>}

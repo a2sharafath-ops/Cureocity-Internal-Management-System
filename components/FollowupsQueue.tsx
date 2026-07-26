@@ -123,7 +123,7 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
 
   const sectionTitle = (icon: string, label: string, n: number, color: string, bg: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px", fontSize: 14, fontWeight: 700 }}>
-      {icon} {label} <span style={{ background: bg, color, borderRadius: 999, padding: "1px 9px", fontSize: 12 }}>{n}</span>
+      {icon}{icon ? " " : ""}{label} <span style={{ background: bg, color, borderRadius: 999, padding: "1px 9px", fontSize: 12 }}>{n}</span>
     </div>
   );
 
@@ -141,13 +141,13 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
         {chip("var(--brand-tint)", "var(--brand-text)", `${reviews.length} to review`)}
       </div>
 
-      {sectionTitle("📞", "Clients to Call Today", calls.length, "var(--amber-text)", "var(--amber-bg)")}
+      {sectionTitle("", "Clients to Call Today", calls.length, "var(--amber-text)", "var(--amber-bg)")}
       {table(calls, true, "No calls due 🎉")}
-      {sectionTitle("🔗", "Links Sent — Awaiting Client", links.length, "var(--blue-text)", "var(--blue-bg)")}
+      {sectionTitle("", "Links Sent — Awaiting Client", links.length, "var(--blue-text)", "var(--blue-bg)")}
       {table(links, true, "Nothing awaiting clients")}
-      {sectionTitle("📝", "Pending Consultant Review", reviews.length, "var(--brand-text)", "var(--brand-tint)")}
+      {sectionTitle("", "Pending Consultant Review", reviews.length, "var(--brand-text)", "var(--brand-tint)")}
       {table(reviews, true, "Review queue clear")}
-      {sectionTitle("✅", "Closed", closed.length, "#64748b", "#f1f5f9")}
+      {sectionTitle("", "Closed", closed.length, "#64748b", "#f1f5f9")}
       {table(closed, false, "Nothing closed yet")}
     </div>
   );

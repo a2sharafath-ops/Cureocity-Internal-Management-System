@@ -90,13 +90,13 @@ function commonTabs(): WsTab[] {
   return [
     { key: "dash", label: "Dashboard", live: true },
     { key: "clients", label: "My Clients", live: true },
-    { key: "appts", label: "📅 Appointments", live: true },
-    { key: "summaries", label: "📝 Summaries", live: true },
-    { key: "bp", label: "🧬 BluePrint", href: "/blueprint" },
+    { key: "appts", label: "Appointments", live: true },
+    { key: "summaries", label: "Summaries", live: true },
+    { key: "bp", label: "BluePrint", href: "/blueprint" },
     // The daily team meeting — every discipline takes part, so it sits in the
     // common set rather than any one workspace's role tabs.
-    { key: "whiteboard", label: "🧠 Whiteboard", href: "/whiteboard" },
-    { key: "concerns", label: "⚠️ Concerns", live: true },
+    { key: "whiteboard", label: "Whiteboard", href: "/whiteboard" },
+    { key: "concerns", label: "Concerns", live: true },
     { key: "team", label: "Care Team Hub", href: "/careteam" },
     { key: "monitor", label: "Client Monitoring", live: true },
     { key: "library", label: "Resource Library", live: true },
