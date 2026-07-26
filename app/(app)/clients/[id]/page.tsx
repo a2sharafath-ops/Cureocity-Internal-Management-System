@@ -174,6 +174,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const assignByDisc = new Map(((assignRows ?? []) as { discipline: string; staff_id: string | null }[]).map((r) => [r.discipline, r.staff_id]));
   const coachId = assignByDisc.get("coach");
   const coachName = coachId ? (staffMap.get(String(coachId)) ?? null) : null;
+  // The full care team assigned to this client, per discipline, in a stable order.
+  const CT_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach", psychologist: "Psychologist" };
+  const careTeam = ["doctor", "dietitian", "trainer", "coach", "psychologist"]
+    .map((d) => ({ disc: CT_LABEL[d], name: assignByDisc.get(d) ? (staffMap.get(String(assignByDisc.get(d))) ?? null) : null }))
+    .filter((x) => x.name) as { disc: string; name: string }[];
   const bp = (bpRow ?? null) as { generated: boolean; generated_date: string | null; scores: Record<string, number> | null } | null;
   // BluePrint consolidated sign-off progress: who's assigned (required) and
   // who's signed. Shown as a "required sign-offs" line so front desk sees who's
@@ -358,6 +363,24 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <Stat label="Owner (Front Desk)" value={ownerName} />
           {(c0.abha_id || c0.uhid) ? <Stat label="ABHA / UHID" value={`${c0.abha_id ?? "—"} / ${c0.uhid ?? "—"}`} /> : <div />}
         </div>
+      </div>
+
+      {/* Care Team */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700 }}>Care Team</div>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>· assigned clinicians</span>
+        </div>
+        {careTeam.length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {careTeam.map((m) => (
+              <div key={m.disc} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", minWidth: 150 }}>
+                <div style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" }}>{m.disc}</div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{m.name}</div>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No clinicians assigned yet.</div>}
       </div>
 
       {/* Health Profile */}

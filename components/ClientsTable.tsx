@@ -13,6 +13,7 @@ export type ClientRow = {
   id: string; code: string | null; name: string; phone: string | null; email: string | null;
   age: number | null; branch: string | null; used: number;
   package_name: string | null; is_facility: boolean; package_sessions: number;
+  packages?: { label: string; category: string }[]; careTeam?: { disc: string; name: string }[];
   is_blueprint: boolean; status: string; coach: string | null; owner: string | null;
   journey: { steps: { label: string; done: boolean }[]; done: number; total: number; stage: string };
   careStatus?: ClientStatus | null;
@@ -70,9 +71,9 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
           <thead>
             <tr>
               <th style={th}>Name</th><th style={th}>Age</th><th style={th}>Package</th><th style={th}>Journey</th><th style={th}>Status</th>
-              {/* pro_id is whichever care professional is assigned — trainer,
-                  doctor, dietitian — not specifically a health coach */}
-              <th style={th}>Assigned Pro</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
+              {/* The full care team assigned to the client (per discipline),
+                  not just the single denormalised pro_id. */}
+              <th style={th}>Care Team</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
             </tr>
           </thead>
           <tbody>
@@ -83,8 +84,14 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.code ?? "—"}{c.phone ? ` · ${c.phone}` : ""}</div></td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.age != null ? `${c.age} yrs` : "—"}</td>
                   <td style={td}>
-                    <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>
-                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : left != null ? `${left} of ${c.package_sessions} credits left` : "—"}</div>
+                    {c.packages && c.packages.length ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {c.packages.map((p, i) => (
+                          <span key={i} style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 9px", fontSize: 11.5, fontWeight: 600 }}>{p.label}</span>
+                        ))}
+                      </div>
+                    ) : <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>}
+                    {(c.is_facility || left != null) && <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : `${left} of ${c.package_sessions} credits left`}</div>}
                   </td>
                   <td style={td}>
                     <div style={{ display: "flex", gap: 3 }} title={c.journey.steps.map((s) => `${s.done ? "✓" : "○"} ${s.label}`).join("   ")}>
@@ -98,7 +105,15 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                     </div>
                   </td>
                   <td style={td}>{statusChip(c.status)}</td>
-                  <td style={{ ...td, color: "var(--muted)" }}>{c.coach ?? "—"}</td>
+                  <td style={{ ...td, color: "var(--muted)" }}>
+                    {c.careTeam && c.careTeam.length ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {c.careTeam.map((t, i) => (
+                          <span key={i} style={{ fontSize: 12 }}><span style={{ color: "var(--ink)", fontWeight: 500 }}>{t.name}</span> <span style={{ color: "var(--muted)", fontSize: 11 }}>· {t.disc}</span></span>
+                        ))}
+                      </div>
+                    ) : (c.coach ?? "—")}
+                  </td>
                   <td style={td}>
                     {writer ? (
                       <form action={setClientOwner}>
