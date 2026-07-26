@@ -8,6 +8,7 @@ import { processDueRenewals } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SubForm from "@/components/SubForm";
 import SubActions from "@/components/SubActions";
+import BackButton from "@/components/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function SubscriptionsPage() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["subscriptions", "invoices"]} />
+      <div style={{ marginBottom: 10 }}><BackButton /></div>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 4, gap: 10 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Subscriptions</h1>
         <span style={{ flex: 1 }} />

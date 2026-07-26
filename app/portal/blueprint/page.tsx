@@ -1,4 +1,4 @@
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
 import { createClient } from "@/lib/supabase/server";
 import BlueprintReport from "@/components/BlueprintReport";
 import type { BpScores } from "@/lib/blueprint";
@@ -21,7 +21,7 @@ export default async function PortalBlueprintPage() {
   return (
     <div style={{ padding: "20px 16px" }}>
       <div className="bp-noprint" style={{ maxWidth: 840, margin: "0 auto 8px" }}>
-        <Link href="/portal" style={{ color: "var(--brand-text)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>← Back to portal</Link>
+        <BackButton fallback="/portal" label="Back to portal" />
       </div>
       {b?.generated ? (
         <BlueprintReport

@@ -1,5 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
+import BackButton from "@/components/BackButton";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
@@ -26,7 +26,7 @@ export default async function BlueprintReportPage({ params }: { params: { id: st
   return (
     <div style={{ maxWidth: 900 }}>
       <div className="bp-noprint" style={{ marginBottom: 8 }}>
-        <Link href={`/clients/${c.id}`} style={{ color: "var(--brand-text)", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>← Back to {c.name}</Link>
+        <BackButton fallback={`/clients/${c.id}`} />
       </div>
       <BlueprintReport
         subject={{ name: c.name, code: c.code }}

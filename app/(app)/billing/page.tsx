@@ -13,6 +13,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import PayOnlineButton from "@/components/PayOnlineButton";
 import { paymentStatus } from "@/lib/payments/config";
 import { raiseInvoiceForClient } from "@/lib/actions";
+import BackButton from "@/components/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -147,6 +148,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["invoices"]} />
+      <div style={{ marginBottom: 10 }}><BackButton /></div>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Billing</h1>
         <span style={{ flex: 1 }} />
