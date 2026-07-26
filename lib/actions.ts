@@ -2303,6 +2303,10 @@ export async function signoffConsolidated(formData: FormData) {
       status: "generated", generated: true, generated_date: todayISO(),
       consolidated_at: now, approved: true, approved_at: now, approved_by: p.name, updated_at: now,
     }).eq("client_id", client_id);
+    // The BluePrint package is a one-time deliverable — its job is done the
+    // moment the report generates. Close it so it stops reading as "active".
+    await supabase.from("client_packages").update({ status: "completed" })
+      .eq("client_id", client_id).eq("category", "blueprint").eq("status", "active");
     await logAudit(p, "Blueprint generated (all sign-offs complete)", await clientName(supabase, client_id), null);
     await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
       title: "BluePrint generated", body: `${await clientName(supabase, client_id)} — all clinicians signed off.`, href: "/blueprint", icon: "🧬",
