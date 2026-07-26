@@ -21,6 +21,8 @@ import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
+import PackageStatusPanel from "@/components/PackageStatusPanel";
+import { getPackageStatus } from "@/lib/package-status";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
 import RenewMembership from "@/components/RenewMembership";
@@ -148,6 +150,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // null for any client not on an active Comprehensive package — the panel
   // simply doesn't render for them.
   const compView = await getComprehensiveView(params.id);
+  const pkgStatus = await getPackageStatus(params.id);
   const ptView = await getPTView(params.id);
   const prescriptions = (rxData ?? []) as unknown as {
     id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
@@ -346,6 +349,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </div>
 
       {tab === "overview" && (<>
+      {/* Package status — open work vs. what's coming up, in one place */}
+      {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
+        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} />
+      )}
       {/* Personal Info */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>Personal Info</div>
