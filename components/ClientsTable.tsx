@@ -19,6 +19,9 @@ export type ClientRow = {
   careStatus?: ClientStatus | null;
 };
 
+const CAT_SHORT: Record<string, string> = { membership: "Membership", comprehensive: "Comprehensive", training: "PT", blueprint: "BluePrint" };
+const DISC_ABBR: Record<string, string> = { Doctor: "Dr", Diet: "Diet", Fitness: "Fit", Coach: "Coach", Psych: "Psy" };
+
 export default function ClientsTable({ clients, staff, writer }: { clients: ClientRow[]; staff: { id: string; name: string }[]; writer: boolean }) {
   const [q, setQ] = useState("");
   const [quickId, setQuickId] = useState<string | null>(null);
@@ -85,12 +88,12 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={{ ...td, color: "var(--muted)" }}>{c.age != null ? `${c.age} yrs` : "—"}</td>
                   <td style={td}>
                     {c.packages && c.packages.length ? (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 190 }}>
                         {c.packages.map((p, i) => (
-                          <span key={i} style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 9px", fontSize: 11.5, fontWeight: 600 }}>{p.label}</span>
+                          <span key={i} title={p.label} style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>{CAT_SHORT[p.category] ?? p.label}</span>
                         ))}
                       </div>
-                    ) : <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>}
+                    ) : <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{c.package_name ?? "—"}</span>}
                     {(c.is_facility || left != null) && <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : `${left} of ${c.package_sessions} credits left`}</div>}
                   </td>
                   <td style={td}>
@@ -107,9 +110,12 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}>{statusChip(c.status)}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>
                     {c.careTeam && c.careTeam.length ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 220 }}>
                         {c.careTeam.map((t, i) => (
-                          <span key={i} style={{ fontSize: 12 }}><span style={{ color: "var(--ink)", fontWeight: 500 }}>{t.name}</span> <span style={{ color: "var(--muted)", fontSize: 11 }}>· {t.disc}</span></span>
+                          <span key={i} title={`${t.disc} · ${t.name}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--border)", borderRadius: 999, padding: "2px 8px", fontSize: 11.5, whiteSpace: "nowrap", background: "#fff" }}>
+                            <span style={{ color: "var(--muted)", fontWeight: 600 }}>{DISC_ABBR[t.disc] ?? t.disc}</span>
+                            <span style={{ color: "var(--ink)" }}>{t.name}</span>
+                          </span>
                         ))}
                       </div>
                     ) : (c.coach ?? "—")}
