@@ -11,6 +11,7 @@ import { WearableForm, WearableConnect } from "@/components/WearableForm";
 import { archiveHabit, removeWorkout } from "@/lib/actions";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { todayISO } from "@/lib/today";
+import { packageCategory } from "@/lib/packages";
 import { ageFromDob } from "@/lib/dob";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
@@ -202,6 +203,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const holdsMembership = legacyFacilityMembership || clientPackages.some((r) => r.category === "membership");
   const currentMembershipPkgId = clientPackages.find((r) => r.category === "membership" && r.status === "active")?.package_id
     ?? clientPackages.find((r) => r.category === "membership")?.package_id ?? null;
+  // The single renewal entry point covers any renewable (fixed-term) package —
+  // membership, PT (training) or Comprehensive. BluePrint is one-off (Add package).
+  const RENEWABLE_CATS = ["membership", "training", "comprehensive"];
+  const renewablePackages = pkgList.filter((pk) => RENEWABLE_CATS.includes(packageCategory(pk.id, pk.is_facility)));
+  const holdsRenewable = legacyFacilityMembership || clientPackages.some((r) => RENEWABLE_CATS.includes(r.category));
+  const currentRenewablePkgId =
+    clientPackages.find((r) => RENEWABLE_CATS.includes(r.category) && r.status === "active")?.package_id
+    ?? clientPackages.find((r) => RENEWABLE_CATS.includes(r.category))?.package_id
+    ?? currentMembershipPkgId;
   const isFrozen = Boolean(c0.frozen);
   // PT / Comprehensive strength sessions: offer guided scheduling until booked.
   const isPtOrComp = clientPackages.some((r) => ["training", "comprehensive"].includes(r.category));
@@ -407,7 +417,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
-          {!ro && canBill(me?.role ?? "") && holdsMembership && <RenewMembership clientId={params.id} packages={pkgList} currentPackageId={currentMembershipPkgId} />}
+          {!ro && canBill(me?.role ?? "") && holdsRenewable && <RenewMembership clientId={params.id} packages={renewablePackages} currentPackageId={currentRenewablePkgId} />}
           {!ro && canWrite(me?.role ?? "") && holdsMembership && <FreezeToggle clientId={params.id} frozen={isFrozen} />}
           {!ro && canWrite(me?.role ?? "") && isPtOrComp && !hasScheduledSessions && <ScheduleSessionsForm clientId={params.id} trainers={trainers} defaultTrainerId={assignedTrainerId} />}
           {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} started={journeyStarted} />}

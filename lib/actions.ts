@@ -1016,12 +1016,13 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
 }
 
 /**
- * Renew a client's membership. Front desk picks the same package or a different
- * one (a longer/shorter facility package = a different duration). The new term
- * continues from the current membership's end date so no paid days are lost;
- * if the membership has already lapsed it starts today. Raises an unpaid invoice.
+ * The single renewal entry point. Renew any renewable package a client holds —
+ * membership, PT (training) or Comprehensive — with the same package or a
+ * different duration. The new term continues from the latest active package of
+ * that same category so no paid days are lost; if it has lapsed it starts today.
+ * Raises an unpaid invoice. BluePrint is a one-time report — use Add package.
  */
-export async function renewMembership(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+export async function renewPackage(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const p = await getProfile();
   if (!p || !canBill(p.role)) return { ok: false, error: "Not permitted" };
   const client_id = String(formData.get("client_id") || "");
@@ -1032,12 +1033,13 @@ export async function renewMembership(formData: FormData): Promise<{ ok: boolean
   const { data: pkg } = await supabase.from("packages")
     .select("name, price, validity, is_facility").eq("id", package_id).maybeSingle();
   if (!pkg) return { ok: false, error: "Package not found" };
-  if (!pkg.is_facility) return { ok: false, error: "Pick a membership package to renew." };
+  const category = packageCategory(package_id, pkg.is_facility);
+  if (category === "blueprint") return { ok: false, error: "BluePrint is a one-time report — add it as a new package instead of renewing." };
 
-  // Continue from the latest active membership end date, else start today.
-  const { data: mem } = await supabase.from("client_packages")
-    .select("end_date").eq("client_id", client_id).eq("category", "membership").eq("status", "active");
-  const ends = ((mem ?? []) as { end_date: string | null }[]).map((r) => r.end_date).filter(Boolean) as string[];
+  // Continue from the latest active term of the SAME category, else start today.
+  const { data: cur } = await supabase.from("client_packages")
+    .select("end_date").eq("client_id", client_id).eq("category", category).eq("status", "active");
+  const ends = ((cur ?? []) as { end_date: string | null }[]).map((r) => r.end_date).filter(Boolean) as string[];
   const latestEnd = ends.sort().at(-1) ?? null;
   const today = todayISO();
   const start = latestEnd && latestEnd >= today ? addDaysISO(latestEnd, 1) : today;
@@ -1045,16 +1047,17 @@ export async function renewMembership(formData: FormData): Promise<{ ok: boolean
   const amount = Math.max(0, Number(pkg.price ?? 0));
 
   await supabase.from("client_packages").insert({
-    client_id, package_id, package_name: pkg.name, category: "membership",
+    client_id, package_id, package_name: pkg.name, category,
     start_date: start, end_date: end, price: amount, status: "active", created_by: p.name,
   });
   const num = await nextInvoiceNum(supabase);
   await supabase.from("invoices").insert({
-    num, client_id, description: `${pkg.name} — membership renewal`,
+    num, client_id, description: `${pkg.name} — renewal`,
     amount, status: "Unpaid", issued_date: today, created_by: p.name,
   });
-  await logAudit(p, "Membership renewed", pkg.name, `${start} → ${end ?? "—"}`);
+  await logAudit(p, "Package renewed", pkg.name, `${category} · ${start} → ${end ?? "—"}`);
   revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 
