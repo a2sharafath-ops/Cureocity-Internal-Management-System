@@ -4739,6 +4739,9 @@ function parseClientForm(formData: FormData) {
     conditions: String(formData.get("conditions") ?? "").trim() || null,
     goals: goalsRaw ? goalsRaw.split(",").map((g) => g.trim()).filter(Boolean) : [],
     joined: String(formData.get("joined") ?? "") || null,
+    dob: String(formData.get("dob") ?? "").trim() || null,
+    address: String(formData.get("address") ?? "").trim() || null,
+    emergency: String(formData.get("emergency") ?? "").trim() || null,
   };
 }
 
