@@ -1163,7 +1163,7 @@ const ROLE_TO_KIND: Record<string, string> = {
 // close the right prompt when a slot is booked directly.
 const DISC_KEYWORDS: Record<string, string[]> = {
   Doctor: ["doctor"], Diet: ["diet", "nutrition"],
-  Trainer: ["fitness", "reassess", "training"], Coach: ["coach"],
+  Trainer: ["fitness", "reassess", "training", "trainer"], Coach: ["coach"],
   Psychologist: ["psych", "counsel"],
 };
 
@@ -1340,13 +1340,21 @@ async function startBlueprintJourney(
   );
 
   const titles = BP_BOOKING_TASKS.map((t) => `${t.label} — ${clientName}`);
+  // Dedupe against tasks in ANY status (not just open) so a re-run never clones
+  // a prompt whose original was completed…
   const { data: existing } = await supabase.from("tasks")
-    .select("title").eq("client_id", clientId).neq("status", "done").in("title", titles);
+    .select("title").eq("client_id", clientId).in("title", titles);
   const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+  // …and skip any discipline that's already booked (a non-cancelled appointment
+  // exists), so a repair after consults are booked doesn't re-queue them.
+  const { data: bpAppts } = await supabase.from("appointments")
+    .select("staff(role)").eq("client_id", clientId).neq("status", "cancelled");
+  const bookedKinds = new Set(((bpAppts ?? []) as unknown as { staff: { role: string } | null }[])
+    .map((a) => ROLE_TO_KIND[a.staff?.role ?? ""]).filter(Boolean));
 
   const rows = BP_BOOKING_TASKS
     .map((t, i) => ({ t, title: titles[i] }))
-    .filter(({ title }) => !taken.has(title))
+    .filter(({ t, title }) => !taken.has(title) && !bookedKinds.has(t.kind))
     .map(({ t, title }) => ({
       title, client_id: clientId, type: "Ops", priority: "High",
       status: "todo", due_date: addDaysISO(todayISO(), BP_BOOKING_DUE_DAYS),
@@ -1446,18 +1454,24 @@ async function startComprehensiveJourney(
     { onConflict: "client_id,protocol,start_date", ignoreDuplicates: true },
   );
 
-  const wanted = [
-    ...INITIAL_BOOKINGS.map((b) => `${b.label} — ${clientName}`),
-    `${PT_BOOKING_LABEL} — ${clientName}`,
-  ];
+  const consultItems = INITIAL_BOOKINGS.map((b) => ({ title: `${b.label} — ${clientName}`, kind: b.consultKind as string }));
+  const sessTitle = `${PT_BOOKING_LABEL} — ${clientName}`;
+  const wanted = [...consultItems.map((b) => b.title), sessTitle];
+  // Dedupe against tasks in ANY status, and skip consult bookings whose
+  // discipline is already booked — so a re-run never re-queues handled work.
   const { data: existing } = await supabase.from("tasks")
-    .select("title").eq("client_id", clientId).neq("status", "done").in("title", wanted);
+    .select("title").eq("client_id", clientId).in("title", wanted);
   const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+  const { data: coAppts } = await supabase.from("appointments")
+    .select("staff(role)").eq("client_id", clientId).neq("status", "cancelled");
+  const bookedKinds = new Set(((coAppts ?? []) as unknown as { staff: { role: string } | null }[])
+    .map((a) => ROLE_TO_KIND[a.staff?.role ?? ""]).filter(Boolean));
 
-  const rows = wanted.filter((t) => !taken.has(t)).map((title) => ({
-    title, client_id: clientId, type: "Ops", priority: "High", status: "todo",
-    due_date: addDaysISO(todayISO(), BOOKING_DUE_DAYS), created_by: actor,
-  }));
+  const mk = (title: string) => ({ title, client_id: clientId, type: "Ops", priority: "High", status: "todo", due_date: addDaysISO(todayISO(), BOOKING_DUE_DAYS), created_by: actor });
+  const rows = [
+    ...consultItems.filter((b) => !taken.has(b.title) && !bookedKinds.has(b.kind)).map((b) => mk(b.title)),
+    ...(!taken.has(sessTitle) ? [mk(sessTitle)] : []),
+  ];
   if (rows.length) await supabase.from("tasks").insert(rows);
 
   if (notify) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
@@ -1498,18 +1512,23 @@ async function startPTJourney(
     { onConflict: "client_id,protocol,start_date", ignoreDuplicates: true },
   );
 
-  const wanted = [
-    ...PT_INITIAL_BOOKINGS.map((b) => `${b.label} — ${clientName}`),
-    `${PT_SESSIONS_LABEL} — ${clientName}`,
-  ];
+  const consultItems = PT_INITIAL_BOOKINGS.map((b) => ({ title: `${b.label} — ${clientName}`, kind: b.consultKind as string }));
+  const sessTitle = `${PT_SESSIONS_LABEL} — ${clientName}`;
+  const wanted = [...consultItems.map((b) => b.title), sessTitle];
+  // Dedupe against ANY status + skip disciplines already booked (see comprehensive).
   const { data: existing } = await supabase.from("tasks")
-    .select("title").eq("client_id", clientId).neq("status", "done").in("title", wanted);
+    .select("title").eq("client_id", clientId).in("title", wanted);
   const taken = new Set(((existing ?? []) as { title: string }[]).map((r) => r.title));
+  const { data: ptAppts } = await supabase.from("appointments")
+    .select("staff(role)").eq("client_id", clientId).neq("status", "cancelled");
+  const bookedKinds = new Set(((ptAppts ?? []) as unknown as { staff: { role: string } | null }[])
+    .map((a) => ROLE_TO_KIND[a.staff?.role ?? ""]).filter(Boolean));
 
-  const rows = wanted.filter((t) => !taken.has(t)).map((title) => ({
-    title, client_id: clientId, type: "Ops", priority: "High", status: "todo",
-    due_date: addDaysISO(todayISO(), PT_BOOKING_DUE_DAYS), created_by: actor,
-  }));
+  const mk = (title: string) => ({ title, client_id: clientId, type: "Ops", priority: "High", status: "todo", due_date: addDaysISO(todayISO(), PT_BOOKING_DUE_DAYS), created_by: actor });
+  const rows = [
+    ...consultItems.filter((b) => !taken.has(b.title) && !bookedKinds.has(b.kind)).map((b) => mk(b.title)),
+    ...(!taken.has(sessTitle) ? [mk(sessTitle)] : []),
+  ];
   if (rows.length) await supabase.from("tasks").insert(rows);
 
   if (notify) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
