@@ -97,7 +97,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
   }
   for (const cp of cps.filter((cp) => cp.status === "active" && cp.end_date && cp.end_date <= in30 && cp.end_date >= today)) {
     if (!subs.some((s) => s.client_id === cp.client_id && s.status === "active")) {
-      flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package ends ${cp.end_date}`, detail: `${cp.package_name ?? "Package"} · no renewal booked`, href: "/subscriptions", cta: "Renew" });
+      flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package ends ${cp.end_date}`, detail: `${cp.package_name ?? "Package"} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
     }
   }
   const order = { high: 0, med: 1, low: 2 };

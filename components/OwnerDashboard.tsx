@@ -131,9 +131,9 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     if (!p || !p.validity || !c.joined || activeSubClients.has(c.id)) continue;
     const expires = addDays(c.joined, p.validity);
     if (expires < today) {
-      flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/subscriptions`, cta: "Renew" });
+      flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/clients/${c.id}`, cta: "Renew" });
     } else if (expires <= in30) {
-      flags.push({ sev: "med", title: `${c.name} — package expiring`, detail: `${p.name} ends ${expires} · no renewal booked`, href: `/subscriptions`, cta: "Renew" });
+      flags.push({ sev: "med", title: `${c.name} — package expiring`, detail: `${p.name} ends ${expires} · no renewal booked`, href: `/clients/${c.id}`, cta: "Renew" });
     }
   }
 
