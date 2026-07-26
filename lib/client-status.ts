@@ -19,6 +19,7 @@ export type StatusInput = {
   bloodRequested: boolean;
   bloodSubmitted: boolean;
   consults: Record<string, DiscState>;  // keys: doctor | dietitian | trainer | coach | psychologist
+  journeySteps: { label: string; done: boolean }[];  // package-aware onboarding ladder
 };
 
 const ROLE_DISC: Record<string, string> = {
@@ -152,28 +153,29 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
       };
     }
 
-    // Overall onboarding state via the shared engine (ops view).
-    let onboardComplete = false, onboardNext: string | null = null;
-    if (["blueprint", "comprehensive", "training", "membership"].includes(category)) {
-      const input: ClientInput = {
-        clientId: c.id, clientName: c.name, category,
-        packageName: cpName.get(`${c.id}|${category}`) ?? pkgById.get(c.package_id ?? "")?.name ?? "—",
-        ownerName: null, hasInvoice: hasInvoice.has(c.id),
-        bloodRequested: requested, bloodSubmitted: submitted,
-        doctor: { scheduled: consults.doctor.booked, completed: consults.doctor.completed },
-        diet: { scheduled: consults.dietitian.booked, completed: consults.dietitian.completed },
-        trainer: { scheduled: consults.trainer.booked, completed: consults.trainer.completed },
-        blueprintGenerated: bpGen.has(c.id),
-        sessionScheduled: sessSched.has(c.id),
-      };
-      const row = onboardingRow(input);
-      onboardComplete = row.complete;
-      onboardNext = row.nextLabel;
-    }
+    // Overall onboarding state via the shared engine (ops view). Computed for
+    // every client so the package-aware journey ladder is always available; the
+    // complete/next summary is only meaningful for the four tracked journeys.
+    const input: ClientInput = {
+      clientId: c.id, clientName: c.name, category,
+      packageName: cpName.get(`${c.id}|${category}`) ?? pkgById.get(c.package_id ?? "")?.name ?? "—",
+      ownerName: null, hasInvoice: hasInvoice.has(c.id),
+      bloodRequested: requested, bloodSubmitted: submitted,
+      doctor: { scheduled: consults.doctor.booked, completed: consults.doctor.completed },
+      diet: { scheduled: consults.dietitian.booked, completed: consults.dietitian.completed },
+      trainer: { scheduled: consults.trainer.booked, completed: consults.trainer.completed },
+      blueprintGenerated: bpGen.has(c.id),
+      sessionScheduled: sessSched.has(c.id),
+    };
+    const row = onboardingRow(input);
+    const tracked = ["blueprint", "comprehensive", "training", "membership"].includes(category);
 
     out.set(c.id, {
       category, membershipActive, frozen: Boolean(c.frozen),
-      onboardComplete, onboardNext, bloodRequested: requested, bloodSubmitted: submitted, consults,
+      onboardComplete: tracked ? row.complete : false,
+      onboardNext: tracked ? row.nextLabel : null,
+      bloodRequested: requested, bloodSubmitted: submitted, consults,
+      journeySteps: row.steps.map((s) => ({ label: s.label, done: s.done })),
     });
   }
   return out;
