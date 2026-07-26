@@ -35,7 +35,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     supabase.from("sessions").select("client_id, trainer_id, status, date"),
     supabase.from("appointments").select("id, date, status"),
     supabase.from("leads").select("id, stage"),
-    supabase.from("blood_requests").select("client_id, submitted"),
+    supabase.from("blood_requests").select("client_id, panel, submitted"),
     supabase.from("blueprints").select("client_id, generated"),
     supabase.from("subscriptions").select("id, client_id, amount, status, renews_on"),
     supabase.from("audit_log").select("actor_name, actor_role, action, target, created_at").order("created_at", { ascending: false }).limit(6),
@@ -49,7 +49,11 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   const sessions = (sessData ?? []) as { client_id: string; trainer_id: string | null; status: string; date: string }[];
   const appts = (apptData ?? []) as { id: string; date: string; status: string }[];
   const leads = (leadData ?? []) as { id: string; stage: string | null }[];
-  const blood = new Map(((bloodData ?? []) as { client_id: string; submitted: boolean }[]).map((b) => [b.client_id, b]));
+  // Key by client + panel: a client can hold several blood panels (a BluePrint
+  // one and a Comprehensive one), and collapsing them by client id alone let the
+  // wrong panel's status win — e.g. a submitted BluePrint report showing pending
+  // because an unsubmitted Comprehensive panel overwrote it.
+  const blood = new Map(((bloodData ?? []) as { client_id: string; panel: string | null; submitted: boolean }[]).map((b) => [`${b.client_id}|${b.panel ?? "blueprint"}`, b]));
   const bps = new Map(((bpData ?? []) as { client_id: string; generated: boolean }[]).map((b) => [b.client_id, b]));
   const subs = (subData ?? []) as { id: string; client_id: string; amount: number; status: string; renews_on: string | null }[];
   const audit = (auditData ?? []) as { actor_name: string | null; actor_role: string | null; action: string; target: string | null; created_at: string }[];
@@ -101,7 +105,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
 
   // 4. BluePrint clients stuck in the flow
   for (const c of clients.filter((x) => x.package_id === "bp1")) {
-    const b = blood.get(c.id);
+    const b = blood.get(`${c.id}|blueprint`);
     const bp = bps.get(c.id);
     if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "Request" });
     else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "Follow up" });
