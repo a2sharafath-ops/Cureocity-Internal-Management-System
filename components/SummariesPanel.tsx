@@ -65,8 +65,8 @@ export default function SummariesPanel({
   return (
     <div>
       <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 14 }}>
-        {seg("individual", "📝 Individual summaries", pending)}
-        {seg("consolidated", "🧬 Consolidated → Blueprint", consolPending)}
+        {seg("individual", "Individual summaries", pending)}
+        {seg("consolidated", "Consolidated → Blueprint", consolPending)}
       </div>
 
       {view === "individual" ? (
@@ -136,7 +136,7 @@ export default function SummariesPanel({
                       </div>
                     </div>
                     {c.generated
-                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>🧬 Blueprint generated — view</Link>
+                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>Blueprint generated — view</Link>
                       : <span style={{ background: signedCount === req.length ? "var(--green-bg)" : "var(--amber-bg)", color: signedCount === req.length ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{signedCount}/{req.length} signed off</span>}
                   </div>
 

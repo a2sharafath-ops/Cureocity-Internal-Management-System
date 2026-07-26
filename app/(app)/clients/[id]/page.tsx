@@ -322,12 +322,12 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
         <span style={{ flex: 1 }} />
         {ro
-          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>👁 Read-only</span>
+          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>Read-only</span>
           : <Link
               href={`/clients/${params.id}/edit`}
               style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
             >
-              ✎ Edit
+              Edit
             </Link>}
       </div>
 
@@ -445,7 +445,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {needsBlood && (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <div style={{ fontWeight: 700 }}>🩸 Blood report</div>
+            <div style={{ fontWeight: 700 }}>Blood report</div>
             {bloodRow?.submitted && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>Received ✓</span>}
           </div>
           {ro
@@ -461,7 +461,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           Client Journey below it stays: it answers a different question
           ("is onboarding complete?") that a chronological stream doesn't. */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📜 Activity</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Activity</div>
         <ActivityTimeline events={activity} today={todayISO()} max={40}
           emptyLabel="No activity recorded yet." />
       </div>
@@ -479,7 +479,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <div style={{ flex: 1 }}>
                 <b style={{ fontSize: 13.5 }}>{m.label}</b>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.detail}</div>
-                <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>🕐 {m.when}</div>
+                <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>{m.when}</div>
               </div>
               {m.bookDisc && m.state === "pending" && !ro && canWrite(me?.role ?? "") && (
                 <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}`}
@@ -499,7 +499,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           boxShadow: "var(--shadow)", padding: "18px 20px",
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>🏋 Strength Sessions</div>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>Strength Sessions</div>
         {pkg?.is_facility ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             Facility access member — no scheduled sessions (check-in/out + workout plan).
@@ -575,7 +575,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           boxShadow: "var(--shadow)", padding: "18px 20px",
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>🩺 Consultations ({consults.length})</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Consultations ({consults.length})</div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultations yet.</div>
         ) : (
@@ -599,7 +599,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Care records — consultations by discipline */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>🗂 Care records</div>
+          <div style={{ fontWeight: 700 }}>Care records</div>
           <span style={{ flex: 1 }} />
           {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Patient Records →</Link>}
         </div>
@@ -631,7 +631,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* BluePrint status */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontWeight: 700 }}>🧬 BluePrint</div>
+          <div style={{ fontWeight: 700 }}>BluePrint</div>
           <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
           <span style={{ flex: 1 }} />
           {Boolean(bp) && <Link href={`/blueprint/${params.id}`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600, borderRadius: 8, padding: "4px 11px" }}>View report →</Link>}
@@ -669,7 +669,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>📏 Measurements / InBody</div>
+          <div style={{ fontWeight: 700 }}>Measurements / InBody</div>
         </div>
         {measures.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>No measurements recorded yet.</div>
@@ -715,7 +715,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         const first = photos[0], latest = photos[photos.length - 1];
         return (
           <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>📸 Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
             {photos.length >= 2 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                 {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
@@ -744,7 +744,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {(canCoach || habits.length > 0) && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontWeight: 700 }}>🔥 Habits &amp; streaks</div>
+            <div style={{ fontWeight: 700 }}>Habits &amp; streaks</div>
             <span style={{ flex: 1 }} />
             {canCoach && <HabitForm clientId={params.id} />}
           </div>
@@ -765,7 +765,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                       <div style={{ color: "var(--muted)", fontSize: 12 }}>{h.cadence} · target {h.target_per_week}/wk</div>
                     </div>
                     <div style={{ textAlign: "right", minWidth: 88 }}>
-                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>🔥 {streak}d streak</div>
+                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>{streak}d streak</div>
                       <div style={{ fontSize: 12, color: hit ? "var(--green-text)" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
                     </div>
                     {canCoach && (
@@ -842,7 +842,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {prescriptions.length > 0 && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>💊 Prescriptions</div>
+            <div style={{ fontWeight: 700 }}>Prescriptions</div>
             <span style={{ flex: 1 }} />
             <Link href={`/emr/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>
           </div>
@@ -872,7 +872,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {(canCoach || workouts.length > 0) && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>🏃 Assigned workouts</div>
+            <div style={{ fontWeight: 700 }}>Assigned workouts</div>
             <span style={{ flex: 1 }} />
             {canCoach && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
           </div>
@@ -907,7 +907,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📎 Files &amp; documents</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
         <FilesGrid files={files} />
         {!ro && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -926,7 +926,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Portal access (staff) */}
       {showPortal && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>🔑 Client Portal access</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Client Portal access</div>
           <PortalLoginForm clientId={params.id} existingEmail={portalProfile?.email ?? null} />
         </div>
       )}

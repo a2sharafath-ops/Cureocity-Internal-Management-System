@@ -83,7 +83,7 @@ export default async function FormsPage() {
               <b style={{ fontSize: 14 }}>{r.forms?.name ?? "Form"}</b>{r.forms && typeChip(r.forms.type)}
               <span style={{ color: "var(--muted)", fontSize: 13 }}>· {r.clients?.name ?? "—"}</span>
               <span style={{ flex: 1 }} />
-              {r.signed_by && <span style={{ color: "var(--muted)", fontSize: 12 }}>✍ {r.signed_by} · {r.signed_at?.slice(0, 10)}</span>}
+              {r.signed_by && <span style={{ color: "var(--muted)", fontSize: 12 }}>{r.signed_by} · {r.signed_at?.slice(0, 10)}</span>}
             </div>
             <div style={{ display: "grid", gap: 4, fontSize: 13 }}>
               {Object.entries(r.answers ?? {}).map(([k, v]) => (

@@ -48,12 +48,12 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
       <div style={{ marginBottom: 14 }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
           { key: "all", label: "All Clients", count: clients.length },
-          { key: "blueprint", label: "🧬 Blueprint clients", count: bpCount },
+          { key: "blueprint", label: "Blueprint clients", count: bpCount },
         ]} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, phone, or email" style={{ maxWidth: 340, width: "100%", padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, outline: "none", background: "#fff" }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, phone, or email" style={{ maxWidth: 340, width: "100%", padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, outline: "none", background: "#fff" }} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, background: "#fff" }}>
           <option>All</option><option>Active</option><option>Completed</option>
         </select>

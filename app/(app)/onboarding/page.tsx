@@ -251,7 +251,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 14px" }}>Nobody is mid-onboarding here. 🎉</td></tr>
+              <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 14px" }}>Nobody is mid-onboarding here.</td></tr>
             )}
           </tbody>
         </table>

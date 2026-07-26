@@ -67,7 +67,7 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
           {[...folders.entries()].map(([folder, list]) => (
             <div key={folder} style={{ ...box, overflow: "hidden" }}>
               <div style={{ padding: "10px 16px", fontWeight: 700, fontSize: 13.5, display: "flex", alignItems: "center", gap: 8 }}>
-                📁 {folder} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 12 }}>· {list.length}</span>
+                {folder} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 12 }}>· {list.length}</span>
               </div>
               {list.map((f) => (
                 <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: "1px solid var(--border)" }}>

@@ -82,7 +82,7 @@ export default function RetentionHub({
                     </td>
                   </tr>
                 ))}
-                {risk.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 14px" }}>No at-risk members detected. 🎉</td></tr>}
+                {risk.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 14px" }}>No at-risk members detected.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -122,7 +122,7 @@ export default function RetentionHub({
 
           {npsList.filter((f) => f.score <= 6).length > 0 && (
             <div style={{ ...box, padding: "16px 18px", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><b>🚨 Detractors to follow up</b>{chip("var(--red-bg)", "var(--red-text)", String(npsList.filter((f) => f.score <= 6).length))}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}><b>Detractors to follow up</b>{chip("var(--red-bg)", "var(--red-text)", String(npsList.filter((f) => f.score <= 6).length))}</div>
               {npsList.filter((f) => f.score <= 6).map((f) => (
                 <div key={f.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                   <b>{f.clientName ?? "—"}</b><span style={{ color: "var(--muted)" }}>{f.comment ?? "—"}</span><span style={{ flex: 1 }} />

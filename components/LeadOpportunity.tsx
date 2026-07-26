@@ -70,7 +70,7 @@ export default function LeadOpportunity({
     return (
       <div style={{ ...box, borderColor: "var(--red-bg)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 700 }}>🚫 Disqualified</div>
+          <div style={{ fontWeight: 700 }}>Disqualified</div>
           <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
             {dqLabel}
           </span>
@@ -93,7 +93,7 @@ export default function LeadOpportunity({
   return (
     <div style={box}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700 }}>💼 Opportunity</div>
+        <div style={{ fontWeight: 700 }}>Opportunity</div>
         {weighted != null && (
           <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
             {money(weighted)} weighted

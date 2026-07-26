@@ -208,22 +208,22 @@ export default async function DashboardPage() {
         <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
           <div style={{ ...card, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <b style={{ fontSize: 15 }}>📞 Front Desk Follow-ups</b>
+              <b style={{ fontSize: 15 }}>Front Desk Follow-ups</b>
               <span style={{ flex: 1 }} />
               <Link href="/followups" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 }}>Open queue →</Link>
             </div>
-            <div style={sectionTitle}>🔥 Immediate priority — overdue ({fuOverdue})</div>
+            <div style={sectionTitle}>Immediate priority — overdue ({fuOverdue})</div>
             {fuOverdue ? (
               <Link href="/followups" style={{ display: "block", color: "var(--red)", fontSize: 13, textDecoration: "none", padding: "2px 0 12px" }}>{fuOverdue} overdue follow-up{fuOverdue === 1 ? "" : "s"} — open the queue →</Link>
             ) : <div style={{ color: "var(--muted)", fontSize: 13, padding: "2px 0 12px" }}>Nothing overdue</div>}
-            <div style={sectionTitle}>📌 Today’s mandatory ({fuMandatory})</div>
+            <div style={sectionTitle}>Today’s mandatory ({fuMandatory})</div>
             {fuToday.length ? (
               <Link href="/followups" style={{ fontSize: 13, textDecoration: "none", color: "inherit" }}>{fuToday.length} due today{fuMandatory ? ` · ${fuMandatory} mandatory` : ""} →</Link>
             ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>None due today</div>}
           </div>
 
           <div style={{ ...card, padding: "16px 18px" }}>
-            <b style={{ fontSize: 15 }}>🏃 Training Attendance</b>
+            <b style={{ fontSize: 15 }}>Training Attendance</b>
             <div style={{ margin: "10px 0 6px", fontSize: 14 }}>
               Today: <b>{checkedIn} of {sessions.length}</b> training clients checked in
             </div>

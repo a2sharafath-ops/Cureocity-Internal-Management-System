@@ -170,7 +170,7 @@ export default async function PortalHome() {
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
         <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts"]} />
-      <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]} 👋</h1>
+      <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
           {!pkg?.is_facility && sess.length > 0 ? ` · ${done} of ${sess.length} strength sessions done` : ""}
@@ -231,7 +231,7 @@ export default async function PortalHome() {
           <div style={{ fontWeight: 700, marginBottom: 8 }}>BluePrint</div>
           {blood && (
             <div style={{ fontSize: 13, marginBottom: 10 }}>
-              🩸 Blood report:{" "}
+              Blood report:{" "}
               {blood.submitted ? (
                 <b style={{ color: "var(--green-text)" }}>received ✓{blood.submitted_date ? ` (${blood.submitted_date})` : ""}</b>
               ) : (
@@ -247,7 +247,7 @@ export default async function PortalHome() {
           )}
           {bp?.generated ? (
             <div style={{ fontSize: 13 }}>
-              🧬 <b style={{ color: "var(--green-text)" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
+              <b style={{ color: "var(--green-text)" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
               {" "}<Link href="/portal/blueprint" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>View full report →</Link>
               {bp.consolidated && <div style={{ marginTop: 6, color: "var(--muted)" }}>{bp.consolidated}</div>}
               {bp.scores && (() => {
@@ -274,7 +274,7 @@ export default async function PortalHome() {
       {/* Latest measurement */}
       {m && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>📏 Latest measurement <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {m.date}</span></div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Latest measurement <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {m.date}</span></div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12, fontSize: 14 }}>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Weight</div>{m.weight != null ? `${m.weight} kg` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>BMI</div>{m.bmi ?? "—"}</div>
@@ -301,7 +301,7 @@ export default async function PortalHome() {
       {/* Assigned workouts */}
       {myWorkouts.length > 0 && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>🏃 My workout plan</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>My workout plan</div>
           <div style={{ display: "grid", gap: 10 }}>
             {myWorkouts.map((w) => (
               <div key={w.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
@@ -321,7 +321,7 @@ export default async function PortalHome() {
       {/* Habits & streaks */}
       {myHabits.length > 0 && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>🔥 My habits <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· tap to check off today</span></div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>My habits <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· tap to check off today</span></div>
           <div style={{ display: "grid", gap: 8 }}>
             {myHabits.map((h) => {
               const dates = habitDoneDates.get(h.id) ?? new Set<string>();
@@ -334,7 +334,7 @@ export default async function PortalHome() {
                   <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
                   <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{h.name}</div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)", fontSize: 14 }}>🔥 {streak}d</div>
+                    <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)", fontSize: 14 }}>{streak}d</div>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{week}/{h.target_per_week} this week</div>
                   </div>
                 </div>
@@ -347,7 +347,7 @@ export default async function PortalHome() {
       {/* Forms to complete */}
       {myForms.length > 0 && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>📝 Forms to complete</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Forms to complete</div>
           <div style={{ display: "grid", gap: 10 }}>
             {myForms.map((r) => (
               <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
@@ -365,7 +365,7 @@ export default async function PortalHome() {
       {/* Upcoming appointments */}
       {myAppts.length > 0 && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>📅 Upcoming appointments</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Upcoming appointments</div>
           <div style={{ display: "grid", gap: 8 }}>
             {myAppts.map((a) => (
               <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
@@ -381,7 +381,7 @@ export default async function PortalHome() {
       {/* Medical record (read-only) */}
       {hasEmr && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>🩺 My health record</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>My health record</div>
           {myAllergies.length > 0 && (
             <div style={{ background: "var(--red-bg)", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", marginBottom: 10, color: "var(--red)", fontSize: 13 }}>
               <b>Allergies:</b> {myAllergies.map((a) => `${a.substance}${a.severity === "severe" ? " (severe)" : ""}`).join(", ")}
@@ -457,7 +457,7 @@ export default async function PortalHome() {
       {/* Today's meals */}
       {showMeals && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>🍽️ Today&apos;s meals</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Today&apos;s meals</div>
           <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>Log what you eat and ask your dietitian anything.</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
             {MEALS.map((m) => (
@@ -470,7 +470,7 @@ export default async function PortalHome() {
       {/* My invoices */}
       {invoices.length > 0 && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>💳 My invoices</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>My invoices</div>
           {invoices.map((i) => (
             <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
               <span style={{ color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</span>
@@ -486,7 +486,7 @@ export default async function PortalHome() {
       {/* Group classes */}
       {classes.length > 0 && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>🧘 Group classes</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Group classes</div>
           {classes.map((c) => {
             const a = avail.get(c.id) as { capacity: number; booked: number } | undefined;
             const booked = mine.has(c.id);
@@ -507,7 +507,7 @@ export default async function PortalHome() {
       {/* Messages */}
       {card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>💬 Messages with your team</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Messages with your team</div>
           <MessageThread messages={messages} viewer="client" />
           <MessageReply variant="portal" />
         </>

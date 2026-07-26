@@ -59,7 +59,7 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
                 </tr>
               );
             })}
-            {orders.length === 0 && <tr><td colSpan={7} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>{view === "open" ? "No open orders. 🎉" : "No orders yet."}</td></tr>}
+            {orders.length === 0 && <tr><td colSpan={7} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>{view === "open" ? "No open orders." : "No orders yet."}</td></tr>}
           </tbody>
         </table>
       </div>

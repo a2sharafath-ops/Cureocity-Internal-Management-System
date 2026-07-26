@@ -32,7 +32,7 @@ export default function ScheduleSessionsForm({ clientId, trainers, defaultTraine
   };
 
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>🏋 Schedule {count} sessions</button>;
+    return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>Schedule {count} sessions</button>;
   }
 
   return (

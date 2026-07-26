@@ -106,7 +106,7 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
                       <input type="hidden" name="id" value={f.id} />
                       <textarea name="summary" value={summary} onChange={(e) => setSummary(e.target.value)} rows={5} placeholder="Write or generate the summary…" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12, resize: "vertical" }} />
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button type="button" onClick={() => setSummary(genSummary(f))} style={btn("#fff", "var(--brand-text)")}>✨ Generate summary</button>
+                        <button type="button" onClick={() => setSummary(genSummary(f))} style={btn("#fff", "var(--brand-text)")}>Generate summary</button>
                         <button type="submit" style={btn("var(--brand-fill)")}>Mark complete</button>
                       </div>
                     </form>
@@ -142,7 +142,7 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
       </div>
 
       {sectionTitle("", "Clients to Call Today", calls.length, "var(--amber-text)", "var(--amber-bg)")}
-      {table(calls, true, "No calls due 🎉")}
+      {table(calls, true, "No calls due")}
       {sectionTitle("", "Links Sent — Awaiting Client", links.length, "var(--blue-text)", "var(--blue-bg)")}
       {table(links, true, "Nothing awaiting clients")}
       {sectionTitle("", "Pending Consultant Review", reviews.length, "var(--brand-text)", "var(--brand-tint)")}

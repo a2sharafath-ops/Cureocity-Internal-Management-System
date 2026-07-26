@@ -40,7 +40,6 @@ export default function ConcernsPanel({ concerns }: { concerns: ConcernRow[] }) 
       <div style={{ ...box, overflow: "hidden" }}>
         {list.length ? list.map((c) => (
           <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderTop: "1px solid var(--border)" }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--amber-bg)", color: "var(--amber-text)", display: "grid", placeItems: "center", fontSize: 15, flexShrink: 0 }}>⚠️</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <b style={{ fontSize: 13 }}>{c.client_name ?? "—"}</b>

@@ -90,7 +90,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
                       <div style={{ flex: 1, color: "var(--ink)" }}>{detail}</div>
                     </div>
                   ))}
-                  {dc.notes && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>📝 {dc.notes}</div>}
+                  {dc.notes && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>{dc.notes}</div>}
                   {dc.client_id && <div style={{ marginTop: 8 }}><Link href={`/clients/${dc.client_id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Open client card →</Link></div>}
                 </div>
               </div>

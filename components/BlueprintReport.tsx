@@ -31,14 +31,14 @@ export default function BlueprintReport({
 
       <div className="bp-noprint" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => window.print()} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🖨 Print / Save PDF</button>
+        <button type="button" onClick={() => window.print()} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Print / Save PDF</button>
       </div>
 
       <div style={{ ...box, padding: "26px 28px" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, borderBottom: "2px solid var(--border)", paddingBottom: 16, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--brand-text)" }}>🧬 Personal Health BluePrint</div>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "var(--brand-text)" }}>Personal Health BluePrint</div>
             <h1 style={{ fontSize: 24, margin: "4px 0 2px" }}>{subject.name}</h1>
             <div style={{ color: "var(--muted)", fontSize: 13 }}>{subject.code ? `${subject.code} · ` : ""}{generatedDate ? `Generated ${generatedDate}` : "Draft — not yet generated"}</div>
           </div>

@@ -83,7 +83,7 @@ export default function LeadRemarks({
   return (
     <div style={box}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700 }}>🗒 Remarks &amp; callback</div>
+        <div style={{ fontWeight: 700 }}>Remarks &amp; callback</div>
         <span style={{ background: tone.bg, color: tone.color, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
           {v.label}
         </span>

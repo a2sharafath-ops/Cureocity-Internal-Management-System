@@ -14,7 +14,7 @@ export default function BloodActions({ clientId, blood }: { clientId: string; bl
           <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>Request: not sent</span>
         </div>
         <SubmitButton pendingLabel="Sending…" doneLabel="✓ Sent" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
-          🩸 Send request
+          Send request
         </SubmitButton>
       </form>
     );

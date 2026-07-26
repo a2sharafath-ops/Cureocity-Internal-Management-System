@@ -76,7 +76,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>
-              {flags.length ? verdict : "Nothing needs attention 🎉"}
+              {flags.length ? verdict : "Nothing needs attention"}
             </div>
             <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 6 }}>
               {(["high", "med", "low"] as const).map((s) =>

@@ -204,7 +204,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
                   </td>}
                 </tr>
               ))}
-              {unbilled.length === 0 && <tr><td colSpan={editable ? 4 : 3} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>Nothing unbilled 🎉</td></tr>}
+              {unbilled.length === 0 && <tr><td colSpan={editable ? 4 : 3} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>Nothing unbilled</td></tr>}
             </tbody>
           </table>
         </div>

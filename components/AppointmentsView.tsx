@@ -290,7 +290,7 @@ export default function AppointmentsView({
           : <span style={{ color: "var(--muted)" }}>Unassigned</span>;
         const header = (icon: string, title: string, count: number, tone: string) => (
           <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px" }}>
-            <span style={{ fontWeight: 700, fontSize: 14 }}>{icon} {title}</span>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>{icon ? `${icon} ` : ""}{title}</span>
             <span style={{ background: tone, color: "#fff", borderRadius: 999, minWidth: 20, height: 20, padding: "0 6px", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 700 }}>{count}</span>
           </div>
         );
@@ -321,13 +321,13 @@ export default function AppointmentsView({
 
         return (
           <div>
-            {header("📅", "Upcoming", upcoming2.length, "var(--blue-text, #2563eb)")}
+            {header("", "Upcoming", upcoming2.length, "var(--blue-text, #2563eb)")}
             {upcoming2.length ? unschedTable(upcoming2, false)
               : <div style={{ ...box, padding: "18px", textAlign: "center", color: "var(--muted)", fontSize: 13, marginBottom: 20 }}>Nothing upcoming</div>}
 
-            {header("⚠️", "Due by Service Schedule", overdue2.length, "var(--red-text, #dc2626)")}
+            {header("", "Due by Service Schedule", overdue2.length, "var(--red-text, #dc2626)")}
             {overdue2.length ? unschedTable(overdue2, true)
-              : <div style={{ ...box, padding: "18px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Nothing overdue 🎉</div>}
+              : <div style={{ ...box, padding: "18px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>Nothing overdue</div>}
           </div>
         );
       })()}

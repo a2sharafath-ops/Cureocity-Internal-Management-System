@@ -62,7 +62,7 @@ export default async function TargetsPage() {
           <b style={{ fontSize: 14 }}>{title}</b>
           <span style={{ flex: 1 }} />
           {tgt > 0 && (hit
-            ? <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>🎉 Target hit</span>
+            ? <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>Target hit</span>
             : <span style={{ background: "var(--amber-bg)", color: "var(--amber-text-soft)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{fmt(tgt - val)} to go</span>)}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

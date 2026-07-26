@@ -7,9 +7,9 @@ type FileItem = {
 };
 
 function label(kind: string) {
-  if (kind === "blood_report") return "🩸 Blood report";
-  if (kind === "progress_photo") return "📸 Progress photo";
-  return "📄 Document";
+  if (kind === "blood_report") return "Blood report";
+  if (kind === "progress_photo") return "Progress photo";
+  return "Document";
 }
 
 export default function FilesGrid({ files }: { files: FileItem[] }) {

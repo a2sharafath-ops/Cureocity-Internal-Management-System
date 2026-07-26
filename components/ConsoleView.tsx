@@ -75,13 +75,12 @@ export default function ConsoleView({
 
       {/* Ambient + AI co-pilot panel — scaffold; wire a real STT + LLM here later. */}
       <div style={{ ...box, padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "linear-gradient(180deg, #14141a, #23232c)", color: "#fff", border: "none" }}>
-        <div style={{ width: 120, height: 74, borderRadius: 10, background: "#000", display: "grid", placeItems: "center", fontSize: 26 }}>🎥</div>
         <div style={{ minWidth: 0 }}>
           <b style={{ fontSize: 14 }}>Live session with {client.name}</b>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>🎙️ Ambient scribe · 🤖 AI co-pilot</div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Ambient scribe · AI co-pilot</div>
         </div>
         <span style={{ flex: 1 }} />
-        <button type="button" disabled title="Connect an ambient recorder + AI scribe to enable" style={{ background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.7)", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "not-allowed" }}>✨ Auto-fill from ambient (soon)</button>
+        <button type="button" disabled title="Connect an ambient recorder + AI scribe to enable" style={{ background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.7)", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "not-allowed" }}>Auto-fill from ambient (soon)</button>
         <span style={{ background: "rgba(255,255,255,.12)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>Recording (simulated)</span>
       </div>
 
@@ -121,7 +120,7 @@ export default function ConsoleView({
         <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 12 }}>
           {/* Medical flags */}
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>🚩 Flags raised {fl.length > 0 && <span style={{ color: "var(--red-text)" }}>· {fl.length}</span>}</div>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Flags raised {fl.length > 0 && <span style={{ color: "var(--red-text)" }}>· {fl.length}</span>}</div>
             {fl.length === 0 && <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>No flags. Add anything clinically notable.</div>}
             <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
               {fl.map((f, i) => {
@@ -143,7 +142,7 @@ export default function ConsoleView({
           </div>
 
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>📝 Consultation summary</div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Consultation summary</div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>This becomes the shareable summary that feeds the Blueprint sign-off.</div>
             <textarea name="summary" rows={10} defaultValue={summary ?? ""} placeholder="Session notes, findings, plan…" style={inp} />
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -152,7 +151,7 @@ export default function ConsoleView({
             </div>
           </div>
           <div style={{ ...box, padding: "12px 16px" }}>
-            <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "📋 Open lead record →" : "📋 Open full client card →"}</Link>
+            <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "Open lead record →" : "Open full client card →"}</Link>
           </div>
         </div>
       </form>
@@ -161,12 +160,12 @@ export default function ConsoleView({
           are separate forms; submitting one keeps the questionnaire in place. */}
       {canTools && (
         <div style={{ marginTop: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>🧰 Session tools</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Session tools</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {/* Vitals */}
             <form action={addVitals} style={{ ...box, padding: "14px 16px" }}>
               <input type="hidden" name="client_id" value={client.id} />
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>❤️ Record vitals</div>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Record vitals</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
                 <input name="systolic" placeholder="Systolic" inputMode="numeric" style={sm} />
                 <input name="diastolic" placeholder="Diastolic" inputMode="numeric" style={sm} />
@@ -182,7 +181,7 @@ export default function ConsoleView({
             <form action={createOrder} style={{ ...box, padding: "14px 16px" }}>
               <input type="hidden" name="client_id" value={client.id} />
               <input type="hidden" name="category" value="lab" />
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>🧪 Order lab test</div>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Order lab test</div>
               <input name="test" placeholder="e.g. Lipid profile, HbA1c" required style={{ ...sm, marginBottom: 6 }} />
               <select name="priority" defaultValue="routine" style={{ ...sm, marginBottom: 8 }}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></select>
               <button type="submit" style={toolBtn}>Place order</button>
@@ -193,7 +192,7 @@ export default function ConsoleView({
               <input type="hidden" name="client_id" value={client.id} />
               <input type="hidden" name="status" value="signed" />
               <input type="hidden" name="items" value={JSON.stringify(rx.drug.trim() ? [rx] : [])} />
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>💊 Prescription</div>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Prescription</div>
               <input value={rx.drug} onChange={(e) => setRx({ ...rx, drug: e.target.value })} placeholder="Drug" style={{ ...sm, marginBottom: 6 }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
                 <input value={rx.dose} onChange={(e) => setRx({ ...rx, dose: e.target.value })} placeholder="Dose" style={sm} />

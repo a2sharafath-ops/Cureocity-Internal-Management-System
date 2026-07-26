@@ -63,7 +63,7 @@ export default function PTProtocol({ clientId, view, canHold, canBook }: { clien
   return (
     <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700 }}>🏋 PT protocol</div>
+        <div style={{ fontWeight: 700 }}>PT protocol</div>
         {held && (
           <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>On hold — waiting on client</span>
         )}

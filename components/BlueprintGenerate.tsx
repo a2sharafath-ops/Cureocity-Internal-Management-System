@@ -13,7 +13,7 @@ export default function BlueprintGenerate({
   const [open, setOpen] = useState(false);
 
   if (generated) {
-    return <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>🧬 Generated</span>;
+    return <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>Generated</span>;
   }
 
   return (

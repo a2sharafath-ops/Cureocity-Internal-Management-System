@@ -344,7 +344,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {readOnly && (
         <div style={{ background: "var(--amber-bg)", color: "var(--amber-text)", border: "1px solid #fde68a", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
-          👁 Viewing the {role.short} workspace — read-only. You can review client details but can&apos;t edit another discipline&apos;s records.
+          Viewing the {role.short} workspace — read-only. You can review client details but can&apos;t edit another discipline&apos;s records.
         </div>
       )}
 
@@ -475,7 +475,6 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {/* ---- STUB TABS (later phases) ---- */}
       {stubDef && (
         <div style={{ ...box, padding: "40px 20px", textAlign: "center" }}>
-          <div style={{ fontSize: 30, marginBottom: 8 }}>🚧</div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>{stubDef.label}</div>
           <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6, maxWidth: 420, marginLeft: "auto", marginRight: "auto" }}>{stubDef.note}</div>
         </div>

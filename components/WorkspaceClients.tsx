@@ -104,8 +104,8 @@ export default function WorkspaceClients({
               </div>
               <span style={{ flex: 1 }} />
               {c.careStatus && <ClientStatusBadge status={c.careStatus} />}
-              {c.conditions && chip("var(--amber-bg)", "var(--amber-text)", "⚠️ Condition")}
-              <Link href={`/clients/${c.id}${linkQuery}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>📋 Open full client card</Link>
+              {c.conditions && chip("var(--amber-bg)", "var(--amber-text)", "Condition")}
+              <Link href={`/clients/${c.id}${linkQuery}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>Open full client card</Link>
             </div>
             <div style={{ marginTop: 10 }}>
               {kv("Package", c.pkg)}
