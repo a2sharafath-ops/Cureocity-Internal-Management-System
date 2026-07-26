@@ -12,7 +12,7 @@ import ClientStatusBadge from "@/components/ClientStatusBadge";
 import type { ClientStatus } from "@/lib/client-status";
 
 export type Trainer = { id: string; name: string; color: string };
-export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null };
+export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null; booked?: boolean; day?: string | null };
 export type AssessmentRow = { id: string; client_id?: string | null; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; shared?: boolean; trainerName: string | null };
 
 function assessLabel(kind: string) { return kind === "reassessment" ? "Fitness Reassessment" : "Fitness Assessment"; }
@@ -102,7 +102,7 @@ export default function TrainingScheduleView({
             <span style={{ background: "var(--neutral-bg)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{assigned} assigned</span>
             <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{available} available</span>
             <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{unavailable} unavailable</span>
-            <span style={{ color: "var(--muted)", fontSize: 12, alignSelf: "center" }}>Name + tag = assigned · dashed + Assign = available · grey = unavailable</span>
+            <span style={{ color: "var(--muted)", fontSize: 12, alignSelf: "center" }}>Name + tag = assigned · &quot;booked&quot; = live calendar booking · dashed + Assign = available · grey = unavailable</span>
           </div>
 
           {/* assign bar */}
@@ -153,7 +153,13 @@ export default function TrainingScheduleView({
                             <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
                               <span style={{ fontSize: 12, fontWeight: 600 }}>{s?.clientName ?? "—"}</span>
                               {tagChip(s?.tag ?? null)}
-                              {canWrite && <form action={unassignTrainerSlot}><input type="hidden" name="trainer_id" value={t.id} /><input type="hidden" name="hour" value={h} /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>✕ clear</button></form>}
+                              {/* A real calendar booking overlaid onto the grid: show its day and
+                                  don't offer "clear" (it isn't a manual trainer_slot to remove). */}
+                              {s?.booked ? (
+                                <span style={{ fontSize: 10, color: "var(--muted)" }}>{s?.day ? `${s.day} · booked` : "booked"}</span>
+                              ) : (
+                                canWrite && <form action={unassignTrainerSlot}><input type="hidden" name="trainer_id" value={t.id} /><input type="hidden" name="hour" value={h} /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>✕ clear</button></form>
+                              )}
                             </div>
                           ) : openCell ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
