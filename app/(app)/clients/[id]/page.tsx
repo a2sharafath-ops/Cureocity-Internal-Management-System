@@ -155,7 +155,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
   // owner / coach names, blueprint status, onboarding journey follow-ups, packages held
-  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }, { data: assignRows }, { data: bloodRows }] = await Promise.all([
+  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }, { data: assignRows }, { data: bloodRows }, { data: signoffRows }] = await Promise.all([
     supabase.from("staff").select("id, name"),
     supabase.from("blueprints").select("generated, generated_date, scores").eq("client_id", params.id).maybeSingle(),
     supabase.from("followups").select("label, due_date, status, kind").eq("client_id", params.id).order("due_date"),
@@ -163,6 +163,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("price"),
     supabase.from("client_assignments").select("discipline, staff_id").eq("client_id", params.id),
     supabase.from("blood_requests").select("requested_at, submitted, submitted_date, panel").eq("client_id", params.id),
+    supabase.from("blueprint_signoffs").select("discipline").eq("client_id", params.id),
   ]);
   const staffMap = new Map(((staffAll ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
   const ownerName = c0.owner ? (staffMap.get(String(c0.owner)) ?? null) : null;
@@ -173,6 +174,12 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const coachId = assignByDisc.get("coach");
   const coachName = coachId ? (staffMap.get(String(coachId)) ?? null) : null;
   const bp = (bpRow ?? null) as { generated: boolean; generated_date: string | null; scores: Record<string, number> | null } | null;
+  // BluePrint consolidated sign-off progress: who's assigned (required) and
+  // who's signed. Shown as a "required sign-offs" line so front desk sees who's
+  // still pending before the Blueprint can generate.
+  const BP_DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
+  const bpRequired = ((assignRows ?? []) as { discipline: string }[]).map((r) => r.discipline).filter((d) => BP_DISC_LABEL[d]);
+  const bpSigned = new Set(((signoffRows ?? []) as { discipline: string }[]).map((r) => r.discipline));
   const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
   const clientPackages = (cpRows ?? []) as { id: string; package_id: string | null; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
   const pkgList = (allPkgs ?? []) as { id: string; name: string; price: number; is_facility: boolean }[];
@@ -619,6 +626,19 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <span style={{ flex: 1 }} />
           {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
         </div>
+        {!bp?.generated && bpRequired.length > 0 && (
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
+            <span style={{ color: "var(--muted)", fontWeight: 600 }}>Required sign-offs · {bpRequired.filter((d) => bpSigned.has(d)).length}/{bpRequired.length}</span>
+            {bpRequired.map((d) => {
+              const on = bpSigned.has(d);
+              return (
+                <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: on ? "var(--green-bg)" : "var(--amber-bg)", color: on ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
+                  {on ? "✓" : "○"} {BP_DISC_LABEL[d]}
+                </span>
+              );
+            })}
+          </div>
+        )}
         {bp?.scores && Object.keys(bp.scores).length > 0 && (() => {
           const vals = BP_SCORES.map((s) => bp!.scores![s.key]).filter((v): v is number => typeof v === "number");
           const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
