@@ -9,6 +9,8 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { loadClientStatuses } from "@/lib/client-status";
+import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
 export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral" };
 export type PackageStatus = { openNow: StatusItem[]; upcoming: StatusItem[] };
@@ -49,40 +51,45 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     if (i.status !== "Paid") openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn" });
   }
 
-  // ---- blood panels -------------------------------------------------------
-  const bloodByPanel = new Map(((blood ?? []) as { panel: string | null; submitted: boolean }[]).map((b) => [b.panel ?? "blueprint", b.submitted]));
-  if (isComp) {
-    const sub = bloodByPanel.get("comprehensive");
-    if (sub === undefined) openNow.push({ label: "Comprehensive blood panel — not requested", href: "/blueprint", tone: "warn" });
-    else if (!sub) openNow.push({ label: "Comprehensive blood report — awaiting client", href: clientHref, tone: "warn" });
-  }
-  if (cats.has("blueprint")) {
-    const sub = bloodByPanel.get("blueprint");
-    if (sub !== undefined && !sub) openNow.push({ label: "BluePrint blood report — awaiting client", href: clientHref, tone: "warn" });
-  }
-
-  // ---- consults + clinician deliverables ---------------------------------
-  const doneKinds = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
-  const bookedKinds = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status !== "completed").map((c) => c.kind));
-  if (isComp || isPt) {
-    const need: [string, string][] = isComp ? [["Doctor", "Doctor consultation"], ["Diet", "Diet consultation"], ["Trainer", "Fitness assessment"]] : [["Trainer", "Fitness assessment"]];
-    for (const [k, lbl] of need) {
-      if (!doneKinds.has(k)) openNow.push({ label: `${lbl} — ${bookedKinds.has(k) ? "booked, awaiting the session" : "not booked"}`, href: bookedKinds.has(k) ? clientHref : `/appointments?client=${clientId}`, tone: "warn" });
-    }
-    if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", href: clientHref, tone: "warn" });
-    if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", href: clientHref, tone: "warn" });
-    if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", href: clientHref, tone: "warn" });
-  }
-  if (cats.has("blueprint") && bp && !bp.generated) openNow.push({ label: "BluePrint — awaiting clinician sign-offs", href: "/blueprint", tone: "warn" });
-
-  // ---- strength sessions --------------------------------------------------
+  // ---- onboarding checklist (canonical) ----------------------------------
+  // Reuse the same engine the Onboarding page runs, so the client's pending
+  // journey steps — blood, consults, blueprint generation, sessions scheduled —
+  // appear here with their real action links, and the two never disagree.
+  const st = (await loadClientStatuses(sb, [clientId], today)).get(clientId);
   const allSess = (sess ?? []) as { status: string; date: string }[];
+  if (st && ["blueprint", "comprehensive", "training", "membership"].includes(st.category)) {
+    const activeCp = active.find((c) => c.category === st.category);
+    const input: ClientInput = {
+      clientId, clientName: "", category: st.category,
+      packageName: activeCp?.package_name ?? st.category,
+      ownerName: null, hasInvoice: (inv ?? []).length > 0,
+      bloodRequested: st.bloodRequested, bloodSubmitted: st.bloodSubmitted,
+      doctor: { scheduled: st.consults.doctor?.booked ?? false, completed: st.consults.doctor?.completed ?? false },
+      diet: { scheduled: st.consults.dietitian?.booked ?? false, completed: st.consults.dietitian?.completed ?? false },
+      trainer: { scheduled: st.consults.trainer?.booked ?? false, completed: st.consults.trainer?.completed ?? false },
+      blueprintGenerated: Boolean(bp?.generated),
+      sessionScheduled: allSess.some((s) => s.status === "scheduled"),
+    };
+    for (const step of onboardingRow(input).steps) {
+      if (!step.done) openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn" });
+    }
+  }
+
+  // ---- clinician deliverables the onboarding ladder doesn't track ----------
+  const doneKinds = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
+  // Comprehensive blood is a separate panel — the onboarding step only checks it
+  // was *requested*; the client still owes the actual report.
+  const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
+  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", href: clientHref, tone: "warn" });
+  if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", href: clientHref, tone: "warn" });
+  if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", href: clientHref, tone: "warn" });
+  if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", href: clientHref, tone: "warn" });
+
+  // ---- strength sessions remaining (scheduling itself is an onboarding step) --
   if (isComp || isPt) {
     const total = allSess.length;
-    const doneSess = allSess.filter((s) => s.status === "completed").length;
-    const remaining = total - doneSess;
-    if (total === 0) openNow.push({ label: "Strength sessions — not scheduled", href: clientHref, tone: "warn" });
-    else if (remaining > 0) {
+    const remaining = total - allSess.filter((s) => s.status === "completed").length;
+    if (total > 0 && remaining > 0) {
       const next = allSess.filter((s) => s.status !== "completed" && s.date >= today).map((s) => s.date).sort()[0];
       upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info" });
     }
