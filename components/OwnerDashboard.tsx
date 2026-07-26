@@ -7,6 +7,7 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { packageCategory } from "@/lib/packages";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -129,6 +130,9 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   for (const c of clients) {
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (!p || !p.validity || !c.joined || activeSubClients.has(c.id)) continue;
+    // BluePrint is a one-time report, not a time-bound subscription — its
+    // "validity" is just the report's shelf life, so never nag to renew it.
+    if (packageCategory(p.id, p.is_facility) === "blueprint") continue;
     const expires = addDays(c.joined, p.validity);
     if (expires < today) {
       flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/clients/${c.id}`, cta: "Renew" });

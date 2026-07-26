@@ -7,6 +7,7 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { packageCategory } from "@/lib/packages";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -96,6 +97,8 @@ export default async function FinanceDashboard({ name }: { name: string }) {
     flags.push({ sev: "high", title: `${nameOf(s.client_id)} — renewal missed`, detail: `Was due ${s.renews_on} · ${money(Number(s.amount ?? 0))}`, href: "/subscriptions", cta: "Renew" });
   }
   for (const cp of cps.filter((cp) => cp.status === "active" && cp.end_date && cp.end_date <= in30 && cp.end_date >= today)) {
+    // BluePrint is a one-time report, not a renewable term — don't flag it.
+    if (packageCategory(cp.package_id, pkgs.get(cp.package_id)?.is_facility ?? false) === "blueprint") continue;
     if (!subs.some((s) => s.client_id === cp.client_id && s.status === "active")) {
       flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package ends ${cp.end_date}`, detail: `${cp.package_name ?? "Package"} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
     }
