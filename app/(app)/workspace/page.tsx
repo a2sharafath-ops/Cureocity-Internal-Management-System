@@ -335,7 +335,6 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* Workspace chrome — one discipline only; switch via the header persona menu */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ width: 38, height: 38, borderRadius: 10, background: role.color, color: "#fff", display: "grid", placeItems: "center", fontSize: 20 }}>{role.icon}</div>
         <div>
           <h1 style={{ fontSize: 20, margin: 0 }}>{role.label}</h1>
           <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>Your clients, consultations, blueprint sign-off and role tools in one place</p>
