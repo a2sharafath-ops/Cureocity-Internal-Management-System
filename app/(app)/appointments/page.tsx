@@ -106,12 +106,18 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     if (t.includes("diet")) return "Dietitian";
     if (t.includes("psych")) return "Psychologist";
     if (t.includes("coach")) return "Health Coach";
-    if (t.includes("fitness") || t.includes("reassess")) return "Fitness Trainer";
+    if (t.includes("fitness") || t.includes("trainer") || t.includes("reassess")) return "Fitness Trainer";
     return null;
   };
   const unscheduled: Unsched[] = ((tasksR.data ?? []) as { id: string; client_id: string | null; title: string; due_date: string | null }[])
     .map((t) => ({ t, disc: taskDiscipline(t.title) }))
     .filter((x): x is { t: { id: string; client_id: string | null; title: string; due_date: string | null }; disc: string } => Boolean(x.disc && x.t.client_id))
+    // Drop tasks whose discipline is already booked for the client — a stale or
+    // duplicate "Book …" task shouldn't linger after the consult exists.
+    .filter(({ t, disc }) => {
+      const kind = ROLE_TO_KIND[disc];
+      return !(kind && (bookedKinds[t.client_id as string] ?? []).includes(kind));
+    })
     .map(({ t, disc }) => {
       const cid = t.client_id as string;
       const ownerId = assignByClient.get(cid)?.[DISC_KEY[disc] ?? ""] ?? null;
