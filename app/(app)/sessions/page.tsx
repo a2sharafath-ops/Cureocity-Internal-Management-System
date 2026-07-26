@@ -9,7 +9,7 @@ import TrainingScheduleView, { type Trainer, type Slot, type BookingCell, type A
 
 export const dynamic = "force-dynamic";
 
-const HOURS = Array.from({ length: 9 }, (_, i) => i + 9); // 9am..5pm
+const BASE_HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6am..9pm gym hours
 
 export default async function SessionsPage({ searchParams }: { searchParams: { week?: string } }) {
   const me = await getProfile();
@@ -72,6 +72,10 @@ export default async function SessionsPage({ searchParams }: { searchParams: { w
     if (!s.trainer_id || !trainerIds.has(s.trainer_id) || s.hour == null) continue;
     bookings.push({ trainer_id: s.trainer_id, date: s.date, hour: s.hour, client_id: s.client_id, clientName: s.clients?.name ?? null, tag: "PT" });
   }
+
+  // Hour rows: gym hours plus any hour that actually has a booking or a manual
+  // slot this week, so an early (7am) or late session always has a row to land in.
+  const HOURS = Array.from(new Set([...BASE_HOURS, ...bookings.map((b) => b.hour), ...slots.map((s) => s.hour)])).sort((a, b) => a - b);
 
   const allAssess: AssessmentRow[] = ((assessR.data ?? []) as unknown as { id: string; kind: string; due_date: string; status: string; scheduled_date: string | null; shared: boolean; client_id: string | null; clients: { name: string } | null; staff: { name: string } | null }[])
     .map((a) => ({ id: a.id, kind: a.kind, due_date: a.due_date, status: a.status, scheduled_date: a.scheduled_date, shared: a.shared, client_id: a.client_id, clientName: a.clients?.name ?? null, trainerName: a.staff?.name ?? null }));
