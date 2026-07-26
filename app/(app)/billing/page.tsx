@@ -12,6 +12,7 @@ import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import PayOnlineButton from "@/components/PayOnlineButton";
 import { paymentStatus } from "@/lib/payments/config";
+import { raiseInvoiceForClient } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +30,18 @@ type Inv = {
 const TABS = [
   { key: "invoices", label: "Invoices" },
   { key: "subscriptions", label: "Subscriptions", href: "/subscriptions" },
+  { key: "unbilled", label: "Unbilled packages" },
   { key: "refunds", label: "Refunds & credits" },
   { key: "dunning", label: "Dunning" },
 ];
 
-export default async function BillingPage({ searchParams }: { searchParams: { tab?: string } }) {
+export default async function BillingPage({ searchParams }: { searchParams: { tab?: string; status?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/billing")) redirect("/dashboard");
-  const tab = ["invoices", "refunds", "dunning"].includes(searchParams.tab ?? "") ? searchParams.tab! : "invoices";
+  const tab = ["invoices", "refunds", "dunning", "unbilled"].includes(searchParams.tab ?? "") ? searchParams.tab! : "invoices";
+  // Deep-link from the dashboard Money cards: /billing?status=paid|unpaid filters
+  // the invoices list to that status.
+  const statusFilter = ["paid", "unpaid", "refunded"].includes((searchParams.status ?? "").toLowerCase()) ? (searchParams.status!.toLowerCase()) : null;
 
   const supabase = createClient();
   const { data, error } = await supabase
@@ -69,6 +74,26 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   const unpaidPrev = sumInMonth(unpaidInv, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
   const overduePrev = sumInMonth(overdue, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
   const refundedPrev = sumInMonth(refunded, lastMonth, (i) => i.issued_date, (i) => Number(i.amount));
+
+  // Invoices tab, optionally filtered by status (from the dashboard cards).
+  const shownInvoices = statusFilter ? invoices.filter((i) => i.status.toLowerCase() === statusFilter) : invoices;
+
+  // Unbilled = clients on a priced package with no invoice raised — the revenue
+  // leak. Front desk / finance can raise the invoice straight from the row.
+  let unbilled: { id: string; name: string; pkg: string; price: number }[] = [];
+  if (tab === "unbilled") {
+    const [{ data: cl }, { data: pk }, { data: invClients }] = await Promise.all([
+      supabase.from("clients").select("id, name, package_id"),
+      supabase.from("packages").select("id, name, price, is_facility"),
+      supabase.from("invoices").select("client_id"),
+    ]);
+    const pkgMap = new Map(((pk ?? []) as { id: string; name: string; price: number }[]).map((p) => [p.id, p]));
+    const invSet = new Set(((invClients ?? []) as { client_id: string | null }[]).map((r) => r.client_id).filter(Boolean));
+    unbilled = ((cl ?? []) as { id: string; name: string; package_id: string | null }[])
+      .map((c) => ({ c, p: c.package_id ? pkgMap.get(c.package_id) : null }))
+      .filter((x): x is { c: { id: string; name: string; package_id: string | null }; p: { id: string; name: string; price: number } } => Boolean(x.p && Number(x.p.price) > 0 && !invSet.has(x.c.id)))
+      .map(({ c, p }) => ({ id: c.id, name: c.name, pkg: p.name, price: Number(p.price) }));
+  }
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const kpi = (label: string, value: string, sub?: string, now?: number, prev?: number, metric: MetricKey = "revenue_month") => (
@@ -158,6 +183,29 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
         <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
           <b>Couldn&apos;t load invoices.</b> {error.message}
         </div>
+      ) : tab === "unbilled" ? (
+        <div style={{ ...box, overflow: "hidden" }}>
+          <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>Clients on a paid package with no invoice raised — {unbilled.length} · {money(unbilled.reduce((s, u) => s + u.price, 0))} not yet billed.</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th style={th}>Client</th><th style={th}>Package</th><th style={th}>Price</th>{editable && <th style={th} />}</tr></thead>
+            <tbody>
+              {unbilled.map((u) => (
+                <tr key={u.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={td}><Link href={`/clients/${u.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{u.name}</Link></td>
+                  <td style={td}>{u.pkg}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{money(u.price)}</td>
+                  {editable && <td style={{ ...td, textAlign: "right" }}>
+                    <form action={raiseInvoiceForClient}>
+                      <input type="hidden" name="client_id" value={u.id} />
+                      <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)" }}>Raise invoice</button>
+                    </form>
+                  </td>}
+                </tr>
+              ))}
+              {unbilled.length === 0 && <tr><td colSpan={editable ? 4 : 3} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>Nothing unbilled 🎉</td></tr>}
+            </tbody>
+          </table>
+        </div>
       ) : tab === "refunds" ? (
         rowsFor(refunded, "default")
       ) : tab === "dunning" ? (
@@ -172,7 +220,15 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
           {rowsFor(dunning, "dunning")}
         </>
       ) : (
-        rowsFor(invoices, "default")
+        <>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {([["", "All"], ["paid", "Paid"], ["unpaid", "Unpaid"], ["refunded", "Refunded"]] as const).map(([k, label]) => {
+              const active = (statusFilter ?? "") === k;
+              return <Link key={k || "all"} href={k ? `/billing?status=${k}` : "/billing"} style={{ padding: "5px 12px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: active ? "var(--brand-fill)" : "#fff", color: active ? "#fff" : "var(--muted)" }}>{label}</Link>;
+            })}
+          </div>
+          {rowsFor(shownInvoices, "default")}
+        </>
       )}
     </div>
   );
