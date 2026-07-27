@@ -175,7 +175,7 @@ export async function runDaily() {
       + (cb.escalated ? ` · ${cb.escalated} callback${cb.escalated === 1 ? "" : "s"} escalated` : "")
       + (idle.value ? ` · ${idle.idle + idle.escalated} deal(s) worth ₹${Math.round(idle.value).toLocaleString("en-IN")} going quiet` : "")
       + (sla.breaches + comp.breaches
-          ? ` · ${sla.breaches + comp.breaches} care SLA breach${sla.breaches + comp.breaches === 1 ? "" : "es"}`
+          ? ` · ${sla.breaches + comp.breaches} care deadline${sla.breaches + comp.breaches === 1 ? "" : "s"} missed`
           : ""),
     href: "/followups", icon: "⚙️",
   });
