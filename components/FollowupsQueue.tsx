@@ -79,8 +79,11 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
     if (f.stage === "LINK_SENT") {
       return (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {!f.reminder_sent && <form action={fuSendReminder}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>⏳ Reminder</button></form>}
+          {!f.reminder_sent && <form action={fuSendReminder}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>Reminder</button></form>}
           <form action={fuMarkReceived}>{hid(f)}<button style={btn("var(--brand-fill)")}>Mark received</button></form>
+          {/* Client would rather come in than answer the link → convert to an
+              in-person booking (marks booked + opens the calendar pre-filled). */}
+          <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book in-person</button></form>
         </div>
       );
     }
