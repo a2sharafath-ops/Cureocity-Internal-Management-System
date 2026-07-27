@@ -2148,7 +2148,9 @@ export async function nudgeClinician(formData: FormData) {
   await notifyStaff(supabase, staff_id, {
     title: `Reminder — ${label}`,
     body: `${c?.name ?? "A client"} · nudged by ${p.name}`,
-    href: "/workspace", icon: "⏰",
+    // Land on the specific client's 360 so the clinician knows exactly who and
+    // can act (or jump to their workspace from there).
+    href: client_id ? `/clients/${client_id}` : "/workspace", icon: "⏰",
   });
   await logAudit(p, "Clinician nudged", c?.name, label);
   revalidatePath(`/clients/${client_id}`);
