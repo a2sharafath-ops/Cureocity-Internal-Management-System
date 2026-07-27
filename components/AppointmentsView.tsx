@@ -45,6 +45,7 @@ export default function AppointmentsView({
   const params = useSearchParams();
   const preClient = params.get("client") ?? "";
   const preDisc = params.get("disc") ?? "";
+  const preType = params.get("type") ?? "";
   const [disc, setDisc] = useState(DISCIPLINES.includes(preDisc) ? preDisc : "All");
   const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string; client: string; taskId?: string }>(
     preClient
@@ -52,7 +53,7 @@ export default function AppointmentsView({
       : { open: false, date: today, hour: 10, provider: "", client: "" },
   );
   const [bookErr, setBookErr] = useState<string | null>(null);
-  const [apptType, setApptType] = useState<string>(preDisc === "Fitness Trainer" ? "Assessment" : "Consultation");
+  const [apptType, setApptType] = useState<string>(preType || (preDisc === "Fitness Trainer" ? "Assessment" : "Consultation"));
   const [booking2, startBooking] = useTransition();
   const submitBooking = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -185,7 +186,7 @@ export default function AppointmentsView({
           {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required value={booking.client} onChange={(e) => setBooking((b) => ({ ...b, client: e.target.value }))}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" value={booking.provider} onChange={(e) => setBooking((b) => ({ ...b, provider: e.target.value }))}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Telehealth</option><option>Procedure</option></select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Diet Chart Explanation</option><option>Telehealth</option><option>Procedure</option></select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required value={booking.date} onChange={(e) => setBooking((b) => ({ ...b, date: e.target.value }))} /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time{takenHours.size > 0 ? " · booked slots greyed" : ""}</label><select style={input} name="hour" value={String(booking.hour)} onChange={(e) => setBooking((b) => ({ ...b, hour: Number(e.target.value) }))}>{hours.map((h) => <option key={h} value={h} disabled={takenHours.has(h)}>{hourLabelFull(h)}{takenHours.has(h) ? " · booked" : ""}</option>)}</select></div>

@@ -3577,9 +3577,13 @@ export async function fuBookInPerson(formData: FormData) {
   // same step rather than just flipping a status.
   const cid = (fu as { client_id: string | null } | null)?.client_id;
   if (cid) {
-    const hay = `${(fu as { category: string | null } | null)?.category ?? ""} ${(fu as { label: string | null } | null)?.label ?? ""}`;
+    const label = (fu as { label: string | null } | null)?.label ?? "";
+    const hay = `${(fu as { category: string | null } | null)?.category ?? ""} ${label}`;
     const disc = /doctor/i.test(hay) ? "Doctor" : /diet/i.test(hay) ? "Dietitian" : /fitness|trainer/i.test(hay) ? "Fitness Trainer" : /coach/i.test(hay) ? "Health Coach" : /psych/i.test(hay) ? "Psychologist" : "";
-    redirect(`/appointments?client=${cid}${disc ? `&disc=${encodeURIComponent(disc)}` : ""}`);
+    // The Day-2 explanation books as its own appointment type; other protocol
+    // touchpoints book as a Follow-up.
+    const type = /diet chart explanation/i.test(label) ? "Diet Chart Explanation" : "Follow-up";
+    redirect(`/appointments?client=${cid}${disc ? `&disc=${encodeURIComponent(disc)}` : ""}&type=${encodeURIComponent(type)}`);
   }
   redirect("/followups");
 }
