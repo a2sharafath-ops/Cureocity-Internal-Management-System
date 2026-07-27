@@ -32,7 +32,7 @@ export default async function NewClientPage({ searchParams }: { searchParams: { 
         ← Clients
       </Link>
       <h1 style={{ fontSize: 20, margin: "10px 0 4px" }}>New Client</h1>
-      {subId && <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>📥 Pre-filled from tablet intake — review, add package &amp; referral, then create.</p>}
+      {subId && <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>Pre-filled from tablet intake — review, add package &amp; referral, then create.</p>}
       <ClientForm action={createClientRecord} packages={packages} submitLabel="Create client" client={prefill} subId={subId} />
     </div>
   );

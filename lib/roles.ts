@@ -32,6 +32,7 @@ const CLIN = [...CLINICIAN_ROLES] as Role[];
 export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/dashboard": "all",
   "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/onboarding": ["Administrator", "Manager", "Front Desk"],
   "/leads": ["Administrator", "Manager", "Front Desk"],
   "/messages": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN],
@@ -227,7 +228,7 @@ export const ROLE_LIST: Role[] = [
 
 // Short area labels for each nav route (mirrors the prototype's area codes).
 const AREA_LABEL: Record<string, string> = {
-  "/dashboard": "dash", "/leads": "crm", "/clients": "clients", "/appointments": "booking",
+  "/dashboard": "dash", "/leads": "crm", "/clients": "clients", "/onboarding": "clients", "/appointments": "booking",
   "/sessions": "training", "/followups": "followups", "/messages": "comms", "/retention": "retention",
   "/targets": "targets", "/intake": "intake", "/access": "access", "/workspace": "workspace",
   "/careteam": "careteam", "/whiteboard": "whiteboard", "/telehealth": "telehealth", "/pro": "consults", "/meals": "meals",

@@ -91,7 +91,7 @@ export async function runBlueprintSla(supabase: Sb, now: number = Date.now()): P
       events.push({ client_id: bp.client_id, gate, kind, due_at: dueAt });
       if (kind === "warning") warnings++; else breaches++;
       await notifyRoles(supabase, roles, {
-        title: kind === "breach" ? `BluePrint SLA missed — ${name}` : `BluePrint due soon — ${name}`,
+        title: kind === "breach" ? `BluePrint deadline missed — ${name}` : `BluePrint due soon — ${name}`,
         body: `${what} · ${formatLeft(msLeft)}`,
         href: "/blueprint",
         icon: kind === "breach" ? "🔴" : "⏳",

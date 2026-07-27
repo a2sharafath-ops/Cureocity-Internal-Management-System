@@ -158,7 +158,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
         ? [...OWNER_ROLES[g.owner], ...MANAGEMENT]
         : OWNER_ROLES[g.owner];
       await notifyRoles(supabase, roles, {
-        title: kind === "breach" ? `Comprehensive SLA missed — ${name}` : `Comprehensive due soon — ${name}`,
+        title: kind === "breach" ? `Comprehensive deadline missed — ${name}` : `Comprehensive due soon — ${name}`,
         body: `${g.label} · ${formatLeft(g.clock.msLeft)}`,
         href: `/clients/${p.client_id}`,
         icon: kind === "breach" ? "🔴" : "⏳",

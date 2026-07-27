@@ -66,12 +66,12 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "upcoming", label: "⏳ Upcoming", count: counts.upcoming },
-          { key: "overdue", label: "⚠️ Overdue", count: counts.overdue },
-          { key: "completed", label: "✅ Completed", count: counts.completed },
+          { key: "upcoming", label: "Upcoming", count: counts.upcoming },
+          { key: "overdue", label: "Overdue", count: counts.overdue },
+          { key: "completed", label: "Completed", count: counts.completed },
         ]} />
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🗓 Smart Timeline View</button>
+        <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Smart Timeline View</button>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>

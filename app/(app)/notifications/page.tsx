@@ -28,7 +28,7 @@ export default async function NotificationsPage() {
   return (
     <div style={{ maxWidth: 1000 }}>
       <RealtimeRefresh tables={["email_log"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Email notifications</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Email Log</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Transactional email for invoices, receipts, reminders and reports. Every attempt is logged below.</p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, background: email.configured ? "var(--green-bg)" : "var(--neutral-bg)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 18, fontSize: 13 }}>

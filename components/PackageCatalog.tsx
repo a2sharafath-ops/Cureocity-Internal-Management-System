@@ -59,8 +59,8 @@ export default function PackageCatalog({
 
           {/* attribute chips */}
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap", margin: "10px 0" }}>
-            {sel.one_time && chip("var(--purple-bg)", "var(--purple-text)", "🔵 One-time purchase")}
-            {sel.requires_slot ? chip("var(--amber-bg)", "var(--amber-text)", "📅 Requires slot booking") : chip("var(--neutral-bg)", "var(--muted)", "No slot needed")}
+            {sel.one_time && chip("var(--purple-bg)", "var(--purple-text)", "One-time purchase")}
+            {sel.requires_slot ? chip("var(--amber-bg)", "var(--amber-text)", "Requires slot booking") : chip("var(--neutral-bg)", "var(--muted)", "No slot needed")}
             {chip("var(--blue-bg)", "var(--blue-text)", sel.delivery_mode)}
             {sel.tags.map((t) => chip("var(--green-bg)", "var(--green-text)", t))}
             {!sel.active && chip("var(--red-bg)", "var(--red-text)", "Deactivated")}
@@ -79,7 +79,7 @@ export default function PackageCatalog({
             <div key={cat} style={{ marginTop: 12 }}>
               <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".6px", color: "var(--muted)" }}>{cat}</div>
               <ul style={{ margin: "3px 0 0", paddingLeft: 4, listStyle: "none" }}>
-                {list.map((s) => <li key={s.name} style={{ fontSize: 13, padding: "2px 0" }}><span style={{ color: "var(--green)" }}>✓</span> {s.name}{s.slot ? " 📅" : ""}</li>)}
+                {list.map((s) => <li key={s.name} style={{ fontSize: 13, padding: "2px 0" }}><span style={{ color: "var(--green)" }}>✓</span> {s.name}</li>)}
               </ul>
             </div>
           ))}

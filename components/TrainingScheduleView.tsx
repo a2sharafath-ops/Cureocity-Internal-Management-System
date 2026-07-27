@@ -2,15 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   setTrainerSlot, assignTrainerSlot, unassignTrainerSlot,
   createAssessment, markAssessmentBooked, completeAssessment, toggleAssessmentShared, addRecoverySession, completeRecoverySession,
 } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type Trainer = { id: string; name: string; color: string };
 export type Slot = { trainer_id: string; hour: number; status: string; client_id: string | null; clientName: string | null; tag: string | null };
-export type AssessmentRow = { id: string; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; shared?: boolean; trainerName: string | null };
+export type BookingCell = { trainer_id: string; date: string; hour: number; client_id: string | null; clientName: string | null; tag: string | null };
+export type WeekDay = { date: string; dow: string; label: string };
+export type WeekNav = { prev: string; next: string; current: string; rangeLabel: string; isCurrent: boolean };
+export type AssessmentRow = { id: string; client_id?: string | null; clientName: string | null; kind: string; due_date: string; status: string; scheduled_date?: string | null; shared?: boolean; trainerName: string | null };
 
 function assessLabel(kind: string) { return kind === "reassessment" ? "Fitness Reassessment" : "Fitness Assessment"; }
 export type RecoveryRow = { id: string; clientName: string | null; kind: string; date: string; hour: number | null; staffName: string | null; status: string };
@@ -26,22 +32,44 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 const input: React.CSSProperties = { padding: "0 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff" , height: 36, boxSizing: "border-box" };
 
 export default function TrainingScheduleView({
-  today, trainers, hours, slots, clients, staff, assessments, assessmentRecords, recovery, classes, canWrite,
+  today, trainers, hours, slots, clients, staff, assessments, assessmentRecords, recovery, classes, canWrite, statusByClient = {},
+  bookings = [], weekDays = [], weekNav,
 }: {
   today: string; trainers: Trainer[]; hours: number[]; slots: Slot[]; clients: { id: string; name: string }[];
   staff: { id: string; name: string }[]; assessments: AssessmentRow[]; assessmentRecords: AssessmentRow[]; recovery: RecoveryRow[]; classes: ClassRow[]; canWrite: boolean;
+  statusByClient?: Record<string, ClientStatus>;
+  bookings?: BookingCell[]; weekDays?: WeekDay[]; weekNav?: WeekNav;
 }) {
+  // Deep-link from a client's "Book" (unbooked session): ?client=<id> opens the
+  // assign-client form with that client pre-selected, so front desk just picks a
+  // trainer + slot.
+  const preClient = useSearchParams().get("client") ?? "";
   const [tab, setTab] = useState<"slots" | "studio" | "recovery">("slots");
   const [assigning, setAssigning] = useState<{ trainer_id: string; hour: number } | null>(null);
-  const [manualAssign, setManualAssign] = useState(false);
+  const [manualAssign, setManualAssign] = useState(Boolean(preClient));
   const [newAssess, setNewAssess] = useState(false);
   const [newRecovery, setNewRecovery] = useState(false);
+  // The week grid shows one trainer at a time (days as columns), so bookings on
+  // different days never collide in the same cell.
+  const [selTrainer, setSelTrainer] = useState(trainers[0]?.id ?? "");
+  const trainer = trainers.find((t) => t.id === selTrainer) ?? trainers[0] ?? null;
 
+  // Recurring manual availability (no date) keyed by trainer|hour; real dated
+  // bookings keyed by trainer|date|hour.
   const slotMap = new Map(slots.map((s) => [`${s.trainer_id}|${s.hour}`, s]));
-  const total = trainers.length * hours.length;
-  const assigned = slots.filter((s) => s.client_id).length;
-  const available = slots.filter((s) => s.status === "available" && !s.client_id).length;
-  const unavailable = total - assigned - available;
+  const bookingMap = new Map(bookings.map((b) => [`${b.trainer_id}|${b.date}|${b.hour}`, b]));
+
+  // Counts for the selected trainer across the visible week (day × hour cells).
+  let weekBooked = 0, weekAssigned = 0, weekAvailable = 0, weekUnavailable = 0;
+  if (trainer) {
+    for (const d of weekDays) for (const h of hours) {
+      if (bookingMap.has(`${trainer.id}|${d.date}|${h}`)) { weekBooked++; continue; }
+      const rs = slotMap.get(`${trainer.id}|${h}`);
+      if (rs?.client_id) weekAssigned++;
+      else if (rs?.status === "available") weekAvailable++;
+      else weekUnavailable++;
+    }
+  }
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const tagChip = (tag: string | null) => {
@@ -65,9 +93,9 @@ export default function TrainingScheduleView({
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "slots", label: "🏋 Slots & Assessments" },
-          { key: "studio", label: "🧘 Group Studio" },
-          { key: "recovery", label: "💆 Recovery" },
+          { key: "slots", label: "Slots & Assessments" },
+          { key: "studio", label: "Group Studio" },
+          { key: "recovery", label: "Recovery" },
         ]} />
         <span style={{ flex: 1 }} />
         {canWrite && <button type="button" onClick={() => { setTab("slots"); setNewAssess(true); }} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Assessment</button>}
@@ -78,23 +106,39 @@ export default function TrainingScheduleView({
       {tab === "slots" && (
         <>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>📝 Weekly trainer schedule</div>
-            <span style={{ color: "var(--muted)", fontSize: 12 }}>1:1 PT &amp; fitness assessments · click a cell to assign / set availability</span>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Weekly trainer schedule</div>
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>1:1 PT &amp; fitness assessments · one trainer&apos;s week, day by day</span>
           </div>
           <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 10px" }}>
-            Personal-training and fitness-assessment sessions — which client is with which trainer, at what hour. Recurring weekly.
+            Real bookings land on their exact day &amp; hour. Recurring availability applies to the whole week.
           </p>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-            {trainers.map((t) => <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: t.color }} />{t.name}</span>)}
-            <span style={{ width: 1, height: 18, background: "var(--border)" }} />
-            {TAGS.map((t) => <span key={t}>{tagChip(t)}</span>)}
+          {/* trainer selector + week navigation */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+            {trainers.map((t) => (
+              <button key={t.id} type="button" onClick={() => setSelTrainer(t.id)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", background: selTrainer === t.id ? "var(--brand-fill)" : "#fff", color: selTrainer === t.id ? "#fff" : "var(--ink)", borderRadius: 999, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: t.color }} />{t.name}
+              </button>
+            ))}
+            <span style={{ flex: 1 }} />
+            {weekNav && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Link href={`/sessions?week=${weekNav.prev}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, textDecoration: "none", color: "var(--ink)" }}>← Prev</Link>
+                <Link href={`/sessions?week=${weekNav.current}`} style={{ border: "1px solid var(--border)", background: weekNav.isCurrent ? "var(--brand-tint)" : "#fff", color: weekNav.isCurrent ? "var(--brand-text)" : "var(--ink)", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>This week</Link>
+                <Link href={`/sessions?week=${weekNav.next}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, textDecoration: "none", color: "var(--ink)" }}>Next →</Link>
+                <span style={{ color: "var(--muted)", fontSize: 12, marginLeft: 4 }}>{weekNav.rangeLabel}</span>
+              </span>
+            )}
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-            <span style={{ background: "var(--neutral-bg)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{assigned} assigned</span>
-            <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{available} available</span>
-            <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{unavailable} unavailable</span>
-            <span style={{ color: "var(--muted)", fontSize: 12, alignSelf: "center" }}>Name + tag = assigned · dashed + Assign = available · grey = unavailable</span>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{weekBooked} booked</span>
+            <span style={{ background: "var(--neutral-bg)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{weekAssigned} recurring</span>
+            <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{weekAvailable} available</span>
+            <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{weekUnavailable} unavailable</span>
+            {TAGS.map((t) => <span key={t}>{tagChip(t)}</span>)}
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>Booked = live calendar booking (that day) · &quot;weekly&quot; = recurring · dashed = available · grey = unavailable</span>
           </div>
 
           {/* assign bar */}
@@ -103,7 +147,7 @@ export default function TrainingScheduleView({
               <input type="hidden" name="trainer_id" value={assigning.trainer_id} />
               <input type="hidden" name="hour" value={assigning.hour} />
               <b style={{ fontSize: 13 }}>{trainers.find((t) => t.id === assigning.trainer_id)?.name} · {hourLabel(assigning.hour)}</b>
-              <select name="client_id" required defaultValue="" style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              <select name="client_id" required defaultValue={preClient} style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
               <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
               <button type="button" onClick={() => setAssigning(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
@@ -116,45 +160,66 @@ export default function TrainingScheduleView({
               <b style={{ fontSize: 13 }}>Assign client</b>
               <select name="trainer_id" required defaultValue="" style={input}><option value="" disabled>Trainer…</option>{trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
               <select name="hour" defaultValue="9" style={input}>{hours.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
-              <select name="client_id" required defaultValue="" style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              <select name="client_id" required defaultValue={preClient} style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
               <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
               <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
               <button type="button" onClick={() => setManualAssign(false)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
             </form>
           )}
 
+          {!trainer ? (
+            <div style={{ ...box, padding: "20px", color: "var(--muted)", fontSize: 13, marginBottom: 18 }}>No trainers on the roster yet.</div>
+          ) : (
           <div style={{ ...box, overflow: "auto", marginBottom: 18 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 60, padding: "10px 8px", borderBottom: "1px solid var(--border)" }} />
-                  {trainers.map((t) => <th key={t.id} style={{ padding: "10px 8px", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", fontSize: 13 }}>{t.name}</th>)}
+                  <th style={{ width: 56, padding: "10px 8px", borderBottom: "1px solid var(--border)" }} />
+                  {weekDays.map((d) => {
+                    const isToday = d.date === today;
+                    return (
+                      <th key={d.date} style={{ padding: "8px 6px", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", fontSize: 12.5, background: isToday ? "var(--brand-tint)" : "transparent" }}>
+                        <div style={{ fontWeight: 700 }}>{d.dow}</div>
+                        <div style={{ color: "var(--muted)", fontSize: 11 }}>{d.label}</div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {hours.map((h) => (
                   <tr key={h}>
                     <td style={{ padding: "6px 8px", color: "var(--muted)", fontSize: 12, textAlign: "right", borderTop: "1px solid var(--border)" }}>{hourLabel(h)}</td>
-                    {trainers.map((t) => {
-                      const s = slotMap.get(`${t.id}|${h}`);
-                      const assignedCell = s?.client_id;
-                      const openCell = s?.status === "available" && !s?.client_id;
+                    {weekDays.map((d) => {
+                      const booking = bookingMap.get(`${trainer.id}|${d.date}|${h}`);
+                      const rs = slotMap.get(`${trainer.id}|${h}`);
+                      const recurAssigned = !booking && rs?.client_id;
+                      const openCell = !booking && !recurAssigned && rs?.status === "available";
+                      const isToday = d.date === today;
+                      const cellBg = booking ? "var(--blue-bg)" : recurAssigned ? trainer.color + "12" : isToday ? "#fafafa" : "transparent";
                       return (
-                        <td key={t.id} style={{ borderTop: "1px solid var(--border)", borderLeft: "1px solid var(--border)", padding: 5, height: 46, textAlign: "center", background: assignedCell ? t.color + "12" : "transparent" }}>
-                          {assignedCell ? (
+                        <td key={d.date} style={{ borderTop: "1px solid var(--border)", borderLeft: "1px solid var(--border)", padding: 5, height: 46, textAlign: "center", background: cellBg }}>
+                          {booking ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
-                              <span style={{ fontSize: 12, fontWeight: 600 }}>{s?.clientName ?? "—"}</span>
-                              {tagChip(s?.tag ?? null)}
-                              {canWrite && <form action={unassignTrainerSlot}><input type="hidden" name="trainer_id" value={t.id} /><input type="hidden" name="hour" value={h} /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>✕ clear</button></form>}
+                              <span style={{ fontSize: 12, fontWeight: 600 }}>{booking.clientName ?? "—"}</span>
+                              {tagChip(booking.tag)}
+                              <span style={{ fontSize: 10, color: "var(--blue-text)" }}>booked</span>
+                            </div>
+                          ) : recurAssigned ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
+                              <span style={{ fontSize: 12, fontWeight: 600 }}>{rs?.clientName ?? "—"}</span>
+                              {tagChip(rs?.tag ?? null)}
+                              <span style={{ fontSize: 10, color: "var(--muted)" }}>weekly</span>
+                              {canWrite && <form action={unassignTrainerSlot}><input type="hidden" name="trainer_id" value={trainer.id} /><input type="hidden" name="hour" value={h} /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>✕ clear</button></form>}
                             </div>
                           ) : openCell ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-                              <button type="button" disabled={!canWrite} onClick={() => setAssigning({ trainer_id: t.id, hour: h })} style={{ border: "1px dashed var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: canWrite ? "pointer" : "default" }}>+ Assign</button>
-                              {canWrite && <form action={setTrainerSlot}><input type="hidden" name="trainer_id" value={t.id} /><input type="hidden" name="hour" value={h} /><input type="hidden" name="status" value="unavailable" /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>set unavailable</button></form>}
+                              <button type="button" disabled={!canWrite} onClick={() => setAssigning({ trainer_id: trainer.id, hour: h })} style={{ border: "1px dashed var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: canWrite ? "pointer" : "default" }}>+ Assign</button>
+                              {canWrite && <form action={setTrainerSlot}><input type="hidden" name="trainer_id" value={trainer.id} /><input type="hidden" name="hour" value={h} /><input type="hidden" name="status" value="unavailable" /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>set unavailable</button></form>}
                             </div>
                           ) : (
                             canWrite ? (
-                              <form action={setTrainerSlot}><input type="hidden" name="trainer_id" value={t.id} /><input type="hidden" name="hour" value={h} /><input type="hidden" name="status" value="available" /><button style={{ border: "none", background: "transparent", color: "#94a3b8", fontSize: 12, cursor: "pointer", width: "100%" }}>Unavailable</button></form>
+                              <form action={setTrainerSlot}><input type="hidden" name="trainer_id" value={trainer.id} /><input type="hidden" name="hour" value={h} /><input type="hidden" name="status" value="available" /><button style={{ border: "none", background: "transparent", color: "#94a3b8", fontSize: 12, cursor: "pointer", width: "100%" }}>Unavailable</button></form>
                             ) : <span style={{ color: "#94a3b8", fontSize: 12 }}>Unavailable</span>
                           )}
                         </td>
@@ -165,11 +230,12 @@ export default function TrainingScheduleView({
               </tbody>
             </table>
           </div>
+          )}
 
           {/* Assessments due */}
           <div style={{ ...box, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={{ fontWeight: 700 }}>📋 Assessments due</div>
+              <div style={{ fontWeight: 700 }}>Assessments due</div>
               {countBadge(assessments.length)}
               <span style={{ flex: 1 }} />
               {canWrite && <button type="button" onClick={() => setNewAssess((v) => !v)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{newAssess ? "Cancel" : "+ New Assessment"}</button>}
@@ -190,7 +256,7 @@ export default function TrainingScheduleView({
                 <tbody>
                   {assessments.map((a) => (
                     <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}{a.client_id && statusByClient[a.client_id] ? <span style={{ marginLeft: 6, fontWeight: 400 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></span> : null}</td>
                       <td style={td}>{assessLabel(a.kind)}{a.trainerName ? <span style={{ color: "var(--muted)" }}> · {a.trainerName}</span> : ""}</td>
                       <td style={td}>{fmtDate(a.due_date)}</td>
                       <td style={td}>{dueBadge(a)}</td>
@@ -215,7 +281,7 @@ export default function TrainingScheduleView({
           {/* Recent assessment records */}
           <div style={{ ...box, padding: "16px 18px", marginTop: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-              <div style={{ fontWeight: 700 }}>🗂 Recent assessment records</div>
+              <div style={{ fontWeight: 700 }}>Recent assessment records</div>
               {countBadge(assessmentRecords.length)}
             </div>
             <div style={{ overflow: "auto" }}>
@@ -224,7 +290,7 @@ export default function TrainingScheduleView({
                 <tbody>
                   {assessmentRecords.map((a) => (
                     <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{a.clientName ?? "—"}{a.client_id && statusByClient[a.client_id] ? <span style={{ marginLeft: 6, fontWeight: 400 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></span> : null}</td>
                       <td style={td}>{assessLabel(a.kind)}</td>
                       <td style={td}>{a.trainerName ?? "—"}</td>
                       <td style={td}>{a.scheduled_date ? fmtDate(a.scheduled_date) : fmtDate(a.due_date)}</td>
@@ -232,7 +298,7 @@ export default function TrainingScheduleView({
                         {canWrite ? (
                           <form action={toggleAssessmentShared}>
                             <input type="hidden" name="id" value={a.id} /><input type="hidden" name="shared" value={String(!!a.shared)} />
-                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "🔓 Shared" : "🔒 Private"}</button>
+                            <button style={{ border: "1px solid var(--border)", background: a.shared ? "var(--green-bg)" : "#fff", color: a.shared ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>{a.shared ? "Shared" : "Private"}</button>
                           </form>
                         ) : <span style={{ color: "var(--muted)", fontSize: 12 }}>{a.shared ? "Shared" : "Private"}</span>}
                       </td>
@@ -250,7 +316,7 @@ export default function TrainingScheduleView({
       {tab === "studio" && (
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>🧘 Group Studio</div>
+            <div style={{ fontWeight: 700 }}>Group Studio</div>
             <span style={{ flex: 1 }} />
             <Link href="/classes" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Manage classes →</Link>
           </div>
@@ -278,7 +344,7 @@ export default function TrainingScheduleView({
       {tab === "recovery" && (
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>💆 Recovery</div>
+            <div style={{ fontWeight: 700 }}>Recovery</div>
             <span style={{ flex: 1 }} />
             {canWrite && <button type="button" onClick={() => setNewRecovery((v) => !v)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{newRecovery ? "Cancel" : "+ Book recovery"}</button>}
           </div>

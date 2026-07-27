@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee, canConsult, isClinician } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { ageFromDob } from "@/lib/dob";
+import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import { boardCandidates, boardProgress, effectiveScores, type ScoreTweaks, type CandidateInput } from "@/lib/whiteboard";
 import type { BpScores } from "@/lib/blueprint";
 import { openWhiteboard, closeWhiteboard, addWhiteboardCard } from "@/lib/actions";
@@ -98,6 +99,10 @@ export default async function WhiteboardPage() {
   const onBoard = new Set(cards.map((c) => c.client_id));
   const suggestions = boardCandidates(inputs, today).filter((s) => !onBoard.has(s.id)).slice(0, 6);
 
+  // Role-aware client status for the board (same value shown everywhere).
+  const wbStatuses = await loadClientStatuses(supabase, cards.map((c) => c.client_id), today);
+  const wbDisc = disciplineForRole(me.role);
+
   // ---- build the cards -----------------------------------------------------
   const notesByCard = new Map<string, CardData["notes"]>();
   if (cards.length) {
@@ -132,6 +137,7 @@ export default async function WhiteboardPage() {
       scores: effectiveScores(bp?.scores ?? null, card.score_tweaks ?? {}),
       notes: notesByCard.get(card.id) ?? [],
       blueprintGenerated: Boolean(bp?.generated),
+      careStatus: clientStatus(wbStatuses.get(card.client_id), wbDisc),
       facts: [
         { label: "Sessions done", value: String(doneDates.length) },
         { label: "Last session", value: doneDates.length ? doneDates[doneDates.length - 1] : "—" },

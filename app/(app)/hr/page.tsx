@@ -86,11 +86,11 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
 
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} items={[
-          { key: "attendance", label: "👥 Team & Attendance", href: "/hr?tab=attendance" },
-          { key: "leave", label: "🌴 Leave", href: "/hr?tab=leave" },
-          { key: "payroll", label: "💰 Payroll & Statutory", href: "/hr?tab=payroll" },
-          { key: "recruit", label: "📋 Recruitment & Docs", href: "/hr?tab=recruit" },
-          { key: "boarding", label: "🔄 On / Offboarding", href: "/hr?tab=boarding" },
+          { key: "attendance", label: "Team & Attendance", href: "/hr?tab=attendance" },
+          { key: "leave", label: "Leave", href: "/hr?tab=leave" },
+          { key: "payroll", label: "Payroll & Statutory", href: "/hr?tab=payroll" },
+          { key: "recruit", label: "Recruitment & Docs", href: "/hr?tab=recruit" },
+          { key: "boarding", label: "On / Offboarding", href: "/hr?tab=boarding" },
         ]} />
       </div>
 
@@ -113,7 +113,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
             </table>
           </div>
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}><b>💬 Daily Updates</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "internal coordination")}</div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}><b>Daily Updates</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "internal coordination")}</div>
             <form action={addHrUpdate} style={{ display: "flex", gap: 6, marginBottom: 12 }}>
               <input name="body" placeholder="Post an update…" required style={{ ...inp, flex: 1 }} />
               <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Post</button>
@@ -167,7 +167,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
       {tab === "payroll" && (
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>📝 Month-End Verification</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "window: 26th onwards")}</div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>Month-End Verification</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "window: 26th onwards")}</div>
             {monthTasks.map((t) => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: "1px solid var(--border)", fontSize: 13.5 }}>
                 <b>{t.label}</b><span style={{ flex: 1 }} />
@@ -180,7 +180,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
           </div>
 
           <div style={{ ...box, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: "14px 16px" }}><b>💰 Payroll Processing — {new Date(today + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "salary sheet")}</div>
+            <div style={{ display: "flex", alignItems: "center", padding: "14px 16px" }}><b>Payroll Processing — {new Date(today + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "salary sheet")}</div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr><th style={th}>Staff</th><th style={th}>Base</th><th style={th}>LOP</th><th style={th}>PF</th><th style={th}>Net pay</th><th style={th}>Payslip</th></tr></thead>
               <tbody>
@@ -208,7 +208,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
             <div style={{ ...box, padding: "16px 18px" }}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>🤝 Commission Tracking</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "training · sales · TDS")}</div>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>Commission Tracking</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "training · sales · TDS")}</div>
               {commissions.map((c) => (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", padding: "9px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                   <div><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.kind} · TDS {money(c.tds)}</div></div>
@@ -223,7 +223,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
               </form>
             </div>
             <div style={{ ...box, padding: "16px 18px" }}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>🏛 Statutory Records</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "ESI & PF · due 3rd–4th")}</div>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>Statutory Records</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "ESI & PF · due 3rd–4th")}</div>
               {statutory.map((s) => (
                 <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                   <div><b>{s.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{s.due_note ?? ""}</div></div>
@@ -241,7 +241,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
       {tab === "recruit" && (
         <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, alignItems: "start" }}>
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>🔍 Recruitment</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "Indeed · Referrals · LinkedIn")}</div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>Recruitment</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "Indeed · Referrals · LinkedIn")}</div>
             {candidates.map((c) => (
               <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                 <div><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.role ?? ""}{c.source ? ` · via ${c.source}` : ""}</div></div>
@@ -254,17 +254,16 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
           </div>
           <div style={{ display: "grid", gap: 16 }}>
             <div style={{ ...box, padding: "16px 18px" }}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>📄 HR Documents</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "offer · experience · contracts")}</div>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>HR Documents</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "offer · experience · contracts")}</div>
               {documents.map((d) => (
                 <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
-                  <div style={{ fontSize: 18 }}>📄</div>
                   <div style={{ flex: 1 }}><b>{d.title}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{d.kind ?? ""}{d.doc_date ? ` · ${fmtDate(d.doc_date)}` : " · —"}</div></div>
                   <span style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>Open</span>
                 </div>
               ))}
             </div>
             <div style={{ ...box, padding: "16px 18px" }}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>🛒 Purchase List</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "office & HR purchases")}</div>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>Purchase List</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "office & HR purchases")}</div>
               {purchases.map((pu) => (
                 <div key={pu.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: "1px solid var(--border)", fontSize: 13 }}>
                   <div style={{ flex: 1 }}><b>{pu.item}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{pu.requested_by ?? ""}{pu.req_date ? ` · ${fmtDate(pu.req_date)}` : ""}</div></div>
@@ -282,14 +281,14 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
       {tab === "boarding" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><b style={{ color: "var(--green)" }}>🟢 Employee Onboarding</b><span style={{ flex: 1 }} /><OnboardingForm /></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><b style={{ color: "var(--green)" }}>Employee Onboarding</b><span style={{ flex: 1 }} /><OnboardingForm /></div>
             <div style={{ display: "grid", gap: 14 }}>
               {onboarding.map((o) => <OnboardingCard key={o.id} id={o.id} name={o.name} role={o.role} joining={o.joining_date} steps={o.steps ?? []} status={o.status} />)}
               {onboarding.length === 0 && <div style={{ ...box, padding: "20px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No one onboarding.</div>}
             </div>
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><b style={{ color: "#dc2626" }}>🔴 Employee Offboarding</b><span style={{ flex: 1 }} /></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><b style={{ color: "#dc2626" }}>Employee Offboarding</b><span style={{ flex: 1 }} /></div>
             <form action={addOffboarding} style={{ ...box, padding: 12, marginBottom: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <input name="name" placeholder="Name" required style={{ ...inp, flex: 1, minWidth: 90 }} />
               <input name="role" placeholder="Role" style={{ ...inp, width: 110 }} />

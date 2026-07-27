@@ -147,7 +147,7 @@ export default function ExperiencePanel({
   return (
     <div style={box}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ fontWeight: 700 }}>🎟 Free experience sessions</div>
+        <div style={{ fontWeight: 700 }}>Free experience sessions</div>
         {s.completed && (
           <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
             Both attended

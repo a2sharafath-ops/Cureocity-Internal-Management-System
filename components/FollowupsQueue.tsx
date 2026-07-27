@@ -6,6 +6,8 @@ import {
   fuSendQuestionnaire, fuSendReminder, fuNoAnswer, fuBookInPerson, fuNoConsult, fuMarkReceived, fuCompleteReview,
 } from "@/lib/actions";
 import Chip from "@/components/Chip";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type FuRow = {
   id: string; clientId: string | null; clientName: string | null; label: string; category: string | null;
@@ -24,7 +26,7 @@ const STAGE_STYLE: Record<string, [string, string, string]> = {
 
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }); }
 
-export default function FollowupsQueue({ items, today, canWrite }: { items: FuRow[]; today: string; canWrite: boolean }) {
+export default function FollowupsQueue({ items, today, canWrite, statusByClient = {} }: { items: FuRow[]; today: string; canWrite: boolean; statusByClient?: Record<string, ClientStatus> }) {
   const [cat, setCat] = useState("All");
   const [review, setReview] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
@@ -90,7 +92,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
             const [sb, sc, st] = STAGE_STYLE[f.stage] ?? ["var(--neutral-bg)", "#64748b", f.stage];
             return (
               <tr key={f.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}</td>
+                <td style={{ ...td, fontWeight: 700 }}>{f.clientName ? <Link href={`/clients/${f.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none" }}>{f.clientName}</Link> : "—"}{f.clientId && statusByClient[f.clientId] ? <div style={{ marginTop: 3, fontWeight: 400 }}><ClientStatusBadge status={statusByClient[f.clientId]} size="sm" /></div> : null}</td>
                 <td style={td}>{f.label}{f.token && <div style={{ fontSize: 11, color: "var(--muted)" }}>token {f.token}</div>}</td>
                 <td style={{ ...td, color: "var(--muted)" }}>{f.category ?? "—"}</td>
                 <td style={td}>{f.day != null ? `Day ${f.day}` : "—"}</td>
@@ -104,7 +106,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
                       <input type="hidden" name="id" value={f.id} />
                       <textarea name="summary" value={summary} onChange={(e) => setSummary(e.target.value)} rows={5} placeholder="Write or generate the summary…" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12, resize: "vertical" }} />
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button type="button" onClick={() => setSummary(genSummary(f))} style={btn("#fff", "var(--brand-text)")}>✨ Generate summary</button>
+                        <button type="button" onClick={() => setSummary(genSummary(f))} style={btn("#fff", "var(--brand-text)")}>Generate summary</button>
                         <button type="submit" style={btn("var(--brand-fill)")}>Mark complete</button>
                       </div>
                     </form>
@@ -121,7 +123,7 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
 
   const sectionTitle = (icon: string, label: string, n: number, color: string, bg: string) => (
     <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 0 8px", fontSize: 14, fontWeight: 700 }}>
-      {icon} {label} <span style={{ background: bg, color, borderRadius: 999, padding: "1px 9px", fontSize: 12 }}>{n}</span>
+      {icon}{icon ? " " : ""}{label} <span style={{ background: bg, color, borderRadius: 999, padding: "1px 9px", fontSize: 12 }}>{n}</span>
     </div>
   );
 
@@ -139,13 +141,13 @@ export default function FollowupsQueue({ items, today, canWrite }: { items: FuRo
         {chip("var(--brand-tint)", "var(--brand-text)", `${reviews.length} to review`)}
       </div>
 
-      {sectionTitle("📞", "Clients to Call Today", calls.length, "var(--amber-text)", "var(--amber-bg)")}
-      {table(calls, true, "No calls due 🎉")}
-      {sectionTitle("🔗", "Links Sent — Awaiting Client", links.length, "var(--blue-text)", "var(--blue-bg)")}
+      {sectionTitle("", "Clients to Call Today", calls.length, "var(--amber-text)", "var(--amber-bg)")}
+      {table(calls, true, "No calls due")}
+      {sectionTitle("", "Links Sent — Awaiting Client", links.length, "var(--blue-text)", "var(--blue-bg)")}
       {table(links, true, "Nothing awaiting clients")}
-      {sectionTitle("📝", "Pending Consultant Review", reviews.length, "var(--brand-text)", "var(--brand-tint)")}
+      {sectionTitle("", "Pending Consultant Review", reviews.length, "var(--brand-text)", "var(--brand-tint)")}
       {table(reviews, true, "Review queue clear")}
-      {sectionTitle("✅", "Closed", closed.length, "#64748b", "#f1f5f9")}
+      {sectionTitle("", "Closed", closed.length, "#64748b", "#f1f5f9")}
       {table(closed, false, "Nothing closed yet")}
     </div>
   );

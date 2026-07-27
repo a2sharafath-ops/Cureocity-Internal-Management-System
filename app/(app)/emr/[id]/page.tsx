@@ -82,7 +82,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
       {/* allergy banner */}
       {allergies.length > 0 && (
         <div style={{ background: "var(--red-bg)", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 16px", marginBottom: 18, color: "var(--red)", fontSize: 14 }}>
-          <b>⚠ Allergies:</b> {allergies.map((al) => `${al.substance}${al.severity === "severe" ? " (severe)" : ""}`).join(", ")}
+          <b>Allergies:</b> {allergies.map((al) => `${al.substance}${al.severity === "severe" ? " (severe)" : ""}`).join(", ")}
         </div>
       )}
 
@@ -222,7 +222,7 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
                     ))}
                   </tbody>
                 </table>
-                {r.flags && <div style={{ marginTop: 8, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>⚠ Flagged at signing: {r.flags}</div>}
+                {r.flags && <div style={{ marginTop: 8, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "6px 10px", fontSize: 12 }}>Flagged at signing: {r.flags}</div>}
                 {r.notes && <div style={{ marginTop: 6, color: "var(--muted)", fontSize: 13 }}>{r.notes}</div>}
               </div>
             );

@@ -174,7 +174,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
         />
 
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>📜 Activity</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Activity</div>
           <ActivityTimeline events={timeline} today={todayISO()} max={30}
             emptyLabel="No activity yet — log a remark or book an experience session." />
         </div>

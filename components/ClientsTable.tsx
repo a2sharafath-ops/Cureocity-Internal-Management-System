@@ -6,14 +6,21 @@ import ClientQuickDrawer from "@/components/ClientQuickDrawer";
 import { setClientOwner } from "@/lib/actions";
 import { BRANCHES } from "@/lib/branches";
 import SegTabs from "@/components/SegTabs";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import type { ClientStatus } from "@/lib/client-status";
 
 export type ClientRow = {
   id: string; code: string | null; name: string; phone: string | null; email: string | null;
   age: number | null; branch: string | null; used: number;
   package_name: string | null; is_facility: boolean; package_sessions: number;
+  packages?: { label: string; category: string }[]; careTeam?: { disc: string; name: string }[];
   is_blueprint: boolean; status: string; coach: string | null; owner: string | null;
   journey: { steps: { label: string; done: boolean }[]; done: number; total: number; stage: string };
+  careStatus?: ClientStatus | null;
 };
+
+const CAT_SHORT: Record<string, string> = { membership: "Membership", comprehensive: "Comprehensive", training: "PT", blueprint: "BluePrint" };
+const DISC_ABBR: Record<string, string> = { Doctor: "Dr", Diet: "Diet", Fitness: "Fit", Coach: "Coach", Psych: "Psy" };
 
 export default function ClientsTable({ clients, staff, writer }: { clients: ClientRow[]; staff: { id: string; name: string }[]; writer: boolean }) {
   const [q, setQ] = useState("");
@@ -45,12 +52,12 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
       <div style={{ marginBottom: 14 }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
           { key: "all", label: "All Clients", count: clients.length },
-          { key: "blueprint", label: "🧬 Blueprint clients", count: bpCount },
+          { key: "blueprint", label: "Blueprint clients", count: bpCount },
         ]} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search by name, phone, or email" style={{ maxWidth: 340, width: "100%", padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, outline: "none", background: "#fff" }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, phone, or email" style={{ maxWidth: 340, width: "100%", padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, outline: "none", background: "#fff" }} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: "9px 12px", fontSize: 14, border: "1px solid var(--border)", borderRadius: 10, background: "#fff" }}>
           <option>All</option><option>Active</option><option>Completed</option>
         </select>
@@ -67,9 +74,9 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
           <thead>
             <tr>
               <th style={th}>Name</th><th style={th}>Age</th><th style={th}>Package</th><th style={th}>Journey</th><th style={th}>Status</th>
-              {/* pro_id is whichever care professional is assigned — trainer,
-                  doctor, dietitian — not specifically a health coach */}
-              <th style={th}>Assigned Pro</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
+              {/* The full care team assigned to the client (per discipline),
+                  not just the single denormalised pro_id. */}
+              <th style={th}>Care Team</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
             </tr>
           </thead>
           <tbody>
@@ -80,8 +87,14 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                   <td style={td}><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.code ?? "—"}{c.phone ? ` · ${c.phone}` : ""}</div></td>
                   <td style={{ ...td, color: "var(--muted)" }}>{c.age != null ? `${c.age} yrs` : "—"}</td>
                   <td style={td}>
-                    <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{c.package_name ?? "—"}</span>
-                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : left != null ? `${left} of ${c.package_sessions} credits left` : "—"}</div>
+                    {c.packages && c.packages.length ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 190 }}>
+                        {c.packages.map((p, i) => (
+                          <span key={i} title={p.label} style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}>{CAT_SHORT[p.category] ?? p.label}</span>
+                        ))}
+                      </div>
+                    ) : <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{c.package_name ?? "—"}</span>}
+                    {(c.is_facility || left != null) && <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : `${left} of ${c.package_sessions} credits left`}</div>}
                   </td>
                   <td style={td}>
                     <div style={{ display: "flex", gap: 3 }} title={c.journey.steps.map((s) => `${s.done ? "✓" : "○"} ${s.label}`).join("   ")}>
@@ -89,10 +102,24 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                         <span key={i} style={{ width: 18, height: 6, borderRadius: 3, background: s.done ? "var(--green)" : "#e2e8f0" }} />
                       ))}
                     </div>
-                    <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{c.journey.done}/{c.journey.total} · {c.journey.stage}</div>
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--muted)", fontSize: 11 }}>{c.journey.done}/{c.journey.total}</span>
+                      {c.careStatus ? <ClientStatusBadge status={c.careStatus} size="sm" /> : <span style={{ color: "var(--muted)", fontSize: 11 }}>· {c.journey.stage}</span>}
+                    </div>
                   </td>
                   <td style={td}>{statusChip(c.status)}</td>
-                  <td style={{ ...td, color: "var(--muted)" }}>{c.coach ?? "—"}</td>
+                  <td style={{ ...td, color: "var(--muted)" }}>
+                    {c.careTeam && c.careTeam.length ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 220 }}>
+                        {c.careTeam.map((t, i) => (
+                          <span key={i} title={`${t.disc} · ${t.name}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--border)", borderRadius: 999, padding: "2px 8px", fontSize: 11.5, whiteSpace: "nowrap", background: "#fff" }}>
+                            <span style={{ color: "var(--muted)", fontWeight: 600 }}>{DISC_ABBR[t.disc] ?? t.disc}</span>
+                            <span style={{ color: "var(--ink)" }}>{t.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (c.coach ?? "—")}
+                  </td>
                   <td style={td}>
                     {writer ? (
                       <form action={setClientOwner}>

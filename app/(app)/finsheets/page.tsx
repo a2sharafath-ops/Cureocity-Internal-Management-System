@@ -11,12 +11,12 @@ export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const TABS = [
-  { key: "sales", label: "🧾 Sales" },
-  { key: "payable", label: "📤 Payables" },
-  { key: "estimates", label: "📝 Estimates" },
-  { key: "bank", label: "🏦 Bank" },
-  { key: "cash", label: "💵 Cash" },
-  { key: "reimburse", label: "🔁 Reimbursements" },
+  { key: "sales", label: "Sales" },
+  { key: "payable", label: "Payables" },
+  { key: "estimates", label: "Estimates" },
+  { key: "bank", label: "Bank" },
+  { key: "cash", label: "Cash" },
+  { key: "reimburse", label: "Reimbursements" },
 ];
 
 type Ledger = { id: string; date: string; ref: string | null; party: string | null; kind: string | null; direction: string; amount: number; voucher_no: number | null };
@@ -189,7 +189,7 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
             <div style={{ ...box, padding: 16, marginBottom: 14, display: "flex", flexWrap: "wrap", gap: 28, alignItems: "center" }}>
               <div><div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 2 }}>Cash in hand</div><div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: low ? "var(--red)" : "var(--brand-text)" }}>{money(inHand)}</div></div>
               <div><div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 2 }}>Cash float</div><div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: "var(--ink)" }}>{money(floatAmount)}</div></div>
-              {low && <div style={{ background: "var(--amber-bg)", color: "var(--amber-text-soft)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>⚠ Low — top up {money(topUpNeeded)} to restore float</div>}
+              {low && <div style={{ background: "var(--amber-bg)", color: "var(--amber-text-soft)", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 600 }}>Low — top up {money(topUpNeeded)} to restore float</div>}
               <span style={{ flex: 1 }} />
               {canManageFinance && (
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

@@ -1,4 +1,5 @@
 import { BRANCHES } from "@/lib/branches";
+import { dobToISO } from "@/lib/dob";
 
 type Pkg = { id: string; name: string };
 type ClientData = {
@@ -7,6 +8,7 @@ type ClientData = {
   package_id?: string | null; branch?: string | null; gender?: string | null;
   occupation?: string | null; height?: number | null; weight?: number | null;
   conditions?: string | null; goals?: string[] | null; joined?: string | null;
+  dob?: string | null; address?: string | null; emergency?: string | null;
 };
 
 const label: React.CSSProperties = {
@@ -57,6 +59,10 @@ export default function ClientForm({
           <input style={input} type="date" name="joined" defaultValue={c.joined ?? new Date().toISOString().slice(0,10)} />
         </div>
         <div>
+          <label style={label}>Date of birth</label>
+          <input style={input} type="date" name="dob" defaultValue={dobToISO(c.dob) ?? ""} />
+        </div>
+        <div>
           <label style={label}>Package</label>
           <select style={input} name="package_id" defaultValue={c.package_id ?? ""}>
             <option value="">— none —</option>
@@ -91,6 +97,14 @@ export default function ClientForm({
         <div>
           <label style={label}>Weight (kg)</label>
           <input style={input} type="number" step="0.1" name="weight" defaultValue={c.weight ?? ""} />
+        </div>
+        <div>
+          <label style={label}>Location</label>
+          <input style={input} name="address" defaultValue={c.address ?? ""} placeholder="Area / city" />
+        </div>
+        <div>
+          <label style={label}>Emergency contact</label>
+          <input style={input} name="emergency" defaultValue={c.emergency ?? ""} placeholder="Name / phone" />
         </div>
       </div>
 

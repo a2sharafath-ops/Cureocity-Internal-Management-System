@@ -11,6 +11,7 @@ import { WearableForm, WearableConnect } from "@/components/WearableForm";
 import { archiveHabit, removeWorkout } from "@/lib/actions";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { todayISO } from "@/lib/today";
+import { packageCategory } from "@/lib/packages";
 import { ageFromDob } from "@/lib/dob";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
@@ -20,9 +21,19 @@ import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
+import PackageStatusPanel from "@/components/PackageStatusPanel";
+import { getPackageStatus } from "@/lib/package-status";
+import PTProtocol from "@/components/PTProtocol";
+import RepairJourneyButton from "@/components/RepairJourneyButton";
+import RenewMembership from "@/components/RenewMembership";
+import FreezeToggle from "@/components/FreezeToggle";
+import BloodActions from "@/components/BloodActions";
+import ClientStatusBadge from "@/components/ClientStatusBadge";
+import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
+import ScheduleSessionsForm from "@/components/ScheduleSessionsForm";
 import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
-import { getComprehensiveView } from "@/lib/actions";
+import { getComprehensiveView, getPTView } from "@/lib/actions";
 import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
@@ -64,11 +75,22 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const ageOf = (dob: unknown): number | null =>
     typeof dob === "string" ? ageFromDob(dob) : null;
 
-  const [{ data: sessions }, { data: trainerData }, { data: consultData }] = await Promise.all([
+  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }, { data: apptData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+    supabase.from("care_protocols").select("id").eq("client_id", params.id).limit(1),
+    // Booked consults live in `appointments`; a `consultations` row only appears
+    // once the clinician hits Start. So the journey must read appointments too,
+    // or a booked-but-not-started consult looks "not scheduled".
+    supabase.from("appointments").select("type, status, staff(role)").eq("client_id", params.id).neq("status", "cancelled"),
   ]);
+  // Has this client's care journey already been kicked off? If so, the primary
+  // "Start" action is done — we only offer a quiet re-run for repairs.
+  // care_protocols covers PT/Comprehensive; BluePrint doesn't create one, so its
+  // evidence (a blueprints row + blood request) is folded in below via `bp` /
+  // `bloodRow` so the button doesn't keep offering "Start journey".
+  const hasProtocol = ((protoData ?? []) as unknown[]).length > 0;
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
   const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
 
@@ -128,6 +150,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // null for any client not on an active Comprehensive package — the panel
   // simply doesn't render for them.
   const compView = await getComprehensiveView(params.id);
+  const pkgStatus = await getPackageStatus(params.id);
+  const ptView = await getPTView(params.id);
   const prescriptions = (rxData ?? []) as unknown as {
     id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
     prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -135,21 +159,92 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
   // owner / coach names, blueprint status, onboarding journey follow-ups, packages held
-  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }] = await Promise.all([
+  const [{ data: staffAll }, { data: bpRow }, { data: fuRows }, { data: cpRows }, { data: allPkgs }, { data: assignRows }, { data: bloodRows }, { data: signoffRows }] = await Promise.all([
     supabase.from("staff").select("id, name"),
     supabase.from("blueprints").select("generated, generated_date, scores").eq("client_id", params.id).maybeSingle(),
     supabase.from("followups").select("label, due_date, status, kind").eq("client_id", params.id).order("due_date"),
-    supabase.from("client_packages").select("id, package_name, category, start_date, end_date, price, status").eq("client_id", params.id).order("start_date", { ascending: false }),
+    supabase.from("client_packages").select("id, package_id, package_name, category, start_date, end_date, price, status").eq("client_id", params.id).order("start_date", { ascending: false }),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("price"),
+    supabase.from("client_assignments").select("discipline, staff_id").eq("client_id", params.id),
+    supabase.from("blood_requests").select("requested_at, submitted, submitted_date, panel").eq("client_id", params.id),
+    supabase.from("blueprint_signoffs").select("discipline").eq("client_id", params.id),
   ]);
   const staffMap = new Map(((staffAll ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
   const ownerName = c0.owner ? (staffMap.get(String(c0.owner)) ?? null) : null;
-  const coachName = c0.pro_id ? (staffMap.get(String(c0.pro_id)) ?? null) : null;
+  // The Health Coach is the coach-discipline care-team member — NOT clients.pro_id,
+  // which is the denormalised primary pro (doctor-first) and would mislabel the
+  // doctor as the coach.
+  const assignByDisc = new Map(((assignRows ?? []) as { discipline: string; staff_id: string | null }[]).map((r) => [r.discipline, r.staff_id]));
+  const coachId = assignByDisc.get("coach");
+  const coachName = coachId ? (staffMap.get(String(coachId)) ?? null) : null;
+  // The full care team assigned to this client, per discipline, in a stable order.
+  const CT_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach", psychologist: "Psychologist" };
+  const careTeam = ["doctor", "dietitian", "trainer", "coach", "psychologist"]
+    .map((d) => ({ disc: CT_LABEL[d], name: assignByDisc.get(d) ? (staffMap.get(String(assignByDisc.get(d))) ?? null) : null }))
+    .filter((x) => x.name) as { disc: string; name: string }[];
   const bp = (bpRow ?? null) as { generated: boolean; generated_date: string | null; scores: Record<string, number> | null } | null;
+  // BluePrint consolidated sign-off progress: who's assigned (required) and
+  // who's signed. Shown as a "required sign-offs" line so front desk sees who's
+  // still pending before the Blueprint can generate.
+  const BP_DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
+  const bpRequired = ((assignRows ?? []) as { discipline: string }[]).map((r) => r.discipline).filter((d) => BP_DISC_LABEL[d]);
+  const bpSigned = new Set(((signoffRows ?? []) as { discipline: string }[]).map((r) => r.discipline));
   const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
-  const clientPackages = (cpRows ?? []) as { id: string; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
+  const clientPackages = (cpRows ?? []) as { id: string; package_id: string | null; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
   const pkgList = (allPkgs ?? []) as { id: string; name: string; price: number; is_facility: boolean }[];
-  const activeMembership = clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
+  // A client's membership can live in either place: the newer client_packages
+  // table, or the legacy single `package_id` on the client record (surfaced as
+  // client.packages). Count both, so a client whose only membership is the
+  // legacy facility package isn't wrongly shown as "no active membership" —
+  // which would also block PT/Comprehensive sales. The 0089 backfill copies
+  // legacy packages into client_packages; this fallback covers anything not yet
+  // migrated and stays correct afterwards.
+  const legacyFacilityMembership = Boolean((client as { packages: { is_facility: boolean } | null }).packages?.is_facility);
+  const activeMembership = legacyFacilityMembership
+    || clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
+  // Does this client hold a package whose care journey should have been kicked
+  // off (booking tasks, blood request, care team)? Used to offer the repair.
+  const hasJourneyPkg = clientPackages.some((r) => ["blueprint", "training", "comprehensive"].includes(r.category));
+  // Membership controls (front-desk supervised): shown for any client who holds
+  // a membership — active or lapsed — so it can be renewed. Default the renew
+  // dropdown to the current membership's package.
+  const holdsMembership = legacyFacilityMembership || clientPackages.some((r) => r.category === "membership");
+  const currentMembershipPkgId = clientPackages.find((r) => r.category === "membership" && r.status === "active")?.package_id
+    ?? clientPackages.find((r) => r.category === "membership")?.package_id ?? null;
+  // The single renewal entry point covers any renewable (fixed-term) package —
+  // membership, PT (training) or Comprehensive. BluePrint is one-off (Add package).
+  const RENEWABLE_CATS = ["membership", "training", "comprehensive"];
+  const renewablePackages = pkgList.filter((pk) => RENEWABLE_CATS.includes(packageCategory(pk.id, pk.is_facility)));
+  const holdsRenewable = legacyFacilityMembership || clientPackages.some((r) => RENEWABLE_CATS.includes(r.category));
+  const currentRenewablePkgId =
+    clientPackages.find((r) => RENEWABLE_CATS.includes(r.category) && r.status === "active")?.package_id
+    ?? clientPackages.find((r) => RENEWABLE_CATS.includes(r.category))?.package_id
+    ?? currentMembershipPkgId;
+  const isFrozen = Boolean(c0.frozen);
+  // PT / Comprehensive strength sessions: offer guided scheduling until booked.
+  const isPtOrComp = clientPackages.some((r) => ["training", "comprehensive"].includes(r.category));
+  const hasScheduledSessions = ((sessions ?? []) as { status: string }[]).some((s) => s.status === "scheduled");
+  const assignedTrainerId = assignByDisc.get("trainer") ?? null;
+  // Role-aware status badge (same value shown everywhere this client appears).
+  const detailStatus = clientStatus((await loadClientStatuses(supabase, [params.id], todayISO())).get(params.id), disciplineForRole(me?.role));
+  // Blood report status — shown prominently for BluePrint / Comprehensive
+  // clients (whose journey requests a panel). One row per client; take the first.
+  const bloodRowsAll = ((bloodRows ?? []) as { requested_at: string | null; submitted: boolean; submitted_date: string | null; panel: string | null }[]);
+  const bloodRow = bloodRowsAll[0] ?? null;
+  // A client can hold two panels at once (BluePrint + Comprehensive). Show each
+  // that either the packages call for or a row already exists for, so front desk
+  // can request / mark-received the right one.
+  const BLOOD_PANEL_LABEL: Record<string, string> = { blueprint: "BluePrint panel", comprehensive: "Comprehensive panel" };
+  const bloodByPanel = new Map(bloodRowsAll.map((r) => [r.panel ?? "blueprint", r]));
+  const bloodPanels = Array.from(new Set([
+    ...clientPackages.filter((r) => ["blueprint", "comprehensive"].includes(r.category)).map((r) => r.category),
+    ...bloodRowsAll.map((r) => r.panel ?? "blueprint"),
+  ]));
+  const needsBlood = bloodPanels.length > 0;
+  // Journey is live if the protocol exists (PT/Comprehensive) or BluePrint's
+  // artefacts do (blueprints row / blood request). Keeps the Start-journey button
+  // from re-appearing after it's already been run.
+  const journeyStarted = hasProtocol || Boolean(bp) || Boolean(bloodRow);
   const clientAge = ageOf(c0.dob);
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
@@ -191,14 +286,26 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   ]);
 
   // ---- Client Journey milestones (Service Timeline) ----
-  const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed");
-  const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind);
+  // Booked (and completed) initial consults per discipline, derived from
+  // appointments — a booked-but-not-started consult has no `consultations` row,
+  // so relying on that table alone made a scheduled consult read "not scheduled".
+  const A_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
+  const INITIAL_APPT_TYPES = ["Consultation", "Assessment"];
+  const apptSched = new Set<string>();
+  const apptDone = new Set<string>();
+  for (const a of (apptData ?? []) as unknown as { type: string | null; status: string; staff: { role: string } | null }[]) {
+    const kind = A_ROLE_TO_KIND[a.staff?.role ?? ""];
+    if (!kind || !INITIAL_APPT_TYPES.includes(a.type ?? "Consultation")) continue;
+    if (a.status === "completed") apptDone.add(kind); else apptSched.add(kind);
+  }
+  const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed") || apptDone.has(kind);
+  const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind) || apptSched.has(kind) || apptDone.has(kind);
   const consultState = (kind: string): "done" | "progress" | "pending" => hasConsult(kind) ? "done" : scheduledConsult(kind) ? "progress" : "pending";
-  const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string }[] = [
+  const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string; bookDisc?: string }[] = [
     { label: "Package Purchase", state: pkg ? "done" : "pending", detail: pkg?.name ?? "No package yet", when: client.joined ?? "—" },
-    { label: "Initial Doctor Consultation", state: consultState("Doctor"), detail: "Doctor Consultation", when: hasConsult("Doctor") ? "Completed" : scheduledConsult("Doctor") ? "Scheduled" : "Not scheduled" },
-    { label: "Initial Diet Consultation", state: consultState("Diet"), detail: "Diet Consultation", when: hasConsult("Diet") ? "Completed" : scheduledConsult("Diet") ? "Scheduled" : "Not scheduled" },
-    { label: "Initial Fitness Assessment", state: consultState("Trainer"), detail: "Fitness Services", when: hasConsult("Trainer") ? "Completed" : scheduledConsult("Trainer") ? "Scheduled" : "Not scheduled" },
+    { label: "Initial Doctor Consultation", state: consultState("Doctor"), detail: "Doctor Consultation", when: hasConsult("Doctor") ? "Completed" : scheduledConsult("Doctor") ? "Scheduled" : "Not scheduled", bookDisc: "Doctor" },
+    { label: "Initial Diet Consultation", state: consultState("Diet"), detail: "Diet Consultation", when: hasConsult("Diet") ? "Completed" : scheduledConsult("Diet") ? "Scheduled" : "Not scheduled", bookDisc: "Dietitian" },
+    { label: "Initial Fitness Assessment", state: consultState("Trainer"), detail: "Fitness Services", when: hasConsult("Trainer") ? "Completed" : scheduledConsult("Trainer") ? "Scheduled" : "Not scheduled", bookDisc: "Fitness Trainer" },
     { label: "BluePrint (PHB) Generated", state: bp?.generated ? "done" : "pending", detail: bp?.generated ? "Ready to download" : "Pending consultations", when: bp?.generated_date ?? "—" },
   ];
   for (const f of followups.filter((x) => x.kind === "onboarding")) {
@@ -222,20 +329,23 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions"]} />
-      <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments"]} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
+            <ClientStatusBadge status={detailStatus} />
+          </div>
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             {client.code} · {pkg?.name ?? "—"} · joined {client.joined ?? "—"}
           </div>
         </div>
         <span style={{ flex: 1 }} />
         {ro
-          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>👁 Read-only</span>
+          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>Read-only</span>
           : <Link
               href={`/clients/${params.id}/edit`}
               style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
             >
-              ✎ Edit
+              Edit
             </Link>}
       </div>
 
@@ -249,6 +359,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </div>
 
       {tab === "overview" && (<>
+      {/* Package status — open work vs. what's coming up, in one place */}
+      {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
+        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} />
+      )}
       {/* Personal Info */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>Personal Info</div>
@@ -268,6 +382,24 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
       </div>
 
+      {/* Care Team */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700 }}>Care Team</div>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>· assigned clinicians</span>
+        </div>
+        {careTeam.length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {careTeam.map((m) => (
+              <div key={m.disc} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", minWidth: 150 }}>
+                <div style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" }}>{m.disc}</div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{m.name}</div>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No clinicians assigned yet.</div>}
+      </div>
+
       {/* Health Profile */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>Health Profile</div>
@@ -284,6 +416,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
             {activeMembership ? "✔ Active membership" : "No active membership"}
           </span>
+          {isFrozen && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>⏸ Paused since {String(c0.frozen).slice(0, 10)}</span>}
         </div>
 
         {/* Packages held (membership + PT + …) */}
@@ -322,7 +455,13 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           </div>
         )}
 
-        {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {!ro && canBill(me?.role ?? "") && <AddPackage clientId={params.id} packages={pkgList} hasMembership={activeMembership} />}
+          {!ro && canBill(me?.role ?? "") && holdsRenewable && <RenewMembership clientId={params.id} packages={renewablePackages} currentPackageId={currentRenewablePkgId} />}
+          {!ro && canWrite(me?.role ?? "") && holdsMembership && <FreezeToggle clientId={params.id} frozen={isFrozen} />}
+          {!ro && canWrite(me?.role ?? "") && isPtOrComp && !hasScheduledSessions && <ScheduleSessionsForm clientId={params.id} trainers={trainers} defaultTrainerId={assignedTrainerId} />}
+          {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} started={journeyStarted} />}
+        </div>
 
         {showBilling && invoices.length > 0 && (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>
@@ -342,6 +481,28 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         {canInvoice && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
       </div>
 
+      {/* Blood report — prominent for BluePrint / Comprehensive clients */}
+      {needsBlood && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>Blood report</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: bloodPanels.length > 1 ? "1fr 1fr" : "1fr", gap: 16 }}>
+            {bloodPanels.map((panel) => {
+              const row = bloodByPanel.get(panel) ?? null;
+              const label = bloodPanels.length > 1 ? (BLOOD_PANEL_LABEL[panel] ?? panel) : undefined;
+              return (
+                <div key={panel}>
+                  {ro
+                    ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{label ? <span style={{ fontWeight: 600 }}>{label}: </span> : null}{row ? (row.submitted ? `Received ${row.submitted_date ?? ""}` : `Requested ${row.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
+                    : <BloodActions clientId={params.id} blood={row} panel={panel} label={label} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       </>)}
 
       {tab === "timeline" && (<>
@@ -349,7 +510,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           Client Journey below it stays: it answers a different question
           ("is onboarding complete?") that a chronological stream doesn't. */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📜 Activity</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Activity</div>
         <ActivityTimeline events={activity} today={todayISO()} max={40}
           emptyLabel="No activity recorded yet." />
       </div>
@@ -367,8 +528,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <div style={{ flex: 1 }}>
                 <b style={{ fontSize: 13.5 }}>{m.label}</b>
                 <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.detail}</div>
-                <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>🕐 {m.when}</div>
+                <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>{m.when}</div>
               </div>
+              {m.bookDisc && m.state === "pending" && !ro && canWrite(me?.role ?? "") && (
+                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}`}
+                  style={{ alignSelf: "center", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+                  Book →
+                </a>
+              )}
             </div>
           ))}
         </div>
@@ -381,7 +548,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           boxShadow: "var(--shadow)", padding: "18px 20px",
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>🏋 Strength Sessions</div>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>Strength Sessions</div>
         {pkg?.is_facility ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             Facility access member — no scheduled sessions (check-in/out + workout plan).
@@ -457,7 +624,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           boxShadow: "var(--shadow)", padding: "18px 20px",
         }}
       >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>🩺 Consultations ({consults.length})</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Consultations ({consults.length})</div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultations yet.</div>
         ) : (
@@ -481,7 +648,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Care records — consultations by discipline */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>🗂 Care records</div>
+          <div style={{ fontWeight: 700 }}>Care records</div>
           <span style={{ flex: 1 }} />
           {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Patient Records →</Link>}
         </div>
@@ -513,11 +680,25 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* BluePrint status */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontWeight: 700 }}>🧬 BluePrint</div>
+          <div style={{ fontWeight: 700 }}>BluePrint</div>
           <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
           <span style={{ flex: 1 }} />
+          {Boolean(bp) && <Link href={`/blueprint/${params.id}`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600, borderRadius: 8, padding: "4px 11px" }}>View report →</Link>}
           {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
         </div>
+        {!bp?.generated && bpRequired.length > 0 && (
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
+            <span style={{ color: "var(--muted)", fontWeight: 600 }}>Required sign-offs · {bpRequired.filter((d) => bpSigned.has(d)).length}/{bpRequired.length}</span>
+            {bpRequired.map((d) => {
+              const on = bpSigned.has(d);
+              return (
+                <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: on ? "var(--green-bg)" : "var(--amber-bg)", color: on ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
+                  {on ? "✓" : "○"} {BP_DISC_LABEL[d]}
+                </span>
+              );
+            })}
+          </div>
+        )}
         {bp?.scores && Object.keys(bp.scores).length > 0 && (() => {
           const vals = BP_SCORES.map((s) => bp!.scores![s.key]).filter((v): v is number => typeof v === "number");
           const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
@@ -537,7 +718,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>📏 Measurements / InBody</div>
+          <div style={{ fontWeight: 700 }}>Measurements / InBody</div>
         </div>
         {measures.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>No measurements recorded yet.</div>
@@ -583,7 +764,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         const first = photos[0], latest = photos[photos.length - 1];
         return (
           <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>📸 Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
             {photos.length >= 2 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                 {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
@@ -612,7 +793,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {(canCoach || habits.length > 0) && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontWeight: 700 }}>🔥 Habits &amp; streaks</div>
+            <div style={{ fontWeight: 700 }}>Habits &amp; streaks</div>
             <span style={{ flex: 1 }} />
             {canCoach && <HabitForm clientId={params.id} />}
           </div>
@@ -633,7 +814,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                       <div style={{ color: "var(--muted)", fontSize: 12 }}>{h.cadence} · target {h.target_per_week}/wk</div>
                     </div>
                     <div style={{ textAlign: "right", minWidth: 88 }}>
-                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>🔥 {streak}d streak</div>
+                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>{streak}d streak</div>
                       <div style={{ fontSize: 12, color: hit ? "var(--green-text)" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
                     </div>
                     {canCoach && (
@@ -697,7 +878,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       )}
 
       {compView && (
-        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} />
+        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
+      )}
+
+      {ptView && (
+        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
       )}
 
       {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
@@ -706,7 +891,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {prescriptions.length > 0 && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>💊 Prescriptions</div>
+            <div style={{ fontWeight: 700 }}>Prescriptions</div>
             <span style={{ flex: 1 }} />
             <Link href={`/emr/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>
           </div>
@@ -736,7 +921,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {(canCoach || workouts.length > 0) && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>🏃 Assigned workouts</div>
+            <div style={{ fontWeight: 700 }}>Assigned workouts</div>
             <span style={{ flex: 1 }} />
             {canCoach && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
           </div>
@@ -771,7 +956,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>📎 Files &amp; documents</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
         <FilesGrid files={files} />
         {!ro && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -790,7 +975,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Portal access (staff) */}
       {showPortal && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>🔑 Client Portal access</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Client Portal access</div>
           <PortalLoginForm clientId={params.id} existingEmail={portalProfile?.email ?? null} />
         </div>
       )}

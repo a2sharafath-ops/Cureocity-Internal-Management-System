@@ -30,14 +30,13 @@ export default async function IntakePage({ searchParams }: { searchParams: { don
 
       {done ? (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "40px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 44, marginBottom: 8 }}>📨</div>
           <h2 style={{ fontSize: 20, margin: "0 0 6px" }}>Intake submitted</h2>
           <p style={{ color: "var(--muted)", fontSize: 15, margin: "0 0 20px" }}>Your details have synced to the front desk. Registration is completed there with OTP verification.</p>
           <Link href="/intake" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "12px 22px", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>+ New registration</Link>
         </div>
       ) : (
         <form action={submitTabletIntake} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "22px 24px" }}>
-          <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>Welcome to Cureocity 👋</h2>
+          <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>Welcome to Cureocity</h2>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 6px" }}>Please fill in your details below. Our front desk will complete your registration.</p>
 
           <div style={row2}>

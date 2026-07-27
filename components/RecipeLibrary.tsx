@@ -53,7 +53,7 @@ export default function RecipeLibrary({ recipes }: { recipes: RecipeRow[] }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {[...weeks.entries()].map(([week, list]) => (
             <div key={week} style={{ ...box, overflow: "hidden" }}>
-              <div style={{ padding: "10px 16px", fontWeight: 700, fontSize: 13.5 }}>🗓 {week}</div>
+              <div style={{ padding: "10px 16px", fontWeight: 700, fontSize: 13.5 }}>{week}</div>
               {list.map((r) => (
                 <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderTop: "1px solid var(--border)" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>

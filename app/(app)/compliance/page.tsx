@@ -120,7 +120,7 @@ export default async function CompliancePage() {
                 <td style={{ ...td, textAlign: "right" }}><BreachActions id={b.id} status={b.status} reported={b.reported_to_authority} /></td>
               </tr>
             ))}
-            {breaches.length === 0 && <tr><td colSpan={7} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No incidents logged. 🎉</td></tr>}
+            {breaches.length === 0 && <tr><td colSpan={7} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No incidents logged.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -148,7 +148,7 @@ export default async function CompliancePage() {
 
       {/* PHI-masked access log */}
       <h2 style={{ fontSize: 15, margin: "0 0 4px" }}>Recent access — PHI masked</h2>
-      <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>Patient identifiers are masked by default. Click 👁 to reveal (authorized viewers only).</p>
+      <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>Patient identifiers are masked by default. Click to reveal (authorized viewers only).</p>
       <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={th}>When</th><th style={th}>Actor</th><th style={th}>Action</th><th style={th}>Subject (PHI)</th></tr></thead>

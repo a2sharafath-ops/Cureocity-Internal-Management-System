@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { markInvoicePaid, refundInvoice } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 const METHODS = ["Cash", "Card", "UPI", "Bank", "Online"];
 
@@ -14,9 +15,9 @@ export default function InvoiceActions({ id, status }: { id: string; status: str
     return (
       <form action={refundInvoice}>
         <input type="hidden" name="id" value={id} />
-        <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: "var(--red)" }}>
+        <SubmitButton pendingLabel="Refunding…" doneLabel="✓ Refunded" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: "var(--red)" }}>
           Refund
-        </button>
+        </SubmitButton>
       </form>
     );
   }
@@ -28,7 +29,7 @@ export default function InvoiceActions({ id, status }: { id: string; status: str
       <select name="method" defaultValue="Cash" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 12 }}>
         {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
       </select>
-      <button type="submit" style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Confirm paid</button>
+      <SubmitButton pendingLabel="Saving…" doneLabel="✓ Paid" style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Confirm paid</SubmitButton>
     </form>
   ) : (
     <button type="button" onClick={() => setOpen(true)} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>

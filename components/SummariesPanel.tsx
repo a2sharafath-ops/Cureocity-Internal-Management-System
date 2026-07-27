@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { toggleConsultFlag, generateBlueprint, startConsult } from "@/lib/actions";
+import { toggleConsultFlag, saveConsolidatedSummary, signoffConsolidated, startConsult } from "@/lib/actions";
 
 export type ConsultSummary = {
   id: string;
@@ -19,23 +19,32 @@ export type ConsolidatedRow = {
   client_id: string;
   name: string;
   code: string | null;
-  doctor: boolean;
-  diet: boolean;
-  trainer: boolean;
+  /** disciplines assigned to this client — the required signers */
+  required: string[];
+  /** individual consultation summary approved, per discipline */
+  approvedByDisc: Record<string, boolean>;
+  /** consolidated summary signed off, per discipline */
+  signedByDisc: Record<string, boolean>;
   generated: boolean;
   consolidated: string | null;
 };
 
+const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
+
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
 export default function SummariesPanel({
-  roleLabel, roleKind, consults, consolidated, clients,
+  roleLabel, roleKind, consults, consolidated, clients, viewerDisc = null, canSignAny = false,
 }: {
   roleLabel: string;
   roleKind: string;
   consults: ConsultSummary[];
   consolidated: ConsolidatedRow[];
   clients: { id: string; name: string }[];
+  /** the viewing clinician's discipline (doctor/dietitian/...) */
+  viewerDisc?: string | null;
+  /** admins/persona previews may sign off any discipline */
+  canSignAny?: boolean;
 }) {
   const [view, setView] = useState<"individual" | "consolidated">("individual");
   const pending = consults.filter((c) => !c.approved).length;
@@ -56,8 +65,8 @@ export default function SummariesPanel({
   return (
     <div>
       <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 14 }}>
-        {seg("individual", "📝 Individual summaries", pending)}
-        {seg("consolidated", "🧬 Consolidated → Blueprint", consolPending)}
+        {seg("individual", "Individual summaries", pending)}
+        {seg("consolidated", "Consolidated → Blueprint", consolPending)}
       </div>
 
       {view === "individual" ? (
@@ -105,32 +114,56 @@ export default function SummariesPanel({
         </>
       ) : (
         <div>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Each professional approves their own summary. Once Doctor, Dietitian &amp; Trainer are all approved, sign off the consolidated summary — that generates the client&apos;s Blueprint.</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Every clinician assigned to the client must sign off the consolidated summary. The Blueprint generates automatically once <b>all</b> of them have signed.</div>
           <div style={{ ...box, overflow: "hidden" }}>
             {consolidated.length ? consolidated.map((c) => {
-              const count = [c.doctor, c.diet, c.trainer].filter(Boolean).length;
+              const req = c.required.length ? c.required : ["doctor", "dietitian", "trainer"];
+              const signedCount = req.filter((d) => c.signedByDisc[d]).length;
+              // The viewer can sign off if: their discipline is required, they
+              // haven't signed, there's a consolidated summary, and their own
+              // summary is approved (or no consult of theirs exists). Admins any.
+              const mineReq = viewerDisc && req.includes(viewerDisc);
+              const mineSigned = viewerDisc ? c.signedByDisc[viewerDisc] : false;
+              const mineApproved = viewerDisc ? (c.approvedByDisc[viewerDisc] ?? false) : false;
+              const canSignMine = !c.generated && Boolean(c.consolidated) && mineReq && !mineSigned && (mineApproved || canSignAny);
               return (
                 <div key={c.client_id} style={{ padding: "13px 16px", borderTop: "1px solid var(--border)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <b style={{ fontSize: 13 }}>{c.name} <span style={{ color: "var(--muted)", fontWeight: 500 }}>{c.code ? `· ${c.code}` : ""}</span></b>
-                      <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>{disc(c.doctor, "Dr")}{disc(c.diet, "Diet")}{disc(c.trainer, "Trainer")}</div>
+                      <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                        {req.map((d) => disc(c.signedByDisc[d], DISC_LABEL[d] ?? d))}
+                      </div>
                     </div>
                     {c.generated
-                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>🧬 Blueprint generated — view</Link>
-                      : count === 3
-                        ? <span style={{ color: "var(--green-text)", fontSize: 12, fontWeight: 600 }}>Ready to sign off ↓</span>
-                        : <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{count}/3 summaries approved</span>}
+                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>Blueprint generated — view</Link>
+                      : <span style={{ background: signedCount === req.length ? "var(--green-bg)" : "var(--amber-bg)", color: signedCount === req.length ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{signedCount}/{req.length} signed off</span>}
                   </div>
-                  {!c.generated && count === 3 && (
-                    <form action={generateBlueprint} style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                      <input type="hidden" name="client_id" value={c.client_id} />
-                      <textarea name="consolidated" rows={2} defaultValue={c.consolidated ?? ""} placeholder="Consolidated summary across the three disciplines…" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", resize: "vertical" }} />
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>🧬 Sign off &amp; generate Blueprint</button>
-                        <Link href="/blueprint" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Enter health scores →</Link>
-                      </div>
-                    </form>
+
+                  {!c.generated && (
+                    <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                      {/* Author / edit the consolidated summary (until generated). */}
+                      <form action={saveConsolidatedSummary} style={{ display: "grid", gap: 6 }}>
+                        <input type="hidden" name="client_id" value={c.client_id} />
+                        <textarea name="consolidated" rows={2} defaultValue={c.consolidated ?? ""} placeholder="Consolidated summary across the care team…" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", resize: "vertical" }} />
+                        <div>
+                          <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save consolidated summary</button>
+                        </div>
+                      </form>
+
+                      {/* This clinician's own sign-off. */}
+                      {mineReq && (
+                        mineSigned
+                          ? <span style={{ color: "var(--green-text)", fontSize: 12.5, fontWeight: 600 }}>✓ You signed off ({DISC_LABEL[viewerDisc!] ?? viewerDisc})</span>
+                          : canSignMine
+                            ? <form action={signoffConsolidated}>
+                                <input type="hidden" name="client_id" value={c.client_id} />
+                                {canSignAny && viewerDisc && <input type="hidden" name="discipline" value={viewerDisc} />}
+                                <button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Sign off consolidated summary</button>
+                              </form>
+                            : <span style={{ color: "var(--muted)", fontSize: 12 }}>{!c.consolidated ? "Waiting for a consolidated summary to be written." : "Approve your own consultation summary first, then sign off here."}</span>
+                      )}
+                    </div>
                   )}
                 </div>
               );

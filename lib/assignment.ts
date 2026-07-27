@@ -28,6 +28,25 @@ export const ROLE_FOR: Record<Discipline, string> = {
   trainer: "Fitness Trainer",
 };
 
+/**
+ * Which disciplines make up the care team for each package category.
+ *   BluePrint & Comprehensive — full clinical team: doctor, dietitian, trainer,
+ *     health coach (no psychologist).
+ *   PT (training) — trainer + health coach only.
+ *   Membership / other — no clinical care team.
+ */
+export function disciplinesForCategory(category: string): Discipline[] {
+  switch (category) {
+    case "blueprint":
+    case "comprehensive":
+      return ["doctor", "dietitian", "trainer", "coach"];
+    case "training":
+      return ["trainer", "coach"];
+    default:
+      return [];
+  }
+}
+
 /** How the assignment was arrived at — stored so the choice is auditable. */
 export type Method = "booking" | "rotation" | "manual";
 
@@ -110,10 +129,18 @@ export function planCareTeam(input: {
 }): Assignment[] {
   const out: Assignment[] = [];
 
-  // 1. Booking-led disciplines.
+  // 1. Booking-led disciplines. The discipline is decided by the *provider's
+  //    role* (their presence in that discipline's candidate pool), NOT by the
+  //    appointment's free-text type — a generic "Consultation" says nothing
+  //    about whether the provider is a doctor or a dietitian. The earliest
+  //    non-cancelled booking with a correctly-rolled provider wins.
   for (const d of ["doctor", "dietitian", "psychologist"] as const) {
-    const fromBooking = providerFromInitialBooking(input.bookings, d);
-    if (fromBooking) out.push({ discipline: d, staff_id: fromBooking, method: "booking" });
+    const ids = new Set(input.pool[d].map((c) => c.id));
+    const mine = input.bookings
+      .filter((b) => b.provider_id && b.status !== "cancelled" && ids.has(b.provider_id))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.hour - b.hour);
+    const staff_id = mine[0]?.provider_id ?? null;
+    if (staff_id) out.push({ discipline: d, staff_id, method: "booking" });
   }
 
   // 2. Health coach — pure rotation.

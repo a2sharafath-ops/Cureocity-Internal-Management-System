@@ -5,6 +5,8 @@ import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ageFromDob } from "@/lib/dob";
+import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
+import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
 
@@ -20,48 +22,71 @@ export default async function ClientsPage() {
   const profile = await getProfile();
   const writer = canWrite(profile?.role ?? "");
 
-  const [{ data, error }, { data: staffData }, { data: consultData }, { data: bpData }] = await Promise.all([
+  const [{ data, error }, { data: staffData }] = await Promise.all([
     supabase.from("clients").select("id, code, name, phone, email, used, branch, joined, dob, owner, package_id, packages(name, sessions, is_facility), staff:pro_id(name)").order("code", { ascending: true }),
     supabase.from("staff").select("id, name").order("name"),
-    supabase.from("consultations").select("client_id, kind, status"),
-    supabase.from("blueprints").select("client_id, generated"),
   ]);
 
   const { data: subData } = await supabase.from("tablet_submissions").select("id, first_name, last_name, phone, created_at").eq("status", "pending").order("created_at", { ascending: false });
   const submissions = (subData ?? []) as { id: string; first_name: string; last_name: string | null; phone: string | null; created_at: string }[];
 
-  // Bulk journey signals → per-client onboarding milestones.
-  const consultDone = new Map<string, Set<string>>();
-  for (const r of (consultData ?? []) as { client_id: string; kind: string; status: string }[]) {
-    if (r.status === "completed") {
-      if (!consultDone.has(r.client_id)) consultDone.set(r.client_id, new Set());
-      consultDone.get(r.client_id)!.add(r.kind);
-    }
-  }
-  const bpGen = new Set(((bpData ?? []) as { client_id: string; generated: boolean }[]).filter((r) => r.generated).map((r) => r.client_id));
+  // One status engine feeds both the journey dots and the status badge, so the
+  // dots are package-aware (BluePrint / PT / Comprehensive / membership each get
+  // their own ladder) and can never disagree with the badge beneath them.
+  const rawRows = (data ?? []) as unknown as Raw[];
+  const ids = rawRows.map((c) => c.id);
+  const [statusMap, { data: cpAll }, { data: caAll }] = await Promise.all([
+    loadClientStatuses(supabase, ids, todayISO()),
+    supabase.from("client_packages").select("client_id, package_name, category, status").in("client_id", ids),
+    supabase.from("client_assignments").select("client_id, discipline, staff_id").in("client_id", ids),
+  ]);
+  const viewerDisc = disciplineForRole(profile?.role);
 
   const staff = (staffData ?? []) as { id: string; name: string }[];
-  const clients: ClientRow[] = ((data ?? []) as unknown as Raw[]).map((c) => {
+  const staffNameById = new Map(staff.map((s) => [s.id, s.name]));
+
+  // Real active packages + full care team per client, so the list reflects
+  // everything a client holds — not just the single legacy package / pro_id.
+  const CAT_LABEL: Record<string, string> = { membership: "Membership", comprehensive: "Comprehensive", training: "PT", blueprint: "BluePrint", other: "Package" };
+  const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Diet", trainer: "Fitness", coach: "Coach", psychologist: "Psych" };
+  const DISC_ORDER = ["doctor", "dietitian", "trainer", "coach", "psychologist"];
+  const pkgsByClient = new Map<string, { label: string; category: string }[]>();
+  for (const r of (cpAll ?? []) as { client_id: string; package_name: string | null; category: string; status: string }[]) {
+    if (r.status !== "active") continue;
+    const arr = pkgsByClient.get(r.client_id) ?? [];
+    arr.push({ label: r.package_name ?? CAT_LABEL[r.category] ?? "Package", category: r.category });
+    pkgsByClient.set(r.client_id, arr);
+  }
+  const teamByClient = new Map<string, { disc: string; name: string }[]>();
+  for (const r of (caAll ?? []) as { client_id: string; discipline: string; staff_id: string | null }[]) {
+    if (!r.staff_id) continue;
+    const name = staffNameById.get(r.staff_id);
+    if (!name) continue;
+    const arr = teamByClient.get(r.client_id) ?? [];
+    arr.push({ disc: r.discipline, name });
+    teamByClient.set(r.client_id, arr);
+  }
+  const clients: ClientRow[] = rawRows.map((c) => {
     const sessions = c.packages?.sessions ?? 0;
     const facility = c.packages?.is_facility ?? false;
     const status = facility ? "Active" : (sessions > 0 && c.used >= sessions ? "Completed" : "Active");
-    const cd = consultDone.get(c.id) ?? new Set<string>();
-    const steps = [
-      { label: "Package", done: c.package_id != null },
-      { label: "Doctor", done: cd.has("Doctor") },
-      { label: "Diet", done: cd.has("Diet") },
-      { label: "Fitness", done: cd.has("Trainer") },
-      { label: "BluePrint", done: bpGen.has(c.id) },
-    ];
+    const st = statusMap.get(c.id);
+    const steps = st?.journeySteps ?? [{ label: "Package sold", done: c.package_id != null }];
     const doneCount = steps.filter((s) => s.done).length;
-    const nextStep = steps.find((s) => !s.done);
+    const cpkgs = pkgsByClient.get(c.id) ?? [];
+    const packages = cpkgs.length ? cpkgs : (c.packages?.name ? [{ label: c.packages.name, category: c.package_id === "bp1" ? "blueprint" : "other" }] : []);
+    const careTeam = (teamByClient.get(c.id) ?? [])
+      .sort((a, b) => DISC_ORDER.indexOf(a.disc) - DISC_ORDER.indexOf(b.disc))
+      .map((t) => ({ disc: DISC_LABEL[t.disc] ?? t.disc, name: t.name }));
     return {
       id: c.id, code: c.code, name: c.name, phone: c.phone, email: c.email,
       age: ageFromDob(c.dob), branch: c.branch, used: c.used,
       package_name: c.packages?.name ?? null, is_facility: facility, package_sessions: sessions,
-      is_blueprint: c.package_id === "bp1" || (c.packages?.name ?? "").toLowerCase().includes("blueprint"),
+      packages, careTeam,
+      is_blueprint: c.package_id === "bp1" || cpkgs.some((p) => p.category === "blueprint") || (c.packages?.name ?? "").toLowerCase().includes("blueprint"),
       status, coach: c.staff?.name ?? null, owner: c.owner ?? null,
-      journey: { steps, done: doneCount, total: steps.length, stage: nextStep ? `Next: ${nextStep.label}` : "Fully onboarded" },
+      journey: { steps, done: doneCount, total: steps.length, stage: doneCount === steps.length ? "Fully onboarded" : (st?.onboardNext ?? "In progress") },
+      careStatus: clientStatus(st, viewerDisc),
     };
   });
 
@@ -79,7 +104,7 @@ export default async function ClientsPage() {
 
       {writer && submissions.map((s) => (
         <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid #99f6e4", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 12, fontSize: 14 }}>
-          <span>📥 <b>Tablet intake received:</b> {s.first_name} {s.last_name ?? ""}{s.phone ? ` · ${s.phone}` : ""} — synced to front desk</span>
+          <span><b>Tablet intake received:</b> {s.first_name} {s.last_name ?? ""}{s.phone ? ` · ${s.phone}` : ""} — synced to front desk</span>
           <span style={{ flex: 1 }} />
           <Link href={`/clients/new?sub=${s.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Review &amp; Add Client</Link>
         </div>

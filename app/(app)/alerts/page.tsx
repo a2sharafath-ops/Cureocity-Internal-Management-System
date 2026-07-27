@@ -43,7 +43,7 @@ export default async function AlertsPage() {
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Your in-app alerts · {unread} unread of {items.length}.</p>
 
       <div style={{ ...box, overflow: "hidden" }}>
-        {items.length === 0 && <div style={{ padding: "26px 16px", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>You&apos;re all caught up. 🎉</div>}
+        {items.length === 0 && <div style={{ padding: "26px 16px", textAlign: "center", color: "var(--muted)", fontSize: 14 }}>You&apos;re all caught up.</div>}
         {items.map((n) => (
           <form key={n.id} action={openNotification}>
             <input type="hidden" name="id" value={n.id} />

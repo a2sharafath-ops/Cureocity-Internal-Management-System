@@ -52,7 +52,6 @@ export default function LeadSearch({
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
       <div style={{ position: "relative", flex: 1, maxWidth: 380, minWidth: 220 }}>
-        <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none" }}>🔍</span>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}

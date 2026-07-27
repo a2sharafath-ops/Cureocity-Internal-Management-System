@@ -6,8 +6,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { RingMeter } from "@/components/Meters";
+import { raiseInvoiceForClient } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
-export type Flag = { sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string };
+export type Flag = {
+  sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string;
+  /** when set, the CTA raises the client's invoice in one click instead of linking away */
+  raiseInvoiceClientId?: string;
+};
 
 const SEV = {
   high: { bg: "var(--red-bg)", col: "var(--red-text)", label: "Urgent", weight: 10 },
@@ -70,7 +76,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>
-              {flags.length ? verdict : "Nothing needs attention 🎉"}
+              {flags.length ? verdict : "Nothing needs attention"}
             </div>
             <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 6 }}>
               {(["high", "med", "low"] as const).map((s) =>
@@ -110,11 +116,25 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
               <b style={{ fontSize: 13 }}>{f.title}</b>
               <div style={{ color: "var(--muted)", fontSize: 12 }}>{f.detail}</div>
             </div>
-            <Link href={f.href} style={{
-              border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
-              padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none",
-              color: "var(--brand-text)", whiteSpace: "nowrap",
-            }}>{f.cta} →</Link>
+            {f.raiseInvoiceClientId ? (
+              <form
+                action={raiseInvoiceForClient}
+                onSubmit={(e) => { if (!confirm(`Raise invoice?\n\n${f.title}\n${f.detail}`)) e.preventDefault(); }}
+              >
+                <input type="hidden" name="client_id" value={f.raiseInvoiceClientId} />
+                <SubmitButton pendingLabel="Raising…" doneLabel="✓ Raised" style={{
+                  border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
+                  padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  color: "var(--brand-text)", whiteSpace: "nowrap",
+                }}>{f.cta}</SubmitButton>
+              </form>
+            ) : (
+              <Link href={f.href} style={{
+                border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
+                padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none",
+                color: "var(--brand-text)", whiteSpace: "nowrap",
+              }}>{f.cta} →</Link>
+            )}
           </div>
         ))}
       </div>

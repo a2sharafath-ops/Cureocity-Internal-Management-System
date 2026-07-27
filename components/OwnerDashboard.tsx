@@ -7,6 +7,8 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { packageCategory } from "@/lib/packages";
+import { careWorkFlags } from "@/lib/care-attention";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -34,7 +36,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     supabase.from("sessions").select("client_id, trainer_id, status, date"),
     supabase.from("appointments").select("id, date, status"),
     supabase.from("leads").select("id, stage"),
-    supabase.from("blood_requests").select("client_id, submitted"),
+    supabase.from("blood_requests").select("client_id, panel, submitted"),
     supabase.from("blueprints").select("client_id, generated"),
     supabase.from("subscriptions").select("id, client_id, amount, status, renews_on"),
     supabase.from("audit_log").select("actor_name, actor_role, action, target, created_at").order("created_at", { ascending: false }).limit(6),
@@ -48,7 +50,11 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   const sessions = (sessData ?? []) as { client_id: string; trainer_id: string | null; status: string; date: string }[];
   const appts = (apptData ?? []) as { id: string; date: string; status: string }[];
   const leads = (leadData ?? []) as { id: string; stage: string | null }[];
-  const blood = new Map(((bloodData ?? []) as { client_id: string; submitted: boolean }[]).map((b) => [b.client_id, b]));
+  // Key by client + panel: a client can hold several blood panels (a BluePrint
+  // one and a Comprehensive one), and collapsing them by client id alone let the
+  // wrong panel's status win — e.g. a submitted BluePrint report showing pending
+  // because an unsubmitted Comprehensive panel overwrote it.
+  const blood = new Map(((bloodData ?? []) as { client_id: string; panel: string | null; submitted: boolean }[]).map((b) => [`${b.client_id}|${b.panel ?? "blueprint"}`, b]));
   const bps = new Map(((bpData ?? []) as { client_id: string; generated: boolean }[]).map((b) => [b.client_id, b]));
   const subs = (subData ?? []) as { id: string; client_id: string; amount: number; status: string; renews_on: string | null }[];
   const audit = (auditData ?? []) as { actor_name: string | null; actor_role: string | null; action: string; target: string | null; created_at: string }[];
@@ -80,7 +86,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (p && Number(p.price) > 0 && !invByClient.get(c.id)) {
       leak += Number(p.price);
-      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "Raise invoice" });
+      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "Raise invoice", raiseInvoiceClientId: c.id });
     }
   }
 
@@ -100,7 +106,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
 
   // 4. BluePrint clients stuck in the flow
   for (const c of clients.filter((x) => x.package_id === "bp1")) {
-    const b = blood.get(c.id);
+    const b = blood.get(`${c.id}|blueprint`);
     const bp = bps.get(c.id);
     if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "Request" });
     else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "Follow up" });
@@ -118,7 +124,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const upcoming = mine.filter((s) => s.status === "scheduled" && s.date >= today);
     const lastDone = mine.filter((s) => s.status === "completed").map((s) => s.date).sort().pop();
     if (upcoming.length === 0) {
-      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/clients/${c.id}`, cta: "Book" });
+      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book" });
     } else if (lastDone && lastDone < quietSince) {
       flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "Reach out" });
     }
@@ -129,11 +135,14 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   for (const c of clients) {
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (!p || !p.validity || !c.joined || activeSubClients.has(c.id)) continue;
+    // BluePrint is a one-time report, not a time-bound subscription — its
+    // "validity" is just the report's shelf life, so never nag to renew it.
+    if (packageCategory(p.id, p.is_facility) === "blueprint") continue;
     const expires = addDays(c.joined, p.validity);
     if (expires < today) {
-      flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/subscriptions`, cta: "Renew" });
+      flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/clients/${c.id}`, cta: "Renew" });
     } else if (expires <= in30) {
-      flags.push({ sev: "med", title: `${c.name} — package expiring`, detail: `${p.name} ends ${expires} · no renewal booked`, href: `/subscriptions`, cta: "Renew" });
+      flags.push({ sev: "med", title: `${c.name} — package expiring`, detail: `${p.name} ends ${expires} · no renewal booked`, href: `/clients/${c.id}`, cta: "Renew" });
     }
   }
 
@@ -147,6 +156,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     }
   }
 
+  flags.push(...await careWorkFlags(today));
   const order = { high: 0, med: 1, low: 2 };
   flags.sort((a, b) => order[a.sev] - order[b.sev]);
 
@@ -182,11 +192,11 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       {/* 1 — MONEY */}
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Money</div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "revenue_month")} minWidth={180} />
-        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "outstanding")} color={outstanding ? "var(--red)" : undefined} minWidth={170} />
-        <MetricCard label="Collection rate" value={`${collectRate}%`} sub="of everything billed" minWidth={160} />
-        <MetricCard label="Renewals ≤30 days" value={money(renewalValue)} sub={`${renewing.length} subscription${renewing.length === 1 ? "" : "s"}`} minWidth={180} />
-        <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} />
+        <MetricCard label="Revenue this month" value={money(revenueMonth)} sub={`${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} trend={monthTrend(revenueMonth, revenuePrev, "revenue_month")} minWidth={180} href="/billing?status=paid" />
+        <MetricCard label="Outstanding" value={money(outstanding)} sub={`${unpaid.length} unpaid`} trend={monthTrend(outstanding, outstandingPrev, "outstanding")} color={outstanding ? "var(--red)" : undefined} minWidth={170} href="/billing?tab=dunning" />
+        <MetricCard label="Collection rate" value={`${collectRate}%`} sub="of everything billed" minWidth={160} href="/billing" />
+        <MetricCard label="Renewals ≤30 days" value={money(renewalValue)} sub={`${renewing.length} subscription${renewing.length === 1 ? "" : "s"}`} minWidth={180} href="/subscriptions" />
+        <MetricCard label="Unbilled packages" value={money(leak)} sub="revenue not yet invoiced" color={leak ? "var(--amber-text-soft)" : undefined} minWidth={180} href="/billing?tab=unbilled" />
       </div>
 
       {/* 2 — NEEDS ATTENTION (collapsed to a health score until clicked) */}

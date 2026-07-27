@@ -90,14 +90,14 @@ function commonTabs(): WsTab[] {
   return [
     { key: "dash", label: "Dashboard", live: true },
     { key: "clients", label: "My Clients", live: true },
-    { key: "appts", label: "📅 Appointments", live: true },
-    { key: "summaries", label: "📝 Summaries", live: true },
-    { key: "bp", label: "🧬 Blueprint", href: "/blueprint" },
+    { key: "appts", label: "Appointments", live: true },
+    { key: "summaries", label: "Summaries", live: true },
+    { key: "bp", label: "BluePrint", href: "/blueprint" },
     // The daily team meeting — every discipline takes part, so it sits in the
     // common set rather than any one workspace's role tabs.
-    { key: "whiteboard", label: "🧠 Whiteboard", href: "/whiteboard" },
-    { key: "concerns", label: "⚠️ Concerns", live: true },
-    { key: "team", label: "Integrated Dashboard", href: "/careteam" },
+    { key: "whiteboard", label: "Whiteboard", href: "/whiteboard" },
+    { key: "concerns", label: "Concerns", live: true },
+    { key: "team", label: "Care Team Hub", href: "/careteam" },
     { key: "monitor", label: "Client Monitoring", live: true },
     { key: "library", label: "Resource Library", live: true },
     { key: "board", label: "MDT", live: true },
@@ -115,7 +115,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   doctor: withRoleTabs([]),
   psych: withRoleTabs([]),
   diet: withRoleTabs([
-    { key: "meals", label: "🍽️ Meal Follow-ups", href: "/meals" },
+    { key: "meals", label: "Meal Monitoring", href: "/meals" },
     { key: "charts", label: "Diet Charts", live: true },
     { key: "recipes", label: "Recipes", live: true },
   ]),
@@ -148,21 +148,24 @@ const COACH_GOALS = ["healthy living", "regulate mood disorders", "manage health
 const PSYCH_GOALS = ["regulate mood disorders", "mental wellbeing", "manage stress", "sleep", "anxiety"];
 
 // Which clients belong in a given role's workspace.
-export function scopeClients(role: WsRoleKey, clients: WsClient[], trainingClientIds: Set<string>): WsClient[] {
+export function scopeClients(role: WsRoleKey, clients: WsClient[], trainingClientIds: Set<string>, assignedIds: Set<string> = new Set()): WsClient[] {
+  // Care-team assignment is the source of truth — a client assigned to this
+  // discipline always shows, regardless of legacy package_id / goal heuristics.
+  const assigned = (c: WsClient) => assignedIds.has(c.id);
   switch (role) {
     case "trainer":
-      return clients.filter((c) => trainingClientIds.has(c.id) || isDietPkg(c.package_id));
+      return clients.filter((c) => assigned(c) || trainingClientIds.has(c.id) || isDietPkg(c.package_id));
     case "diet":
-      return clients.filter((c) => isDietPkg(c.package_id));
+      return clients.filter((c) => assigned(c) || isDietPkg(c.package_id));
     case "doctor":
-      return clients.filter((c) => hasCondition(c) || isBluePrint(c.package_id));
+      return clients.filter((c) => assigned(c) || hasCondition(c) || isBluePrint(c.package_id));
     case "coach":
       return clients.filter(
-        (c) => isBluePrint(c.package_id) || (c.goals ?? []).some((g) => COACH_GOALS.includes(g.toLowerCase())),
+        (c) => assigned(c) || isBluePrint(c.package_id) || (c.goals ?? []).some((g) => COACH_GOALS.includes(g.toLowerCase())),
       );
     case "psych":
       return clients.filter(
-        (c) => isBluePrint(c.package_id) || (c.goals ?? []).some((g) => PSYCH_GOALS.some((p) => g.toLowerCase().includes(p))),
+        (c) => assigned(c) || isBluePrint(c.package_id) || (c.goals ?? []).some((g) => PSYCH_GOALS.some((p) => g.toLowerCase().includes(p))),
       );
     default:
       return clients;

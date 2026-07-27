@@ -13,7 +13,7 @@ function when(iso: string) {
 // viewer: whose perspective — staff sees staff messages on the right; client (portal) sees their own on the right.
 export default function MessageThread({ messages, viewer }: { messages: Msg[]; viewer: "staff" | "client" }) {
   if (!messages.length) {
-    return <div style={{ color: "var(--muted)", fontSize: 13, padding: "10px 0" }}>No messages yet. Say hello 👋</div>;
+    return <div style={{ color: "var(--muted)", fontSize: 13, padding: "10px 0" }}>No messages yet. Say hello</div>;
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto", padding: "4px 2px" }}>
