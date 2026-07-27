@@ -3537,9 +3537,20 @@ export async function fuBookInPerson(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
   const supabase = createClient();
+  const { data: fu } = await supabase.from("followups").select("client_id, category, label").eq("id", id).maybeSingle();
   await supabase.from("followups").update({ stage: "BOOKED", status: "done", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Follow-up booked in-person", null, null);
   revalidatePath("/followups");
+  // Hand the front desk straight to the Appointment Calendar, pre-filled with
+  // this client and the owning discipline, so they book the real slot in the
+  // same step rather than just flipping a status.
+  const cid = (fu as { client_id: string | null } | null)?.client_id;
+  if (cid) {
+    const hay = `${(fu as { category: string | null } | null)?.category ?? ""} ${(fu as { label: string | null } | null)?.label ?? ""}`;
+    const disc = /doctor/i.test(hay) ? "Doctor" : /diet/i.test(hay) ? "Dietitian" : /fitness|trainer/i.test(hay) ? "Fitness Trainer" : /coach/i.test(hay) ? "Health Coach" : /psych/i.test(hay) ? "Psychologist" : "";
+    redirect(`/appointments?client=${cid}${disc ? `&disc=${encodeURIComponent(disc)}` : ""}`);
+  }
+  redirect("/followups");
 }
 
 export async function fuNoConsult(formData: FormData) {
