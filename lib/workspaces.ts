@@ -124,6 +124,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
     { key: "recipes", label: "Recipes", live: true },
   ]),
   trainer: withRoleTabs([
+    { key: "planner", label: "Workout Planner", live: true },
     { key: "exlib", label: "Exercise Library", href: "/exlib" },
   ]),
   coach: withRoleTabs([

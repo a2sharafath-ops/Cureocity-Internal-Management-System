@@ -41,6 +41,11 @@ export function canWriteNutrition(role: string): boolean {
   return isAdmin(role) || role === "Dietitian";
 }
 
+// workout plans (client_workouts)
+export function canWriteFitness(role: string): boolean {
+  return isAdmin(role) || role === "Fitness Trainer";
+}
+
 // concerns / resource files carry their own `role` column
 export function canWriteRoleScoped(role: string, rowRole: string | null, extra: string[] = []): boolean {
   if (isAdmin(role)) return true;

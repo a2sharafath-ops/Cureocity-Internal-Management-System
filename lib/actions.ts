@@ -12,7 +12,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
-import { canWriteNutrition, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
+import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
 import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
@@ -2151,7 +2151,7 @@ export async function nudgeClinician(formData: FormData) {
   let href = client_id ? `/clients/${client_id}` : "/workspace";
   if (client_id) {
     if (/diet chart/.test(l)) href = `/workspace?role=diet&tab=charts&client=${client_id}`;
-    else if (/workout/.test(l)) href = `/exlib?client=${client_id}`;
+    else if (/workout/.test(l)) href = `/workspace?role=trainer&tab=planner&client=${client_id}`;
     else if (/consolidated/.test(l)) href = `/workspace?role=doctor&tab=summaries&client=${client_id}`;
   }
   await notifyStaff(supabase, staff_id, {
@@ -3173,6 +3173,60 @@ export async function removeWorkout(formData: FormData) {
   await supabase.from("client_workouts").delete().eq("id", id);
   await logAudit(p, "Workout removed", null, null);
   revalidatePath(`/clients/${client_id}`);
+}
+
+// ---- Workout Planner (per-client builder, mirrors the diet chart maker) -----
+// The trainer composes a plan exercise-by-exercise, saves it as a Draft, then
+// Publishes it to the client's portal — exactly like addDietChart/publishDietChart.
+export async function addWorkoutPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
+  const client_id = String(formData.get("client_id") || "") || null;
+  if (!client_id) return;
+  const name = String(formData.get("name") || "").trim() || "Workout plan";
+  const type = String(formData.get("type") || "Strength").trim() || "Strength";
+  const mode = String(formData.get("mode") || "Offline").trim() || "Offline";
+  const exercises = formData.getAll("ex_name").map((v) => String(v).trim());
+  const sets = formData.getAll("ex_sets").map((v) => String(v).trim());
+  const reps = formData.getAll("ex_reps").map((v) => String(v).trim());
+  const rest = formData.getAll("ex_rest").map((v) => String(v).trim());
+  const items = exercises
+    .map((exercise, i) => ({ exercise, sets: sets[i] ?? "", reps: reps[i] ?? "", rest: rest[i] ?? "" }))
+    .filter((it) => it.exercise);
+  if (items.length === 0) return;
+  const supabase = createClient();
+  const { count } = await supabase.from("client_workouts").select("id", { count: "exact", head: true }).eq("client_id", client_id);
+  await supabase.from("client_workouts").insert({
+    client_id, name, mode, type, items, status: "Draft",
+    version: (count ?? 0) + 1,
+    notes: String(formData.get("notes") || "").trim() || null,
+    by_name: p.name, assigned_by: p.name,
+  });
+  await logAudit(p, "Workout plan drafted", await clientName(supabase, client_id), `v${(count ?? 0) + 1}`);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function publishWorkoutPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("client_workouts").update({ status: "Published" }).eq("id", id);
+  await logAudit(p, "Workout plan published", id, null);
+  revalidatePath("/workspace");
+}
+
+export async function deleteWorkoutPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("client_workouts").delete().eq("id", id);
+  await logAudit(p, "Workout plan deleted", id, null);
+  revalidatePath("/workspace");
 }
 
 export async function addTemplate(formData: FormData) {

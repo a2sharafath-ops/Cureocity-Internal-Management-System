@@ -14,6 +14,7 @@ import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
+import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
@@ -192,6 +193,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       calories: r.calories, protein: r.protein, notes: r.notes, meals: (r.meals ?? []) as [string, string][], by_name: r.by_name, created_at: r.created_at,
     }));
   }
+  // Trainer tool: per-client workout plans (draft → publish), mirrors diet charts.
+  let workoutPlans: WorkoutPlanRow[] = [];
+  if (tab === "planner") {
+    const { data: wp } = await supabase.from("client_workouts").select("id, client_id, name, type, mode, version, status, notes, items, by_name, created_at, clients(name)").order("created_at", { ascending: false });
+    workoutPlans = ((wp ?? []) as unknown as (WorkoutPlanRow & { clients: { name: string } | null })[]).map((r) => ({
+      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, name: r.name, type: r.type, mode: r.mode,
+      version: r.version, status: r.status ?? "Published", notes: r.notes, items: (r.items ?? []) as WorkoutPlanRow["items"], by_name: r.by_name, created_at: r.created_at,
+    }));
+  }
   let recipes: RecipeRow[] = [];
   if (tab === "recipes") {
     const { data: rc } = await supabase.from("recipes").select("id, week, name, tags, kcal, published, created_at").order("created_at", { ascending: false });
@@ -331,7 +341,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "recipes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "client_workouts", "recipes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline only; switch via the header persona menu */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -467,6 +477,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
       {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} />}
+
+      {/* ---- WORKOUT PLANNER (trainer) ---- */}
+      {tab === "planner" && <WorkoutPlanner plans={workoutPlans} clients={clientOpts} />}
 
       {/* ---- RECIPES (dietitian) ---- */}
       {tab === "recipes" && <RecipeLibrary recipes={recipes} />}
