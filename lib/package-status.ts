@@ -99,10 +99,9 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn" });
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
   // nudge them, rather than linking to a workspace they can't act in.
-  const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer"), doctor = ownerBy.get("doctor");
+  const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer");
   if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
   if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
-  if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", detail: doctor ? `Owed by ${doctor.name}` : undefined, ownerStaffId: doctor?.id, ownerName: doctor?.name, tone: "warn" });
   // Day-2 diet chart explanation (a follow-up touchpoint the coach schedules).
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage)) {
     if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn" });

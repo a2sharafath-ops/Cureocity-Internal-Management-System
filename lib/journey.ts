@@ -38,7 +38,6 @@ export function buildFullJourney(s: JourneySignals): JStep[] {
         { label: "Diet chart drafted", done: s.hasChart },
         { label: "Diet chart explanation (Day 2)", done: s.dietExplained },
         { label: "Workout plan created", done: s.hasWorkout },
-        { label: "Consolidated summary approved", done: s.consolidated },
         { label: `Strength sessions ${s.sessionsDone}/${sessTotal}`, done: sessDone },
       ];
       if (s.startDate) {

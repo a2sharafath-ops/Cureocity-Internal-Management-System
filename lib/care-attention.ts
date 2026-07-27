@@ -62,7 +62,6 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       if (sub === false) flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: "Requested, awaiting the client", href: clientHref, cta: "View" });
       if (done.has("Diet") && !hasChart.has(clientId)) flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: "Owed after the diet consult", href: "/workspace?role=diet", cta: "Open" });
       if (done.has("Trainer") && !hasWorkout.has(clientId)) flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: "Owed after the fitness assessment", href: "/workspace?role=trainer", cta: "Open" });
-      if (["Doctor", "Diet", "Trainer"].every((k) => done.has(k)) && !protoBy.get(clientId)?.approved_at) flags.push({ sev: "med", title: `${who} — consolidated summary pending`, detail: "All three consults done · awaiting sign-off", href: clientHref, cta: "View" });
       // Overdue calendar milestones (bookings that never got made).
       const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
       if (start) {

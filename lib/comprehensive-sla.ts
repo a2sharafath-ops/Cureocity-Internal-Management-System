@@ -19,7 +19,7 @@ import {
   type Clock, type Hold,
 } from "@/lib/sla-clock";
 import {
-  SIGNOFF_MS, CONSOLIDATED_MS, DIET_DRAFT_MS, WORKOUT_PLAN_MS, PRESCRIPTION_MS,
+  SIGNOFF_MS, DIET_DRAFT_MS, WORKOUT_PLAN_MS, PRESCRIPTION_MS,
   PT_SESSIONS_PER_CYCLE, DISCIPLINE_KINDS, KIND_LABEL,
   milestoneDates, ptDeadline, cyclesFor,
   type DisciplineKind, type DatedMilestone,
@@ -69,8 +69,6 @@ export type Gate = {
 export type ComprehensiveReport = {
   turnarounds: Gate[];
   milestones: Gate[];
-  /** null until all three initial appointments are complete */
-  lastInitialAt: string | null;
   missed: boolean;
   needsAttention: boolean;
   onHold: boolean;
@@ -108,24 +106,8 @@ export function comprehensiveSla(
     });
   }
 
-  // ---- 48h consolidated summary -------------------------------------------
-  // Starts at the LAST of the three, because the consolidated summary can't be
-  // written until all three have happened. Starting earlier would set a
-  // deadline that was already impossible when it was set.
-  const completions = DISCIPLINE_KINDS.map((k) => latest(k)?.completedAt ?? null);
-  const lastInitialAt = completions.every(Boolean)
-    ? completions.slice().sort().reverse()[0]
-    : null;
-  const deliveredAt = input.approvedAt
-    ? (input.consolidatedAt && input.consolidatedAt > input.approvedAt
-        ? input.consolidatedAt : input.approvedAt)
-    : null;
-  turnarounds.push({
-    gate: "consolidated",
-    label: "Consolidated summary approved",
-    owner: "doctor",
-    clock: clock(lastInitialAt, deliveredAt, CONSOLIDATED_MS, now, hold),
-  });
+  // The consolidated summary is a BluePrint-only deliverable — Comprehensive
+  // does not require it, so there is no 48h consolidated gate here.
 
   // ---- 24h diet chart draft ------------------------------------------------
   const diet = latest("Diet");
@@ -197,7 +179,6 @@ export function comprehensiveSla(
   return {
     turnarounds,
     milestones: milestones.sort((a, b) => String(a.clock.dueAt).localeCompare(String(b.clock.dueAt))),
-    lastInitialAt,
     missed: all.some((c) => c.missed),
     needsAttention: all.some((c) => c.status === "breached" || c.status === "due_soon"),
     onHold: Boolean(hold.holdSince),
