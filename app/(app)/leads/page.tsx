@@ -9,7 +9,6 @@ import SegTabs from "@/components/SegTabs";
 import { leadScore, TIER_STYLE, type Tier } from "@/lib/leadscore";
 import Link from "next/link";
 import { LeadForm, CallCell } from "@/components/LeadControls";
-import WalkInForm from "@/components/WalkInForm";
 import LeadFilters from "@/components/LeadFilters";
 import { matchesLeadQuery } from "@/lib/leadsearch";
 import { selectAll } from "@/lib/select-all";
@@ -304,7 +303,7 @@ export default async function LeadsPage({
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>CRM &amp; Leads</h1>
         <span style={{ flex: 1 }} />
-        <WalkInForm />
+        <Link href="/leads/walk-in" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 9, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--ink)", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Walk-in</Link>
         <LeadForm campaigns={campaigns} staff={assignable} />
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 12px" }}>

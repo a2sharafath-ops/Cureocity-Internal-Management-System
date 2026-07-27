@@ -70,12 +70,12 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
       </div>
 
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 1040 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, minWidth: 860 }}>
           <thead>
             <tr>
-              <th style={th}>Name</th><th style={th}>Age</th><th style={th}>Package</th><th style={th}>Journey</th><th style={th}>Status</th>
-              {/* The full care team assigned to the client (per discipline),
-                  not just the single denormalised pro_id. */}
+              {/* Age folded under Name and Status into Journey to keep the row
+                  compact — no horizontal scroll. */}
+              <th style={th}>Client</th><th style={th}>Package</th><th style={th}>Journey</th>
               <th style={th}>Care Team</th><th style={th}>Owner (Front Desk)</th><th style={th}>Branch</th><th style={th} />
             </tr>
           </thead>
@@ -84,8 +84,7 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
               const left = c.is_facility ? null : (c.package_sessions > 0 ? c.package_sessions - c.used : null);
               return (
                 <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={td}><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.code ?? "—"}{c.phone ? ` · ${c.phone}` : ""}</div></td>
-                  <td style={{ ...td, color: "var(--muted)" }}>{c.age != null ? `${c.age} yrs` : "—"}</td>
+                  <td style={td}><b>{c.name}</b><div style={{ color: "var(--muted)", fontSize: 12 }}>{c.code ?? "—"}{c.age != null ? ` · ${c.age}y` : ""}{c.phone ? ` · ${c.phone}` : ""}</div></td>
                   <td style={td}>
                     {c.packages && c.packages.length ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 190 }}>
@@ -96,18 +95,20 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                     ) : <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{c.package_name ?? "—"}</span>}
                     {(c.is_facility || left != null) && <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{c.is_facility ? "Facility access" : `${left} of ${c.package_sessions} credits left`}</div>}
                   </td>
-                  <td style={td}>
-                    <div style={{ display: "flex", gap: 3 }} title={c.journey.steps.map((s) => `${s.done ? "✓" : "○"} ${s.label}`).join("   ")}>
-                      {c.journey.steps.map((s, i) => (
-                        <span key={i} style={{ width: 18, height: 6, borderRadius: 3, background: s.done ? "var(--green)" : "#e2e8f0" }} />
-                      ))}
+                  <td style={{ ...td, minWidth: 150 }}>
+                    {/* Compact progress bar instead of a wide dot row — hover for
+                        the full step-by-step checklist. */}
+                    <div title={c.journey.steps.map((s) => `${s.done ? "✓" : "○"} ${s.label}`).join("\n")} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <div style={{ flex: 1, minWidth: 70, maxWidth: 120, height: 6, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
+                        <div style={{ width: `${c.journey.total ? Math.round((c.journey.done / c.journey.total) * 100) : 0}%`, height: "100%", background: c.journey.done === c.journey.total ? "var(--green)" : "var(--brand-fill)" }} />
+                      </div>
+                      <span style={{ color: "var(--muted)", fontSize: 11, whiteSpace: "nowrap" }}>{c.journey.done}/{c.journey.total}</span>
                     </div>
-                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ color: "var(--muted)", fontSize: 11 }}>{c.journey.done}/{c.journey.total}</span>
-                      {c.careStatus ? <ClientStatusBadge status={c.careStatus} size="sm" /> : <span style={{ color: "var(--muted)", fontSize: 11 }}>· {c.journey.stage}</span>}
+                    <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      {statusChip(c.status)}
+                      {c.careStatus ? <ClientStatusBadge status={c.careStatus} size="sm" /> : null}
                     </div>
                   </td>
-                  <td style={td}>{statusChip(c.status)}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>
                     {c.careTeam && c.careTeam.length ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: 220 }}>

@@ -26,6 +26,14 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("appointments").select("client_id, type, date, status").neq("status", "cancelled"),
   ]);
 
+  // Who owns each clinician deliverable, so ops can nudge them from the dashboard.
+  const { data: asg } = await sb.from("client_assignments").select("client_id, discipline, staff_id, staff:staff_id(name)");
+  const ownerBy = new Map<string, { id: string; name: string }>();
+  for (const a of (asg ?? []) as unknown as { client_id: string; discipline: string; staff_id: string | null; staff: { name: string } | null }[]) {
+    if (a.staff_id) ownerBy.set(`${a.client_id}|${a.discipline}`, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
+  }
+  const firstName = (n: string) => n.split(" ")[0];
+
   const name = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const catsBy = new Map<string, { category: string; start_date: string | null; end_date: string | null }[]>();
   for (const c of (cps ?? []) as { client_id: string; category: string; start_date: string | null; end_date: string | null }[]) {
@@ -60,9 +68,14 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       const comp = rows.find((r) => r.category === "comprehensive");
       const sub = bloodBy.get(clientId)?.get("comprehensive");
       if (sub === false) flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: "Requested, awaiting the client", href: clientHref, cta: "View" });
-      if (done.has("Diet") && !hasChart.has(clientId)) flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: "Owed after the diet consult", href: "/workspace?role=diet", cta: "Open" });
-      if (done.has("Trainer") && !hasWorkout.has(clientId)) flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: "Owed after the fitness assessment", href: "/workspace?role=trainer", cta: "Open" });
-      if (["Doctor", "Diet", "Trainer"].every((k) => done.has(k)) && !protoBy.get(clientId)?.approved_at) flags.push({ sev: "med", title: `${who} — consolidated summary pending`, detail: "All three consults done · awaiting sign-off", href: clientHref, cta: "View" });
+      if (done.has("Diet") && !hasChart.has(clientId)) {
+        const o = ownerBy.get(`${clientId}|dietitian`);
+        flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted" } : undefined });
+      }
+      if (done.has("Trainer") && !hasWorkout.has(clientId)) {
+        const o = ownerBy.get(`${clientId}|trainer`);
+        flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created" } : undefined });
+      }
       // Overdue calendar milestones (bookings that never got made).
       const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
       if (start) {

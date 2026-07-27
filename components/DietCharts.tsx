@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { addDietChart, publishDietChart, deleteDietChart } from "@/lib/actions";
 
 export type DietChartRow = {
@@ -21,7 +22,10 @@ export type DietChartRow = {
 const DEFAULT_ROWS: [string, string][] = [["Early Morning", ""], ["Breakfast", ""], ["Mid-Morning", ""], ["Lunch", ""], ["Evening", ""], ["Dinner", ""]];
 
 export default function DietCharts({ charts, clients }: { charts: DietChartRow[]; clients: { id: string; name: string }[] }) {
-  const [open, setOpen] = useState(false);
+  // Deep-linked from a "diet chart pending" reminder: ?client=<id> opens the
+  // builder straight away with that client pre-selected.
+  const focusClient = useSearchParams().get("client") ?? "";
+  const [open, setOpen] = useState(Boolean(focusClient));
   const [rows, setRows] = useState<[string, string][]>(DEFAULT_ROWS);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -44,7 +48,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
       {open && (
         <form action={addDietChart} onSubmit={() => setTimeout(() => { setOpen(false); setRows(DEFAULT_ROWS); }, 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 700 }}>Diet chart builder</div>
-          <select name="client_id" required defaultValue="" style={inpControl}>
+          <select name="client_id" required defaultValue={focusClient} style={inpControl}>
             <option value="" disabled>Select client…</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>

@@ -12,11 +12,11 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
-import { canWriteNutrition, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
+import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
 import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
-import { notifyRoles } from "@/lib/notify";
+import { notifyRoles, notifyStaff } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
 import { leadScore } from "@/lib/leadscore";
@@ -737,6 +737,14 @@ export async function createLead(formData: FormData) {
   revalidatePath("/leads");
 }
 
+// Walk-in capture lives on its own page (/leads/walk-in). It reuses createLead
+// (owner, first-response task, score, new-lead notification) then returns the
+// front desk to the leads list so they see the lead they just added.
+export async function createWalkInLead(formData: FormData) {
+  await createLead(formData);
+  redirect("/leads?view=open");
+}
+
 export async function updateLead(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
@@ -780,7 +788,7 @@ export async function convertLeadWithPackage(formData: FormData) {
   const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
   const { data: inserted } = await supabase.from("clients").insert({
     code, name: lead.name, phone: lead.phone ?? null, joined,
-    package_id, used: 0, verified: true, converted_from: id, pro_id: "d1",
+    package_id, used: 0, verified: true, converted_from: id, pro_id: "t0",
   }).select("id").single();
 
   // Experience bookings move across before anything else, so the client's
@@ -2132,6 +2140,37 @@ export async function requestBlood(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
+/** Ops roles (front desk / manager / admin) nudge the clinician who owes a
+ *  deliverable (diet chart, workout plan, consolidated summary) instead of being
+ *  sent to a workspace they can't act in. Drops a notification in that
+ *  clinician's bell. */
+export async function nudgeClinician(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  const staff_id = String(formData.get("staff_id") || "");
+  const label = String(formData.get("label") || "a deliverable").trim();
+  if (!staff_id) return;
+  const supabase = createClient();
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  // Deep-link straight into the drafting screen for the deliverable, pre-focused
+  // on this client, so the clinician lands where they actually do the work.
+  const l = label.toLowerCase();
+  let href = client_id ? `/clients/${client_id}` : "/workspace";
+  if (client_id) {
+    if (/diet chart/.test(l)) href = `/workspace?role=diet&tab=charts&client=${client_id}`;
+    else if (/workout/.test(l)) href = `/workspace?role=trainer&tab=planner&client=${client_id}`;
+    else if (/consolidated/.test(l)) href = `/workspace?role=doctor&tab=summaries&client=${client_id}`;
+  }
+  await notifyStaff(supabase, staff_id, {
+    title: `Reminder — ${label}`,
+    body: `${c?.name ?? "A client"} · nudged by ${p.name}`,
+    href, icon: "⏰",
+  });
+  await logAudit(p, "Clinician nudged", c?.name, label);
+  revalidatePath(`/clients/${client_id}`);
+}
+
 export async function markBloodReceived(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;
@@ -3144,6 +3183,60 @@ export async function removeWorkout(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
+// ---- Workout Planner (per-client builder, mirrors the diet chart maker) -----
+// The trainer composes a plan exercise-by-exercise, saves it as a Draft, then
+// Publishes it to the client's portal — exactly like addDietChart/publishDietChart.
+export async function addWorkoutPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
+  const client_id = String(formData.get("client_id") || "") || null;
+  if (!client_id) return;
+  const name = String(formData.get("name") || "").trim() || "Workout plan";
+  const type = String(formData.get("type") || "Strength").trim() || "Strength";
+  const mode = String(formData.get("mode") || "Offline").trim() || "Offline";
+  const exercises = formData.getAll("ex_name").map((v) => String(v).trim());
+  const sets = formData.getAll("ex_sets").map((v) => String(v).trim());
+  const reps = formData.getAll("ex_reps").map((v) => String(v).trim());
+  const rest = formData.getAll("ex_rest").map((v) => String(v).trim());
+  const items = exercises
+    .map((exercise, i) => ({ exercise, sets: sets[i] ?? "", reps: reps[i] ?? "", rest: rest[i] ?? "" }))
+    .filter((it) => it.exercise);
+  if (items.length === 0) return;
+  const supabase = createClient();
+  const { count } = await supabase.from("client_workouts").select("id", { count: "exact", head: true }).eq("client_id", client_id);
+  await supabase.from("client_workouts").insert({
+    client_id, name, mode, type, items, status: "Draft",
+    version: (count ?? 0) + 1,
+    notes: String(formData.get("notes") || "").trim() || null,
+    by_name: p.name, assigned_by: p.name,
+  });
+  await logAudit(p, "Workout plan drafted", await clientName(supabase, client_id), `v${(count ?? 0) + 1}`);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function publishWorkoutPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("client_workouts").update({ status: "Published" }).eq("id", id);
+  await logAudit(p, "Workout plan published", id, null);
+  revalidatePath("/workspace");
+}
+
+export async function deleteWorkoutPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("client_workouts").delete().eq("id", id);
+  await logAudit(p, "Workout plan deleted", id, null);
+  revalidatePath("/workspace");
+}
+
 export async function addTemplate(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;
@@ -3546,9 +3639,13 @@ export async function fuBookInPerson(formData: FormData) {
   // same step rather than just flipping a status.
   const cid = (fu as { client_id: string | null } | null)?.client_id;
   if (cid) {
-    const hay = `${(fu as { category: string | null } | null)?.category ?? ""} ${(fu as { label: string | null } | null)?.label ?? ""}`;
+    const label = (fu as { label: string | null } | null)?.label ?? "";
+    const hay = `${(fu as { category: string | null } | null)?.category ?? ""} ${label}`;
     const disc = /doctor/i.test(hay) ? "Doctor" : /diet/i.test(hay) ? "Dietitian" : /fitness|trainer/i.test(hay) ? "Fitness Trainer" : /coach/i.test(hay) ? "Health Coach" : /psych/i.test(hay) ? "Psychologist" : "";
-    redirect(`/appointments?client=${cid}${disc ? `&disc=${encodeURIComponent(disc)}` : ""}`);
+    // The Day-2 explanation books as its own appointment type; other protocol
+    // touchpoints book as a Follow-up.
+    const type = /diet chart explanation/i.test(label) ? "Diet Chart Explanation" : "Follow-up";
+    redirect(`/appointments?client=${cid}${disc ? `&disc=${encodeURIComponent(disc)}` : ""}&type=${encodeURIComponent(type)}`);
   }
   redirect("/followups");
 }
@@ -4774,7 +4871,7 @@ export async function createClientRecord(formData: FormData) {
 
   const { data: inserted } = await supabase
     .from("clients")
-    .insert({ ...c, code, used: 0, verified: true, consent_tnc: true, consent_waiver: true, pro_id: "d1" })
+    .insert({ ...c, code, used: 0, verified: true, consent_tnc: true, consent_waiver: true, pro_id: "t0" })
     .select("id")
     .single();
 

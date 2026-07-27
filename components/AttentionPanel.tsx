@@ -6,13 +6,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { RingMeter } from "@/components/Meters";
-import { raiseInvoiceForClient } from "@/lib/actions";
+import { raiseInvoiceForClient, nudgeClinician } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 
 export type Flag = {
   sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string;
   /** when set, the CTA raises the client's invoice in one click instead of linking away */
   raiseInvoiceClientId?: string;
+  /** when set, the CTA nudges the responsible clinician instead of linking away —
+   *  for clinician-owed work an ops viewer can't do themselves. */
+  nudge?: { clientId: string; staffId: string; label: string };
 };
 
 const SEV = {
@@ -116,7 +119,18 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
               <b style={{ fontSize: 13 }}>{f.title}</b>
               <div style={{ color: "var(--muted)", fontSize: 12 }}>{f.detail}</div>
             </div>
-            {f.raiseInvoiceClientId ? (
+            {f.nudge ? (
+              <form action={nudgeClinician}>
+                <input type="hidden" name="client_id" value={f.nudge.clientId} />
+                <input type="hidden" name="staff_id" value={f.nudge.staffId} />
+                <input type="hidden" name="label" value={f.nudge.label} />
+                <SubmitButton pendingLabel="Reminding…" doneLabel="✓ Reminded" style={{
+                  border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
+                  padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  color: "var(--brand-text)", whiteSpace: "nowrap",
+                }}>{f.cta}</SubmitButton>
+              </form>
+            ) : f.raiseInvoiceClientId ? (
               <form
                 action={raiseInvoiceForClient}
                 onSubmit={(e) => { if (!confirm(`Raise invoice?\n\n${f.title}\n${f.detail}`)) e.preventDefault(); }}

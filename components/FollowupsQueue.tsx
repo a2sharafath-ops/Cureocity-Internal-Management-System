@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   fuSendQuestionnaire, fuSendReminder, fuNoAnswer, fuBookInPerson, fuNoConsult, fuMarkReceived, fuCompleteReview,
 } from "@/lib/actions";
@@ -30,9 +31,15 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
   const [cat, setCat] = useState("All");
   const [review, setReview] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
+  // Deep-linked from a client's package status ("Diet chart explanation — due"):
+  // ?client=<id> focuses the queue on just that client.
+  const focusClient = useSearchParams().get("client");
+  const focusName = focusClient ? (items.find((f) => f.clientId === focusClient)?.clientName ?? null) : null;
 
   const cats = ["All", ...Array.from(new Set(items.map((f) => f.category).filter(Boolean) as string[]))];
-  const inScope = items.filter((f) => cat === "All" || f.category === cat);
+  const inScope = items
+    .filter((f) => !focusClient || f.clientId === focusClient)
+    .filter((f) => cat === "All" || f.category === cat);
   const calls = inScope.filter((f) => f.stage === "PENDING_CALL").sort((a, b) => a.due_date < b.due_date ? -1 : 1);
   const links = inScope.filter((f) => f.stage === "LINK_SENT");
   const reviews = inScope.filter((f) => f.stage === "PENDING_REVIEW");
@@ -52,19 +59,15 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
   const actions = (f: FuRow) => {
     if (!canWrite) return null;
     if (f.stage === "PENDING_CALL") {
-      const canOnline = f.mode === "Online" || f.category === "Diet Consultation" || f.category === "Doctor Consultation";
+      // One booking path — always "Book appointment" (opens the calendar).
+      // Only genuinely online touchpoints (e.g. the Day-10 check-in) additionally
+      // offer a questionnaire; everything else is booked.
+      const online = f.mode === "Online";
       return (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {f.mode === "Online"
-            ? <>
-                <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("var(--brand-fill)")}>Send questionnaire</button></form>
-                <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book in-person</button></form>
-              </>
-            : <>
-                <form action={fuBookInPerson}>{hid(f)}<button style={btn("var(--brand-fill)")}>Book in-person</button></form>
-                {canOnline && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Send questionnaire</button></form>}
-              </>}
-          {canOnline && <form action={fuNoAnswer}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>No answer</button></form>}
+          <form action={fuBookInPerson}>{hid(f)}<button style={btn("var(--brand-fill)")}>Book appointment</button></form>
+          {online && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Send questionnaire</button></form>}
+          <form action={fuNoAnswer}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>No answer</button></form>
           <form action={fuNoConsult}>{hid(f)}<button style={btn("#fff", "var(--red-text)")}>No consult</button></form>
         </div>
       );
@@ -72,8 +75,10 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
     if (f.stage === "LINK_SENT") {
       return (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {!f.reminder_sent && <form action={fuSendReminder}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>⏳ Reminder</button></form>}
+          {!f.reminder_sent && <form action={fuSendReminder}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>Reminder</button></form>}
           <form action={fuMarkReceived}>{hid(f)}<button style={btn("var(--brand-fill)")}>Mark received</button></form>
+          {/* Client would rather come in than answer the link → convert to a booking. */}
+          <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book appointment</button></form>
         </div>
       );
     }
@@ -129,6 +134,12 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
 
   return (
     <div>
+      {focusClient && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 14, fontSize: 12.5 }}>
+          <span>Showing follow-ups for <b style={{ color: "var(--ink)" }}>{focusName ?? "this client"}</b> only.</span>
+          <Link href="/followups" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>Show all →</Link>
+        </div>
+      )}
       {/* toolbar */}
       <div style={{ ...box, display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", marginBottom: 16, flexWrap: "wrap" }}>
         <b style={{ fontSize: 12.5 }}>Category:</b>
