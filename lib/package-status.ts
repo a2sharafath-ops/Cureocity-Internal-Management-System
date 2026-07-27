@@ -12,7 +12,7 @@ import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/compreh
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
-export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral" };
+export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string };
 export type PackageStatus = { openNow: StatusItem[]; upcoming: StatusItem[] };
 
 const daysBetween = (a: string, b: string) =>
@@ -37,6 +37,14 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("blueprints").select("generated").eq("client_id", clientId).maybeSingle(),
     sb.from("care_protocols").select("start_date, approved_at").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),
   ]);
+
+  // Who owns each clinician deliverable — so ops roles can nudge the right
+  // person rather than being sent to a workspace they can't act in.
+  const { data: asg } = await sb.from("client_assignments").select("discipline, staff_id, staff:staff_id(name)").eq("client_id", clientId);
+  const ownerBy = new Map<string, { id: string; name: string }>();
+  for (const a of (asg ?? []) as unknown as { discipline: string; staff_id: string | null; staff: { name: string } | null }[]) {
+    if (a.staff_id) ownerBy.set(a.discipline, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
+  }
 
   const active = ((cps ?? []) as { package_id: string | null; package_name: string | null; category: string; status: string; start_date: string | null; end_date: string | null }[]).filter((c) => c.status === "active");
   if (!active.length && !(bp && !bp.generated)) return { openNow: [], upcoming: [] };
@@ -82,10 +90,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
   // Blood card + consolidated approval live on this same page, so no cross-link.
   if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn" });
-  // Diet chart / workout plan are drafted in the owning clinician's workspace.
-  if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", href: "/workspace?role=diet", tone: "warn" });
-  if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", href: "/workspace?role=trainer", tone: "warn" });
-  if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", tone: "warn" });
+  // Clinician-owed deliverables: name the responsible clinician so ops roles can
+  // nudge them, rather than linking to a workspace they can't act in.
+  const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer"), doctor = ownerBy.get("doctor");
+  if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
+  if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
+  if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", detail: doctor ? `Owed by ${doctor.name}` : undefined, ownerStaffId: doctor?.id, ownerName: doctor?.name, tone: "warn" });
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
   if (isComp || isPt) {

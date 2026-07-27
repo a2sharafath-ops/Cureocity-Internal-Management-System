@@ -361,7 +361,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {tab === "overview" && (<>
       {/* Package status — open work vs. what's coming up, in one place */}
       {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
-        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} />
+        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} />
       )}
       {/* Personal Info */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>

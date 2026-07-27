@@ -16,7 +16,7 @@ import { canWriteNutrition, ownsConsultKind, wsKeyForRole } from "@/lib/discipli
 import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
-import { notifyRoles } from "@/lib/notify";
+import { notifyRoles, notifyStaff } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
 import { leadScore } from "@/lib/leadscore";
@@ -2129,6 +2129,28 @@ export async function requestBlood(formData: FormData) {
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blood report requested", c?.name, panel);
   revalidatePath("/blueprint");
+  revalidatePath(`/clients/${client_id}`);
+}
+
+/** Ops roles (front desk / manager / admin) nudge the clinician who owes a
+ *  deliverable (diet chart, workout plan, consolidated summary) instead of being
+ *  sent to a workspace they can't act in. Drops a notification in that
+ *  clinician's bell. */
+export async function nudgeClinician(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  const staff_id = String(formData.get("staff_id") || "");
+  const label = String(formData.get("label") || "a deliverable").trim();
+  if (!staff_id) return;
+  const supabase = createClient();
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await notifyStaff(supabase, staff_id, {
+    title: `Reminder — ${label}`,
+    body: `${c?.name ?? "A client"} · nudged by ${p.name}`,
+    href: "/workspace", icon: "⏰",
+  });
+  await logAudit(p, "Clinician nudged", c?.name, label);
   revalidatePath(`/clients/${client_id}`);
 }
 
