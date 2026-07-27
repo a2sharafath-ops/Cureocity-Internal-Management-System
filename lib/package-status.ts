@@ -38,6 +38,13 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("care_protocols").select("start_date, approved_at").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),
   ]);
 
+  // The Day-2 "diet chart explanation" lives in the follow-ups system, not the
+  // milestone set — pull it so the client card shows the whole plan.
+  const { data: fus } = await sb.from("followups").select("label, day, due_date, stage").eq("client_id", clientId);
+  const dietExplain = ((fus ?? []) as { label: string; day: number | null; due_date: string; stage: string }[])
+    .find((f) => f.day === 2 && /explanation/i.test(f.label));
+  const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
+
   // Who owns each clinician deliverable — so ops roles can nudge the right
   // person rather than being sent to a workspace they can't act in.
   const { data: asg } = await sb.from("client_assignments").select("discipline, staff_id, staff:staff_id(name)").eq("client_id", clientId);
@@ -96,6 +103,11 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
   if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
   if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", detail: doctor ? `Owed by ${doctor.name}` : undefined, ownerStaffId: doctor?.id, ownerName: doctor?.name, tone: "warn" });
+  // Day-2 diet chart explanation (a follow-up touchpoint the coach schedules).
+  if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage)) {
+    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: "/followups", tone: "warn" });
+    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: "/followups", tone: "info" });
+  }
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
   if (isComp || isPt) {

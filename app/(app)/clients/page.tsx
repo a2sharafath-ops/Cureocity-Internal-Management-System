@@ -37,7 +37,7 @@ export default async function ClientsPage() {
   const rawRows = (data ?? []) as unknown as Raw[];
   const ids = rawRows.map((c) => c.id);
   const today = todayISO();
-  const [statusMap, { data: cpAll }, { data: caAll }, { data: chartsAll }, { data: workoutsAll }, { data: protosAll }, { data: sessAll }, { data: bloodAll }, { data: apptAll }] = await Promise.all([
+  const [statusMap, { data: cpAll }, { data: caAll }, { data: chartsAll }, { data: workoutsAll }, { data: protosAll }, { data: sessAll }, { data: bloodAll }, { data: apptAll }, { data: fuAll }] = await Promise.all([
     loadClientStatuses(supabase, ids, today),
     supabase.from("client_packages").select("client_id, package_name, category, status, start_date, end_date").in("client_id", ids),
     supabase.from("client_assignments").select("client_id, discipline, staff_id").in("client_id", ids),
@@ -47,6 +47,7 @@ export default async function ClientsPage() {
     supabase.from("sessions").select("client_id, status").in("client_id", ids),
     supabase.from("blood_requests").select("client_id, panel, submitted").in("client_id", ids),
     supabase.from("appointments").select("client_id, type, date, status").in("client_id", ids).neq("status", "cancelled"),
+    supabase.from("followups").select("client_id, day, label, stage").in("client_id", ids),
   ]);
   const viewerDisc = disciplineForRole(profile?.role);
 
@@ -68,6 +69,11 @@ export default async function ClientsPage() {
   for (const a of (apptAll ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     (apptBy.get(a.client_id) ?? apptBy.set(a.client_id, []).get(a.client_id)!).push(a);
   }
+  // Day-2 diet chart explanation closed (booked / completed / no-consult).
+  const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
+  const dietExplainedSet = new Set(((fuAll ?? []) as { client_id: string; day: number | null; label: string; stage: string }[])
+    .filter((f) => f.day === 2 && /explanation/i.test(f.label) && FU_CLOSED.has(f.stage))
+    .map((f) => f.client_id));
   const cpDatesBy = new Map<string, { category: string; start_date: string | null; end_date: string | null }[]>();
   for (const r of (cpAll ?? []) as { client_id: string; category: string; status: string; start_date: string | null; end_date: string | null }[]) {
     if (r.status !== "active") continue;
@@ -117,7 +123,7 @@ export default async function ClientsPage() {
       doctorDone: st?.consults.doctor?.completed ?? false,
       dietDone: st?.consults.dietitian?.completed ?? false,
       trainerDone: st?.consults.trainer?.completed ?? false,
-      hasChart: chartSet.has(c.id), hasWorkout: workoutSet.has(c.id), consolidated: consolidatedSet.has(c.id),
+      hasChart: chartSet.has(c.id), dietExplained: dietExplainedSet.has(c.id), hasWorkout: workoutSet.has(c.id), consolidated: consolidatedSet.has(c.id),
       blueprintGenerated: st?.journeySteps.some((s) => s.label.includes("BluePrint generated") && s.done) ?? false,
       sessionsTotal: sess.total, sessionsDone: sess.done, sessionScheduled: sess.scheduled,
       startDate: cpDate?.start_date ?? null, endDate: cpDate?.end_date ?? null,

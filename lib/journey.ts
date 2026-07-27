@@ -12,7 +12,7 @@ export type JourneySignals = {
   bloodRequested: boolean;
   bloodReceived: boolean;          // for the package's own panel
   doctorDone: boolean; dietDone: boolean; trainerDone: boolean;
-  hasChart: boolean; hasWorkout: boolean; consolidated: boolean;
+  hasChart: boolean; dietExplained: boolean; hasWorkout: boolean; consolidated: boolean;
   blueprintGenerated: boolean;
   sessionsTotal: number; sessionsDone: number; sessionScheduled: boolean;
   startDate: string | null; endDate: string | null;
@@ -36,6 +36,7 @@ export function buildFullJourney(s: JourneySignals): JStep[] {
         { label: "Diet consultation", done: s.dietDone },
         { label: "Fitness assessment", done: s.trainerDone },
         { label: "Diet chart drafted", done: s.hasChart },
+        { label: "Diet chart explanation (Day 2)", done: s.dietExplained },
         { label: "Workout plan created", done: s.hasWorkout },
         { label: "Consolidated summary approved", done: s.consolidated },
         { label: `Strength sessions ${s.sessionsDone}/${sessTotal}`, done: sessDone },
