@@ -1,0 +1,58 @@
+// Front-desk exceptions for the ops dashboard "Needs your attention" queue:
+// the things front desk actually owns — money to raise/chase, blood reports to
+// chase from clients, new intakes to complete, and overdue follow-ups.
+
+import { createClient } from "@/lib/supabase/server";
+import type { Flag } from "@/components/AttentionPanel";
+
+const shift = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const money = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
+
+export async function frontDeskFlags(today: string): Promise<Flag[]> {
+  const sb = createClient();
+  const cut7 = shift(today, -7);
+  const [{ data: cps }, { data: inv }, { data: clients }, { data: blood }, { data: tablet }, { data: fu }] = await Promise.all([
+    sb.from("client_packages").select("client_id, package_name, price, status").eq("status", "active"),
+    sb.from("invoices").select("client_id, num, amount, status, issued_date"),
+    sb.from("clients").select("id, name"),
+    sb.from("blood_requests").select("client_id, panel, submitted"),
+    sb.from("tablet_submissions").select("id, first_name, last_name").eq("status", "pending"),
+    sb.from("followups").select("id, due_date, status").eq("status", "pending"),
+  ]);
+
+  const nameOf = (id: string | null) => (id && ((clients ?? []) as { id: string; name: string }[]).find((c) => c.id === id)?.name) || "Client";
+  const hasInvoice = new Set(((inv ?? []) as { client_id: string | null }[]).map((i) => i.client_id).filter(Boolean) as string[]);
+  const flags: Flag[] = [];
+
+  // ---- unbilled active packages (front desk raises the invoice) -------------
+  const billed = new Set<string>();
+  for (const cp of (cps ?? []) as { client_id: string; package_name: string | null; price: number | null }[]) {
+    if (!cp.client_id || hasInvoice.has(cp.client_id) || billed.has(cp.client_id)) continue;
+    billed.add(cp.client_id);
+    flags.push({ sev: "high", title: `${nameOf(cp.client_id)} — no invoice raised`, detail: `${cp.package_name ?? "Package"} · ${money(Number(cp.price))}`, href: `/clients/${cp.client_id}`, cta: "Raise invoice", raiseInvoiceClientId: cp.client_id });
+  }
+
+  // ---- overdue unpaid invoices ---------------------------------------------
+  for (const i of (inv ?? []) as { client_id: string | null; num: number | null; amount: number; status: string; issued_date: string | null }[]) {
+    if (i.status === "Paid") continue;
+    if ((i.issued_date ?? "9999-12-31") <= cut7) flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`, detail: `${nameOf(i.client_id)} · ${money(Number(i.amount))} · overdue`, href: "/billing", cta: "Chase" });
+  }
+
+  // ---- blood report awaited from the client --------------------------------
+  for (const b of (blood ?? []) as { client_id: string | null; panel: string | null; submitted: boolean }[]) {
+    if (b.submitted || !b.client_id) continue;
+    flags.push({ sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`, detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · chase the client`, href: `/clients/${b.client_id}`, cta: "View" });
+  }
+
+  // ---- new tablet intakes to complete --------------------------------------
+  for (const t of (tablet ?? []) as { first_name: string; last_name: string | null }[]) {
+    flags.push({ sev: "med", title: `New tablet intake — ${t.first_name} ${t.last_name ?? ""}`.trim(), detail: "Complete registration at front desk", href: "/clients", cta: "Add" });
+  }
+
+  // ---- overdue follow-ups (one summary line) -------------------------------
+  const overdue = ((fu ?? []) as { due_date: string }[]).filter((f) => f.due_date < today).length;
+  if (overdue) flags.push({ sev: "high", title: `${overdue} overdue follow-up${overdue === 1 ? "" : "s"}`, detail: "Calls / bookings past due", href: "/followups", cta: "Open queue" });
+
+  const order = { high: 0, med: 1, low: 2 };
+  return flags.sort((a, b) => order[a.sev] - order[b.sev]);
+}

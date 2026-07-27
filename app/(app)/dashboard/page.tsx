@@ -8,6 +8,8 @@ import OwnerDashboard from "@/components/OwnerDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
 import FinanceDashboard from "@/components/FinanceDashboard";
 import HrDashboard from "@/components/HrDashboard";
+import AttentionPanel from "@/components/AttentionPanel";
+import { frontDeskFlags } from "@/lib/frontdesk-attention";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
@@ -142,9 +144,12 @@ export default async function DashboardPage() {
   }
 
   // ---- Ops view (Admin / Manager / Front Desk) — mirrors the prototype ----
+  const fdFlags = await frontDeskFlags(TODAY);
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["sessions", "appointments", "leads", "consultations", "invoices", "subscriptions"]} />
+
+      <AttentionPanel flags={fdFlags} />
 
       {/* controls: tabs (left) + quick actions (right) */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
