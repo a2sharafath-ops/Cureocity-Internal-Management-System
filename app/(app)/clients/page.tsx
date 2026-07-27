@@ -6,6 +6,7 @@ import { canWrite } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ageFromDob } from "@/lib/dob";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
+import { buildFullJourney } from "@/lib/journey";
 import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
@@ -35,12 +36,43 @@ export default async function ClientsPage() {
   // their own ladder) and can never disagree with the badge beneath them.
   const rawRows = (data ?? []) as unknown as Raw[];
   const ids = rawRows.map((c) => c.id);
-  const [statusMap, { data: cpAll }, { data: caAll }] = await Promise.all([
-    loadClientStatuses(supabase, ids, todayISO()),
-    supabase.from("client_packages").select("client_id, package_name, category, status").in("client_id", ids),
+  const today = todayISO();
+  const [statusMap, { data: cpAll }, { data: caAll }, { data: chartsAll }, { data: workoutsAll }, { data: protosAll }, { data: sessAll }, { data: bloodAll }, { data: apptAll }] = await Promise.all([
+    loadClientStatuses(supabase, ids, today),
+    supabase.from("client_packages").select("client_id, package_name, category, status, start_date, end_date").in("client_id", ids),
     supabase.from("client_assignments").select("client_id, discipline, staff_id").in("client_id", ids),
+    supabase.from("diet_charts").select("client_id").in("client_id", ids),
+    supabase.from("client_workouts").select("client_id").in("client_id", ids),
+    supabase.from("care_protocols").select("client_id, approved_at").eq("protocol", "comprehensive").eq("status", "active").in("client_id", ids),
+    supabase.from("sessions").select("client_id, status").in("client_id", ids),
+    supabase.from("blood_requests").select("client_id, panel, submitted").in("client_id", ids),
+    supabase.from("appointments").select("client_id, type, date, status").in("client_id", ids).neq("status", "cancelled"),
   ]);
   const viewerDisc = disciplineForRole(profile?.role);
+
+  // ---- full-journey signals (the whole package lifecycle, not just onboarding) --
+  const chartSet = new Set(((chartsAll ?? []) as { client_id: string }[]).map((r) => r.client_id));
+  const workoutSet = new Set(((workoutsAll ?? []) as { client_id: string }[]).map((r) => r.client_id));
+  const consolidatedSet = new Set(((protosAll ?? []) as { client_id: string; approved_at: string | null }[]).filter((r) => r.approved_at).map((r) => r.client_id));
+  const sessBy = new Map<string, { total: number; done: number; scheduled: boolean }>();
+  for (const s of (sessAll ?? []) as { client_id: string; status: string }[]) {
+    const v = sessBy.get(s.client_id) ?? { total: 0, done: 0, scheduled: false };
+    v.total++; if (s.status === "completed") v.done++; if (s.status === "scheduled") v.scheduled = true;
+    sessBy.set(s.client_id, v);
+  }
+  const bloodPanelBy = new Map<string, Map<string, boolean>>();
+  for (const b of (bloodAll ?? []) as { client_id: string; panel: string | null; submitted: boolean }[]) {
+    (bloodPanelBy.get(b.client_id) ?? bloodPanelBy.set(b.client_id, new Map()).get(b.client_id)!).set(b.panel ?? "blueprint", b.submitted);
+  }
+  const apptBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
+  for (const a of (apptAll ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
+    (apptBy.get(a.client_id) ?? apptBy.set(a.client_id, []).get(a.client_id)!).push(a);
+  }
+  const cpDatesBy = new Map<string, { category: string; start_date: string | null; end_date: string | null }[]>();
+  for (const r of (cpAll ?? []) as { client_id: string; category: string; status: string; start_date: string | null; end_date: string | null }[]) {
+    if (r.status !== "active") continue;
+    (cpDatesBy.get(r.client_id) ?? cpDatesBy.set(r.client_id, []).get(r.client_id)!).push({ category: r.category, start_date: r.start_date, end_date: r.end_date });
+  }
 
   const staff = (staffData ?? []) as { id: string; name: string }[];
   const staffNameById = new Map(staff.map((s) => [s.id, s.name]));
@@ -71,7 +103,27 @@ export default async function ClientsPage() {
     const facility = c.packages?.is_facility ?? false;
     const status = facility ? "Active" : (sessions > 0 && c.used >= sessions ? "Completed" : "Active");
     const st = statusMap.get(c.id);
-    const steps = st?.journeySteps ?? [{ label: "Package sold", done: c.package_id != null }];
+    // The WHOLE journey of the client's primary active package — blood, consults,
+    // deliverables, consolidated, sessions and calendar milestones — not just the
+    // onboarding ladder.
+    const cat = st?.category ?? "other";
+    const panel = cat === "comprehensive" ? "comprehensive" : "blueprint";
+    const sess = sessBy.get(c.id) ?? { total: 0, done: 0, scheduled: false };
+    const cpDate = (cpDatesBy.get(c.id) ?? []).find((r) => r.category === cat);
+    const fullSteps = buildFullJourney({
+      category: cat,
+      bloodRequested: st?.bloodRequested ?? false,
+      bloodReceived: bloodPanelBy.get(c.id)?.get(panel) ?? false,
+      doctorDone: st?.consults.doctor?.completed ?? false,
+      dietDone: st?.consults.dietitian?.completed ?? false,
+      trainerDone: st?.consults.trainer?.completed ?? false,
+      hasChart: chartSet.has(c.id), hasWorkout: workoutSet.has(c.id), consolidated: consolidatedSet.has(c.id),
+      blueprintGenerated: st?.journeySteps.some((s) => s.label.includes("BluePrint generated") && s.done) ?? false,
+      sessionsTotal: sess.total, sessionsDone: sess.done, sessionScheduled: sess.scheduled,
+      startDate: cpDate?.start_date ?? null, endDate: cpDate?.end_date ?? null,
+      appts: apptBy.get(c.id) ?? [], today,
+    });
+    const steps = fullSteps.length ? fullSteps : (st?.journeySteps ?? [{ label: "Package sold", done: c.package_id != null }]);
     const doneCount = steps.filter((s) => s.done).length;
     const cpkgs = pkgsByClient.get(c.id) ?? [];
     const packages = cpkgs.length ? cpkgs : (c.packages?.name ? [{ label: c.packages.name, category: c.package_id === "bp1" ? "blueprint" : "other" }] : []);
@@ -85,7 +137,7 @@ export default async function ClientsPage() {
       packages, careTeam,
       is_blueprint: c.package_id === "bp1" || cpkgs.some((p) => p.category === "blueprint") || (c.packages?.name ?? "").toLowerCase().includes("blueprint"),
       status, coach: c.staff?.name ?? null, owner: c.owner ?? null,
-      journey: { steps, done: doneCount, total: steps.length, stage: doneCount === steps.length ? "Fully onboarded" : (st?.onboardNext ?? "In progress") },
+      journey: { steps, done: doneCount, total: steps.length, stage: doneCount === steps.length ? "Journey complete" : `Next: ${steps.find((s) => !s.done)?.label ?? "—"}` },
       careStatus: clientStatus(st, viewerDisc),
     };
   });
