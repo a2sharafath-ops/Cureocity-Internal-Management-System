@@ -229,8 +229,18 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const detailStatus = clientStatus((await loadClientStatuses(supabase, [params.id], todayISO())).get(params.id), disciplineForRole(me?.role));
   // Blood report status — shown prominently for BluePrint / Comprehensive
   // clients (whose journey requests a panel). One row per client; take the first.
-  const bloodRow = ((bloodRows ?? []) as { requested_at: string | null; submitted: boolean; submitted_date: string | null; panel: string | null }[])[0] ?? null;
-  const needsBlood = clientPackages.some((r) => ["blueprint", "comprehensive"].includes(r.category)) || Boolean(bloodRow);
+  const bloodRowsAll = ((bloodRows ?? []) as { requested_at: string | null; submitted: boolean; submitted_date: string | null; panel: string | null }[]);
+  const bloodRow = bloodRowsAll[0] ?? null;
+  // A client can hold two panels at once (BluePrint + Comprehensive). Show each
+  // that either the packages call for or a row already exists for, so front desk
+  // can request / mark-received the right one.
+  const BLOOD_PANEL_LABEL: Record<string, string> = { blueprint: "BluePrint panel", comprehensive: "Comprehensive panel" };
+  const bloodByPanel = new Map(bloodRowsAll.map((r) => [r.panel ?? "blueprint", r]));
+  const bloodPanels = Array.from(new Set([
+    ...clientPackages.filter((r) => ["blueprint", "comprehensive"].includes(r.category)).map((r) => r.category),
+    ...bloodRowsAll.map((r) => r.panel ?? "blueprint"),
+  ]));
+  const needsBlood = bloodPanels.length > 0;
   // Journey is live if the protocol exists (PT/Comprehensive) or BluePrint's
   // artefacts do (blueprints row / blood request). Keeps the Start-journey button
   // from re-appearing after it's already been run.
@@ -476,11 +486,20 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Blood report</div>
-            {bloodRow?.submitted && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>Received ✓</span>}
           </div>
-          {ro
-            ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{bloodRow ? (bloodRow.submitted ? `Received ${bloodRow.submitted_date ?? ""}` : `Requested ${bloodRow.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
-            : <BloodActions clientId={params.id} blood={bloodRow} />}
+          <div style={{ display: "grid", gridTemplateColumns: bloodPanels.length > 1 ? "1fr 1fr" : "1fr", gap: 16 }}>
+            {bloodPanels.map((panel) => {
+              const row = bloodByPanel.get(panel) ?? null;
+              const label = bloodPanels.length > 1 ? (BLOOD_PANEL_LABEL[panel] ?? panel) : undefined;
+              return (
+                <div key={panel}>
+                  {ro
+                    ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{label ? <span style={{ fontWeight: 600 }}>{label}: </span> : null}{row ? (row.submitted ? `Received ${row.submitted_date ?? ""}` : `Requested ${row.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
+                    : <BloodActions clientId={params.id} blood={row} panel={panel} label={label} />}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

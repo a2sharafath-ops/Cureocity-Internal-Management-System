@@ -2119,13 +2119,17 @@ export async function requestBlood(formData: FormData) {
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
+  // Panel from the form so front desk can request either report set; defaults
+  // to the BluePrint panel.
+  const panel = String(formData.get("panel") ?? BP_PANEL);
   await supabase.from("blood_requests").upsert(
-    { client_id, panel: BP_PANEL, requested_at: todayISO(), submitted: false },
+    { client_id, panel, requested_at: todayISO(), submitted: false },
     { onConflict: "client_id,panel" },
   );
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
-  await logAudit(p, "Blood report requested", c?.name, null);
+  await logAudit(p, "Blood report requested", c?.name, panel);
   revalidatePath("/blueprint");
+  revalidatePath(`/clients/${client_id}`);
 }
 
 export async function markBloodReceived(formData: FormData) {
@@ -2140,8 +2144,9 @@ export async function markBloodReceived(formData: FormData) {
     .update({ submitted: true, submitted_date: todayISO() })
     .eq("client_id", client_id).eq("panel", panel);
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
-  await logAudit(p, "Blood report received", c?.name, null);
+  await logAudit(p, "Blood report received", c?.name, panel);
   revalidatePath("/blueprint");
+  revalidatePath(`/clients/${client_id}`);
 }
 
 export async function saveBlueprintScores(formData: FormData) {
