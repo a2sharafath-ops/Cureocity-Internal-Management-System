@@ -59,19 +59,15 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
   const actions = (f: FuRow) => {
     if (!canWrite) return null;
     if (f.stage === "PENDING_CALL") {
-      const canOnline = f.mode === "Online" || f.category === "Diet Consultation" || f.category === "Doctor Consultation";
+      // One booking path — always "Book appointment" (opens the calendar).
+      // Only genuinely online touchpoints (e.g. the Day-10 check-in) additionally
+      // offer a questionnaire; everything else is booked.
+      const online = f.mode === "Online";
       return (
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {f.mode === "Online"
-            ? <>
-                <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("var(--brand-fill)")}>Send questionnaire</button></form>
-                <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book in-person</button></form>
-              </>
-            : <>
-                <form action={fuBookInPerson}>{hid(f)}<button style={btn("var(--brand-fill)")}>Book in-person</button></form>
-                {canOnline && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Send questionnaire</button></form>}
-              </>}
-          {canOnline && <form action={fuNoAnswer}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>No answer</button></form>}
+          <form action={fuBookInPerson}>{hid(f)}<button style={btn("var(--brand-fill)")}>Book appointment</button></form>
+          {online && <form action={fuSendQuestionnaire}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Send questionnaire</button></form>}
+          <form action={fuNoAnswer}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>No answer</button></form>
           <form action={fuNoConsult}>{hid(f)}<button style={btn("#fff", "var(--red-text)")}>No consult</button></form>
         </div>
       );
@@ -81,9 +77,8 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {!f.reminder_sent && <form action={fuSendReminder}>{hid(f)}<button style={btn("#fff", "var(--muted)")}>Reminder</button></form>}
           <form action={fuMarkReceived}>{hid(f)}<button style={btn("var(--brand-fill)")}>Mark received</button></form>
-          {/* Client would rather come in than answer the link → convert to an
-              in-person booking (marks booked + opens the calendar pre-filled). */}
-          <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book in-person</button></form>
+          {/* Client would rather come in than answer the link → convert to a booking. */}
+          <form action={fuBookInPerson}>{hid(f)}<button style={btn("#fff", "var(--brand-text)")}>Book appointment</button></form>
         </div>
       );
     }
