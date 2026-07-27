@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 type Ex = { id: string; name: string; mode: string; type: string; active: boolean };
 type Tpl = { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[] };
 
-export default async function ExlibPage() {
+export default async function ExlibPage({ searchParams }: { searchParams: { client?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/exlib")) redirect("/dashboard");
 
@@ -41,6 +41,15 @@ export default async function ExlibPage() {
       <BackLink />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Exercise Library</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Online/offline exercises &amp; reusable workout templates.</p>
+
+      {(() => {
+        const focus = searchParams?.client ? clients.find((c) => c.id === searchParams.client) : null;
+        return focus ? (
+          <div style={{ background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
+            Assigning a workout for <b style={{ color: "var(--ink)" }}>{focus.name}</b> — pick a template below and click <b>Assign →</b> ({focus.name} is pre-selected).
+          </div>
+        ) : null;
+      })()}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, alignItems: "start" }}>
         {/* exercises */}

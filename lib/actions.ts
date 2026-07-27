@@ -2151,7 +2151,7 @@ export async function nudgeClinician(formData: FormData) {
   let href = client_id ? `/clients/${client_id}` : "/workspace";
   if (client_id) {
     if (/diet chart/.test(l)) href = `/workspace?role=diet&tab=charts&client=${client_id}`;
-    else if (/workout/.test(l)) href = `/clients/${client_id}?tab=card`;
+    else if (/workout/.test(l)) href = `/exlib?client=${client_id}`;
     else if (/consolidated/.test(l)) href = `/workspace?role=doctor&tab=summaries&client=${client_id}`;
   }
   await notifyStaff(supabase, staff_id, {
