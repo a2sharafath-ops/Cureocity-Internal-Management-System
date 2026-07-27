@@ -80,10 +80,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // Comprehensive blood is a separate panel — the onboarding step only checks it
   // was *requested*; the client still owes the actual report.
   const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
-  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", href: clientHref, tone: "warn" });
-  if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", href: clientHref, tone: "warn" });
-  if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", href: clientHref, tone: "warn" });
-  if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", href: clientHref, tone: "warn" });
+  // Blood card + consolidated approval live on this same page, so no cross-link.
+  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn" });
+  // Diet chart / workout plan are drafted in the owning clinician's workspace.
+  if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", href: "/workspace?role=diet", tone: "warn" });
+  if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", href: "/workspace?role=trainer", tone: "warn" });
+  if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", tone: "warn" });
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
   if (isComp || isPt) {
@@ -114,7 +116,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // ---- package end dates --------------------------------------------------
   for (const c of active) {
     if (!c.end_date) continue;
-    upcoming.push({ label: `${c.package_name ?? c.category} ends`, detail: fmt(c.end_date), href: clientHref, tone: "neutral" });
+    upcoming.push({ label: `${c.package_name ?? c.category} ends`, detail: fmt(c.end_date), tone: "neutral" });
   }
 
   upcoming.sort((a, b) => (a.detail ?? "").localeCompare(b.detail ?? ""));
