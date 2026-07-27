@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   fuSendQuestionnaire, fuSendReminder, fuNoAnswer, fuBookInPerson, fuNoConsult, fuMarkReceived, fuCompleteReview,
 } from "@/lib/actions";
@@ -30,9 +31,15 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
   const [cat, setCat] = useState("All");
   const [review, setReview] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
+  // Deep-linked from a client's package status ("Diet chart explanation — due"):
+  // ?client=<id> focuses the queue on just that client.
+  const focusClient = useSearchParams().get("client");
+  const focusName = focusClient ? (items.find((f) => f.clientId === focusClient)?.clientName ?? null) : null;
 
   const cats = ["All", ...Array.from(new Set(items.map((f) => f.category).filter(Boolean) as string[]))];
-  const inScope = items.filter((f) => cat === "All" || f.category === cat);
+  const inScope = items
+    .filter((f) => !focusClient || f.clientId === focusClient)
+    .filter((f) => cat === "All" || f.category === cat);
   const calls = inScope.filter((f) => f.stage === "PENDING_CALL").sort((a, b) => a.due_date < b.due_date ? -1 : 1);
   const links = inScope.filter((f) => f.stage === "LINK_SENT");
   const reviews = inScope.filter((f) => f.stage === "PENDING_REVIEW");
@@ -129,6 +136,12 @@ export default function FollowupsQueue({ items, today, canWrite, statusByClient 
 
   return (
     <div>
+      {focusClient && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 14, fontSize: 12.5 }}>
+          <span>Showing follow-ups for <b style={{ color: "var(--ink)" }}>{focusName ?? "this client"}</b> only.</span>
+          <Link href="/followups" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>Show all →</Link>
+        </div>
+      )}
       {/* toolbar */}
       <div style={{ ...box, display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", marginBottom: 16, flexWrap: "wrap" }}>
         <b style={{ fontSize: 12.5 }}>Category:</b>

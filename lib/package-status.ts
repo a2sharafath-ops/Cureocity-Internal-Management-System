@@ -105,8 +105,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if (isComp && ["Doctor", "Diet", "Trainer"].every((k) => doneKinds.has(k)) && !proto?.approved_at) openNow.push({ label: "Consolidated summary — awaiting approval", detail: doctor ? `Owed by ${doctor.name}` : undefined, ownerStaffId: doctor?.id, ownerName: doctor?.name, tone: "warn" });
   // Day-2 diet chart explanation (a follow-up touchpoint the coach schedules).
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage)) {
-    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: "/followups", tone: "warn" });
-    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: "/followups", tone: "info" });
+    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn" });
+    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info" });
   }
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
