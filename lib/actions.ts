@@ -2145,12 +2145,19 @@ export async function nudgeClinician(formData: FormData) {
   if (!staff_id) return;
   const supabase = createClient();
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  // Deep-link straight into the drafting screen for the deliverable, pre-focused
+  // on this client, so the clinician lands where they actually do the work.
+  const l = label.toLowerCase();
+  let href = client_id ? `/clients/${client_id}` : "/workspace";
+  if (client_id) {
+    if (/diet chart/.test(l)) href = `/workspace?role=diet&tab=charts&client=${client_id}`;
+    else if (/workout/.test(l)) href = `/clients/${client_id}?tab=card`;
+    else if (/consolidated/.test(l)) href = `/workspace?role=doctor&tab=summaries&client=${client_id}`;
+  }
   await notifyStaff(supabase, staff_id, {
     title: `Reminder — ${label}`,
     body: `${c?.name ?? "A client"} · nudged by ${p.name}`,
-    // Land on the specific client's 360 so the clinician knows exactly who and
-    // can act (or jump to their workspace from there).
-    href: client_id ? `/clients/${client_id}` : "/workspace", icon: "⏰",
+    href, icon: "⏰",
   });
   await logAudit(p, "Clinician nudged", c?.name, label);
   revalidatePath(`/clients/${client_id}`);
