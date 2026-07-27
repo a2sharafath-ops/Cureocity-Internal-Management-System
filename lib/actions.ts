@@ -737,6 +737,14 @@ export async function createLead(formData: FormData) {
   revalidatePath("/leads");
 }
 
+// Walk-in capture lives on its own page (/leads/walk-in). It reuses createLead
+// (owner, first-response task, score, new-lead notification) then returns the
+// front desk to the leads list so they see the lead they just added.
+export async function createWalkInLead(formData: FormData) {
+  await createLead(formData);
+  redirect("/leads?view=open");
+}
+
 export async function updateLead(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
