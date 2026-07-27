@@ -54,7 +54,11 @@ const WS_OVERSIGHT = ["Administrator", "Super Admin", "Manager"];
 export function visibleWorkspaces(loginRole: string): WsRoleKey[] {
   const own = roleFromStaffRole(loginRole);
   if (own) return [own];
-  if (WS_OVERSIGHT.includes(loginRole)) return ["doctor"]; // default until a persona is chosen
+  // Oversight roles may open ANY discipline workspace — so deep links like
+  // "?role=trainer" (e.g. a dashboard "workout plan not created" flag) resolve
+  // to that discipline instead of falling back to doctor. The default landing
+  // (no ?role) is still doctor; the header persona menu is the usual switch.
+  if (WS_OVERSIGHT.includes(loginRole)) return ["doctor", "diet", "trainer", "coach", "psych"];
   return [];
 }
 
