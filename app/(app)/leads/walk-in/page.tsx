@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 import { createWalkInLead } from "@/lib/actions";
-import BackLink from "@/components/BackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +20,8 @@ export default async function WalkInPage() {
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <BackLink />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Add walk-in</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Quick front-desk capture. Creates a lead (source Walk-in) with an owner, a first-response task and a score, just like any other lead.</p>
+      <Link href="/leads" style={{ color: "var(--muted)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 12 }}>← Back to CRM &amp; Leads</Link>
+      <h1 style={{ fontSize: 20, margin: "0 0 16px" }}>Welcome to Cureocity</h1>
 
       <form action={createWalkInLead} style={{ ...box, padding: 20, display: "grid", gap: 14 }}>
         <input type="hidden" name="source" value="Walk-in" />
