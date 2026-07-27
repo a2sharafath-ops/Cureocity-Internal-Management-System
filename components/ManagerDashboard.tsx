@@ -9,6 +9,7 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { careWorkFlags } from "@/lib/care-attention";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -119,6 +120,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       });
     }
   }
+  flags.push(...await careWorkFlags(today));
   const order = { high: 0, med: 1, low: 2 };
   flags.sort((a, b) => order[a.sev] - order[b.sev]);
 
