@@ -780,7 +780,7 @@ export async function convertLeadWithPackage(formData: FormData) {
   const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
   const { data: inserted } = await supabase.from("clients").insert({
     code, name: lead.name, phone: lead.phone ?? null, joined,
-    package_id, used: 0, verified: true, converted_from: id, pro_id: "d1",
+    package_id, used: 0, verified: true, converted_from: id, pro_id: "t0",
   }).select("id").single();
 
   // Experience bookings move across before anything else, so the client's
@@ -4809,7 +4809,7 @@ export async function createClientRecord(formData: FormData) {
 
   const { data: inserted } = await supabase
     .from("clients")
-    .insert({ ...c, code, used: 0, verified: true, consent_tnc: true, consent_waiver: true, pro_id: "d1" })
+    .insert({ ...c, code, used: 0, verified: true, consent_tnc: true, consent_waiver: true, pro_id: "t0" })
     .select("id")
     .single();
 
