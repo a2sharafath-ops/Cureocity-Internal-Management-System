@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createAppointment } from "@/lib/actions";
@@ -17,6 +17,12 @@ export type Provider = { id: string; name: string; color: string; discipline: st
 export type Unsched = { id: string; clientId: string; clientName: string; label: string; disc: string; due: string | null; owner?: string | null; category?: string };
 
 const DISCIPLINES = ["All", "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"];
+// Discipline (display) → the service catalogue category it books into. Used to
+// auto-pick the discipline's initial service as the default Type.
+const DISC_CATEGORY: Record<string, string> = {
+  Doctor: "Doctor Consultation", Dietitian: "Diet Consultation",
+  "Fitness Trainer": "Fitness Services", "Health Coach": "Coaching", Psychologist: "Counselling",
+};
 
 function hourLabel(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr} ${am ? "AM" : "PM"}`; }
 function hourLabelFull(h: number) { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr}:00 ${am ? "AM" : "PM"}`; }
@@ -26,7 +32,7 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 
 export default function AppointmentsView({
   today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek, statusByClient = {},
-  providerKind = {}, bookedKinds = {}, serviceTypes = [],
+  providerKind = {}, bookedKinds = {}, serviceTypes = [], careTeamByClient = {},
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
   providers: Provider[]; clients: { id: string; name: string }[]; unscheduled?: Unsched[];
@@ -38,6 +44,9 @@ export default function AppointmentsView({
   bookedKinds?: Record<string, string[]>;
   /** The active service catalogue (name + category) — drives the Type dropdown. */
   serviceTypes?: { name: string; category: string }[];
+  /** client id → { discipline display name → assigned staff id }. Used to
+   *  auto-fill the provider once a client + discipline are chosen. */
+  careTeamByClient?: Record<string, Record<string, string>>;
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records" | "unscheduled">("calendar");
@@ -71,6 +80,24 @@ export default function AppointmentsView({
   const firstInitial = serviceTypes.find((s) => /initial/i.test(s.name))?.name;
   const defaultType = preType || discInitial || firstInitial || (hasServices ? serviceTypes[0].name : "Consultation");
   const [apptType, setApptType] = useState<string>(defaultType);
+
+  // Fewer clicks: as soon as a patient + discipline are known, pre-fill the
+  // obvious choices — the client's assigned care-team clinician as Provider, and
+  // that discipline's initial service as Type. Both remain freely changeable.
+  useEffect(() => {
+    if (!booking.client || disc === "All") return;
+    const assigned = careTeamByClient[booking.client]?.[disc];
+    if (assigned) setBooking((b) => (b.provider === assigned ? b : { ...b, provider: assigned }));
+    if (!preType) {
+      const cat = DISC_CATEGORY[disc];
+      const svc = cat
+        ? serviceTypes.find((s) => s.category === cat && /initial/i.test(s.name))?.name
+          ?? serviceTypes.find((s) => s.category === cat)?.name
+        : undefined;
+      if (svc) setApptType(svc);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking.client, disc]);
   const [booking2, startBooking] = useTransition();
   const submitBooking = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -73,6 +73,16 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const DISC_KEY: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", Psychologist: "psychologist", "Health Coach": "coach", "Fitness Trainer": "trainer" };
   const CATEGORY_OF: Record<string, string> = { Doctor: "Doctor Consultation", Dietitian: "Diet Consultation", Psychologist: "Counselling", "Health Coach": "Coaching", "Fitness Trainer": "Fitness Services" };
 
+  // client id → { discipline display name → assigned staff id }, for the booking
+  // form to auto-fill the provider once a client + discipline are chosen.
+  const KEY_TO_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", psychologist: "Psychologist", coach: "Health Coach", trainer: "Fitness Trainer" };
+  const careTeamByClient: Record<string, Record<string, string>> = {};
+  for (const [cid, rec] of assignByClient) {
+    const out: Record<string, string> = {};
+    for (const [k, sid] of Object.entries(rec)) { const d = KEY_TO_DISC[k]; if (d) out[d] = sid; }
+    careTeamByClient[cid] = out;
+  }
+
   // Providers = care-team members that map to a booking discipline.
   const providers: Provider[] = staffRows
     .map((s) => ({ id: s.id, name: s.name, color: s.color ?? "#e11f34", discipline: disciplineOf(s) }))
@@ -171,6 +181,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         statusByClient={statusByClient}
         providerKind={providerKind} bookedKinds={bookedKinds}
         serviceTypes={serviceTypes}
+        careTeamByClient={careTeamByClient}
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>
