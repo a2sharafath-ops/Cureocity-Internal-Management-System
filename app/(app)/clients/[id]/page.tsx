@@ -531,7 +531,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>{m.when}</div>
               </div>
               {m.bookDisc && m.state === "pending" && !ro && canWrite(me?.role ?? "") && (
-                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}`}
+                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}&back=timeline`}
                   style={{ alignSelf: "center", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
                   Book →
                 </a>

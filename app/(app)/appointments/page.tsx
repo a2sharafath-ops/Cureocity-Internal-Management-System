@@ -35,7 +35,7 @@ function disciplineOf(s: StaffRow): string {
   return "Other";
 }
 
-export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string; client?: string; disc?: string } }) {
+export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string; client?: string; disc?: string; back?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/appointments")) redirect("/dashboard");
 
@@ -168,16 +168,23 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["appointments"]} />
 
-      {focusClientId && (
+      {focusClientId && (() => {
+        // Return to whichever client tab the booking was launched from. The
+        // Service Timeline passes ?back=timeline; everything else (the Overview
+        // "Upcoming" panel, dashboard flags) returns to Overview.
+        const backTab = searchParams.back === "timeline" ? "timeline" : "overview";
+        const backLabel = backTab === "timeline" ? "Service Timeline" : "Overview";
+        return (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 14 }}>
-          <Link href={`/clients/${focusClientId}?tab=timeline`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
-            ← Back to Service Timeline
+          <Link href={`/clients/${focusClientId}?tab=${backTab}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+            ← Back to {backLabel}
           </Link>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
             Booking for <b style={{ color: "var(--ink)" }}>{focusClientName ?? "this client"}</b> — schedule this appointment, then head back to book the rest of their journey.
           </span>
         </div>
-      )}
+        );
+      })()}
 
       <AppointmentsView
         today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} unscheduled={unscheduled}
