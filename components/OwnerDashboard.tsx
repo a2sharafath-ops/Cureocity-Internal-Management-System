@@ -9,6 +9,8 @@ import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { packageCategory } from "@/lib/packages";
 import { careWorkFlags } from "@/lib/care-attention";
+import TodayAgenda from "@/components/TodayAgenda";
+import { todayAgenda } from "@/lib/today-agenda";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -24,6 +26,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   const today = todayISO();
   const month = today.slice(0, 7);
   const in30 = addDays(today, 30);
+  const agenda = await todayAgenda(today);
 
   const [
     { data: clientData }, { data: pkgData }, { data: invData }, { data: sessData },
@@ -220,6 +223,13 @@ export default async function OwnerDashboard({ name }: { name: string }) {
         <MetricCard value={clients.length} label="Clients" href="/clients"
           meter={{ of: clients.length, filled: withPackage }}
           sub={`${withPackage} of ${clients.length} on a package`} />
+      </div>
+
+      {/* Itemised agenda under the stat cards — every appointment, session,
+          follow-up (incl. the Day-2 diet chart explanation) and care deadline
+          due today, with Done/Pending and a Mark-done on sessions. */}
+      <div style={{ marginBottom: 20 }}>
+        <TodayAgenda agenda={agenda} dateLabel={new Date(today + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })} />
       </div>
 
       {/* 4 — GROWTH. Also full width, directly under Today. */}
