@@ -15,6 +15,7 @@ import {
   COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, bookableNow,
   bookingTaskTitle, reassessmentOutOfOrder,
 } from "@/lib/comprehensive";
+import { loadCatOf } from "@/lib/appt-match";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -101,10 +102,13 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
   for (const s of (sessions ?? []) as { client_id: string }[]) {
     sessCount.set(s.client_id, (sessCount.get(s.client_id) ?? 0) + 1);
   }
+  // Resolve each booking's type to its service category so a manually-booked
+  // service ("10th Day Diet Followup") counts against its milestone / SLA.
+  const catOf = await loadCatOf(supabase);
   const apptsBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (appts ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     const list = apptsBy.get(a.client_id) ?? [];
-    list.push({ type: a.type, date: a.date, status: a.status });
+    list.push({ type: catOf(a.type), date: a.date, status: a.status });
     apptsBy.set(a.client_id, list);
   }
   // comp4 = 28 days = 1 cycle; comp12 = 84 = 3. Read from the package the

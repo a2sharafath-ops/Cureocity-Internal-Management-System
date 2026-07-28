@@ -7,6 +7,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { loadCatOf } from "@/lib/appt-match";
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -33,6 +34,8 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     if (a.staff_id) ownerBy.set(`${a.client_id}|${a.discipline}`, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
   }
   const firstName = (n: string) => n.split(" ")[0];
+  // Resolve an appointment's type to its service category for milestone matching.
+  const catOf = await loadCatOf(sb);
 
   const name = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const catsBy = new Map<string, { category: string; start_date: string | null; end_date: string | null }[]>();
@@ -82,7 +85,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
         for (const m of milestoneDates(start, cyclesFor(span))) {
           if (today <= m.dueDate) continue;
-          const satisfied = (apptsBy.get(clientId) ?? []).some((a) => a.type === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
+          const satisfied = (apptsBy.get(clientId) ?? []).some((a) => catOf(a.type) === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
           if (!satisfied) flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: `/appointments?client=${clientId}`, cta: "Book" });
         }
       }

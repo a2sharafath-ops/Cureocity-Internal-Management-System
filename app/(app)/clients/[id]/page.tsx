@@ -23,6 +23,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PackageStatusPanel from "@/components/PackageStatusPanel";
 import { getPackageStatus } from "@/lib/package-status";
+import { isInitialApptType } from "@/lib/appt-match";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
 import RenewMembership from "@/components/RenewMembership";
@@ -290,12 +291,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // appointments — a booked-but-not-started consult has no `consultations` row,
   // so relying on that table alone made a scheduled consult read "not scheduled".
   const A_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
-  const INITIAL_APPT_TYPES = ["Consultation", "Assessment"];
   const apptSched = new Set<string>();
   const apptDone = new Set<string>();
   for (const a of (apptData ?? []) as unknown as { type: string | null; status: string; staff: { role: string } | null }[]) {
     const kind = A_ROLE_TO_KIND[a.staff?.role ?? ""];
-    if (!kind || !INITIAL_APPT_TYPES.includes(a.type ?? "Consultation")) continue;
+    if (!kind || !isInitialApptType(a.type)) continue;
     if (a.status === "completed") apptDone.add(kind); else apptSched.add(kind);
   }
   const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed") || apptDone.has(kind);

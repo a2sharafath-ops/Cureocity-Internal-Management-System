@@ -16,6 +16,7 @@ import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } fro
 import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
+import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
 import { notifyRoles, notifyStaff } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
@@ -1665,7 +1666,7 @@ export async function getComprehensiveView(clientId: string) {
     workoutPlannedAt: plan?.created_at ?? null,
     prescriptionSharedAt: ((rx ?? [])[0] as { shared_at: string | null } | undefined)?.shared_at ?? null,
     sessionsCompleted: (sessions ?? []).length,
-    appointments: ((appts ?? []) as { type: string | null; date: string | null; status: string }[]),
+    appointments: normalizeApptTypes((appts ?? []) as { type: string | null; date: string | null; status: string }[], await loadCatOf(supabase)),
     hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
     holdNote: (proto.hold_note as string | null) ?? null,
   };
@@ -1707,7 +1708,7 @@ export async function getPTView(clientId: string) {
     fitnessApprovedAt: fit?.approved_at ?? null,
     workoutPlannedAt: plan?.created_at ?? null,
     sessionsCompleted: (sessions ?? []).length,
-    appointments: ((appts ?? []) as { type: string | null; date: string | null; status: string }[]),
+    appointments: normalizeApptTypes((appts ?? []) as { type: string | null; date: string | null; status: string }[], await loadCatOf(supabase)),
     hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
     holdNote: (proto.hold_note as string | null) ?? null,
   };
@@ -3904,13 +3905,12 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
   // "Consultation"/"Assessment" of the same discipline while any non-cancelled
   // one exists (scheduled OR completed). Follow-ups use a different type and are
   // not limited here.
-  const INITIAL_TYPES = ["Consultation", "Assessment"];
   const newType = String(formData.get("type") || "Consultation");
-  if (newDisc && INITIAL_TYPES.includes(newType)) {
+  if (newDisc && isInitialApptType(newType)) {
     const { data: existing } = await supabase.from("appointments")
       .select("type, staff(role)").eq("client_id", client_id).neq("status", "cancelled");
     const dup = ((existing ?? []) as unknown as { type: string | null; staff: { role: string } | null }[])
-      .some((a) => ROLE_TO_KIND[a.staff?.role ?? ""] === newDisc && INITIAL_TYPES.includes(a.type ?? "Consultation"));
+      .some((a) => ROLE_TO_KIND[a.staff?.role ?? ""] === newDisc && isInitialApptType(a.type));
     if (dup) {
       const label = newDisc === "Diet" ? "dietitian" : newDisc === "Trainer" ? "fitness" : newDisc.toLowerCase();
       return { ok: false, error: `This client already has a ${label} consultation for this package. Cancel it first, or book a follow-up instead.` };

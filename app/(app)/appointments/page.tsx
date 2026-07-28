@@ -7,6 +7,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import AppointmentsView, { type ViewAppt, type Provider, type Unsched } from "@/components/AppointmentsView";
+import { isInitialApptType } from "@/lib/appt-match";
 
 export const dynamic = "force-dynamic";
 
@@ -99,10 +100,13 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   // letting front desk submit into an error.
   const providerKind: Record<string, string> = {};
   for (const s of staffRows) { const k = ROLE_TO_KIND[s.role ?? ""]; if (k) providerKind[s.id] = k; }
+  // Initial consults now carry service-name types ("Initial Diet Consultation"),
+  // so filter in JS via isInitialApptType rather than a fixed type list.
   const { data: initR } = await supabase.from("appointments")
-    .select("client_id, provider_id, type").in("type", ["Consultation", "Assessment"]).neq("status", "cancelled");
+    .select("client_id, provider_id, type").neq("status", "cancelled");
   const bookedKinds: Record<string, string[]> = {};
   for (const a of (initR ?? []) as { client_id: string; provider_id: string | null; type: string | null }[]) {
+    if (!isInitialApptType(a.type)) continue;
     const k = a.provider_id ? providerKind[a.provider_id] : null;
     if (!k) continue;
     (bookedKinds[a.client_id] ??= []);

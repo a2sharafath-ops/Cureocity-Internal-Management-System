@@ -14,6 +14,7 @@ import {
   PT_CATEGORY, milestoneDates, cyclesFor, bookableNow, bookingTaskTitle,
   ptDeadline, PT_SESSIONS_PER_CYCLE,
 } from "@/lib/pt";
+import { loadCatOf } from "@/lib/appt-match";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -55,9 +56,12 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
   const validityByPkg = new Map(((pkgRows ?? []) as { id: string; validity: number }[]).map((p) => [p.id, p.validity]));
   const validityByClient = new Map(cps.map((c) => [c.client_id, (c.package_id && validityByPkg.get(c.package_id)) || 28]));
 
+  // Resolve each booking's type to its service category so a manually-booked
+  // service ("Fitness Reassessment") counts against its milestone.
+  const catOf = await loadCatOf(supabase);
   const apptsBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (apptRows ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
-    (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push(a);
+    (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push({ ...a, type: catOf(a.type) });
   }
   const doneSessions = new Map<string, number>();
   for (const s of (sessRows ?? []) as { client_id: string; status: string }[]) {

@@ -13,6 +13,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { COMPREHENSIVE_CATEGORY, milestoneDates as compMilestones, cyclesFor as compCycles } from "@/lib/comprehensive";
 import { PT_CATEGORY, milestoneDates as ptMilestones, cyclesFor as ptCycles } from "@/lib/pt";
+import { loadCatOf } from "@/lib/appt-match";
 
 export type AgendaKind = "appointment" | "session" | "followup" | "deadline";
 
@@ -92,6 +93,7 @@ export async function todayAgenda(today: string): Promise<Agenda> {
     }
   }
 
+  const catOf = await loadCatOf(sb);
   const deadlines: AgendaItem[] = [];
   for (const cp of (cps ?? []) as { client_id: string; category: string; start_date: string | null; end_date: string | null }[]) {
     const start = protoStart.get(cp.client_id) ?? cp.start_date;
@@ -103,7 +105,7 @@ export async function todayAgenda(today: string): Promise<Agenda> {
       : compMilestones(start, compCycles(spanDays));
     for (const m of dated) {
       if (m.dueDate !== today) continue;
-      const satisfied = clientAppts.some((a) => a.type === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
+      const satisfied = clientAppts.some((a) => catOf(a.type) === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
       if (satisfied) continue;
       deadlines.push({
         id: `${cp.client_id}-${m.gate}`, kind: "deadline", clientId: cp.client_id, clientName: nameOf.get(cp.client_id) ?? "—",

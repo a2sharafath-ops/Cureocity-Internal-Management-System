@@ -7,6 +7,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ageFromDob } from "@/lib/dob";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import { buildFullJourney } from "@/lib/journey";
+import { loadCatOf } from "@/lib/appt-match";
 import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
@@ -65,9 +66,12 @@ export default async function ClientsPage() {
   for (const b of (bloodAll ?? []) as { client_id: string; panel: string | null; submitted: boolean }[]) {
     (bloodPanelBy.get(b.client_id) ?? bloodPanelBy.set(b.client_id, new Map()).get(b.client_id)!).set(b.panel ?? "blueprint", b.submitted);
   }
+  // Resolve each booking's type to its service category so a manually-booked
+  // service ("10th Day Diet Followup") counts against its journey milestone.
+  const catOf = await loadCatOf(supabase);
   const apptBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (apptAll ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
-    (apptBy.get(a.client_id) ?? apptBy.set(a.client_id, []).get(a.client_id)!).push(a);
+    (apptBy.get(a.client_id) ?? apptBy.set(a.client_id, []).get(a.client_id)!).push({ ...a, type: catOf(a.type) });
   }
   // Day-2 diet chart explanation closed (booked / completed / no-consult).
   const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
