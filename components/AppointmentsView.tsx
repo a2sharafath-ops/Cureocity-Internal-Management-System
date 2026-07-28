@@ -26,7 +26,7 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 
 export default function AppointmentsView({
   today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek, statusByClient = {},
-  providerKind = {}, bookedKinds = {},
+  providerKind = {}, bookedKinds = {}, serviceTypes = [],
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
   providers: Provider[]; clients: { id: string; name: string }[]; unscheduled?: Unsched[];
@@ -36,6 +36,8 @@ export default function AppointmentsView({
    *  disable Book for a duplicate initial consult before the server rejects it. */
   providerKind?: Record<string, string>;
   bookedKinds?: Record<string, string[]>;
+  /** The active service catalogue (name + category) — drives the Type dropdown. */
+  serviceTypes?: { name: string; category: string }[];
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records" | "unscheduled">("calendar");
@@ -53,7 +55,22 @@ export default function AppointmentsView({
       : { open: false, date: today, hour: 10, provider: "", client: "" },
   );
   const [bookErr, setBookErr] = useState<string | null>(null);
-  const [apptType, setApptType] = useState<string>(preType || (preDisc === "Fitness Trainer" ? "Assessment" : "Consultation"));
+  // Bookable types come from the active service catalogue, grouped by category.
+  // Fall back to a minimal generic set if no services are configured yet.
+  const FALLBACK_TYPES = ["Consultation", "Assessment", "Follow-up", "Diet Chart Explanation"];
+  const groupedServices = serviceTypes.reduce<Record<string, string[]>>((acc, s) => {
+    (acc[s.category] ??= []).push(s.name);
+    return acc;
+  }, {});
+  const serviceCategories = Object.keys(groupedServices);
+  const hasServices = serviceCategories.length > 0;
+  // A sensible starting type: the deep-linked one, else the initial consult for
+  // the pre-filtered discipline, else the first "Initial …" service / generic.
+  const discCat = preDisc === "Fitness Trainer" ? "fitness" : preDisc === "Dietitian" ? "diet" : preDisc === "Doctor" ? "doctor" : null;
+  const discInitial = discCat ? serviceTypes.find((s) => new RegExp(discCat, "i").test(s.category) && /initial/i.test(s.name))?.name : undefined;
+  const firstInitial = serviceTypes.find((s) => /initial/i.test(s.name))?.name;
+  const defaultType = preType || discInitial || firstInitial || (hasServices ? serviceTypes[0].name : "Consultation");
+  const [apptType, setApptType] = useState<string>(defaultType);
   const [booking2, startBooking] = useTransition();
   const submitBooking = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -127,7 +144,9 @@ export default function AppointmentsView({
   // erroring on submit. Only bites for an initial type (Consultation/Assessment)
   // with a provider whose discipline the client already has booked.
   const selKind = booking.provider ? (providerKind[booking.provider] ?? null) : null;
-  const isInitialType = apptType === "Consultation" || apptType === "Assessment";
+  // "Initial …" services (and the legacy generic Consultation/Assessment) are
+  // the once-per-discipline bookings the duplicate guard applies to.
+  const isInitialType = /initial/i.test(apptType) || apptType === "Consultation" || apptType === "Assessment";
   const dupConsult = Boolean(selKind && isInitialType && (bookedKinds[booking.client] ?? []).includes(selKind));
   const dupLabel = selKind === "Diet" ? "dietitian" : selKind === "Trainer" ? "fitness" : (selKind ?? "").toLowerCase();
   const upcoming = sorted.filter((a) => a.date >= today && a.status === "scheduled");
@@ -186,7 +205,15 @@ export default function AppointmentsView({
           {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required value={booking.client} onChange={(e) => setBooking((b) => ({ ...b, client: e.target.value }))}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" value={booking.provider} onChange={(e) => setBooking((b) => ({ ...b, provider: e.target.value }))}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}><option>Consultation</option><option>Assessment</option><option>Follow-up</option><option>Diet Chart Explanation</option><option>Telehealth</option><option>Procedure</option></select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}>
+            {hasServices
+              ? serviceCategories.map((cat) => (
+                  <optgroup key={cat} label={cat}>
+                    {groupedServices[cat].map((n) => <option key={n} value={n}>{n}</option>)}
+                  </optgroup>
+                ))
+              : FALLBACK_TYPES.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Title (optional)</label><input style={input} name="title" placeholder="e.g. Diet review" /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Date</label><input style={input} name="date" type="date" required value={booking.date} onChange={(e) => setBooking((b) => ({ ...b, date: e.target.value }))} /></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Time{takenHours.size > 0 ? " · booked slots greyed" : ""}</label><select style={input} name="hour" value={String(booking.hour)} onChange={(e) => setBooking((b) => ({ ...b, hour: Number(e.target.value) }))}>{hours.map((h) => <option key={h} value={h} disabled={takenHours.has(h)}>{hourLabelFull(h)}{takenHours.has(h) ? " · booked" : ""}</option>)}</select></div>

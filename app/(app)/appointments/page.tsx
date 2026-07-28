@@ -45,14 +45,17 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const supabase = createClient();
-  const [apptsR, clientsR, staffR, tasksR, assignsR] = await Promise.all([
+  const [apptsR, clientsR, staffR, tasksR, assignsR, servicesR] = await Promise.all([
     supabase.from("appointments").select("id, client_id, type, title, date, hour, duration_min, status, provider_id, clients(id, name), staff(name)").gte("date", weekStart).lte("date", weekEnd).order("hour"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("staff").select("id, name, designation, department, color, is_trainer, role").order("name"),
     // Open "Book …" tasks = appointments that are due but not yet on the diary.
     supabase.from("tasks").select("id, client_id, title, due_date").neq("status", "done").ilike("title", "Book %").order("due_date").limit(2000),
     supabase.from("client_assignments").select("client_id, discipline, staff_id"),
+    // The master service catalogue drives the bookable "Type" options.
+    supabase.from("services").select("name, category").eq("active", true).order("category").order("name"),
   ]);
+  const serviceTypes = (servicesR.data ?? []) as { name: string; category: string }[];
   const raw = (apptsR.data ?? []) as unknown as Appt[];
   const clients = (clientsR.data ?? []) as { id: string; name: string }[];
   const staffRows = (staffR.data ?? []) as StaffRow[];
@@ -167,6 +170,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         weekLabel={weekLabel} prevHref={`/appointments?week=${offset - 1}`} nextHref={`/appointments?week=${offset + 1}`} isThisWeek={offset === 0}
         statusByClient={statusByClient}
         providerKind={providerKind} bookedKinds={bookedKinds}
+        serviceTypes={serviceTypes}
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>
