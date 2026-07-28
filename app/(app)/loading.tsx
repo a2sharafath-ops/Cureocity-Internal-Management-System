@@ -23,6 +23,14 @@ export default function Loading() {
     <div style={{ maxWidth: 1120 }} aria-busy="true" aria-live="polite">
       <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Loading</span>
 
+      {/* Slim indeterminate progress bar pinned to the top of the viewport — the
+          instant, universal "something is loading" cue on every navigation. It
+          lives here in loading.tsx so it appears the moment a click starts a
+          route change and vanishes automatically once the page has rendered. */}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 3, zIndex: 9999, overflow: "hidden", background: "var(--brand-tint)", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: 0, height: "100%", borderRadius: 3, background: "var(--brand-fill)", boxShadow: "0 0 8px var(--brand-fill)", animation: "cure-topbar 1s ease-in-out infinite" }} />
+      </div>
+
       <div style={bar(180, 20)} />
       <div style={bar(300, 12, 10)} />
 
