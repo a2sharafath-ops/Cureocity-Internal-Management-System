@@ -43,3 +43,31 @@ export function isInitialApptType(type: string | null | undefined): boolean {
   const t = (type ?? "").toLowerCase();
   return t.startsWith("initial") || t === "consultation" || t === "assessment";
 }
+
+/** Service category → booking-form discipline (display) name. */
+export const CATEGORY_TO_DISC: Record<string, string> = {
+  "Doctor Consultation": "Doctor",
+  "Diet Consultation": "Dietitian",
+  "Fitness Services": "Fitness Trainer",
+  "Counselling": "Psychologist",
+  "Coaching": "Health Coach",
+};
+
+/** Build a pre-filled booking link for a milestone: patient + discipline + the
+ *  specific service (matched by category + day-offset). Opening it lands the
+ *  booking form with the obvious Type selected and — via the form's care-team
+ *  default — the assigned provider filled in, so the booking is one click. */
+export function milestoneBookHref(
+  clientId: string,
+  category: string,
+  dayFrom: number,
+  services: { name: string; category: string; day_offset: number | null }[],
+): string {
+  const disc = CATEGORY_TO_DISC[category];
+  const svc = services.find((s) => s.category === category && (s.day_offset ?? -1) === dayFrom)
+    ?? services.find((s) => s.category === category && /followup|follow-up|review|reassess/i.test(s.name));
+  const params = new URLSearchParams({ client: clientId });
+  if (disc) params.set("disc", disc);
+  if (svc) params.set("type", svc.name);
+  return `/appointments?${params.toString()}`;
+}

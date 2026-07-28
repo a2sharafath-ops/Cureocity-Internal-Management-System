@@ -13,7 +13,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { COMPREHENSIVE_CATEGORY, milestoneDates as compMilestones, cyclesFor as compCycles } from "@/lib/comprehensive";
 import { PT_CATEGORY, milestoneDates as ptMilestones, cyclesFor as ptCycles } from "@/lib/pt";
-import { loadCatOf } from "@/lib/appt-match";
+import { makeCatOf, milestoneBookHref } from "@/lib/appt-match";
 
 export type AgendaKind = "appointment" | "session" | "followup" | "deadline";
 
@@ -93,7 +93,9 @@ export async function todayAgenda(today: string): Promise<Agenda> {
     }
   }
 
-  const catOf = await loadCatOf(sb);
+  const { data: svcData } = await sb.from("services").select("name, category, day_offset");
+  const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
+  const catOf = makeCatOf(services);
   const deadlines: AgendaItem[] = [];
   for (const cp of (cps ?? []) as { client_id: string; category: string; start_date: string | null; end_date: string | null }[]) {
     const start = protoStart.get(cp.client_id) ?? cp.start_date;
@@ -110,7 +112,7 @@ export async function todayAgenda(today: string): Promise<Agenda> {
       deadlines.push({
         id: `${cp.client_id}-${m.gate}`, kind: "deadline", clientId: cp.client_id, clientName: nameOf.get(cp.client_id) ?? "—",
         label: `${m.label} due`, time: null, done: false, overdue: false,
-        href: `/appointments?client=${cp.client_id}`,
+        href: milestoneBookHref(cp.client_id, m.apptType, m.from, services),
       });
     }
   }
