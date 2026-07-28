@@ -53,6 +53,18 @@ export const CATEGORY_TO_DISC: Record<string, string> = {
   "Coaching": "Health Coach",
 };
 
+/** The specific catalogue service a milestone books — matched by category +
+ *  day-offset (e.g. Diet Consultation @ day 10 → "10th Day Diet Followup"). */
+export function serviceForMilestone(
+  category: string,
+  dayFrom: number,
+  services: { name: string; category: string; day_offset: number | null }[],
+): string | null {
+  const svc = services.find((s) => s.category === category && (s.day_offset ?? -1) === dayFrom)
+    ?? services.find((s) => s.category === category && /followup|follow-up|review|reassess/i.test(s.name));
+  return svc?.name ?? null;
+}
+
 /** Build a pre-filled booking link for a milestone: patient + discipline + the
  *  specific service (matched by category + day-offset). Opening it lands the
  *  booking form with the obvious Type selected and — via the form's care-team
@@ -64,10 +76,24 @@ export function milestoneBookHref(
   services: { name: string; category: string; day_offset: number | null }[],
 ): string {
   const disc = CATEGORY_TO_DISC[category];
-  const svc = services.find((s) => s.category === category && (s.day_offset ?? -1) === dayFrom)
-    ?? services.find((s) => s.category === category && /followup|follow-up|review|reassess/i.test(s.name));
+  const svc = serviceForMilestone(category, dayFrom, services);
   const params = new URLSearchParams({ client: clientId });
   if (disc) params.set("disc", disc);
-  if (svc) params.set("type", svc.name);
+  if (svc) params.set("type", svc);
   return `/appointments?${params.toString()}`;
+}
+
+/** Is a milestone satisfied by an existing booking? A booking counts when either
+ *  its type is the milestone's specific service (any date — an early booking
+ *  still counts), or it's a legacy category-typed appointment falling within the
+ *  milestone's date window. `catOf` resolves service names to their category. */
+export function milestoneSatisfied(
+  appts: { type: string | null; date: string | null; status: string }[],
+  opts: { category: string; fromDate: string; service: string | null; catOf: CatOf },
+): boolean {
+  return appts.some((a) => {
+    if (a.status !== "completed" && a.status !== "scheduled") return false;
+    if (opts.service && a.type === opts.service) return true;
+    return opts.catOf(a.type) === opts.category && !!a.date && a.date >= opts.fromDate;
+  });
 }

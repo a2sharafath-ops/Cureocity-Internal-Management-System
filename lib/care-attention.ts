@@ -7,7 +7,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
-import { makeCatOf, milestoneBookHref } from "@/lib/appt-match";
+import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -87,7 +87,8 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
         for (const m of milestoneDates(start, cyclesFor(span))) {
           if (today <= m.dueDate) continue;
-          const satisfied = (apptsBy.get(clientId) ?? []).some((a) => catOf(a.type) === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
+          const svc = serviceForMilestone(m.apptType, m.from, services);
+          const satisfied = milestoneSatisfied(apptsBy.get(clientId) ?? [], { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
           if (!satisfied) flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: milestoneBookHref(clientId, m.apptType, m.from, services), cta: "Book" });
         }
       }

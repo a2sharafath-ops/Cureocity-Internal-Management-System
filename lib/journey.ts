@@ -4,6 +4,7 @@
 // milestones), so the Journey dots reflect everything the package entails.
 
 import { milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { makeCatOf, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 
 export type JStep = { label: string; done: boolean };
 
@@ -16,7 +17,10 @@ export type JourneySignals = {
   blueprintGenerated: boolean;
   sessionsTotal: number; sessionsDone: number; sessionScheduled: boolean;
   startDate: string | null; endDate: string | null;
+  /** Raw appointments (type = service name or category) for milestone matching. */
   appts: { type: string | null; date: string | null; status: string }[];
+  /** Service catalogue (name/category/day) — resolves service ↔ milestone. */
+  services: { name: string; category: string; day_offset: number | null }[];
   today: string;
 };
 
@@ -41,9 +45,10 @@ export function buildFullJourney(s: JourneySignals): JStep[] {
         { label: `Strength sessions ${s.sessionsDone}/${sessTotal}`, done: sessDone },
       ];
       if (s.startDate) {
+        const catOf = makeCatOf(s.services);
         const span = s.endDate ? Math.max(28, daysBetween(s.startDate, s.endDate)) : 28;
         for (const m of milestoneDates(s.startDate, cyclesFor(span))) {
-          const done = s.appts.some((a) => a.type === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
+          const done = milestoneSatisfied(s.appts, { category: m.apptType, fromDate: m.fromDate, service: serviceForMilestone(m.apptType, m.from, s.services), catOf });
           steps.push({ label: m.label, done });
         }
       }

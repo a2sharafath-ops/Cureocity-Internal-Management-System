@@ -13,7 +13,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { COMPREHENSIVE_CATEGORY, milestoneDates as compMilestones, cyclesFor as compCycles } from "@/lib/comprehensive";
 import { PT_CATEGORY, milestoneDates as ptMilestones, cyclesFor as ptCycles } from "@/lib/pt";
-import { makeCatOf, milestoneBookHref } from "@/lib/appt-match";
+import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 
 export type AgendaKind = "appointment" | "session" | "followup" | "deadline";
 
@@ -107,7 +107,8 @@ export async function todayAgenda(today: string): Promise<Agenda> {
       : compMilestones(start, compCycles(spanDays));
     for (const m of dated) {
       if (m.dueDate !== today) continue;
-      const satisfied = clientAppts.some((a) => catOf(a.type) === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
+      const svc = serviceForMilestone(m.apptType, m.from, services);
+      const satisfied = milestoneSatisfied(clientAppts, { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
       if (satisfied) continue;
       deadlines.push({
         id: `${cp.client_id}-${m.gate}`, kind: "deadline", clientId: cp.client_id, clientName: nameOf.get(cp.client_id) ?? "—",
