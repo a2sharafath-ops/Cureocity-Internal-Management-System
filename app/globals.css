@@ -118,6 +118,17 @@
   @keyframes cure-topbar { 0%, 100% { left: 0; width: 100%; } }
 }
 
+/* Loading "notch" pill spinner + drop-in animation (loading.tsx) */
+@keyframes cure-spin { to { transform: rotate(360deg); } }
+@keyframes cure-notch-in {
+  0%   { transform: translateY(-140%); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes cure-spin { 0%, 100% { transform: rotate(0deg); } }
+  @keyframes cure-notch-in { 0%, 100% { transform: translateY(0); opacity: 1; } }
+}
+
 html,
 body {
   padding: 0;

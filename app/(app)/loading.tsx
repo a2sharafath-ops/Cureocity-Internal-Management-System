@@ -23,12 +23,15 @@ export default function Loading() {
     <div style={{ maxWidth: 1120 }} aria-busy="true" aria-live="polite">
       <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Loading</span>
 
-      {/* Slim indeterminate progress bar pinned to the top of the viewport — the
-          instant, universal "something is loading" cue on every navigation. It
-          lives here in loading.tsx so it appears the moment a click starts a
-          route change and vanishes automatically once the page has rendered. */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, height: 3, zIndex: 9999, overflow: "hidden", background: "var(--brand-tint)", pointerEvents: "none" }}>
-        <div style={{ position: "absolute", top: 0, height: "100%", borderRadius: 3, background: "var(--brand-fill)", boxShadow: "0 0 8px var(--brand-fill)", animation: "cure-topbar 1s ease-in-out infinite" }} />
+      {/* A floating "notch" pill — a dynamic-island-style loading badge that
+          drops in from the top-centre of the viewport with a spinner. It lives
+          here in loading.tsx so it appears the moment a click starts a route
+          change and vanishes automatically once the page has rendered. */}
+      <div style={{ position: "fixed", top: 12, left: 0, right: 0, display: "flex", justifyContent: "center", zIndex: 9999, pointerEvents: "none" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "rgba(20,20,25,0.92)", color: "#fff", borderRadius: 999, padding: "10px 20px", boxShadow: "0 10px 34px rgba(20,20,25,0.32)", WebkitBackdropFilter: "blur(8px)", backdropFilter: "blur(8px)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.1px", animation: "cure-notch-in 0.32s cubic-bezier(0.22,1,0.36,1)" }}>
+          <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2.5px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "cure-spin 0.7s linear infinite" }} />
+          Loading…
+        </div>
       </div>
 
       <div style={bar(180, 20)} />
