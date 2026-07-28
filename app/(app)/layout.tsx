@@ -5,33 +5,29 @@ import RolePreview from "@/components/RolePreview";
 import HeaderTitle from "@/components/HeaderTitle";
 import NotificationBell from "@/components/NotificationBell";
 import { createClient } from "@/lib/supabase/server";
-import { getViewRole } from "@/lib/auth";
+import { getProfile, getViewRole } from "@/lib/auth";
 import { signOut } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, role")
-    .eq("id", user.id)
-    .maybeSingle();
+  // Cached getProfile — the layout, getViewRole and the page all resolve to the
+  // same single getUser + profiles read for this request (see lib/auth).
+  const me = await getProfile();
+  if (!me) redirect("/login");
 
   // clients don't use the staff app
-  if (profile?.role === "Client") redirect("/portal");
+  if (me.role === "Client") redirect("/portal");
 
   const { real, effective, preview, profession } = await getViewRole();
 
   const { data: notifRows } = await supabase
     .from("notifications").select("id, title, body, href, icon, read, created_at")
-    .eq("user_id", user.id).order("created_at", { ascending: false }).limit(20);
+    .eq("user_id", me.id).order("created_at", { ascending: false }).limit(20);
   const notifs = (notifRows ?? []) as { id: string; title: string; body: string | null; href: string | null; icon: string | null; read: boolean; created_at: string }[];
   const unread = notifs.filter((n) => !n.read).length;
-  const name = profile?.name ?? user.email?.split("@")[0] ?? "User";
+  const name = me.name;
   const role = effective; // display + nav follow the (possibly previewed) role
   const initials = name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
 

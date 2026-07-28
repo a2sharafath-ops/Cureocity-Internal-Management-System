@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,7 +13,14 @@ export type Profile = {
   staffId: string | null;
 };
 
-export async function getProfile(): Promise<Profile | null> {
+// Memoized for the lifetime of a single request with React `cache()`. A page
+// render resolves the profile many times — the page body, its `canSee` guards,
+// `getViewRole`, and the layout all call this — and each call used to repeat
+// `auth.getUser()` (a network round-trip that revalidates the JWT against
+// Supabase Auth) plus a `profiles` read. `cache()` collapses all of those into
+// ONE getUser + ONE profiles query per request, shared across the layout and
+// page. This is a direct cut to the fixed per-navigation latency.
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = createClient();
   const {
     data: { user },
@@ -34,7 +42,7 @@ export async function getProfile(): Promise<Profile | null> {
     // this when no owner is chosen explicitly.
     staffId: (data as { staff_id?: string | null } | null)?.staff_id ?? null,
   };
-}
+});
 
 // Effective (display) role — Administrators can preview another role via a cookie.
 // The REAL role still governs all permissions; this only changes what's shown.
