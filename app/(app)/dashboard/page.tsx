@@ -10,6 +10,7 @@ import FinanceDashboard from "@/components/FinanceDashboard";
 import HrDashboard from "@/components/HrDashboard";
 import AttentionPanel from "@/components/AttentionPanel";
 import { frontDeskFlags } from "@/lib/frontdesk-attention";
+import { careWorkFlags } from "@/lib/care-attention";
 import TodayAgenda from "@/components/TodayAgenda";
 import { todayAgenda } from "@/lib/today-agenda";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -144,14 +145,20 @@ export default async function DashboardPage() {
     );
   }
 
-  // ---- Ops view (Admin / Manager / Front Desk) — mirrors the prototype ----
-  const [fdFlags, agenda] = await Promise.all([frontDeskFlags(TODAY), todayAgenda(TODAY)]);
+  // ---- Ops view (Admin / Front Desk) — mirrors the prototype ----
+  // Front desk sees BOTH their own exceptions (billing, blood, intakes) and the
+  // clinician-deliverable flags (diet chart / workout plan not done) — the same
+  // "Remind {clinician}" action the Owner/Manager dashboards and the client
+  // Package-status panel already offer. One capability, one behaviour everywhere.
+  const [fdFlags, careFlags, agenda] = await Promise.all([frontDeskFlags(TODAY), careWorkFlags(TODAY), todayAgenda(TODAY)]);
+  const sevRank = { high: 0, med: 1, low: 2 } as const;
+  const opsFlags = [...fdFlags, ...careFlags].sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
   const agendaDate = new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["sessions", "appointments", "leads", "consultations", "invoices", "subscriptions"]} />
 
-      <AttentionPanel flags={fdFlags} />
+      <AttentionPanel flags={opsFlags} />
 
       {/* controls: tabs (left) + quick actions (right) */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
