@@ -3962,6 +3962,21 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
     slot: { date, hour: Number(formData.get("hour")) || 9 }, actor: p.name,
   });
 
+  // Tell the assigned clinician they have a new appointment (skip if they booked
+  // it themselves). Milestone follow-ups are booked with the owning clinician as
+  // provider, so this is how the dietitian / trainer / doctor learns of the
+  // Day-10 follow-up, fitness reassessment, Day-28 review, etc.
+  if (provider_id && provider_id !== p.staffId) {
+    const hr12 = (hour % 12) || 12;
+    const when = `${hr12}:00 ${hour < 12 ? "AM" : "PM"}`;
+    await notifyStaff(supabase, provider_id, {
+      title: `New appointment — ${await clientName(supabase, client_id)}`,
+      body: `${newType} · ${date} · ${when}`,
+      icon: "🗓",
+      link: { kind: "client", ref: client_id },
+    });
+  }
+
   // Booked from the "To book" list? Close the prompting task so it drops off.
   const taskId = String(formData.get("task_id") || "");
   if (taskId) await supabase.from("tasks").update({ status: "done" }).eq("id", taskId);
