@@ -85,7 +85,13 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     if (cats.has("comprehensive")) {
       const comp = rows.find((r) => r.category === "comprehensive");
       const sub = bloodBy.get(clientId)?.get("comprehensive");
-      if (sub === false) flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: "Requested, awaiting the client", href: clientHref, cta: "View" });
+      if (sub === false) {
+        // Chasing the client for the report is the care team's job — nudge the
+        // relationship owner (coach first, then the ordering doctor, then anyone
+        // on the team) instead of just linking ops to the client card.
+        const o = ownerFor(clientId, "coach") ?? ownerFor(clientId, "doctor") ?? ownerFor(clientId, "dietitian") ?? ownerFor(clientId, "trainer");
+        flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client" } : undefined });
+      }
       if (done.has("Diet") && !hasChart.has(clientId)) {
         const o = ownerFor(clientId, "dietitian");
         flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted" } : undefined });
