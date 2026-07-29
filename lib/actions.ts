@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -1053,6 +1053,38 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     body: `${pcli?.name ?? "Client"} · ${pkg.name} · ₹${amount.toLocaleString("en-IN")}${discount > 0 ? ` (−₹${discount.toLocaleString("en-IN")})` : ""}`,
     href: `/clients/${client_id}`, icon: "🛒",
   });
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
+/**
+ * Void a package that was added to a client by mistake. A soft-cancel — the row
+ * stays for the audit trail with status "void" (so it's excluded from every
+ * obligation, membership check and control) rather than being deleted. Admin /
+ * Manager only. Any still-*unpaid* invoice for the package is voided too so it
+ * doesn't leave a phantom due; paid invoices are left alone (those need a
+ * refund, not a void).
+ */
+export async function voidClientPackage(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canVoidPackage(p.role)) return { ok: false, error: "Not permitted" };
+  const rowId = String(formData.get("package_row_id") || "");
+  const client_id = String(formData.get("client_id") || "");
+  if (!rowId) return { ok: false, error: "Missing package" };
+
+  const supabase = createClient();
+  const { data: row } = await supabase.from("client_packages")
+    .select("package_name, status").eq("id", rowId).maybeSingle();
+  if (!row) return { ok: false, error: "Package not found" };
+  const r = row as { package_name: string | null; status: string };
+  if (r.status === "void") return { ok: true };
+
+  await supabase.from("client_packages").update({ status: "void" }).eq("id", rowId);
+  if (r.package_name && client_id) {
+    await supabase.from("invoices").update({ status: "Void" })
+      .eq("client_id", client_id).eq("status", "Unpaid").ilike("description", `${r.package_name}%`);
+  }
+  await logAudit(p, "Package voided", r.package_name ?? "package", client_id);
   revalidatePath(`/clients/${client_id}`);
   return { ok: true };
 }

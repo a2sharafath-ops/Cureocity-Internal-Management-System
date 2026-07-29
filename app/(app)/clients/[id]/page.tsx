@@ -16,8 +16,9 @@ import { ageFromDob } from "@/lib/dob";
 import InvoiceActions from "@/components/InvoiceActions";
 import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
+import VoidPackageButton from "@/components/VoidPackageButton";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill, canManageInvoices } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
@@ -205,29 +206,35 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // legacy packages into client_packages; this fallback covers anything not yet
   // migrated and stays correct afterwards.
   const legacyFacilityMembership = Boolean((client as { packages: { is_facility: boolean } | null }).packages?.is_facility);
+  // Voided packages are still rendered (struck-through, for the audit trail) but
+  // must not count towards any obligation, control or membership check — so all
+  // the derived flags run off heldPackages, never the raw list.
+  const heldPackages = clientPackages.filter((r) => r.status !== "void");
+  // Void a wrongly-added package — Admin / Manager only, and never in read-only.
+  const canVoidPackages = !ro && canVoidPackage(me?.role ?? "");
   const activeMembership = legacyFacilityMembership
-    || clientPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
+    || heldPackages.some((r) => r.category === "membership" && r.status === "active" && (!r.end_date || r.end_date >= todayISO()) && (!r.start_date || r.start_date <= todayISO()));
   // Does this client hold a package whose care journey should have been kicked
   // off (booking tasks, blood request, care team)? Used to offer the repair.
-  const hasJourneyPkg = clientPackages.some((r) => ["blueprint", "training", "comprehensive"].includes(r.category));
+  const hasJourneyPkg = heldPackages.some((r) => ["blueprint", "training", "comprehensive"].includes(r.category));
   // Membership controls (front-desk supervised): shown for any client who holds
   // a membership — active or lapsed — so it can be renewed. Default the renew
   // dropdown to the current membership's package.
-  const holdsMembership = legacyFacilityMembership || clientPackages.some((r) => r.category === "membership");
-  const currentMembershipPkgId = clientPackages.find((r) => r.category === "membership" && r.status === "active")?.package_id
-    ?? clientPackages.find((r) => r.category === "membership")?.package_id ?? null;
+  const holdsMembership = legacyFacilityMembership || heldPackages.some((r) => r.category === "membership");
+  const currentMembershipPkgId = heldPackages.find((r) => r.category === "membership" && r.status === "active")?.package_id
+    ?? heldPackages.find((r) => r.category === "membership")?.package_id ?? null;
   // The single renewal entry point covers any renewable (fixed-term) package —
   // membership, PT (training) or Comprehensive. BluePrint is one-off (Add package).
   const RENEWABLE_CATS = ["membership", "training", "comprehensive"];
   const renewablePackages = pkgList.filter((pk) => RENEWABLE_CATS.includes(packageCategory(pk.id, pk.is_facility)));
-  const holdsRenewable = legacyFacilityMembership || clientPackages.some((r) => RENEWABLE_CATS.includes(r.category));
+  const holdsRenewable = legacyFacilityMembership || heldPackages.some((r) => RENEWABLE_CATS.includes(r.category));
   const currentRenewablePkgId =
-    clientPackages.find((r) => RENEWABLE_CATS.includes(r.category) && r.status === "active")?.package_id
-    ?? clientPackages.find((r) => RENEWABLE_CATS.includes(r.category))?.package_id
+    heldPackages.find((r) => RENEWABLE_CATS.includes(r.category) && r.status === "active")?.package_id
+    ?? heldPackages.find((r) => RENEWABLE_CATS.includes(r.category))?.package_id
     ?? currentMembershipPkgId;
   const isFrozen = Boolean(c0.frozen);
   // PT / Comprehensive strength sessions: offer guided scheduling until booked.
-  const isPtOrComp = clientPackages.some((r) => ["training", "comprehensive"].includes(r.category));
+  const isPtOrComp = heldPackages.some((r) => ["training", "comprehensive"].includes(r.category));
   const hasScheduledSessions = ((sessions ?? []) as { status: string }[]).some((s) => s.status === "scheduled");
   const assignedTrainerId = assignByDisc.get("trainer") ?? null;
   // Role-aware status badge (same value shown everywhere this client appears).
@@ -242,7 +249,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const BLOOD_PANEL_LABEL: Record<string, string> = { blueprint: "BluePrint panel", comprehensive: "Comprehensive panel" };
   const bloodByPanel = new Map(bloodRowsAll.map((r) => [r.panel ?? "blueprint", r]));
   const bloodPanels = Array.from(new Set([
-    ...clientPackages.filter((r) => ["blueprint", "comprehensive"].includes(r.category)).map((r) => r.category),
+    ...heldPackages.filter((r) => ["blueprint", "comprehensive"].includes(r.category)).map((r) => r.category),
     ...bloodRowsAll.map((r) => r.panel ?? "blueprint"),
   ]));
   const needsBlood = bloodPanels.length > 0;
@@ -443,18 +450,21 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 <th style={{ textAlign: "left", padding: "4px 6px" }}>Valid</th>
                 <th style={{ textAlign: "left", padding: "4px 6px" }}>Price</th>
                 <th style={{ textAlign: "left", padding: "4px 6px" }}>Status</th>
+                {canVoidPackages && <th style={{ textAlign: "right", padding: "4px 6px" }}></th>}
               </tr>
             </thead>
             <tbody>
               {clientPackages.map((cp) => {
+                const voided = cp.status === "void";
                 const live = cp.status === "active" && (!cp.end_date || cp.end_date >= todayISO());
                 return (
-                  <tr key={cp.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>{cp.package_name ?? "—"}</td>
+                  <tr key={cp.id} style={{ borderTop: "1px solid var(--border)", opacity: voided ? 0.55 : 1 }}>
+                    <td style={{ padding: "8px 6px", fontWeight: 600, textDecoration: voided ? "line-through" : "none" }}>{cp.package_name ?? "—"}</td>
                     <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "var(--blue-bg)" : "var(--brand-tint)", color: cp.category === "membership" ? "var(--blue-text)" : "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
                     <td style={{ padding: "8px 6px", color: "var(--muted)" }}>{cp.start_date ?? "—"}{cp.end_date ? ` → ${cp.end_date}` : ""}</td>
                     <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(cp.price ?? 0).toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "8px 6px" }}><span style={{ background: live ? "var(--green-bg)" : "var(--neutral-bg)", color: live ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{live ? "Active" : "Expired"}</span></td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: voided ? "var(--red-bg)" : live ? "var(--green-bg)" : "var(--neutral-bg)", color: voided ? "var(--red-text)" : live ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{voided ? "Void" : live ? "Active" : "Expired"}</span></td>
+                    {canVoidPackages && <td style={{ padding: "8px 6px", textAlign: "right" }}>{!voided && <VoidPackageButton clientId={params.id} packageRowId={cp.id} packageName={cp.package_name ?? "this package"} />}</td>}
                   </tr>
                 );
               })}

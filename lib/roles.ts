@@ -120,6 +120,12 @@ export function canManagePackages(role: string): boolean {
   return role === "Super Admin" || role === "Administrator";
 }
 
+// Who can void a package added to a client (soft-cancel, keeps the audit row).
+// Admin + Manager only — front desk sells but doesn't reverse a sale.
+export function canVoidPackage(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role);
+}
+
 // Who can manage the services catalog. Admin + Manager.
 export function canManageServices(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager"].includes(role);
