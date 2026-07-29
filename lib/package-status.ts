@@ -87,7 +87,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       sessionScheduled: allSess.some((s) => s.status === "scheduled"),
     };
     for (const step of onboardingRow(input).steps) {
-      if (!step.done) openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn" });
+      if (step.done) continue;
+      // The strength-session booking has its own dedicated "Schedule sessions"
+      // card on the client Overview, so don't also list it here — one flow, not
+      // two.
+      if (/session/i.test(step.label)) continue;
+      openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn" });
     }
   }
 

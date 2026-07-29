@@ -15,6 +15,7 @@ import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
+import { loadCatOf } from "@/lib/appt-match";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
@@ -275,10 +276,19 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
         ? supabase.from("appointments").select(cols).eq("provider_id", me.staffId).order("date", { ascending: false }).limit(200)
         : Promise.resolve({ data: [] as unknown[] }),
     ]);
+    // Show only appointments that are actually this clinician's: their own
+    // bookings (provider = them), or appointments in their own discipline. Without
+    // the discipline gate, the roster query leaks a shared client's OTHER-
+    // discipline appointments — e.g. a dietitian seeing the trainer's fitness
+    // reassessment for a client they both look after.
+    const catOf = await loadCatOf(supabase);
+    const CAT_TO_WSKEY: Record<string, string> = { "Diet Consultation": "diet", "Doctor Consultation": "doctor", "Fitness Services": "trainer", "Counselling": "psych", "Coaching": "coach" };
     const merged = new Map<string, ApptRow & { clients: { name: string } | null; is_experience?: boolean | null }>();
     for (const a of [...(rosterRes.data ?? []), ...(mineRes.data ?? [])] as unknown as (ApptRow & { clients: { name: string } | null; is_experience?: boolean | null })[]) {
       if (a.is_experience) continue; // pre-sale trials are folded in separately below
-      merged.set(a.id, a);
+      const isMine = !!me.staffId && a.provider_id === me.staffId;
+      const myDiscipline = CAT_TO_WSKEY[catOf(a.type) ?? ""] === roleKey;
+      if (isMine || myDiscipline) merged.set(a.id, a);
     }
     apptRows = [...merged.values()].map((a) => ({
       id: a.id, client_id: a.client_id, provider_id: a.provider_id, client_name: a.clients?.name ?? null, date: a.date, hour: a.hour, type: a.type, title: a.title, status: a.status,

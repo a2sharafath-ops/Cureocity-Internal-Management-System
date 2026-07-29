@@ -2555,9 +2555,33 @@ export async function markInvoicePaid(formData: FormData) {
   const id = String(formData.get("id"));
   const method = String(formData.get("method") ?? "").trim() || "Cash";
   const supabase = createClient();
+  // Read first so we can (a) avoid double-posting a receipt if it was already
+  // Paid and (b) build the matching cash-book entry from the invoice details.
+  const { data: inv } = await supabase.from("invoices")
+    .select("num, amount, status, client_id").eq("id", id).maybeSingle();
+  const row = inv as { num: number | null; amount: number; status: string; client_id: string | null } | null;
+  const alreadyPaid = row?.status === "Paid";
+
   await supabase.from("invoices").update({ status: "Paid", paid_date: todayISO(), method }).eq("id", id);
   await logAudit(p, "Invoice marked paid", null, method);
+
+  // Auto-post the received money into the cash book, so confirming a payment
+  // records it once — not twice. Cash → the cash account (auto-vouchered);
+  // card / UPI / bank / online → the bank account. Skipped when it was already
+  // Paid, so re-confirming can't create a duplicate receipt.
+  if (row && !alreadyPaid && Number(row.amount) > 0) {
+    const account = method.trim().toLowerCase() === "cash" ? "cash" : "bank";
+    await supabase.from("ledger").insert({
+      account, date: todayISO(),
+      ref: `INV-${String(row.num ?? 0).padStart(3, "0")}`,
+      party: row.client_id ? await clientName(supabase, row.client_id) : null,
+      kind: method, direction: "in",
+      amount: Number(row.amount) || 0, created_by: p.name,
+    });
+  }
+
   revalidatePath("/billing");
+  revalidatePath("/finsheets");
   revalidatePath("/", "layout");
 }
 
