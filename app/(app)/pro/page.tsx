@@ -35,18 +35,26 @@ export default async function ProPage() {
   const disciplineKind = persona?.kind && persona.kind !== "Trainer" && persona.kind !== "Diet" ? persona.kind : null;
 
   const supabase = createClient();
-  const [{ data: consultData }, { data: clientData }, { data: apptData }] = await Promise.all([
+  const [{ data: consultData }, { data: clientData }, { data: apptData }, { data: cpData }] = await Promise.all([
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, by_name, created_at, clients(name)").order("created_at", { ascending: false }).limit(100),
-    // clients on care packages (Comprehensive or BluePrint) as consultation candidates
-    supabase.from("clients").select("id, name, packages(is_facility)").order("name"),
+    supabase.from("clients").select("id, name").order("name"),
     // booked slots ready to be started
     supabase.from("appointments").select("id, client_id, provider_id, date, hour, status, clients(name), staff(name, role)").eq("status", "scheduled").order("date").order("hour"),
+    // who actually holds a care package (Comprehensive / PT / BluePrint) — a
+    // client may also hold a Facility Membership, so judge by client_packages,
+    // not the single legacy primary package.
+    supabase.from("client_packages").select("client_id, category, status"),
   ]);
 
   const allConsults = (consultData ?? []) as unknown as Row[];
   const consults = disciplineKind ? allConsults.filter((c) => c.kind === disciplineKind) : allConsults;
-  const clients = ((clientData ?? []) as unknown as { id: string; name: string; packages: { is_facility: boolean } | null }[])
-    .filter((c) => c.packages && !c.packages.is_facility)
+  const careClientIds = new Set(
+    ((cpData ?? []) as { client_id: string; category: string; status: string }[])
+      .filter((c) => c.status === "active" && ["comprehensive", "training", "blueprint"].includes(c.category))
+      .map((c) => c.client_id),
+  );
+  const clients = ((clientData ?? []) as unknown as { id: string; name: string }[])
+    .filter((c) => careClientIds.has(c.id))
     .map((c) => ({ id: c.id, name: c.name }));
 
   // "Ready to start": booked slots this clinician can open. A real clinician
