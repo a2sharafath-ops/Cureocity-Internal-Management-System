@@ -91,7 +91,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (p && Number(p.price) > 0 && !invByClient.get(c.id)) {
       leak += Number(p.price);
-      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "Raise invoice", raiseInvoiceClientId: c.id });
+      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "View", raiseInvoiceClientId: c.id });
     }
   }
 
@@ -99,23 +99,23 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   for (const i of unpaid) {
     if (i.issued_date && i.issued_date <= addDays(today, -7)) {
       const c = clients.find((x) => x.id === i.client_id);
-      flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} overdue`, detail: `${c?.name ?? "—"} · ${money(Number(i.amount))} · issued ${i.issued_date}`, href: "/billing", cta: "Chase" });
+      flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} overdue`, detail: `${c?.name ?? "—"} · ${money(Number(i.amount))} · issued ${i.issued_date}`, href: "/billing", cta: "View", chaseRole: { roles: ["Front Desk", "Finance"], who: "Front Desk", label: `Chase payment · INV-${String(i.num ?? 0).padStart(3, "0")}`, clientId: i.client_id ?? undefined, href: "/billing" } });
     }
   }
 
   // 3. stalled onboarding — no package, or missing contact details
   for (const c of clients) {
-    if (!c.package_id) flags.push({ sev: "med", title: `${c.name} — no package assigned`, detail: `Joined ${c.joined ?? "—"} · onboarding incomplete`, href: `/clients/${c.id}`, cta: "Complete" });
-    else if (!c.phone && !c.email) flags.push({ sev: "low", title: `${c.name} — no contact details`, detail: "No phone or email on record", href: `/clients/${c.id}`, cta: "Add" });
+    if (!c.package_id) flags.push({ sev: "med", title: `${c.name} — no package assigned`, detail: `Joined ${c.joined ?? "—"} · onboarding incomplete`, href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Complete onboarding — assign a package", clientId: c.id, href: `/clients/${c.id}` } });
+    else if (!c.phone && !c.email) flags.push({ sev: "low", title: `${c.name} — no contact details`, detail: "No phone or email on record", href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Add missing contact details", clientId: c.id, href: `/clients/${c.id}` } });
   }
 
   // 4. BluePrint clients stuck in the flow
   for (const c of clients.filter((x) => x.package_id === "bp1")) {
     const b = blood.get(`${c.id}|blueprint`);
     const bp = bps.get(c.id);
-    if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "Request" });
-    else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "Follow up" });
-    else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review" });
+    if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Doctor"], who: "the team", label: "Request BluePrint blood", clientId: c.id, href: "/blueprint" } });
+    else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Health Coach"], who: "the team", label: "Chase BluePrint blood report", clientId: c.id, href: "/blueprint" } });
+    else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review", chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "clinicians", label: "BluePrint sign-off", clientId: c.id, href: "/blueprint" } });
   }
 
   // 5. churn signals — credits left but nothing on the calendar, or gone quiet
@@ -129,9 +129,9 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const upcoming = mine.filter((s) => s.status === "scheduled" && s.date >= today);
     const lastDone = mine.filter((s) => s.status === "completed").map((s) => s.date).sort().pop();
     if (upcoming.length === 0) {
-      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book" });
+      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book next session", clientId: c.id, href: `/sessions?client=${c.id}` } });
     } else if (lastDone && lastDone < quietSince) {
-      flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "Reach out" });
+      flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Fitness Trainer", "Health Coach"], who: "the coach", label: "Re-engage — client gone quiet", clientId: c.id, href: `/clients/${c.id}` } });
     }
   }
 
@@ -156,7 +156,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const label = cp.package_name ?? cp.category;
     const end = cp.end_date as string;
     if (end < today) {
-      flags.push({ sev: "high", title: `${nm} — package expired`, detail: `${label} ended ${end} · no renewal in place`, href: `/clients/${cp.client_id}`, cta: "Renew" });
+      flags.push({ sev: "high", title: `${nm} — package expired`, detail: `${label} ended ${end} · no renewal in place`, href: `/clients/${cp.client_id}`, cta: "Renew", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book renewal — package expired", clientId: cp.client_id, href: `/clients/${cp.client_id}` } });
       continue;
     }
     // "Expiring soon" window is proportional: never wider than the package's own
@@ -165,7 +165,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const term = cp.start_date ? Math.max(1, daysApart(cp.start_date, end)) : 30;
     const window = Math.min(30, Math.ceil(term / 2));
     if (daysApart(today, end) <= window) {
-      flags.push({ sev: "med", title: `${nm} — package expiring`, detail: `${label} ends ${end} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
+      flags.push({ sev: "med", title: `${nm} — package expiring`, detail: `${label} ends ${end} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book renewal — package expiring", clientId: cp.client_id, href: `/clients/${cp.client_id}` } });
     }
   }
 

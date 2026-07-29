@@ -2285,6 +2285,33 @@ export async function nudgeClinician(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
+// Chase a whole role/team for an attention-queue item that no single person is
+// assigned to (billing, onboarding, bookings, renewals). Sends the notification
+// to every listed role, deep-linking to where they act.
+export async function nudgeRole(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const roles = String(formData.get("roles") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const label = String(formData.get("label") || "a task").trim();
+  const href = String(formData.get("href") || "").trim() || undefined;
+  const client_id = String(formData.get("client_id") || "").trim() || undefined;
+  if (!roles.length) return;
+  const supabase = createClient();
+  let who = "";
+  if (client_id) {
+    const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+    who = (c as { name: string } | null)?.name ?? "";
+  }
+  await notifyRoles(supabase, roles, {
+    title: `Chase — ${label}`,
+    body: `${who ? `${who} · ` : ""}flagged by ${p.name}`,
+    href: href ?? "/dashboard", icon: "⏰",
+    link: client_id ? { kind: "client", ref: client_id } : undefined,
+  });
+  await logAudit(p, "Team chased", label, client_id ?? null);
+  if (client_id) revalidatePath(`/clients/${client_id}`);
+}
+
 export async function markBloodReceived(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;

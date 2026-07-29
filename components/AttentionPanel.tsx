@@ -6,17 +6,22 @@
 import { useState } from "react";
 import Link from "next/link";
 import { RingMeter } from "@/components/Meters";
-import { raiseInvoiceForClient, nudgeClinician } from "@/lib/actions";
+import { raiseInvoiceForClient, nudgeClinician, nudgeRole } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 
 export type Flag = {
-  sev: "high" | "med" | "low"; title: string; detail: string; href: string; cta: string;
-  /** when set, the CTA raises the client's invoice in one click instead of linking away */
+  sev: "high" | "med" | "low"; title: string; detail: string; href: string;
+  /** label for the View link (the deep-link to this item's own section). Defaults to "View". */
+  cta?: string;
+  /** when set, an extra button raises the client's invoice in one click */
   raiseInvoiceClientId?: string;
-  /** when set, the CTA nudges the responsible clinician instead of linking away —
-   *  for clinician-owed work an ops viewer can't do themselves. */
-  nudge?: { clientId: string; staffId: string; label: string };
+  /** chase a specific staff member (clinician-owed work) */
+  nudge?: { clientId: string; staffId: string; label: string; who?: string };
+  /** chase a whole role/team (ops work no single person is assigned) */
+  chaseRole?: { roles: string[]; who: string; label: string; clientId?: string; href?: string };
 };
+
+const firstName = (n: string) => n.split(" ")[0];
 
 const SEV = {
   high: { bg: "var(--red-bg)", col: "var(--red-text)", label: "Urgent", weight: 10 },
@@ -33,6 +38,17 @@ export function healthScore(flags: Flag[]): number {
 const box: React.CSSProperties = {
   background: "var(--card)", border: "1px solid var(--border)",
   borderRadius: "var(--radius)", boxShadow: "var(--shadow)",
+};
+
+// Chase = primary (brand fill); View = secondary (outline).
+const chaseBtn: React.CSSProperties = {
+  border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8,
+  padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+};
+const viewBtn: React.CSSProperties = {
+  border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
+  padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none",
+  color: "var(--brand-text)", whiteSpace: "nowrap",
 };
 
 export default function AttentionPanel({ flags }: { flags: Flag[] }) {
@@ -119,36 +135,39 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
               <b style={{ fontSize: 13 }}>{f.title}</b>
               <div style={{ color: "var(--muted)", fontSize: 12 }}>{f.detail}</div>
             </div>
-            {f.nudge ? (
-              <form action={nudgeClinician}>
-                <input type="hidden" name="client_id" value={f.nudge.clientId} />
-                <input type="hidden" name="staff_id" value={f.nudge.staffId} />
-                <input type="hidden" name="label" value={f.nudge.label} />
-                <SubmitButton pendingLabel="Reminding…" doneLabel="✓ Reminded" style={{
-                  border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
-                  padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  color: "var(--brand-text)", whiteSpace: "nowrap",
-                }}>{f.cta}</SubmitButton>
-              </form>
-            ) : f.raiseInvoiceClientId ? (
-              <form
-                action={raiseInvoiceForClient}
-                onSubmit={(e) => { if (!confirm(`Raise invoice?\n\n${f.title}\n${f.detail}`)) e.preventDefault(); }}
-              >
-                <input type="hidden" name="client_id" value={f.raiseInvoiceClientId} />
-                <SubmitButton pendingLabel="Raising…" doneLabel="✓ Raised" style={{
-                  border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
-                  padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  color: "var(--brand-text)", whiteSpace: "nowrap",
-                }}>{f.cta}</SubmitButton>
-              </form>
-            ) : (
-              <Link href={f.href} style={{
-                border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
-                padding: "5px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none",
-                color: "var(--brand-text)", whiteSpace: "nowrap",
-              }}>{f.cta} →</Link>
-            )}
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+              {/* Chase — nudge the person/team who owns the work */}
+              {f.nudge ? (
+                <form action={nudgeClinician}>
+                  <input type="hidden" name="client_id" value={f.nudge.clientId} />
+                  <input type="hidden" name="staff_id" value={f.nudge.staffId} />
+                  <input type="hidden" name="label" value={f.nudge.label} />
+                  <SubmitButton pendingLabel="Chasing…" doneLabel="✓ Chased" style={chaseBtn}>
+                    {f.nudge.who ? `Chase ${firstName(f.nudge.who)}` : "Chase"}
+                  </SubmitButton>
+                </form>
+              ) : f.chaseRole ? (
+                <form action={nudgeRole}>
+                  <input type="hidden" name="roles" value={f.chaseRole.roles.join(",")} />
+                  <input type="hidden" name="label" value={f.chaseRole.label} />
+                  {f.chaseRole.clientId && <input type="hidden" name="client_id" value={f.chaseRole.clientId} />}
+                  {f.chaseRole.href && <input type="hidden" name="href" value={f.chaseRole.href} />}
+                  <SubmitButton pendingLabel="Chasing…" doneLabel="✓ Chased" style={chaseBtn}>
+                    {`Chase ${f.chaseRole.who}`}
+                  </SubmitButton>
+                </form>
+              ) : f.raiseInvoiceClientId ? (
+                <form
+                  action={raiseInvoiceForClient}
+                  onSubmit={(e) => { if (!confirm(`Raise invoice?\n\n${f.title}\n${f.detail}`)) e.preventDefault(); }}
+                >
+                  <input type="hidden" name="client_id" value={f.raiseInvoiceClientId} />
+                  <SubmitButton pendingLabel="Raising…" doneLabel="✓ Raised" style={chaseBtn}>Raise invoice</SubmitButton>
+                </form>
+              ) : null}
+              {/* View — deep-link to this item's own section */}
+              <Link href={f.href} style={viewBtn}>{f.cta ?? "View"} →</Link>
+            </div>
           </div>
         ))}
       </div>
