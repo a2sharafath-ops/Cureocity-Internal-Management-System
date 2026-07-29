@@ -577,9 +577,12 @@ export async function rescheduleSession(formData: FormData) {
   const trainer_id = String(formData.get("trainer_id"));
   const supabase = createClient();
   const { data: s } = await supabase.from("sessions").select("seq, clients(name)").eq("id", id).maybeSingle();
+  // Rescheduling also revives the session to "scheduled" — so a missed session
+  // (recorded as cancelled) that the client asks to make up becomes a live
+  // upcoming session again at the new slot, rather than staying lost.
   await supabase
     .from("sessions")
-    .update({ date, hour, trainer_id, rescheduled: true })
+    .update({ date, hour, trainer_id, rescheduled: true, status: "scheduled" })
     .eq("id", id);
   const cName = (s as { clients?: { name?: string } } | null)?.clients?.name;
   await logAudit(p, "Session rescheduled", cName, `#${s?.seq ?? "?"} → ${date} ${hour}:00`);
