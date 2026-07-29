@@ -17,6 +17,9 @@ export function resolveNotificationTarget(kind: string | null, ref: string | nul
     case "workout":     return `/workspace?role=trainer&tab=planner&client=${ref}`;
     case "diet-chart":  return `/workspace?role=diet&tab=charts&client=${ref}`;
     case "consolidated":return `/workspace?role=doctor&tab=summaries&client=${ref}`;
+    // A clinician's own workspace Appointments tab (their login resolves the
+    // discipline; oversight roles land on their default workspace).
+    case "appointment": return `/workspace?tab=appts`;
     case "client":      return `/clients/${ref}`;
     default:            return null;
   }

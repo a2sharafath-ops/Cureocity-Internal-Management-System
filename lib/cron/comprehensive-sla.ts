@@ -16,6 +16,7 @@ import {
   bookingTaskTitle, reassessmentOutOfOrder,
 } from "@/lib/comprehensive";
 import { loadCatOf } from "@/lib/appt-match";
+import { nudgeLink } from "@/lib/notification-target";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -166,6 +167,9 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
         body: `${g.label} · ${formatLeft(g.clock.msLeft)}`,
         href: `/clients/${p.client_id}`,
         icon: kind === "breach" ? "🔴" : "⏳",
+        // Resolve to the actual drafting section (diet chart / workout planner /
+        // consolidated summary) at click-time; falls back to the client card.
+        link: nudgeLink(g.label, p.client_id),
       });
     };
 
