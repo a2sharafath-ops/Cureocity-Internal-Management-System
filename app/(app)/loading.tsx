@@ -23,16 +23,9 @@ export default function Loading() {
     <div style={{ maxWidth: 1120 }} aria-busy="true" aria-live="polite">
       <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Loading</span>
 
-      {/* A floating "notch" pill — a dynamic-island-style loading badge that
-          drops in from the top-centre of the viewport with a spinner. It lives
-          here in loading.tsx so it appears the moment a click starts a route
-          change and vanishes automatically once the page has rendered. */}
-      <div style={{ position: "fixed", top: 12, left: 0, right: 0, display: "flex", justifyContent: "center", zIndex: 9999, pointerEvents: "none" }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "rgba(20,20,25,0.92)", color: "#fff", borderRadius: 999, padding: "10px 20px", boxShadow: "0 10px 34px rgba(20,20,25,0.32)", WebkitBackdropFilter: "blur(8px)", backdropFilter: "blur(8px)", fontSize: 13.5, fontWeight: 600, letterSpacing: "0.1px", animation: "cure-notch-in 0.32s cubic-bezier(0.22,1,0.36,1)" }}>
-          <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2.5px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", animation: "cure-spin 0.7s linear infinite" }} />
-          Loading…
-        </div>
-      </div>
+      {/* The floating "notch" badge is rendered by <RouteProgress> in the app
+          layout so it also covers same-page (tab / filter) navigations. This
+          server boundary just shows the content skeleton below. */}
 
       <div style={bar(180, 20)} />
       <div style={bar(300, 12, 10)} />
