@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -801,7 +801,7 @@ export async function convertLeadWithPackage(formData: FormData) {
   if (inserted) await carryExperienceToClient(supabase, id, inserted.id);
 
   if (inserted && package_id) {
-    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
+    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
     // Diagnostic (BluePrint) and front-desk-booked tracks (PT / Comprehensive)
     // don't auto-schedule strength workouts.
     const cat = packageCategory(package_id, pkg?.is_facility ?? false);
@@ -811,6 +811,16 @@ export async function convertLeadWithPackage(formData: FormData) {
       await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
     }
     if (pkg) {
+      // Record the package in client_packages too — not just the legacy
+      // clients.package_id — so membership checks, renewals and status panels
+      // all see it. Without this a membership sold here is invisible to the
+      // membership-prerequisite rule and blocks later PT/Comprehensive sales.
+      await supabase.from("client_packages").insert({
+        client_id: inserted.id, package_id, package_name: pkg.name,
+        category: cat, start_date: joined,
+        end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
+        price: pkg.price ?? 0, status: "active", created_by: p.name,
+      });
       const num = await nextInvoiceNum(supabase);
       await supabase.from("invoices").insert({
         num, client_id: inserted.id, description: `${pkg.name} package`, amount: pkg.price ?? 0,
@@ -992,11 +1002,24 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
 
   const cat = packageCategory(package_id, pkg.is_facility);
   if (requiresMembership(cat)) {
-    const { data: existing } = await supabase.from("client_packages")
-      .select("category, start_date, end_date").eq("client_id", client_id).eq("status", "active");
-    if (!hasActiveMembership((existing ?? []) as { category: string; start_date: string | null; end_date: string | null }[], start)) {
-      return { ok: false, error: MEMBERSHIP_RULE_MSG };
+    // A membership can live in either place: the client_packages table, or the
+    // legacy single `package_id` on the client record (a facility package).
+    // Honour both — exactly as the client page does — so a client whose only
+    // membership is the legacy facility package isn't wrongly blocked.
+    const [{ data: existing }, { data: cli }] = await Promise.all([
+      supabase.from("client_packages")
+        .select("category, start_date, end_date").eq("client_id", client_id).eq("status", "active"),
+      supabase.from("clients").select("package_id").eq("id", client_id).maybeSingle(),
+    ]);
+    let legacyFacility = false;
+    const legacyPkgId = (cli as { package_id: string | null } | null)?.package_id ?? null;
+    if (legacyPkgId) {
+      const { data: lp } = await supabase.from("packages").select("is_facility").eq("id", legacyPkgId).maybeSingle();
+      legacyFacility = Boolean((lp as { is_facility: boolean } | null)?.is_facility);
     }
+    const ok = legacyFacility
+      || hasActiveMembership((existing ?? []) as { category: string; start_date: string | null; end_date: string | null }[], start);
+    if (!ok) return { ok: false, error: MEMBERSHIP_RULE_MSG };
   }
 
   const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
@@ -1030,6 +1053,89 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     body: `${pcli?.name ?? "Client"} · ${pkg.name} · ₹${amount.toLocaleString("en-IN")}${discount > 0 ? ` (−₹${discount.toLocaleString("en-IN")})` : ""}`,
     href: `/clients/${client_id}`, icon: "🛒",
   });
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
+/**
+ * Void a package that was added to a client by mistake. A soft-cancel — the row
+ * stays for the audit trail with status "void" (so it's excluded from every
+ * obligation, membership check and control) rather than being deleted. Admin /
+ * Manager only. Any still-*unpaid* invoice for the package is voided too so it
+ * doesn't leave a phantom due; paid invoices are left alone (those need a
+ * refund, not a void).
+ */
+export async function voidClientPackage(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canVoidPackage(p.role)) return { ok: false, error: "Not permitted" };
+  const rowId = String(formData.get("package_row_id") || "");
+  const client_id = String(formData.get("client_id") || "");
+  if (!rowId) return { ok: false, error: "Missing package" };
+
+  const supabase = createClient();
+  const { data: row } = await supabase.from("client_packages")
+    .select("package_name, category, package_id, status").eq("id", rowId).maybeSingle();
+  if (!row) return { ok: false, error: "Package not found" };
+  const r = row as { package_name: string | null; category: string; package_id: string | null; status: string };
+  if (r.status === "void") return { ok: true };
+
+  // Soft-cancel the package line (kept, struck-through, for the audit trail).
+  await supabase.from("client_packages").update({ status: "void" }).eq("id", rowId);
+
+  // 1. Remove any not-yet-paid invoice for this package entirely — a removed
+  //    package must not leave an invoice sitting there to be marked paid. Paid
+  //    invoices are left alone (money received → that needs a refund, not this).
+  if (r.package_name && client_id) {
+    await supabase.from("invoices").delete()
+      .eq("client_id", client_id).neq("status", "Paid").ilike("description", `${r.package_name}%`);
+  }
+
+  // 2. If this membership is also the legacy clients.package_id, clear that
+  //    field too — otherwise the "Active membership" badge stays lit.
+  if (r.category === "membership" && client_id && r.package_id) {
+    const { data: cli } = await supabase.from("clients").select("package_id").eq("id", client_id).maybeSingle();
+    if ((cli as { package_id: string | null } | null)?.package_id === r.package_id) {
+      await supabase.from("clients").update({ package_id: null }).eq("id", client_id);
+    }
+  }
+
+  // 3. Care-journey cascade. A journey package (Comprehensive / PT / BluePrint)
+  //    kicks off a protocol, bookings, sessions, follow-ups and a blood request;
+  //    removing the package must clear those so nothing is left "open now" or
+  //    "upcoming". Shared, package-untagged artifacts (sessions/tasks/follow-ups/
+  //    blood/care-team) are only cleared when the client has NO other active
+  //    journey package, so we never strip a second journey's work by mistake.
+  if (["comprehensive", "training", "blueprint"].includes(r.category) && client_id) {
+    const { data: allCps } = await supabase.from("client_packages")
+      .select("id, category, status").eq("client_id", client_id);
+    const otherJourney = ((allCps ?? []) as { id: string; category: string; status: string }[])
+      .some((x) => x.id !== rowId && x.status === "active" && ["comprehensive", "training", "blueprint"].includes(x.category));
+
+    // Protocol + its SLA markers are tied to this exact category, so always safe.
+    if (r.category === "comprehensive" || r.category === "training") {
+      await supabase.from("care_protocols").update({ status: "cancelled" })
+        .eq("client_id", client_id).eq("protocol", r.category).eq("status", "active");
+      await supabase.from("blueprint_sla_events").delete()
+        .eq("client_id", client_id).eq("protocol", r.category);
+    }
+
+    if (!otherJourney) {
+      // Scheduled / missed strength sessions (completed ones kept as history).
+      await supabase.from("sessions").delete().eq("client_id", client_id).neq("status", "completed");
+      // Auto-generated booking/journey tasks still open.
+      await supabase.from("tasks").delete().eq("client_id", client_id).eq("created_by", "auto").neq("status", "done");
+      // Journey follow-ups (diet-chart explanation, meal monitoring, etc.).
+      await supabase.from("followups").delete().eq("client_id", client_id);
+      // The blood panel this journey requested.
+      const panel = r.category === "comprehensive" ? "comprehensive" : r.category === "blueprint" ? "blueprint" : null;
+      if (panel) await supabase.from("blood_requests").delete().eq("client_id", client_id).eq("panel", panel);
+      // Care-team assignments + the denormalised primary pro.
+      await supabase.from("client_assignments").delete().eq("client_id", client_id);
+      await supabase.from("clients").update({ pro_id: null }).eq("id", client_id);
+    }
+  }
+
+  await logAudit(p, "Package removed", r.package_name ?? "package", client_id);
   revalidatePath(`/clients/${client_id}`);
   return { ok: true };
 }
@@ -2177,6 +2283,33 @@ export async function nudgeClinician(formData: FormData) {
   });
   await logAudit(p, "Clinician nudged", c?.name, label);
   revalidatePath(`/clients/${client_id}`);
+}
+
+// Chase a whole role/team for an attention-queue item that no single person is
+// assigned to (billing, onboarding, bookings, renewals). Sends the notification
+// to every listed role, deep-linking to where they act.
+export async function nudgeRole(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWrite(p.role)) return;
+  const roles = String(formData.get("roles") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const label = String(formData.get("label") || "a task").trim();
+  const href = String(formData.get("href") || "").trim() || undefined;
+  const client_id = String(formData.get("client_id") || "").trim() || undefined;
+  if (!roles.length) return;
+  const supabase = createClient();
+  let who = "";
+  if (client_id) {
+    const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+    who = (c as { name: string } | null)?.name ?? "";
+  }
+  await notifyRoles(supabase, roles, {
+    title: `Chase — ${label}`,
+    body: `${who ? `${who} · ` : ""}flagged by ${p.name}`,
+    href: href ?? "/dashboard", icon: "⏰",
+    link: client_id ? { kind: "client", ref: client_id } : undefined,
+  });
+  await logAudit(p, "Team chased", label, client_id ?? null);
+  if (client_id) revalidatePath(`/clients/${client_id}`);
 }
 
 export async function markBloodReceived(formData: FormData) {

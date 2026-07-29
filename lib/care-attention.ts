@@ -46,7 +46,6 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     if (!fallbackOwner.has(key)) fallbackOwner.set(key, { id: a.provider_id, name: a.staff.name });
   }
   const ownerFor = (clientId: string, disc: string) => ownerBy.get(`${clientId}|${disc}`) ?? fallbackOwner.get(`${clientId}|${disc}`);
-  const firstName = (n: string) => n.split(" ")[0];
   // Service catalogue → category resolver + pre-filled Book links.
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
   const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
@@ -85,14 +84,26 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     if (cats.has("comprehensive")) {
       const comp = rows.find((r) => r.category === "comprehensive");
       const sub = bloodBy.get(clientId)?.get("comprehensive");
-      if (sub === false) flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: "Requested, awaiting the client", href: clientHref, cta: "View" });
+      if (sub === false) {
+        // Chasing the client for the report is the care team's job — chase the
+        // relationship owner (coach first, then the ordering doctor). If no one
+        // is assigned yet, chase the team by role so the button always works.
+        const o = ownerFor(clientId, "coach") ?? ownerFor(clientId, "doctor") ?? ownerFor(clientId, "dietitian") ?? ownerFor(clientId, "trainer");
+        flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: "View",
+          nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
+          chaseRole: o ? undefined : { roles: ["Health Coach", "Doctor", "Front Desk"], who: "the team", label: "Blood report — awaiting client", clientId, href: clientHref } });
+      }
       if (done.has("Diet") && !hasChart.has(clientId)) {
         const o = ownerFor(clientId, "dietitian");
-        flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted" } : undefined });
+        flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: "View",
+          nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
+          chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: clientHref } });
       }
       if (done.has("Trainer") && !hasWorkout.has(clientId)) {
         const o = ownerFor(clientId, "trainer");
-        flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created" } : undefined });
+        flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: "View",
+          nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
+          chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: clientHref } });
       }
       // Overdue calendar milestones (bookings that never got made).
       const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
@@ -102,14 +113,19 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
           if (today <= m.dueDate) continue;
           const svc = serviceForMilestone(m.apptType, m.from, services);
           const satisfied = milestoneSatisfied(apptsBy.get(clientId) ?? [], { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
-          if (!satisfied) flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: milestoneBookHref(clientId, m.apptType, m.from, services), cta: "Book" });
+          if (!satisfied) {
+            const bookHref = milestoneBookHref(clientId, m.apptType, m.from, services);
+            flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: bookHref, cta: "Book",
+              chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: `Book ${m.label}`, clientId, href: bookHref } });
+          }
         }
       }
     }
 
     if (cats.has("blueprint") && !bpGen.has(clientId)) {
       const bpBlood = bloodBy.get(clientId)?.get("blueprint");
-      if (bpBlood) flags.push({ sev: "med", title: `${who} — BluePrint not generated`, detail: "Blood in · awaiting clinician sign-offs", href: "/blueprint", cta: "Review" });
+      if (bpBlood) flags.push({ sev: "med", title: `${who} — BluePrint not generated`, detail: "Blood in · awaiting clinician sign-offs", href: "/blueprint", cta: "Review",
+        chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "clinicians", label: "BluePrint sign-off", clientId, href: "/blueprint" } });
     }
   }
   return flags;

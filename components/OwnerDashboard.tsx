@@ -32,6 +32,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     { data: clientData }, { data: pkgData }, { data: invData }, { data: sessData },
     { data: apptData }, { data: leadData }, { data: bloodData }, { data: bpData },
     { data: subData }, { data: auditData }, { data: attData }, { data: staffData },
+    { data: cpData }, { data: caData },
   ] = await Promise.all([
     supabase.from("clients").select("id, code, name, phone, email, package_id, used, joined"),
     supabase.from("packages").select("id, name, price, sessions, validity, is_facility"),
@@ -45,7 +46,14 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     supabase.from("audit_log").select("actor_name, actor_role, action, target, created_at").order("created_at", { ascending: false }).limit(6),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("staff").select("id, name, is_trainer"),
+    supabase.from("client_packages").select("client_id, package_name, category, start_date, end_date, status").eq("status", "active"),
+    supabase.from("client_assignments").select("client_id, staff_id, staff:staff_id(name)").eq("discipline", "trainer"),
   ]);
+  // Assigned trainer per client — the primary owner to chase for a session count drift.
+  const trainerBy = new Map<string, { id: string; name: string }>();
+  for (const a of (caData ?? []) as unknown as { client_id: string; staff_id: string | null; staff: { name: string } | null }[]) {
+    if (a.staff_id) trainerBy.set(a.client_id, { id: a.staff_id, name: a.staff?.name ?? "trainer" });
+  }
 
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; phone: string | null; email: string | null; package_id: string | null; used: number | null; joined: string | null }[];
   const pkgs = new Map(((pkgData ?? []) as { id: string; name: string; price: number; sessions: number; validity: number; is_facility: boolean }[]).map((p) => [p.id, p]));
@@ -89,7 +97,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (p && Number(p.price) > 0 && !invByClient.get(c.id)) {
       leak += Number(p.price);
-      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "Raise invoice", raiseInvoiceClientId: c.id });
+      flags.push({ sev: "high", title: `${c.name} — no invoice raised`, detail: `${p.name} · ${money(Number(p.price))} never billed`, href: `/clients/${c.id}`, cta: "View", raiseInvoiceClientId: c.id });
     }
   }
 
@@ -97,23 +105,23 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   for (const i of unpaid) {
     if (i.issued_date && i.issued_date <= addDays(today, -7)) {
       const c = clients.find((x) => x.id === i.client_id);
-      flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} overdue`, detail: `${c?.name ?? "—"} · ${money(Number(i.amount))} · issued ${i.issued_date}`, href: "/billing", cta: "Chase" });
+      flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} overdue`, detail: `${c?.name ?? "—"} · ${money(Number(i.amount))} · issued ${i.issued_date}`, href: "/billing", cta: "View", chaseRole: { roles: ["Front Desk", "Finance"], who: "Front Desk", label: `Chase payment · INV-${String(i.num ?? 0).padStart(3, "0")}`, clientId: i.client_id ?? undefined, href: "/billing" } });
     }
   }
 
   // 3. stalled onboarding — no package, or missing contact details
   for (const c of clients) {
-    if (!c.package_id) flags.push({ sev: "med", title: `${c.name} — no package assigned`, detail: `Joined ${c.joined ?? "—"} · onboarding incomplete`, href: `/clients/${c.id}`, cta: "Complete" });
-    else if (!c.phone && !c.email) flags.push({ sev: "low", title: `${c.name} — no contact details`, detail: "No phone or email on record", href: `/clients/${c.id}`, cta: "Add" });
+    if (!c.package_id) flags.push({ sev: "med", title: `${c.name} — no package assigned`, detail: `Joined ${c.joined ?? "—"} · onboarding incomplete`, href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Complete onboarding — assign a package", clientId: c.id, href: `/clients/${c.id}` } });
+    else if (!c.phone && !c.email) flags.push({ sev: "low", title: `${c.name} — no contact details`, detail: "No phone or email on record", href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Add missing contact details", clientId: c.id, href: `/clients/${c.id}` } });
   }
 
   // 4. BluePrint clients stuck in the flow
   for (const c of clients.filter((x) => x.package_id === "bp1")) {
     const b = blood.get(`${c.id}|blueprint`);
     const bp = bps.get(c.id);
-    if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "Request" });
-    else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "Follow up" });
-    else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review" });
+    if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Doctor"], who: "the team", label: "Request BluePrint blood", clientId: c.id, href: "/blueprint" } });
+    else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Health Coach"], who: "the team", label: "Chase BluePrint blood report", clientId: c.id, href: "/blueprint" } });
+    else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review", chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "clinicians", label: "BluePrint sign-off", clientId: c.id, href: "/blueprint" } });
   }
 
   // 5. churn signals — credits left but nothing on the calendar, or gone quiet
@@ -127,25 +135,43 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const upcoming = mine.filter((s) => s.status === "scheduled" && s.date >= today);
     const lastDone = mine.filter((s) => s.status === "completed").map((s) => s.date).sort().pop();
     if (upcoming.length === 0) {
-      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book" });
+      flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book next session", clientId: c.id, href: `/sessions?client=${c.id}` } });
     } else if (lastDone && lastDone < quietSince) {
-      flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "Reach out" });
+      flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Fitness Trainer", "Health Coach"], who: "the coach", label: "Re-engage — client gone quiet", clientId: c.id, href: `/clients/${c.id}` } });
     }
   }
 
-  // 6. package expiring / expired with no active renewal
+  // 6. package expiring / expired with no active renewal — read the real
+  //    client_packages rows (the source of truth), not the legacy single
+  //    clients.package_id, so a removed/void package never nags and the actual
+  //    active package is the one that's checked.
   const activeSubClients = new Set(subs.filter((s) => s.status === "active").map((s) => s.client_id));
-  for (const c of clients) {
-    const p = c.package_id ? pkgs.get(c.package_id) : null;
-    if (!p || !p.validity || !c.joined || activeSubClients.has(c.id)) continue;
-    // BluePrint is a one-time report, not a time-bound subscription — its
-    // "validity" is just the report's shelf life, so never nag to renew it.
-    if (packageCategory(p.id, p.is_facility) === "blueprint") continue;
-    const expires = addDays(c.joined, p.validity);
-    if (expires < today) {
-      flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/clients/${c.id}`, cta: "Renew" });
-    } else if (expires <= in30) {
-      flags.push({ sev: "med", title: `${c.name} — package expiring`, detail: `${p.name} ends ${expires} · no renewal booked`, href: `/clients/${c.id}`, cta: "Renew" });
+  const nameById = new Map(clients.map((c) => [c.id, c.name]));
+  // BluePrint is a one-time report — never nag to renew it.
+  const RENEWABLE_FLAG = new Set(["membership", "training", "comprehensive"]);
+  const activeCps = ((cpData ?? []) as { client_id: string; package_name: string | null; category: string; start_date: string | null; end_date: string | null; status: string }[])
+    .filter((cp) => RENEWABLE_FLAG.has(cp.category) && cp.end_date);
+  const daysApart = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+  for (const cp of activeCps) {
+    if (activeSubClients.has(cp.client_id)) continue;
+    // If a later-ending package of the same category is already in place, the
+    // client has effectively renewed — don't flag the earlier one.
+    const laterExists = activeCps.some((o) => o.client_id === cp.client_id && o.category === cp.category && (o.end_date ?? "") > (cp.end_date ?? ""));
+    if (laterExists) continue;
+    const nm = nameById.get(cp.client_id) ?? "A client";
+    const label = cp.package_name ?? cp.category;
+    const end = cp.end_date as string;
+    if (end < today) {
+      flags.push({ sev: "high", title: `${nm} — package expired`, detail: `${label} ended ${end} · no renewal in place`, href: `/clients/${cp.client_id}`, cta: "Renew", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book renewal — package expired", clientId: cp.client_id, href: `/clients/${cp.client_id}` } });
+      continue;
+    }
+    // "Expiring soon" window is proportional: never wider than the package's own
+    // term, so a 4-week package doesn't trip the alert the day it's sold. Warn in
+    // the back half of the term, capped at 30 days for long memberships.
+    const term = cp.start_date ? Math.max(1, daysApart(cp.start_date, end)) : 30;
+    const window = Math.min(30, Math.ceil(term / 2));
+    if (daysApart(today, end) <= window) {
+      flags.push({ sev: "med", title: `${nm} — package expiring`, detail: `${label} ends ${end} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book renewal — package expiring", clientId: cp.client_id, href: `/clients/${cp.client_id}` } });
     }
   }
 
@@ -155,7 +181,12 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const used = c.used ?? 0;
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (p && !p.is_facility && used !== doneRows) {
-      flags.push({ sev: "low", title: `${c.name} — session count mismatch`, detail: `Counter says ${used}, actual completed rows: ${doneRows}`, href: `/clients/${c.id}`, cta: "Reconcile" });
+      // The trainer marks sessions, so they're the primary owner; fall back to
+      // Front Desk (check-ins) then Manager (oversight) when none is assigned.
+      const t = trainerBy.get(c.id);
+      flags.push({ sev: "low", title: `${c.name} — session count mismatch`, detail: `Counter says ${used}, actual completed rows: ${doneRows}`, href: `/clients/${c.id}`, cta: "Reconcile",
+        nudge: t ? { clientId: c.id, staffId: t.id, label: "Reconcile session count", who: t.name } : undefined,
+        chaseRole: t ? undefined : { roles: ["Fitness Trainer", "Front Desk", "Manager"], who: "the trainer", label: "Reconcile session count", clientId: c.id, href: `/clients/${c.id}` } });
     }
   }
 
