@@ -29,24 +29,24 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
   for (const cp of (cps ?? []) as { client_id: string; package_name: string | null; price: number | null }[]) {
     if (!cp.client_id || hasInvoice.has(cp.client_id) || billed.has(cp.client_id)) continue;
     billed.add(cp.client_id);
-    flags.push({ sev: "high", title: `${nameOf(cp.client_id)} — no invoice raised`, detail: `${cp.package_name ?? "Package"} · ${money(Number(cp.price))}`, href: `/clients/${cp.client_id}`, cta: "Raise invoice", raiseInvoiceClientId: cp.client_id });
+    flags.push({ sev: "high", title: `${nameOf(cp.client_id)} — no invoice raised`, detail: `${cp.package_name ?? "Package"} · ${money(Number(cp.price))}`, href: `/clients/${cp.client_id}`, cta: "View", raiseInvoiceClientId: cp.client_id });
   }
 
   // ---- overdue unpaid invoices ---------------------------------------------
   for (const i of (inv ?? []) as { client_id: string | null; num: number | null; amount: number; status: string; issued_date: string | null }[]) {
     if (i.status === "Paid") continue;
-    if ((i.issued_date ?? "9999-12-31") <= cut7) flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`, detail: `${nameOf(i.client_id)} · ${money(Number(i.amount))} · overdue`, href: "/billing", cta: "Chase" });
+    if ((i.issued_date ?? "9999-12-31") <= cut7) flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`, detail: `${nameOf(i.client_id)} · ${money(Number(i.amount))} · overdue`, href: "/billing", cta: "View", chaseRole: { roles: ["Finance", "Manager"], who: "Finance", label: `Chase payment · INV-${String(i.num ?? 0).padStart(3, "0")}`, clientId: i.client_id ?? undefined, href: "/billing" } });
   }
 
   // ---- blood report awaited from the client --------------------------------
   for (const b of (blood ?? []) as { client_id: string | null; panel: string | null; submitted: boolean }[]) {
     if (b.submitted || !b.client_id) continue;
-    flags.push({ sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`, detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · chase the client`, href: `/clients/${b.client_id}`, cta: "View" });
+    flags.push({ sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`, detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · chase the client`, href: `/clients/${b.client_id}`, cta: "View", chaseRole: { roles: ["Health Coach", "Doctor"], who: "the team", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` } });
   }
 
   // ---- new tablet intakes to complete --------------------------------------
   for (const t of (tablet ?? []) as { first_name: string; last_name: string | null }[]) {
-    flags.push({ sev: "med", title: `New tablet intake — ${t.first_name} ${t.last_name ?? ""}`.trim(), detail: "Complete registration at front desk", href: "/clients", cta: "Add" });
+    flags.push({ sev: "med", title: `New tablet intake — ${t.first_name} ${t.last_name ?? ""}`.trim(), detail: "Complete registration at front desk", href: "/intake", cta: "Complete" });
   }
 
   // ---- overdue follow-ups (one summary line) -------------------------------

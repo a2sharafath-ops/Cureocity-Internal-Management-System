@@ -76,13 +76,25 @@ export default async function ManagerDashboard({ name }: { name: string }) {
   // ---- exception queue -----------------------------------------------------
   const flags: Flag[] = [];
   const nameOf = (id: string) => clients.find((c) => c.id === id)?.name ?? "—";
+  // Resolve the assigned clinician for a discipline, so each flag can chase the
+  // specific person who owns the work (falls back to a role chase otherwise).
+  const staffName = new Map(staff.map((s) => [s.id, s.name]));
+  const ownerOf = (clientId: string, disc: string) => {
+    const a = assigns.find((x) => x.client_id === clientId && x.discipline === disc && x.staff_id);
+    return a?.staff_id ? { id: a.staff_id, name: staffName.get(a.staff_id) ?? "clinician" } : undefined;
+  };
+  const KIND_TO_DISC: Record<string, string> = { Doctor: "doctor", Diet: "dietitian", Trainer: "trainer", Coach: "coach", Psychologist: "psychologist" };
+  const KIND_TO_ROLE: Record<string, string> = { Doctor: "Doctor", Diet: "Dietitian", Trainer: "Fitness Trainer", Coach: "Health Coach", Psychologist: "Psychologist" };
 
   for (const f of followups.filter((f) => f.due_date < today)) {
+    const o = ownerOf(f.client_id, "coach") ?? ownerOf(f.client_id, "dietitian");
     flags.push({
       sev: f.priority === "mandatory" ? "high" : "med",
       title: `${f.clients?.name ?? nameOf(f.client_id)} — follow-up overdue`,
       detail: `Due ${f.due_date}${f.priority === "mandatory" ? " · mandatory" : ""}`,
-      href: "/followups", cta: "Call",
+      href: "/followups", cta: "View",
+      nudge: o ? { clientId: f.client_id, staffId: o.id, label: "Follow-up overdue", who: o.name } : undefined,
+      chaseRole: o ? undefined : { roles: ["Health Coach", "Front Desk"], who: "the coach", label: "Follow-up overdue", clientId: f.client_id, href: "/followups" },
     });
   }
   for (const i of invoices.filter((i) => i.status !== "Paid" && (i.issued_date ?? "") <= overdueCut)) {
@@ -90,15 +102,20 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       sev: "high",
       title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`,
       detail: `${i.client_id ? nameOf(i.client_id) : "—"} · ${money(Number(i.amount))} · issued ${i.issued_date}`,
-      href: "/billing", cta: "Chase",
+      href: "/billing", cta: "View",
+      chaseRole: { roles: ["Front Desk", "Finance"], who: "Front Desk", label: `Chase payment · INV-${String(i.num ?? 0).padStart(3, "0")}`, clientId: i.client_id ?? undefined, href: "/billing" },
     });
   }
   for (const c of consults) {
+    const disc = KIND_TO_DISC[c.kind];
+    const o = disc ? ownerOf(c.client_id, disc) : undefined;
     flags.push({
       sev: "med",
       title: `${c.clients?.name ?? nameOf(c.client_id)} — ${c.kind} consultation open`,
       detail: "Started but not completed",
-      href: "/pro", cta: "Review",
+      href: "/pro", cta: "View",
+      nudge: o ? { clientId: c.client_id, staffId: o.id, label: `${c.kind} consultation — finish`, who: o.name } : undefined,
+      chaseRole: o ? undefined : { roles: [KIND_TO_ROLE[c.kind] ?? "Doctor"], who: "the clinician", label: `${c.kind} consultation — finish`, clientId: c.client_id, href: "/pro" },
     });
   }
   // clients with credits left but nothing on the calendar
@@ -108,7 +125,8 @@ export default async function ManagerDashboard({ name }: { name: string }) {
     if (mine > 0 && upcoming === 0) {
       flags.push({
         sev: "med", title: `${c.name} — nothing booked`,
-        detail: "No upcoming session on the calendar", href: `/clients/${c.id}`, cta: "Book",
+        detail: "No upcoming session on the calendar", href: `/sessions?client=${c.id}`, cta: "Book",
+        chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book next session", clientId: c.id, href: `/sessions?client=${c.id}` },
       });
     }
   }
@@ -119,7 +137,8 @@ export default async function ManagerDashboard({ name }: { name: string }) {
     if (missing.length) {
       flags.push({
         sev: "low", title: `${c.name} — no ${missing.join(" or ")} assigned`,
-        detail: "Care team incomplete", href: `/clients/${c.id}`, cta: "Assign",
+        detail: "Care team incomplete", href: `/clients/${c.id}`, cta: "View",
+        chaseRole: { roles: ["Front Desk", "Manager"], who: "Front Desk", label: "Assign the care team", clientId: c.id, href: `/clients/${c.id}` },
       });
     }
   }
