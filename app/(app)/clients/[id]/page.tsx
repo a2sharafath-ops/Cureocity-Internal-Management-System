@@ -24,7 +24,6 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PackageStatusPanel from "@/components/PackageStatusPanel";
 import { getPackageStatus } from "@/lib/package-status";
-import { isInitialApptType } from "@/lib/appt-match";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
 import RenewMembership from "@/components/RenewMembership";
@@ -77,15 +76,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const ageOf = (dob: unknown): number | null =>
     typeof dob === "string" ? ageFromDob(dob) : null;
 
-  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }, { data: apptData }] = await Promise.all([
+  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("care_protocols").select("id").eq("client_id", params.id).limit(1),
-    // Booked consults live in `appointments`; a `consultations` row only appears
-    // once the clinician hits Start. So the journey must read appointments too,
-    // or a booked-but-not-started consult looks "not scheduled".
-    supabase.from("appointments").select("type, status, staff(role)").eq("client_id", params.id).neq("status", "cancelled"),
   ]);
   // Has this client's care journey already been kicked off? If so, the primary
   // "Start" action is done — we only offer a quiet re-run for repairs.
@@ -94,7 +89,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // `bloodRow` so the button doesn't keep offering "Start journey".
   const hasProtocol = ((protoData ?? []) as unknown[]).length > 0;
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
-  const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean }[];
+  const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; approved: boolean; shared: boolean; created_at: string | null }[];
 
   const me = await getProfile();
   const showPortal = !ro && canWrite(me?.role ?? "");
@@ -270,13 +265,18 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // costs nothing extra — the data was always here, it was just displayed as
   // six independently-sorted tables.
   const activity: TimelineEvent[] = buildTimeline([
+    // Package purchases — where the journey begins.
+    clientPackages.filter((c) => c.status !== "void").map((c) => ({
+      at: atDay(c.start_date) ?? "", kind: "package" as const,
+      title: `${c.package_name ?? c.category} purchased`, detail: c.category,
+    })),
     sess.map((x) => ({
       at: atDay(x.date) ?? "", kind: "session" as const,
       title: `Strength session ${x.seq ?? ""}`.trim(),
       detail: x.status, pending: x.status === "scheduled",
     })),
     consults.map((c) => ({
-      at: atDay(null) ?? new Date().toISOString(), kind: "consultation" as const,
+      at: atDay(c.created_at) ?? "", kind: "consultation" as const,
       title: `${c.kind} consultation`, detail: c.status,
       pending: c.status !== "completed",
     })),
@@ -295,34 +295,27 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       at: w.created_at, kind: "note" as const,
       title: `Workout assigned — ${w.name}`, by: w.assigned_by,
     })),
+    // Blood report — requested, then received.
+    bloodRowsAll.flatMap((b) => {
+      const panel = b.panel === "comprehensive" ? "Comprehensive" : "BluePrint";
+      const evs: (TimelineEvent | null)[] = [
+        b.requested_at ? { at: atDay(b.requested_at) ?? "", kind: "note" as const, title: `Blood report requested`, detail: `${panel} panel`, pending: !b.submitted } : null,
+      ];
+      if (b.submitted && b.submitted_date) evs.push({ at: atDay(b.submitted_date) ?? "", kind: "note" as const, title: "Blood report received", detail: `${panel} panel` });
+      return evs;
+    }),
+    // BluePrint generated.
+    bp?.generated && bp.generated_date ? [{ at: atDay(bp.generated_date) ?? "", kind: "note" as const, title: "BluePrint generated", detail: "PHB ready" }] : [],
+    // Onboarding milestones (dated follow-ups).
+    followups.filter((f) => f.kind === "onboarding").map((f) => ({
+      at: atDay(f.due_date) ?? "", kind: "task" as const,
+      title: f.label, detail: "onboarding milestone", pending: f.status !== "done",
+    })),
   ]);
 
-  // ---- Client Journey milestones (Service Timeline) ----
-  // Booked (and completed) initial consults per discipline, derived from
-  // appointments — a booked-but-not-started consult has no `consultations` row,
-  // so relying on that table alone made a scheduled consult read "not scheduled".
-  const A_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
-  const apptSched = new Set<string>();
-  const apptDone = new Set<string>();
-  for (const a of (apptData ?? []) as unknown as { type: string | null; status: string; staff: { role: string } | null }[]) {
-    const kind = A_ROLE_TO_KIND[a.staff?.role ?? ""];
-    if (!kind || !isInitialApptType(a.type)) continue;
-    if (a.status === "completed") apptDone.add(kind); else apptSched.add(kind);
-  }
-  const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed") || apptDone.has(kind);
-  const scheduledConsult = (kind: string) => consults.some((c) => c.kind === kind) || apptSched.has(kind) || apptDone.has(kind);
-  const consultState = (kind: string): "done" | "progress" | "pending" => hasConsult(kind) ? "done" : scheduledConsult(kind) ? "progress" : "pending";
-  const journey: { label: string; state: "done" | "progress" | "pending"; detail: string; when: string; bookDisc?: string }[] = [
-    { label: "Package Purchase", state: pkg ? "done" : "pending", detail: pkg?.name ?? "No package yet", when: client.joined ?? "—" },
-    { label: "Initial Doctor Consultation", state: consultState("Doctor"), detail: "Doctor Consultation", when: hasConsult("Doctor") ? "Completed" : scheduledConsult("Doctor") ? "Scheduled" : "Not scheduled", bookDisc: "Doctor" },
-    { label: "Initial Diet Consultation", state: consultState("Diet"), detail: "Diet Consultation", when: hasConsult("Diet") ? "Completed" : scheduledConsult("Diet") ? "Scheduled" : "Not scheduled", bookDisc: "Dietitian" },
-    { label: "Initial Fitness Assessment", state: consultState("Trainer"), detail: "Fitness Services", when: hasConsult("Trainer") ? "Completed" : scheduledConsult("Trainer") ? "Scheduled" : "Not scheduled", bookDisc: "Fitness Trainer" },
-    { label: "BluePrint (PHB) Generated", state: bp?.generated ? "done" : "pending", detail: bp?.generated ? "Ready to download" : "Pending consultations", when: bp?.generated_date ?? "—" },
-  ];
-  for (const f of followups.filter((x) => x.kind === "onboarding")) {
-    journey.push({ label: f.label, state: f.status === "done" ? "done" : f.status === "skipped" ? "pending" : "progress", detail: "Onboarding protocol", when: (f.due_date < todayISO() && f.status === "pending" ? "Overdue " : "Due ") + f.due_date });
-  }
-  const dotColor = (s: string) => s === "done" ? "var(--green)" : s === "progress" ? "var(--amber)" : "#cbd5e1";
+  // (Client-journey milestone checklist removed — its completed steps now
+  // interleave into the chronological feed above, and what's still pending
+  // lives on the Overview "Open now / Upcoming" tracker.)
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -534,39 +527,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </>)}
 
       {tab === "timeline" && (<>
-      {/* The actual timeline — everything that happened, newest first. The
-          Client Journey below it stays: it answers a different question
-          ("is onboarding complete?") that a chronological stream doesn't. */}
+      {/* One chronological record of the whole journey — purchases, consults,
+          sessions, invoices, blood, workouts and onboarding milestones, newest
+          first. What's still *pending* lives on Overview (Open now / Upcoming);
+          this tab is the history. */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Activity</div>
-        <ActivityTimeline events={activity} today={todayISO()} max={40}
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Journey timeline</div>
+        <ActivityTimeline events={activity} today={todayISO()} max={60}
           emptyLabel="No activity recorded yet." />
-      </div>
-
-      {/* Client Journey */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700 }}>Client Journey</div>
-          <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>green = complete · amber = in progress</span>
-        </div>
-        <div style={{ display: "grid", gap: 2 }}>
-          {journey.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
-              <div style={{ width: 12, height: 12, borderRadius: "50%", background: dotColor(m.state), marginTop: 4, flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <b style={{ fontSize: 13.5 }}>{m.label}</b>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>{m.detail}</div>
-                <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>{m.when}</div>
-              </div>
-              {m.bookDisc && m.state === "pending" && !ro && canWrite(me?.role ?? "") && (
-                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}&back=timeline`}
-                  style={{ alignSelf: "center", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
-                  Book →
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Sessions */}
@@ -645,31 +613,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               </table>
             </div>
           </>
-        )}
-      </div>
-
-      {/* Consultations */}
-      <div
-        style={{
-          marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)",
-          boxShadow: "var(--shadow)", padding: "18px 20px",
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Consultations ({consults.length})</div>
-        {consults.length === 0 ? (
-          <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultations yet.</div>
-        ) : (
-          consults.map((cs) => (
-            <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 0" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.kind}</span>
-                <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "var(--neutral-bg)", color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>{cs.status}</span>
-                {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
-                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
-              </div>
-              {cs.summary && <div style={{ marginTop: 6, fontSize: 13, color: "var(--muted)" }}>{cs.summary}</div>}
-            </div>
-          ))
         )}
       </div>
 
