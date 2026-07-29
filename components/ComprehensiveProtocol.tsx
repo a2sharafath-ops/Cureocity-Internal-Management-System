@@ -17,7 +17,10 @@
 import { toggleComprehensiveHold } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 import { comprehensiveSla, formatLeft, SLA_TONE, type Gate } from "@/lib/comprehensive-sla";
+import { MILESTONES } from "@/lib/comprehensive";
+import { milestoneBookHref } from "@/lib/appt-match";
 import type { Hold } from "@/lib/sla-clock";
+export type SvcRow = { name: string; category: string; day_offset: number | null };
 
 type View = {
   startDate: string;
@@ -66,18 +69,22 @@ function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?
 const OWNER_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach" };
 
 export default function ComprehensiveProtocol({
-  clientId, view, canHold, canBook,
-}: { clientId: string; view: View; canHold: boolean; canBook?: boolean }) {
+  clientId, view, canHold, canBook, services = [],
+}: { clientId: string; view: View; canHold: boolean; canBook?: boolean; services?: SvcRow[] }) {
   const r = comprehensiveSla(view);
   const held = Boolean(view.hold.holdSince);
 
   // A milestone that's an appointment (not the strength-session block) and isn't
   // done yet gets a one-click "Book →" that pre-fills the calendar with this
-  // client and the owning discipline.
-  const bookHref = (g: Gate): string | null =>
-    canBook && g.gate.startsWith("milestone:") && !["met", "late"].includes(g.clock.status)
-      ? `/appointments?client=${clientId}&disc=${encodeURIComponent(OWNER_DISC[g.owner] ?? "")}`
-      : null;
+  // client, the owning discipline AND the specific milestone service, then
+  // returns here (the Service Timeline) after booking.
+  const bookHref = (g: Gate): string | null => {
+    if (!canBook || !g.gate.startsWith("milestone:") || ["met", "late"].includes(g.clock.status)) return null;
+    const key = g.gate.replace(/^milestone:/, "").replace(/#\d+$/, "");
+    const m = MILESTONES.find((x) => x.key === key);
+    if (m) return milestoneBookHref(clientId, m.apptType, m.from, services, "timeline");
+    return `/appointments?client=${clientId}&disc=${encodeURIComponent(OWNER_DISC[g.owner] ?? "")}&back=timeline`;
+  };
 
   const section = (title: string, gates: Gate[], dateOnly?: boolean) => (
     <div style={{ marginTop: 12 }}>

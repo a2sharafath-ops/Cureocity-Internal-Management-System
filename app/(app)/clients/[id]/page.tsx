@@ -153,6 +153,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const compView = await getComprehensiveView(params.id);
   const pkgStatus = await getPackageStatus(params.id);
   const ptView = await getPTView(params.id);
+  // Service catalogue — lets the protocol boards' "Book →" pre-fill the exact
+  // milestone service, not just the discipline.
+  const { data: svcRows } = await supabase.from("services").select("name, category, day_offset");
+  const bookServices = (svcRows ?? []) as { name: string; category: string; day_offset: number | null }[];
   const prescriptions = (rxData ?? []) as unknown as {
     id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
     prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -878,11 +882,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       )}
 
       {compView && (
-        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
+        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} services={bookServices} />
       )}
 
       {ptView && (
-        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
+        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} services={bookServices} />
       )}
 
       {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still

@@ -6,7 +6,10 @@
 import { togglePTHold } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 import { ptSla, formatLeft, SLA_TONE, type Gate } from "@/lib/pt-sla";
+import { MILESTONES } from "@/lib/pt";
+import { milestoneBookHref } from "@/lib/appt-match";
 import type { Hold } from "@/lib/sla-clock";
+export type SvcRow = { name: string; category: string; day_offset: number | null };
 
 type View = {
   startDate: string;
@@ -41,17 +44,20 @@ function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?
   );
 }
 
-export default function PTProtocol({ clientId, view, canHold, canBook }: { clientId: string; view: View; canHold: boolean; canBook?: boolean }) {
+export default function PTProtocol({ clientId, view, canHold, canBook, services = [] }: { clientId: string; view: View; canHold: boolean; canBook?: boolean; services?: SvcRow[] }) {
   const r = ptSla(view);
   const held = Boolean(view.hold.holdSince);
 
   // The reassessment is an appointment; the session block isn't. Offer a
-  // one-click "Book →" (pre-filling the calendar) on the appointment milestone
-  // only, while it's still outstanding.
-  const bookHref = (g: Gate): string | null =>
-    canBook && g.gate.startsWith("milestone:") && !["met", "late"].includes(g.clock.status)
-      ? `/appointments?client=${clientId}&disc=Fitness%20Trainer`
-      : null;
+  // one-click "Book →" that pre-fills the calendar with the client, discipline
+  // and the specific milestone service, returning to the Service Timeline after.
+  const bookHref = (g: Gate): string | null => {
+    if (!canBook || !g.gate.startsWith("milestone:") || ["met", "late"].includes(g.clock.status)) return null;
+    const key = g.gate.replace(/^milestone:/, "").replace(/#\d+$/, "");
+    const m = MILESTONES.find((x) => x.key === key);
+    if (m) return milestoneBookHref(clientId, m.apptType, m.from, services, "timeline");
+    return `/appointments?client=${clientId}&disc=Fitness%20Trainer&back=timeline`;
+  };
 
   const section = (title: string, gates: Gate[], dateOnly?: boolean) => (
     <div style={{ marginTop: 12 }}>

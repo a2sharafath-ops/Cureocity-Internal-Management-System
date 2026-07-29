@@ -60,9 +60,21 @@ export function serviceForMilestone(
   dayFrom: number,
   services: { name: string; category: string; day_offset: number | null }[],
 ): string | null {
-  const svc = services.find((s) => s.category === category && (s.day_offset ?? -1) === dayFrom)
-    ?? services.find((s) => s.category === category && /followup|follow-up|review|reassess/i.test(s.name));
-  return svc?.name ?? null;
+  const inCat = services.filter((s) => s.category === category);
+  if (!inCat.length) return null;
+  // 1. Exact day-offset match (the happy path).
+  const exact = inCat.find((s) => (s.day_offset ?? -1) === dayFrom);
+  if (exact) return exact.name;
+  // 2. Resilient to a service's day being edited: pick the day-scheduled service
+  //    in this category whose day is closest to the milestone's day.
+  const dated = inCat.filter((s) => s.day_offset != null);
+  if (dated.length) {
+    return dated.reduce((best, s) =>
+      Math.abs((s.day_offset ?? 0) - dayFrom) < Math.abs((best.day_offset ?? 0) - dayFrom) ? s : best,
+    ).name;
+  }
+  // 3. Last resort: a follow-up/review/reassessment service by name.
+  return inCat.find((s) => /followup|follow-up|review|reassess/i.test(s.name))?.name ?? null;
 }
 
 /** Build a pre-filled booking link for a milestone: patient + discipline + the
@@ -74,12 +86,14 @@ export function milestoneBookHref(
   category: string,
   dayFrom: number,
   services: { name: string; category: string; day_offset: number | null }[],
+  back?: "timeline" | "overview",
 ): string {
   const disc = CATEGORY_TO_DISC[category];
   const svc = serviceForMilestone(category, dayFrom, services);
   const params = new URLSearchParams({ client: clientId });
   if (disc) params.set("disc", disc);
   if (svc) params.set("type", svc);
+  if (back) params.set("back", back);
   return `/appointments?${params.toString()}`;
 }
 
