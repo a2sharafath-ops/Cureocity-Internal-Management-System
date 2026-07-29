@@ -46,7 +46,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     supabase.from("audit_log").select("actor_name, actor_role, action, target, created_at").order("created_at", { ascending: false }).limit(6),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("staff").select("id, name, is_trainer"),
-    supabase.from("client_packages").select("client_id, package_name, category, end_date, status").eq("status", "active"),
+    supabase.from("client_packages").select("client_id, package_name, category, start_date, end_date, status").eq("status", "active"),
   ]);
 
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; phone: string | null; email: string | null; package_id: string | null; used: number | null; joined: string | null }[];
@@ -143,8 +143,9 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   const nameById = new Map(clients.map((c) => [c.id, c.name]));
   // BluePrint is a one-time report — never nag to renew it.
   const RENEWABLE_FLAG = new Set(["membership", "training", "comprehensive"]);
-  const activeCps = ((cpData ?? []) as { client_id: string; package_name: string | null; category: string; end_date: string | null; status: string }[])
+  const activeCps = ((cpData ?? []) as { client_id: string; package_name: string | null; category: string; start_date: string | null; end_date: string | null; status: string }[])
     .filter((cp) => RENEWABLE_FLAG.has(cp.category) && cp.end_date);
+  const daysApart = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
   for (const cp of activeCps) {
     if (activeSubClients.has(cp.client_id)) continue;
     // If a later-ending package of the same category is already in place, the
@@ -153,10 +154,18 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     if (laterExists) continue;
     const nm = nameById.get(cp.client_id) ?? "A client";
     const label = cp.package_name ?? cp.category;
-    if ((cp.end_date ?? "") < today) {
-      flags.push({ sev: "high", title: `${nm} — package expired`, detail: `${label} ended ${cp.end_date} · no renewal in place`, href: `/clients/${cp.client_id}`, cta: "Renew" });
-    } else if ((cp.end_date ?? "") <= in30) {
-      flags.push({ sev: "med", title: `${nm} — package expiring`, detail: `${label} ends ${cp.end_date} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
+    const end = cp.end_date as string;
+    if (end < today) {
+      flags.push({ sev: "high", title: `${nm} — package expired`, detail: `${label} ended ${end} · no renewal in place`, href: `/clients/${cp.client_id}`, cta: "Renew" });
+      continue;
+    }
+    // "Expiring soon" window is proportional: never wider than the package's own
+    // term, so a 4-week package doesn't trip the alert the day it's sold. Warn in
+    // the back half of the term, capped at 30 days for long memberships.
+    const term = cp.start_date ? Math.max(1, daysApart(cp.start_date, end)) : 30;
+    const window = Math.min(30, Math.ceil(term / 2));
+    if (daysApart(today, end) <= window) {
+      flags.push({ sev: "med", title: `${nm} — package expiring`, detail: `${label} ends ${end} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
     }
   }
 

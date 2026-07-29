@@ -96,12 +96,17 @@ export default async function FinanceDashboard({ name }: { name: string }) {
   for (const s of subs.filter((s) => s.status === "active" && s.renews_on && s.renews_on < today)) {
     flags.push({ sev: "high", title: `${nameOf(s.client_id)} — renewal missed`, detail: `Was due ${s.renews_on} · ${money(Number(s.amount ?? 0))}`, href: "/subscriptions", cta: "Renew" });
   }
-  for (const cp of cps.filter((cp) => cp.status === "active" && cp.end_date && cp.end_date <= in30 && cp.end_date >= today)) {
+  // "Ending soon" window is proportional to the package's own term (capped at 30
+  // days), so a short 4-week package isn't flagged the day it's sold.
+  const daysApart = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+  for (const cp of cps.filter((cp) => cp.status === "active" && cp.end_date && cp.end_date >= today)) {
     // BluePrint is a one-time report, not a renewable term — don't flag it.
     if (packageCategory(cp.package_id, pkgs.get(cp.package_id)?.is_facility ?? false) === "blueprint") continue;
-    if (!subs.some((s) => s.client_id === cp.client_id && s.status === "active")) {
-      flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package ends ${cp.end_date}`, detail: `${cp.package_name ?? "Package"} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
-    }
+    if (subs.some((s) => s.client_id === cp.client_id && s.status === "active")) continue;
+    const end = cp.end_date as string;
+    const term = cp.start_date ? Math.max(1, daysApart(cp.start_date, end)) : 30;
+    if (daysApart(today, end) > Math.min(30, Math.ceil(term / 2))) continue;
+    flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package ends ${end}`, detail: `${cp.package_name ?? "Package"} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
   }
   const order = { high: 0, med: 1, low: 2 };
   flags.sort((a, b) => order[a.sev] - order[b.sev]);
