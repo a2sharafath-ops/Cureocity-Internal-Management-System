@@ -4000,7 +4000,8 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
       title: `New appointment — ${await clientName(supabase, client_id)}`,
       body: `${newType} · ${date} · ${when}`,
       icon: "🗓",
-      link: { kind: "client", ref: client_id },
+      // Opens the clinician's own Appointments tab in their workspace.
+      link: { kind: "appointment", ref: client_id },
     });
   }
 
