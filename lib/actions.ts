@@ -801,7 +801,7 @@ export async function convertLeadWithPackage(formData: FormData) {
   if (inserted) await carryExperienceToClient(supabase, id, inserted.id);
 
   if (inserted && package_id) {
-    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility").eq("id", package_id).maybeSingle();
+    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
     // Diagnostic (BluePrint) and front-desk-booked tracks (PT / Comprehensive)
     // don't auto-schedule strength workouts.
     const cat = packageCategory(package_id, pkg?.is_facility ?? false);
@@ -811,6 +811,16 @@ export async function convertLeadWithPackage(formData: FormData) {
       await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
     }
     if (pkg) {
+      // Record the package in client_packages too — not just the legacy
+      // clients.package_id — so membership checks, renewals and status panels
+      // all see it. Without this a membership sold here is invisible to the
+      // membership-prerequisite rule and blocks later PT/Comprehensive sales.
+      await supabase.from("client_packages").insert({
+        client_id: inserted.id, package_id, package_name: pkg.name,
+        category: cat, start_date: joined,
+        end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
+        price: pkg.price ?? 0, status: "active", created_by: p.name,
+      });
       const num = await nextInvoiceNum(supabase);
       await supabase.from("invoices").insert({
         num, client_id: inserted.id, description: `${pkg.name} package`, amount: pkg.price ?? 0,
@@ -992,11 +1002,24 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
 
   const cat = packageCategory(package_id, pkg.is_facility);
   if (requiresMembership(cat)) {
-    const { data: existing } = await supabase.from("client_packages")
-      .select("category, start_date, end_date").eq("client_id", client_id).eq("status", "active");
-    if (!hasActiveMembership((existing ?? []) as { category: string; start_date: string | null; end_date: string | null }[], start)) {
-      return { ok: false, error: MEMBERSHIP_RULE_MSG };
+    // A membership can live in either place: the client_packages table, or the
+    // legacy single `package_id` on the client record (a facility package).
+    // Honour both — exactly as the client page does — so a client whose only
+    // membership is the legacy facility package isn't wrongly blocked.
+    const [{ data: existing }, { data: cli }] = await Promise.all([
+      supabase.from("client_packages")
+        .select("category, start_date, end_date").eq("client_id", client_id).eq("status", "active"),
+      supabase.from("clients").select("package_id").eq("id", client_id).maybeSingle(),
+    ]);
+    let legacyFacility = false;
+    const legacyPkgId = (cli as { package_id: string | null } | null)?.package_id ?? null;
+    if (legacyPkgId) {
+      const { data: lp } = await supabase.from("packages").select("is_facility").eq("id", legacyPkgId).maybeSingle();
+      legacyFacility = Boolean((lp as { is_facility: boolean } | null)?.is_facility);
     }
+    const ok = legacyFacility
+      || hasActiveMembership((existing ?? []) as { category: string; start_date: string | null; end_date: string | null }[], start);
+    if (!ok) return { ok: false, error: MEMBERSHIP_RULE_MSG };
   }
 
   const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
