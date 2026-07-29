@@ -31,7 +31,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("invoices").select("num, description, amount, status").eq("client_id", clientId),
     sb.from("blood_requests").select("panel, submitted").eq("client_id", clientId),
     sb.from("consultations").select("kind, status").eq("client_id", clientId),
-    sb.from("appointments").select("type, date, status").eq("client_id", clientId).neq("status", "cancelled"),
+    sb.from("appointments").select("type, date, status, provider_id, staff:provider_id(name, role)").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("sessions").select("status, date").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("diet_charts").select("id").eq("client_id", clientId).limit(1),
     sb.from("client_workouts").select("id").eq("client_id", clientId).limit(1),
@@ -52,6 +52,15 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   const ownerBy = new Map<string, { id: string; name: string }>();
   for (const a of (asg ?? []) as unknown as { discipline: string; staff_id: string | null; staff: { name: string } | null }[]) {
     if (a.staff_id) ownerBy.set(a.discipline, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
+  }
+  // Fall back to the clinician who ran the completed consult (appointment
+  // provider) when the care team was never explicitly assigned — so "Remind"
+  // still targets the right person instead of degrading to a plain link.
+  const ROLE_TO_DISC: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer", "Health Coach": "coach", Psychologist: "psychologist" };
+  for (const a of (appts ?? []) as unknown as { status: string; provider_id: string | null; staff: { name: string; role: string } | null }[]) {
+    if (a.status !== "completed" || !a.provider_id || !a.staff) continue;
+    const disc = ROLE_TO_DISC[a.staff.role];
+    if (disc && !ownerBy.has(disc)) ownerBy.set(disc, { id: a.provider_id, name: a.staff.name });
   }
 
   const active = ((cps ?? []) as { package_id: string | null; package_name: string | null; category: string; status: string; start_date: string | null; end_date: string | null }[]).filter((c) => c.status === "active");
