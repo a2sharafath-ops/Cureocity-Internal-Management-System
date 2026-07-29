@@ -16,28 +16,35 @@ export default function SessionActions({
 }) {
   const [open, setOpen] = useState(false);
 
-  if (status !== "scheduled") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
+  // A completed session is settled — nothing to do. A scheduled OR a missed
+  // (cancelled) session can be rescheduled; only a scheduled one can be marked
+  // done. This is how a client who missed a session gets it moved to a new slot.
+  if (status === "completed") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
+  const missed = status !== "scheduled";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        {missed && <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11, fontWeight: 600 }}>missed</span>}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 9px", fontSize: 12, cursor: "pointer" }}
         >
-          Reschedule
+          {missed ? "Reschedule missed" : "Reschedule"}
         </button>
-        <form action={markSessionComplete}>
-          <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="client_id" value={clientId} />
-          <SubmitButton
-            pendingLabel="Saving…" doneLabel="✓ Done"
-            style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}
-          >
-            ✓ Mark done
-          </SubmitButton>
-        </form>
+        {!missed && (
+          <form action={markSessionComplete}>
+            <input type="hidden" name="id" value={id} />
+            <input type="hidden" name="client_id" value={clientId} />
+            <SubmitButton
+              pendingLabel="Saving…" doneLabel="✓ Done"
+              style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}
+            >
+              ✓ Mark done
+            </SubmitButton>
+          </form>
+        )}
       </div>
 
       {open && (

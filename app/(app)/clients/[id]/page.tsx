@@ -563,7 +563,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         }}
       >
         <div style={{ fontWeight: 700, marginBottom: 4 }}>Strength Sessions</div>
-        {pkg?.is_facility ? (
+        {pkg?.is_facility && sess.length === 0 ? (
+          // Only show the facility-only message when there really are no sessions.
+          // A client who also holds Comprehensive/PT DOES have a session block —
+          // don't let a facility membership hide it (and its Reschedule actions).
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
             Facility access member — no scheduled sessions (check-in/out + workout plan).
           </div>

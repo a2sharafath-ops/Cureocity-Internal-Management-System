@@ -63,7 +63,14 @@ export default async function PortalHome() {
 
   const { data: mealRows } = await supabase.from("meal_logs").select("*").eq("client_id", client.id).eq("date", TODAY);
   const mealMap = new Map(((mealRows ?? []) as MealLog[]).map((m) => [m.meal, m]));
-  const showMeals = !pkg?.is_facility;
+  // A client can hold several packages (e.g. a Facility Membership AND
+  // Comprehensive). Decide portal features from what they actually hold, not the
+  // single legacy primary package — otherwise a facility-primary client with a
+  // care package wrongly loses meal monitoring / strength sessions.
+  const { data: cpRows } = await supabase.from("client_packages").select("category, status").eq("client_id", client.id);
+  const careCats = new Set(((cpRows ?? []) as { category: string; status: string }[]).filter((c) => c.status === "active").map((c) => c.category));
+  const holdsCare = careCats.has("comprehensive") || careCats.has("training") || careCats.has("blueprint");
+  const showMeals = !pkg?.is_facility || holdsCare;
 
   const { data: latestM } = await supabase
     .from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat")
@@ -173,7 +180,7 @@ export default async function PortalHome() {
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
-          {!pkg?.is_facility && sess.length > 0 ? ` · ${done} of ${sess.length} strength sessions done` : ""}
+          {sess.length > 0 ? ` · ${done} of ${sess.length} strength sessions done` : ""}
         </div>
       </div>
 
@@ -193,7 +200,7 @@ export default async function PortalHome() {
       )}
 
       {/* Sessions */}
-      {!pkg?.is_facility && sess.length > 0 && card(
+      {sess.length > 0 && card(
         <>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>My strength sessions</div>
           <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 8 }}>{done} completed · {upcoming.length} upcoming</div>
