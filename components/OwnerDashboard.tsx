@@ -32,7 +32,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     { data: clientData }, { data: pkgData }, { data: invData }, { data: sessData },
     { data: apptData }, { data: leadData }, { data: bloodData }, { data: bpData },
     { data: subData }, { data: auditData }, { data: attData }, { data: staffData },
-    { data: cpData },
+    { data: cpData }, { data: caData },
   ] = await Promise.all([
     supabase.from("clients").select("id, code, name, phone, email, package_id, used, joined"),
     supabase.from("packages").select("id, name, price, sessions, validity, is_facility"),
@@ -47,7 +47,13 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("staff").select("id, name, is_trainer"),
     supabase.from("client_packages").select("client_id, package_name, category, start_date, end_date, status").eq("status", "active"),
+    supabase.from("client_assignments").select("client_id, staff_id, staff:staff_id(name)").eq("discipline", "trainer"),
   ]);
+  // Assigned trainer per client — the primary owner to chase for a session count drift.
+  const trainerBy = new Map<string, { id: string; name: string }>();
+  for (const a of (caData ?? []) as unknown as { client_id: string; staff_id: string | null; staff: { name: string } | null }[]) {
+    if (a.staff_id) trainerBy.set(a.client_id, { id: a.staff_id, name: a.staff?.name ?? "trainer" });
+  }
 
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; phone: string | null; email: string | null; package_id: string | null; used: number | null; joined: string | null }[];
   const pkgs = new Map(((pkgData ?? []) as { id: string; name: string; price: number; sessions: number; validity: number; is_facility: boolean }[]).map((p) => [p.id, p]));
@@ -175,7 +181,12 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const used = c.used ?? 0;
     const p = c.package_id ? pkgs.get(c.package_id) : null;
     if (p && !p.is_facility && used !== doneRows) {
-      flags.push({ sev: "low", title: `${c.name} — session count mismatch`, detail: `Counter says ${used}, actual completed rows: ${doneRows}`, href: `/clients/${c.id}`, cta: "Reconcile" });
+      // The trainer marks sessions, so they're the primary owner; fall back to
+      // Front Desk (check-ins) then Manager (oversight) when none is assigned.
+      const t = trainerBy.get(c.id);
+      flags.push({ sev: "low", title: `${c.name} — session count mismatch`, detail: `Counter says ${used}, actual completed rows: ${doneRows}`, href: `/clients/${c.id}`, cta: "Reconcile",
+        nudge: t ? { clientId: c.id, staffId: t.id, label: "Reconcile session count", who: t.name } : undefined,
+        chaseRole: t ? undefined : { roles: ["Fitness Trainer", "Front Desk", "Manager"], who: "the trainer", label: "Reconcile session count", clientId: c.id, href: `/clients/${c.id}` } });
     }
   }
 
