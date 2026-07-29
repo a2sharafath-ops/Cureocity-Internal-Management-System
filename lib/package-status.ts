@@ -72,8 +72,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   const upcoming: StatusItem[] = [];
 
   // ---- payments -----------------------------------------------------------
+  // Only genuinely-outstanding invoices are an open item. Paid ones are done;
+  // Void / Cancelled / Refunded ones are settled (e.g. an invoice for a removed
+  // package) and must not sit in "open now" waiting to be actioned.
+  const SETTLED_INVOICE = new Set(["Paid", "Void", "Cancelled", "Refunded"]);
   for (const i of (inv ?? []) as { num: number | null; description: string | null; amount: number; status: string }[]) {
-    if (i.status !== "Paid") openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn" });
+    if (!SETTLED_INVOICE.has(i.status)) openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn" });
   }
 
   // ---- onboarding checklist (canonical) ----------------------------------

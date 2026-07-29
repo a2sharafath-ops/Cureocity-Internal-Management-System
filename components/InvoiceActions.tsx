@@ -22,7 +22,10 @@ export default function InvoiceActions({ id, status }: { id: string; status: str
     );
   }
 
-  // Unpaid
+  // Only a genuinely unpaid invoice can be marked paid. Void / Cancelled and
+  // any other settled state get no action (a removed package's invoice, say).
+  if (status !== "Unpaid") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
+
   return open ? (
     <form action={markInvoicePaid} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
       <input type="hidden" name="id" value={id} />
