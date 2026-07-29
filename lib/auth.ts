@@ -22,19 +22,23 @@ export type Profile = {
 // page. This is a direct cut to the fixed per-navigation latency.
 export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  // getClaims() verifies the JWT locally where possible (network only when it
+  // must), avoiding a getUser() round-trip on every request. cache() then dedupes
+  // this across the layout + page of a single render.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
+  if (!claims?.sub) return null;
+  const userId = claims.sub as string;
+  const email = (claims.email as string | undefined) ?? null;
   const { data } = await supabase
     .from("profiles")
     .select("name, role, branch, staff_id")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
   return {
-    id: user.id,
-    email: user.email ?? null,
-    name: data?.name ?? user.email?.split("@")[0] ?? "User",
+    id: userId,
+    email,
+    name: data?.name ?? email?.split("@")[0] ?? "User",
     role: data?.role ?? "Staff",
     branch: data?.branch ?? null,
     // The staff row behind this login. Null for client portal users, and for
