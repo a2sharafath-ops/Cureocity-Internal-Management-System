@@ -17,6 +17,7 @@ import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
 import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
+import { resolveNotificationTarget, nudgeLink } from "@/lib/notification-target";
 import { notifyRoles, notifyStaff } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
@@ -2167,6 +2168,9 @@ export async function nudgeClinician(formData: FormData) {
     title: `Reminder — ${label}`,
     body: `${c?.name ?? "A client"} · nudged by ${p.name}`,
     href, icon: "⏰",
+    // Store the intent so the link is resolved fresh at click-time and never
+    // goes stale, even if the drafting screen moves.
+    link: client_id ? nudgeLink(label, client_id) : undefined,
   });
   await logAudit(p, "Clinician nudged", c?.name, label);
   revalidatePath(`/clients/${client_id}`);
@@ -2997,12 +3001,21 @@ export async function markAllNotificationsRead() {
 // mark one read, then go to its target
 export async function openNotification(formData: FormData) {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const me = await getProfile();
   const id = String(formData.get("id"));
-  const href = String(formData.get("href") || "");
-  if (user) await supabase.from("notifications").update({ read: true }).eq("id", id).eq("user_id", user.id);
+  const fallbackHref = String(formData.get("href") || "");
+  // Resolve the destination fresh from the stored intent (link_kind/link_ref) so
+  // a reminder always opens the current screen, even if that screen has since
+  // moved. Falls back to the frozen href for notifications without an intent.
+  let target = fallbackHref;
+  if (me) {
+    const { data: n } = await supabase.from("notifications").select("href, link_kind, link_ref").eq("id", id).eq("user_id", me.id).maybeSingle();
+    const row = n as { href: string | null; link_kind: string | null; link_ref: string | null } | null;
+    target = resolveNotificationTarget(row?.link_kind ?? null, row?.link_ref ?? null) ?? row?.href ?? fallbackHref;
+    await supabase.from("notifications").update({ read: true }).eq("id", id).eq("user_id", me.id);
+  }
   revalidatePath("/", "layout");
-  if (href) redirect(href);
+  if (target) redirect(target);
 }
 
 // ---- HR: attendance / leave / payroll --------------------------------------
