@@ -463,7 +463,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                     <td style={{ padding: "8px 6px" }}><span style={{ background: cp.category === "membership" ? "var(--blue-bg)" : "var(--brand-tint)", color: cp.category === "membership" ? "var(--blue-text)" : "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600, textTransform: "capitalize" }}>{cp.category}</span></td>
                     <td style={{ padding: "8px 6px", color: "var(--muted)" }}>{cp.start_date ?? "—"}{cp.end_date ? ` → ${cp.end_date}` : ""}</td>
                     <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(cp.price ?? 0).toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "8px 6px" }}><span style={{ background: voided ? "var(--red-bg)" : live ? "var(--green-bg)" : "var(--neutral-bg)", color: voided ? "var(--red-text)" : live ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{voided ? "Void" : live ? "Active" : "Expired"}</span></td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: voided ? "var(--red-bg)" : live ? "var(--green-bg)" : "var(--neutral-bg)", color: voided ? "var(--red-text)" : live ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{voided ? "Removed" : live ? "Active" : "Expired"}</span></td>
                     {canVoidPackages && <td style={{ padding: "8px 6px", textAlign: "right" }}>{!voided && <VoidPackageButton clientId={params.id} packageRowId={cp.id} packageName={cp.package_name ?? "this package"} />}</td>}
                   </tr>
                 );

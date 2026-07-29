@@ -26,10 +26,10 @@ export default function VoidPackageButton({ clientId, packageRowId, packageName 
     return (
       <button
         onClick={() => setConfirming(true)}
-        title={`Void ${packageName}`}
+        title={`Remove ${packageName}`}
         style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 600, color: "var(--red-text)", cursor: "pointer" }}
       >
-        Void
+        Remove
       </button>
     );
   }
@@ -42,7 +42,7 @@ export default function VoidPackageButton({ clientId, packageRowId, packageName 
         disabled={pending}
         style={{ background: "var(--red-fill, #dc2626)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: pending ? "default" : "pointer" }}
       >
-        {pending ? "Voiding…" : "Confirm void"}
+        {pending ? "Removing…" : "Confirm remove"}
       </button>
       <button
         onClick={() => { setConfirming(false); setErr(null); }}

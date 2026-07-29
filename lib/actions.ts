@@ -1084,7 +1084,7 @@ export async function voidClientPackage(formData: FormData): Promise<{ ok: boole
     await supabase.from("invoices").update({ status: "Void" })
       .eq("client_id", client_id).eq("status", "Unpaid").ilike("description", `${r.package_name}%`);
   }
-  await logAudit(p, "Package voided", r.package_name ?? "package", client_id);
+  await logAudit(p, "Package removed", r.package_name ?? "package", client_id);
   revalidatePath(`/clients/${client_id}`);
   return { ok: true };
 }
