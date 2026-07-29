@@ -367,6 +367,16 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
         <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} />
       )}
+      {/* Schedule the strength-session block right here on Overview — front desk
+          doesn't have to hop to the Client Card tab. Shows only for PT /
+          Comprehensive clients who don't yet have sessions booked. */}
+      {!ro && canWrite(me?.role ?? "") && isPtOrComp && !hasScheduledSessions && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Strength sessions</div>
+          <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>Book this client&apos;s strength-session block — pick a trainer, start date and time.</div>
+          <ScheduleSessionsForm clientId={params.id} trainers={trainers} defaultTrainerId={assignedTrainerId} />
+        </div>
+      )}
       {/* Personal Info */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>Personal Info</div>
