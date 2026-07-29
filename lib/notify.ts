@@ -4,14 +4,17 @@
 
 type AnyClient = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
+type NotifInput = { title: string; body?: string; href?: string; icon?: string; link?: { kind: string; ref: string } };
+
 export async function notifyRoles(
   supabase: AnyClient,
   roles: string[],
-  n: { title: string; body?: string; href?: string; icon?: string },
+  n: NotifInput,
 ) {
   const { data } = await supabase.from("profiles").select("id").in("role", roles);
   const rows = ((data ?? []) as { id: string }[]).map((p) => ({
     user_id: p.id, title: n.title, body: n.body ?? null, href: n.href ?? null, icon: n.icon ?? "🔔",
+    link_kind: n.link?.kind ?? null, link_ref: n.link?.ref ?? null,
   }));
   if (rows.length) await supabase.from("notifications").insert(rows);
 }
@@ -32,7 +35,7 @@ export async function notifyRoles(
 export async function notifyStaff(
   supabase: AnyClient,
   staffId: string,
-  n: { title: string; body?: string; href?: string; icon?: string },
+  n: NotifInput,
 ): Promise<boolean> {
   const { data } = await supabase
     .from("profiles").select("id").eq("staff_id", staffId).limit(1);
@@ -41,6 +44,7 @@ export async function notifyStaff(
   await supabase.from("notifications").insert({
     user_id: prof.id, title: n.title, body: n.body ?? null,
     href: n.href ?? null, icon: n.icon ?? "🔔",
+    link_kind: n.link?.kind ?? null, link_ref: n.link?.ref ?? null,
   });
   return true;
 }

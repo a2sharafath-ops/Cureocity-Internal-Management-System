@@ -22,7 +22,7 @@ import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard"
 import TrialOutcomeActions from "@/components/TrialOutcomeActions";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import SubmitButton from "@/components/SubmitButton";
-import { startConsultFromAppointment } from "@/lib/actions";
+import { startConsultFromAppointment, markSessionComplete } from "@/lib/actions";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
@@ -117,7 +117,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // Trainer also has strength sessions (workouts) today.
   let sessToday: TodayItem[] = [];
   if (isTrainer) {
-    const { data: sd } = await supabase.from("sessions").select("id, hour, status, trainer_id, client_id, clients(name)").eq("date", today).eq("status", "scheduled").order("hour");
+    // Include completed sessions too — a done session must still show (with a ✓),
+    // otherwise the trainer can't tell whether it happened; it just disappears.
+    const { data: sd } = await supabase.from("sessions").select("id, hour, status, trainer_id, client_id, clients(name)").eq("date", today).neq("status", "cancelled").order("hour");
     sessToday = ((sd ?? []) as unknown as { id: string; hour: number | null; status: string; trainer_id: string | null; client_id: string | null; clients: { name: string } | null }[])
       .filter((s) => scopeToStaff ? s.trainer_id === me.staffId : true)
       .map((s) => ({ id: s.id, hour: s.hour, client_id: s.client_id, client_name: s.clients?.name ?? null, status: s.status, provider_id: s.trainer_id, isSession: true }));
@@ -393,6 +395,16 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                       <div style={{ color: "var(--muted)", fontSize: 12 }}>{detail}</div>
                     </div>
                     <b style={{ fontSize: 13 }}>{fmtHour(a.hour)}</b>
+                    {a.isSession && (
+                      <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap", ...(a.status === "completed" ? { background: "var(--green-bg)", color: "var(--green-text)" } : { background: "var(--amber-bg)", color: "var(--amber-text)" }) }}>{a.status === "completed" ? "✓ Done" : "Pending"}</span>
+                    )}
+                    {!readOnly && a.isSession && a.status !== "completed" && a.client_id && (
+                      <form action={markSessionComplete} style={{ margin: 0 }}>
+                        <input type="hidden" name="id" value={a.id} />
+                        <input type="hidden" name="client_id" value={a.client_id} />
+                        <SubmitButton pendingLabel="Saving…" style={{ border: "1px solid var(--ink)", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Mark done</SubmitButton>
+                      </form>
+                    )}
                     {!readOnly && !a.isSession && a.status === "scheduled" && a.client_id && (
                       <form action={startConsultFromAppointment} style={{ margin: 0 }}>
                         <input type="hidden" name="appointment_id" value={a.id} />

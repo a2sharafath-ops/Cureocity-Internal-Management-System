@@ -7,6 +7,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import AppointmentsView, { type ViewAppt, type Provider, type Unsched } from "@/components/AppointmentsView";
+import { isInitialApptType } from "@/lib/appt-match";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ function disciplineOf(s: StaffRow): string {
   return "Other";
 }
 
-export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string; client?: string; disc?: string } }) {
+export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string; client?: string; disc?: string; back?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/appointments")) redirect("/dashboard");
 
@@ -45,14 +46,17 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const supabase = createClient();
-  const [apptsR, clientsR, staffR, tasksR, assignsR] = await Promise.all([
+  const [apptsR, clientsR, staffR, tasksR, assignsR, servicesR] = await Promise.all([
     supabase.from("appointments").select("id, client_id, type, title, date, hour, duration_min, status, provider_id, clients(id, name), staff(name)").gte("date", weekStart).lte("date", weekEnd).order("hour"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("staff").select("id, name, designation, department, color, is_trainer, role").order("name"),
     // Open "Book …" tasks = appointments that are due but not yet on the diary.
     supabase.from("tasks").select("id, client_id, title, due_date").neq("status", "done").ilike("title", "Book %").order("due_date").limit(2000),
     supabase.from("client_assignments").select("client_id, discipline, staff_id"),
+    // The master service catalogue drives the bookable "Type" options.
+    supabase.from("services").select("name, category").eq("active", true).order("category").order("name"),
   ]);
+  const serviceTypes = (servicesR.data ?? []) as { name: string; category: string }[];
   const raw = (apptsR.data ?? []) as unknown as Appt[];
   const clients = (clientsR.data ?? []) as { id: string; name: string }[];
   const staffRows = (staffR.data ?? []) as StaffRow[];
@@ -70,6 +74,16 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const DISC_KEY: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", Psychologist: "psychologist", "Health Coach": "coach", "Fitness Trainer": "trainer" };
   const CATEGORY_OF: Record<string, string> = { Doctor: "Doctor Consultation", Dietitian: "Diet Consultation", Psychologist: "Counselling", "Health Coach": "Coaching", "Fitness Trainer": "Fitness Services" };
 
+  // client id → { discipline display name → assigned staff id }, for the booking
+  // form to auto-fill the provider once a client + discipline are chosen.
+  const KEY_TO_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", psychologist: "Psychologist", coach: "Health Coach", trainer: "Fitness Trainer" };
+  const careTeamByClient: Record<string, Record<string, string>> = {};
+  for (const [cid, rec] of assignByClient) {
+    const out: Record<string, string> = {};
+    for (const [k, sid] of Object.entries(rec)) { const d = KEY_TO_DISC[k]; if (d) out[d] = sid; }
+    careTeamByClient[cid] = out;
+  }
+
   // Providers = care-team members that map to a booking discipline.
   const providers: Provider[] = staffRows
     .map((s) => ({ id: s.id, name: s.name, color: s.color ?? "#e11f34", discipline: disciplineOf(s) }))
@@ -86,10 +100,13 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   // letting front desk submit into an error.
   const providerKind: Record<string, string> = {};
   for (const s of staffRows) { const k = ROLE_TO_KIND[s.role ?? ""]; if (k) providerKind[s.id] = k; }
+  // Initial consults now carry service-name types ("Initial Diet Consultation"),
+  // so filter in JS via isInitialApptType rather than a fixed type list.
   const { data: initR } = await supabase.from("appointments")
-    .select("client_id, provider_id, type").in("type", ["Consultation", "Assessment"]).neq("status", "cancelled");
+    .select("client_id, provider_id, type").neq("status", "cancelled");
   const bookedKinds: Record<string, string[]> = {};
   for (const a of (initR ?? []) as { client_id: string; provider_id: string | null; type: string | null }[]) {
+    if (!isInitialApptType(a.type)) continue;
     const k = a.provider_id ? providerKind[a.provider_id] : null;
     if (!k) continue;
     (bookedKinds[a.client_id] ??= []);
@@ -151,22 +168,31 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["appointments"]} />
 
-      {focusClientId && (
+      {focusClientId && (() => {
+        // Return to whichever client tab the booking was launched from. The
+        // Service Timeline passes ?back=timeline; everything else (the Overview
+        // "Upcoming" panel, dashboard flags) returns to Overview.
+        const backTab = searchParams.back === "timeline" ? "timeline" : "overview";
+        const backLabel = backTab === "timeline" ? "Service Timeline" : "Overview";
+        return (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 14 }}>
-          <Link href={`/clients/${focusClientId}?tab=timeline`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
-            ← Back to Service Timeline
+          <Link href={`/clients/${focusClientId}?tab=${backTab}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+            ← Back to {backLabel}
           </Link>
           <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
             Booking for <b style={{ color: "var(--ink)" }}>{focusClientName ?? "this client"}</b> — schedule this appointment, then head back to book the rest of their journey.
           </span>
         </div>
-      )}
+        );
+      })()}
 
       <AppointmentsView
         today={today} days={days} hours={HOURS} appts={appts} providers={providers} clients={clients} unscheduled={unscheduled}
         weekLabel={weekLabel} prevHref={`/appointments?week=${offset - 1}`} nextHref={`/appointments?week=${offset + 1}`} isThisWeek={offset === 0}
         statusByClient={statusByClient}
         providerKind={providerKind} bookedKinds={bookedKinds}
+        serviceTypes={serviceTypes}
+        careTeamByClient={careTeamByClient}
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>

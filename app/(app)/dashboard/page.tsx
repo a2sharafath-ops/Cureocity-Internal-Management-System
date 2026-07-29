@@ -10,6 +10,8 @@ import FinanceDashboard from "@/components/FinanceDashboard";
 import HrDashboard from "@/components/HrDashboard";
 import AttentionPanel from "@/components/AttentionPanel";
 import { frontDeskFlags } from "@/lib/frontdesk-attention";
+import TodayAgenda from "@/components/TodayAgenda";
+import { todayAgenda } from "@/lib/today-agenda";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
@@ -101,7 +103,6 @@ export default async function DashboardPage() {
   const trainToday = sessions.filter((s) => s.status === "scheduled");
   const revenue = paid.reduce((s, i) => s + Number(i.amount), 0);
   const checkedIn = sessions.filter((s) => s.status === "completed").length;
-  const scheduleTotal = scheduledAppts.length + sessions.length;
   const fuOverdue = fuOverdueC.count ?? 0;
   const fuToday = (fuTodayRes.data ?? []) as { id: string; priority: string }[];
   const fuMandatory = fuToday.filter((f) => f.priority === "mandatory").length;
@@ -144,7 +145,8 @@ export default async function DashboardPage() {
   }
 
   // ---- Ops view (Admin / Manager / Front Desk) — mirrors the prototype ----
-  const fdFlags = await frontDeskFlags(TODAY);
+  const [fdFlags, agenda] = await Promise.all([frontDeskFlags(TODAY), todayAgenda(TODAY)]);
+  const agendaDate = new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["sessions", "appointments", "leads", "consultations", "invoices", "subscriptions"]} />
@@ -179,35 +181,8 @@ export default async function DashboardPage() {
 
       {/* two-column body */}
       <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16 }}>
-        {/* Today's schedule */}
-        <div style={{ ...card, padding: "16px 18px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <b style={{ fontSize: 15 }}>Today’s Schedule — {new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })}</b>
-            <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 600 }}>{scheduleTotal} total</span>
-            <span style={{ flex: 1 }} />
-            <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 }}>Calendar →</Link>
-          </div>
-
-          <div style={sectionTitle}>Consultations &amp; Assessments ({scheduledAppts.length})</div>
-          {scheduledAppts.length ? scheduledAppts.map((a) => (
-            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--border)" }}>
-              <span style={{ width: 80, color: "var(--muted)", fontSize: 13 }}>{fmtHour(a.hour)}</span>
-              {a.clients ? <Link href={`/clients/${a.clients.id}`} style={{ fontWeight: 600, fontSize: 14, textDecoration: "none", color: "inherit" }}>{a.clients.name}</Link> : "—"}
-              <span style={{ flex: 1 }} />
-              <span style={{ color: "var(--muted)", fontSize: 12 }}>{a.type ?? "Consultation"}</span>
-            </div>
-          )) : <div style={{ color: "var(--muted)", fontSize: 13, padding: "10px 0 16px", textAlign: "center" }}>No consultations today</div>}
-
-          <div style={{ ...sectionTitle, marginTop: 16 }}>Strength Sessions Today ({sessions.length})</div>
-          {sessions.length ? sessions.map((s) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: "1px solid var(--border)" }}>
-              <span style={{ width: 80, color: "var(--muted)", fontSize: 13 }}>{fmtHour(s.hour)}</span>
-              {s.clients ? <Link href={`/clients/${s.clients.id}`} style={{ fontWeight: 600, fontSize: 14, textDecoration: "none", color: "inherit" }}>{s.clients.name}</Link> : "—"}
-              <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: s.status === "completed" ? "var(--green-text)" : "var(--muted)" }}>{s.status === "completed" ? "✓ checked in" : s.staff?.name ?? ""}</span>
-            </div>
-          )) : <div style={{ color: "var(--muted)", fontSize: 13, padding: "10px 0 6px", textAlign: "center" }}>No training sessions today</div>}
-        </div>
+        {/* Today's agenda — appointments, sessions, follow-ups & care deadlines */}
+        <TodayAgenda agenda={agenda} dateLabel={agendaDate} />
 
         {/* right column */}
         <div style={{ display: "grid", gap: 16, alignContent: "start" }}>

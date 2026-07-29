@@ -23,6 +23,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PackageStatusPanel from "@/components/PackageStatusPanel";
 import { getPackageStatus } from "@/lib/package-status";
+import { isInitialApptType } from "@/lib/appt-match";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
 import RenewMembership from "@/components/RenewMembership";
@@ -152,6 +153,10 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const compView = await getComprehensiveView(params.id);
   const pkgStatus = await getPackageStatus(params.id);
   const ptView = await getPTView(params.id);
+  // Service catalogue — lets the protocol boards' "Book →" pre-fill the exact
+  // milestone service, not just the discipline.
+  const { data: svcRows } = await supabase.from("services").select("name, category, day_offset");
+  const bookServices = (svcRows ?? []) as { name: string; category: string; day_offset: number | null }[];
   const prescriptions = (rxData ?? []) as unknown as {
     id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
     prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -290,12 +295,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // appointments — a booked-but-not-started consult has no `consultations` row,
   // so relying on that table alone made a scheduled consult read "not scheduled".
   const A_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
-  const INITIAL_APPT_TYPES = ["Consultation", "Assessment"];
   const apptSched = new Set<string>();
   const apptDone = new Set<string>();
   for (const a of (apptData ?? []) as unknown as { type: string | null; status: string; staff: { role: string } | null }[]) {
     const kind = A_ROLE_TO_KIND[a.staff?.role ?? ""];
-    if (!kind || !INITIAL_APPT_TYPES.includes(a.type ?? "Consultation")) continue;
+    if (!kind || !isInitialApptType(a.type)) continue;
     if (a.status === "completed") apptDone.add(kind); else apptSched.add(kind);
   }
   const hasConsult = (kind: string) => consults.some((c) => c.kind === kind && c.status === "completed") || apptDone.has(kind);
@@ -531,7 +535,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 <div style={{ fontSize: 11.5, color: "var(--brand-text)", marginTop: 2 }}>{m.when}</div>
               </div>
               {m.bookDisc && m.state === "pending" && !ro && canWrite(me?.role ?? "") && (
-                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}`}
+                <a href={`/appointments?client=${params.id}&disc=${encodeURIComponent(m.bookDisc)}&back=timeline`}
                   style={{ alignSelf: "center", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
                   Book →
                 </a>
@@ -878,11 +882,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       )}
 
       {compView && (
-        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
+        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} services={bookServices} />
       )}
 
       {ptView && (
-        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} />
+        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} services={bookServices} />
       )}
 
       {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still

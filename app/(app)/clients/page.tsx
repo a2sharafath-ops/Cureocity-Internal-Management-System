@@ -65,9 +65,14 @@ export default async function ClientsPage() {
   for (const b of (bloodAll ?? []) as { client_id: string; panel: string | null; submitted: boolean }[]) {
     (bloodPanelBy.get(b.client_id) ?? bloodPanelBy.set(b.client_id, new Map()).get(b.client_id)!).set(b.panel ?? "blueprint", b.submitted);
   }
+  // Keep raw appointment types; the journey builder resolves service ↔ milestone
+  // itself (a manually-booked "10th Day Diet Followup" counts against its
+  // milestone even when booked early).
+  const { data: svcData } = await supabase.from("services").select("name, category, day_offset");
+  const journeyServices = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
   const apptBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (apptAll ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
-    (apptBy.get(a.client_id) ?? apptBy.set(a.client_id, []).get(a.client_id)!).push(a);
+    (apptBy.get(a.client_id) ?? apptBy.set(a.client_id, []).get(a.client_id)!).push({ type: a.type, date: a.date, status: a.status });
   }
   // Day-2 diet chart explanation closed (booked / completed / no-consult).
   const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
@@ -127,7 +132,7 @@ export default async function ClientsPage() {
       blueprintGenerated: st?.journeySteps.some((s) => s.label.includes("BluePrint generated") && s.done) ?? false,
       sessionsTotal: sess.total, sessionsDone: sess.done, sessionScheduled: sess.scheduled,
       startDate: cpDate?.start_date ?? null, endDate: cpDate?.end_date ?? null,
-      appts: apptBy.get(c.id) ?? [], today,
+      appts: apptBy.get(c.id) ?? [], services: journeyServices, today,
     });
     const steps = fullSteps.length ? fullSteps : (st?.journeySteps ?? [{ label: "Package sold", done: c.package_id != null }]);
     const doneCount = steps.filter((s) => s.done).length;

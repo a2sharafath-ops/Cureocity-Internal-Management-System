@@ -10,6 +10,8 @@ import MetricCard from "@/components/MetricCard";
 import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { careWorkFlags } from "@/lib/care-attention";
+import TodayAgenda from "@/components/TodayAgenda";
+import { todayAgenda } from "@/lib/today-agenda";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -29,6 +31,7 @@ function fmtHour(h: number | null) {
 export default async function ManagerDashboard({ name }: { name: string }) {
   const supabase = createClient();
   const today = todayISO();
+  const agenda = await todayAgenda(today);
   const month = today.slice(0, 7);
   const monthStart = month + "-01";
   const overdueCut = addDays(today, -7);
@@ -190,6 +193,12 @@ export default async function ManagerDashboard({ name }: { name: string }) {
         <MetricCard value={fuToday.length} label="Follow-ups due" href="/followups"
           meter={{ of: fuToday.length || 1, filled: fuDone }}
           sub={fuToday.length ? `${fuToday.length - fuDone} overdue` : "all clear"} />
+      </div>
+
+      {/* Itemised agenda: appointments, sessions, follow-ups (incl. the Day-2
+          diet chart explanation) and care deadlines due today, each actionable. */}
+      <div style={{ marginBottom: 20 }}>
+        <TodayAgenda agenda={agenda} dateLabel={new Date(today + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })} />
       </div>
 
       {/* 4 — GROWTH */}

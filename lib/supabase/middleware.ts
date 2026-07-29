@@ -49,9 +49,13 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the session JWT *locally* (using the project's signing
+  // keys) and only makes a network call when it has to — unlike getUser(), which
+  // hits Supabase Auth on every request. This runs on every navigation, so the
+  // saved round-trip is a direct cut to per-click latency. Data is still fully
+  // protected: RLS gates every query and each page re-resolves the profile.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const path = request.nextUrl.pathname;
   const isLogin = path === "/login";

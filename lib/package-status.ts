@@ -9,6 +9,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
@@ -123,11 +124,18 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     const comp = active.find((c) => c.category === "comprehensive");
     const start = proto?.start_date ?? comp?.start_date ?? null;
     if (start) {
+      // Resolve each booking's type to its service category so a manually-booked
+      // service ("10th Day Diet Followup") counts against its milestone; and use
+      // the catalogue (name/category/day) to build a pre-filled Book link.
+      const { data: svcData } = await sb.from("services").select("name, category, day_offset");
+      const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
+      const catOf = makeCatOf(services);
       const spanDays = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
       for (const m of milestoneDates(start, cyclesFor(spanDays))) {
-        const satisfied = (appts ?? []).some((a: { type: string | null; date: string | null; status: string }) => a.type === m.apptType && a.date && a.date >= m.fromDate && (a.status === "completed" || a.status === "scheduled"));
+        const svc = serviceForMilestone(m.apptType, m.from, services);
+        const satisfied = milestoneSatisfied((appts ?? []) as { type: string | null; date: string | null; status: string }[], { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
         if (satisfied) continue;
-        const bookHref = `/appointments?client=${clientId}`;
+        const bookHref = milestoneBookHref(clientId, m.apptType, m.from, services);
         if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: bookHref, tone: "warn" });
         else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: bookHref, tone: "info" });
       }

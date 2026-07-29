@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import RouteProgress from "@/components/RouteProgress";
 import RolePreview from "@/components/RolePreview";
 import HeaderTitle from "@/components/HeaderTitle";
 import NotificationBell from "@/components/NotificationBell";
@@ -33,6 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
+      <Suspense fallback={null}><RouteProgress /></Suspense>
       <Sidebar role={role} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Floating glass header.

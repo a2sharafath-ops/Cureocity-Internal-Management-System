@@ -23,6 +23,10 @@ export default function Loading() {
     <div style={{ maxWidth: 1120 }} aria-busy="true" aria-live="polite">
       <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>Loading</span>
 
+      {/* The floating "notch" badge is rendered by <RouteProgress> in the app
+          layout so it also covers same-page (tab / filter) navigations. This
+          server boundary just shows the content skeleton below. */}
+
       <div style={bar(180, 20)} />
       <div style={bar(300, 12, 10)} />
 
