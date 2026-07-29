@@ -24,15 +24,28 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("blood_requests").select("client_id, panel, submitted"),
     sb.from("blueprints").select("client_id, generated"),
     sb.from("care_protocols").select("client_id, start_date, approved_at").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
-    sb.from("appointments").select("client_id, type, date, status").neq("status", "cancelled"),
+    sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
   ]);
 
   // Who owns each clinician deliverable, so ops can nudge them from the dashboard.
+  // Prefer the formal care-team assignment; fall back to the clinician who
+  // actually ran the completed consult (the appointment provider) — so a client
+  // whose care team was never explicitly assigned can still be reminded.
   const { data: asg } = await sb.from("client_assignments").select("client_id, discipline, staff_id, staff:staff_id(name)");
   const ownerBy = new Map<string, { id: string; name: string }>();
   for (const a of (asg ?? []) as unknown as { client_id: string; discipline: string; staff_id: string | null; staff: { name: string } | null }[]) {
     if (a.staff_id) ownerBy.set(`${a.client_id}|${a.discipline}`, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
   }
+  const ROLE_TO_DISC: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer", "Health Coach": "coach", Psychologist: "psychologist" };
+  const fallbackOwner = new Map<string, { id: string; name: string }>();
+  for (const a of (appts ?? []) as unknown as { client_id: string; status: string; provider_id: string | null; staff: { name: string; role: string } | null }[]) {
+    if (a.status !== "completed" || !a.provider_id || !a.staff) continue;
+    const disc = ROLE_TO_DISC[a.staff.role];
+    if (!disc) continue;
+    const key = `${a.client_id}|${disc}`;
+    if (!fallbackOwner.has(key)) fallbackOwner.set(key, { id: a.provider_id, name: a.staff.name });
+  }
+  const ownerFor = (clientId: string, disc: string) => ownerBy.get(`${clientId}|${disc}`) ?? fallbackOwner.get(`${clientId}|${disc}`);
   const firstName = (n: string) => n.split(" ")[0];
   // Service catalogue → category resolver + pre-filled Book links.
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
@@ -74,11 +87,11 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       const sub = bloodBy.get(clientId)?.get("comprehensive");
       if (sub === false) flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: "Requested, awaiting the client", href: clientHref, cta: "View" });
       if (done.has("Diet") && !hasChart.has(clientId)) {
-        const o = ownerBy.get(`${clientId}|dietitian`);
+        const o = ownerFor(clientId, "dietitian");
         flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted" } : undefined });
       }
       if (done.has("Trainer") && !hasWorkout.has(clientId)) {
-        const o = ownerBy.get(`${clientId}|trainer`);
+        const o = ownerFor(clientId, "trainer");
         flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: o ? `Remind ${firstName(o.name)}` : "View", nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created" } : undefined });
       }
       // Overdue calendar milestones (bookings that never got made).
