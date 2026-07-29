@@ -1074,16 +1074,67 @@ export async function voidClientPackage(formData: FormData): Promise<{ ok: boole
 
   const supabase = createClient();
   const { data: row } = await supabase.from("client_packages")
-    .select("package_name, status").eq("id", rowId).maybeSingle();
+    .select("package_name, category, package_id, status").eq("id", rowId).maybeSingle();
   if (!row) return { ok: false, error: "Package not found" };
-  const r = row as { package_name: string | null; status: string };
+  const r = row as { package_name: string | null; category: string; package_id: string | null; status: string };
   if (r.status === "void") return { ok: true };
 
+  // Soft-cancel the package line (kept, struck-through, for the audit trail).
   await supabase.from("client_packages").update({ status: "void" }).eq("id", rowId);
+
+  // 1. Remove any not-yet-paid invoice for this package entirely — a removed
+  //    package must not leave an invoice sitting there to be marked paid. Paid
+  //    invoices are left alone (money received → that needs a refund, not this).
   if (r.package_name && client_id) {
-    await supabase.from("invoices").update({ status: "Void" })
-      .eq("client_id", client_id).eq("status", "Unpaid").ilike("description", `${r.package_name}%`);
+    await supabase.from("invoices").delete()
+      .eq("client_id", client_id).neq("status", "Paid").ilike("description", `${r.package_name}%`);
   }
+
+  // 2. If this membership is also the legacy clients.package_id, clear that
+  //    field too — otherwise the "Active membership" badge stays lit.
+  if (r.category === "membership" && client_id && r.package_id) {
+    const { data: cli } = await supabase.from("clients").select("package_id").eq("id", client_id).maybeSingle();
+    if ((cli as { package_id: string | null } | null)?.package_id === r.package_id) {
+      await supabase.from("clients").update({ package_id: null }).eq("id", client_id);
+    }
+  }
+
+  // 3. Care-journey cascade. A journey package (Comprehensive / PT / BluePrint)
+  //    kicks off a protocol, bookings, sessions, follow-ups and a blood request;
+  //    removing the package must clear those so nothing is left "open now" or
+  //    "upcoming". Shared, package-untagged artifacts (sessions/tasks/follow-ups/
+  //    blood/care-team) are only cleared when the client has NO other active
+  //    journey package, so we never strip a second journey's work by mistake.
+  if (["comprehensive", "training", "blueprint"].includes(r.category) && client_id) {
+    const { data: allCps } = await supabase.from("client_packages")
+      .select("id, category, status").eq("client_id", client_id);
+    const otherJourney = ((allCps ?? []) as { id: string; category: string; status: string }[])
+      .some((x) => x.id !== rowId && x.status === "active" && ["comprehensive", "training", "blueprint"].includes(x.category));
+
+    // Protocol + its SLA markers are tied to this exact category, so always safe.
+    if (r.category === "comprehensive" || r.category === "training") {
+      await supabase.from("care_protocols").update({ status: "cancelled" })
+        .eq("client_id", client_id).eq("protocol", r.category).eq("status", "active");
+      await supabase.from("blueprint_sla_events").delete()
+        .eq("client_id", client_id).eq("protocol", r.category);
+    }
+
+    if (!otherJourney) {
+      // Scheduled / missed strength sessions (completed ones kept as history).
+      await supabase.from("sessions").delete().eq("client_id", client_id).neq("status", "completed");
+      // Auto-generated booking/journey tasks still open.
+      await supabase.from("tasks").delete().eq("client_id", client_id).eq("created_by", "auto").neq("status", "done");
+      // Journey follow-ups (diet-chart explanation, meal monitoring, etc.).
+      await supabase.from("followups").delete().eq("client_id", client_id);
+      // The blood panel this journey requested.
+      const panel = r.category === "comprehensive" ? "comprehensive" : r.category === "blueprint" ? "blueprint" : null;
+      if (panel) await supabase.from("blood_requests").delete().eq("client_id", client_id).eq("panel", panel);
+      // Care-team assignments + the denormalised primary pro.
+      await supabase.from("client_assignments").delete().eq("client_id", client_id);
+      await supabase.from("clients").update({ pro_id: null }).eq("id", client_id);
+    }
+  }
+
   await logAudit(p, "Package removed", r.package_name ?? "package", client_id);
   revalidatePath(`/clients/${client_id}`);
   return { ok: true };
