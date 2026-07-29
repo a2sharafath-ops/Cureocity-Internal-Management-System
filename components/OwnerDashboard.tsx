@@ -32,6 +32,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     { data: clientData }, { data: pkgData }, { data: invData }, { data: sessData },
     { data: apptData }, { data: leadData }, { data: bloodData }, { data: bpData },
     { data: subData }, { data: auditData }, { data: attData }, { data: staffData },
+    { data: cpData },
   ] = await Promise.all([
     supabase.from("clients").select("id, code, name, phone, email, package_id, used, joined"),
     supabase.from("packages").select("id, name, price, sessions, validity, is_facility"),
@@ -45,6 +46,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     supabase.from("audit_log").select("actor_name, actor_role, action, target, created_at").order("created_at", { ascending: false }).limit(6),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("staff").select("id, name, is_trainer"),
+    supabase.from("client_packages").select("client_id, package_name, category, end_date, status").eq("status", "active"),
   ]);
 
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; phone: string | null; email: string | null; package_id: string | null; used: number | null; joined: string | null }[];
@@ -133,19 +135,28 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     }
   }
 
-  // 6. package expiring / expired with no active renewal
+  // 6. package expiring / expired with no active renewal — read the real
+  //    client_packages rows (the source of truth), not the legacy single
+  //    clients.package_id, so a removed/void package never nags and the actual
+  //    active package is the one that's checked.
   const activeSubClients = new Set(subs.filter((s) => s.status === "active").map((s) => s.client_id));
-  for (const c of clients) {
-    const p = c.package_id ? pkgs.get(c.package_id) : null;
-    if (!p || !p.validity || !c.joined || activeSubClients.has(c.id)) continue;
-    // BluePrint is a one-time report, not a time-bound subscription — its
-    // "validity" is just the report's shelf life, so never nag to renew it.
-    if (packageCategory(p.id, p.is_facility) === "blueprint") continue;
-    const expires = addDays(c.joined, p.validity);
-    if (expires < today) {
-      flags.push({ sev: "high", title: `${c.name} — package expired`, detail: `${p.name} ended ${expires} · no renewal in place`, href: `/clients/${c.id}`, cta: "Renew" });
-    } else if (expires <= in30) {
-      flags.push({ sev: "med", title: `${c.name} — package expiring`, detail: `${p.name} ends ${expires} · no renewal booked`, href: `/clients/${c.id}`, cta: "Renew" });
+  const nameById = new Map(clients.map((c) => [c.id, c.name]));
+  // BluePrint is a one-time report — never nag to renew it.
+  const RENEWABLE_FLAG = new Set(["membership", "training", "comprehensive"]);
+  const activeCps = ((cpData ?? []) as { client_id: string; package_name: string | null; category: string; end_date: string | null; status: string }[])
+    .filter((cp) => RENEWABLE_FLAG.has(cp.category) && cp.end_date);
+  for (const cp of activeCps) {
+    if (activeSubClients.has(cp.client_id)) continue;
+    // If a later-ending package of the same category is already in place, the
+    // client has effectively renewed — don't flag the earlier one.
+    const laterExists = activeCps.some((o) => o.client_id === cp.client_id && o.category === cp.category && (o.end_date ?? "") > (cp.end_date ?? ""));
+    if (laterExists) continue;
+    const nm = nameById.get(cp.client_id) ?? "A client";
+    const label = cp.package_name ?? cp.category;
+    if ((cp.end_date ?? "") < today) {
+      flags.push({ sev: "high", title: `${nm} — package expired`, detail: `${label} ended ${cp.end_date} · no renewal in place`, href: `/clients/${cp.client_id}`, cta: "Renew" });
+    } else if ((cp.end_date ?? "") <= in30) {
+      flags.push({ sev: "med", title: `${nm} — package expiring`, detail: `${label} ends ${cp.end_date} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
     }
   }
 
