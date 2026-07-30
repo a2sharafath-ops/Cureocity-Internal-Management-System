@@ -18,6 +18,7 @@ import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/
 import { assignCareTeam } from "@/lib/care-team";
 import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
 import { resolveNotificationTarget, nudgeLink } from "@/lib/notification-target";
+import { openaiComplete, type AiState } from "@/lib/ai";
 import { notifyRoles, notifyStaff } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
@@ -5456,6 +5457,104 @@ export async function deleteDietChart(formData: FormData) {
   await supabase.from("diet_charts").delete().eq("id", id);
   await logAudit(p, "Diet chart deleted", id, null);
   revalidatePath("/workspace");
+}
+
+// ---- AI assist (OpenAI) — dietitian summaries & drafts ----------------------
+// All read structured data already in Cureocity (no PDF upload) and return text
+// the dietitian reviews before using. Gated to consult-capable roles.
+
+type MeasRow = { date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; resting_hr: number | null };
+const fmtMeas = (m: MeasRow) => `${m.date}: weight ${m.weight ?? "—"}kg · BMI ${m.bmi ?? "—"} · body fat ${m.body_fat ?? "—"}% · skeletal muscle ${m.muscle_mass ?? "—"}kg · visceral fat ${m.visceral_fat ?? "—"} · waist ${m.waist ?? "—"}cm · hip ${m.hip ?? "—"}cm · resting HR ${m.resting_hr ?? "—"}`;
+
+export async function aiInbodySummary(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Pick a client first." };
+  const supabase = createClient();
+  const { data } = await supabase.from("measurements")
+    .select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr")
+    .eq("client_id", client_id).order("date", { ascending: false }).limit(2);
+  const rows = (data ?? []) as MeasRow[];
+  if (!rows.length) return { error: "No InBody / measurements recorded for this client yet." };
+  const user = `Latest InBody — ${fmtMeas(rows[0])}` + (rows[1] ? `\nPrevious InBody — ${fmtMeas(rows[1])}` : "");
+  return openaiComplete(
+    "You are a clinical dietitian assistant. Summarise a client's InBody / body-composition reading for the care team in 4–6 short lines: highlight the key metrics, note the change vs the previous reading if one is given (direction and magnitude), and add 2–3 concise practical observations. Plain text, no markdown headings.",
+    user,
+  );
+}
+
+export async function aiConsultSummary(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Pick a client first." };
+  const supabase = createClient();
+  const [{ data: cons }, { data: forms }, { data: cli }] = await Promise.all([
+    supabase.from("consultations").select("kind, status, notes, summary, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(4),
+    supabase.from("form_responses").select("answers, status, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
+    supabase.from("clients").select("goals, conditions").eq("id", client_id).maybeSingle(),
+  ]);
+  const consults = (cons ?? []) as { kind: string; status: string; notes: string | null; summary: string | null }[];
+  const answers = (forms ?? []) as { answers: Record<string, unknown> }[];
+  const c = cli as { goals: string[] | null; conditions: string | null } | null;
+  if (!consults.length && !answers.length) return { error: "No consultation notes or questionnaire answers found for this client." };
+  const parts: string[] = [];
+  if (c?.goals?.length) parts.push(`Goals: ${c.goals.join(", ")}`);
+  if (c?.conditions) parts.push(`Conditions: ${c.conditions}`);
+  for (const cn of consults) parts.push(`${cn.kind} consult (${cn.status})${cn.summary ? ` — ${cn.summary}` : ""}${cn.notes ? ` · notes: ${cn.notes}` : ""}`);
+  for (const a of answers) parts.push(`Questionnaire answers: ${JSON.stringify(a.answers).slice(0, 1500)}`);
+  return openaiComplete(
+    "You are a clinical assistant. Write a clear, shareable consultation summary for a client from the notes and questionnaire answers provided. Cover: presenting goals/concerns, relevant history, key findings, and the plan/next steps. Neutral clinical tone, tidy short paragraphs or bullet lines.",
+    parts.join("\n"),
+  );
+}
+
+export async function aiDietDraft(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Pick a client first." };
+  const supabase = createClient();
+  const [{ data: cons }, { data: forms }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
+    supabase.from("consultations").select("kind, summary, notes").eq("client_id", client_id).eq("status", "completed"),
+    supabase.from("form_responses").select("answers").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
+    supabase.from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr").eq("client_id", client_id).order("date", { ascending: false }).limit(1),
+    supabase.from("clients").select("name, goals, conditions").eq("id", client_id).maybeSingle(),
+    supabase.from("client_workouts").select("name, type, mode, items").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1),
+  ]);
+  const c = cli as { name: string; goals: string[] | null; conditions: string | null } | null;
+  const parts: string[] = [];
+  if (c) parts.push(`Client: ${c.name}${c.goals?.length ? ` · goals: ${c.goals.join(", ")}` : ""}${c.conditions ? ` · conditions: ${c.conditions}` : ""}`);
+  const mrows = (meas ?? []) as MeasRow[];
+  if (mrows[0]) parts.push(`InBody — ${fmtMeas(mrows[0])}`);
+  for (const cn of ((cons ?? []) as { kind: string; summary: string | null; notes: string | null }[])) parts.push(`${cn.kind} consult: ${cn.summary ?? cn.notes ?? "—"}`);
+  for (const a of ((forms ?? []) as { answers: Record<string, unknown> }[])) parts.push(`Questionnaire: ${JSON.stringify(a.answers).slice(0, 1200)}`);
+  const w = (wk ?? [])[0] as { name: string; type: string; mode: string; items: unknown } | undefined;
+  if (w) parts.push(`Fitness plan: ${w.name} (${w.type}, ${w.mode})`);
+  if (parts.length <= 1) return { error: "Not enough client data yet (need consults / InBody / questionnaire)." };
+  return openaiComplete(
+    "You are an expert clinical dietitian. Draft a first-cut daily diet chart the dietitian will review and tweak. Use these meal slots in order: Early Morning, Breakfast, Mid-Morning, Lunch, Evening, Dinner. For each, give a concrete Indian-friendly suggestion with rough portions. Then add a line 'Calories: ~X kcal/day' and 'Protein target: ~X g'. Keep it practical and aligned to the goals, conditions, InBody and fitness plan given. Plain text.",
+    parts.join("\n"),
+    { maxTokens: 900 },
+  );
+}
+
+export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  const date = String(formData.get("date") || todayISO());
+  if (!client_id) return { error: "Pick a client first." };
+  const supabase = createClient();
+  const { data } = await supabase.from("meal_logs").select("meal, description, review, doubt, doubt_answer").eq("client_id", client_id).eq("date", date);
+  const logs = (data ?? []) as { meal: string; description: string | null; review: string | null; doubt: string | null; doubt_answer: string | null }[];
+  if (!logs.length) return { error: `No meals logged for ${date}.` };
+  const user = `Meals logged on ${date}:\n` + logs.map((l) => `- ${l.meal}: ${l.description ?? "—"}${l.review ? ` [dietitian: ${l.review}]` : ""}${l.doubt ? ` [client asked: ${l.doubt}${l.doubt_answer ? ` → ${l.doubt_answer}` : ""}]` : ""}`).join("\n");
+  return openaiComplete(
+    "You are a friendly dietitian. Turn a client's logged meals for the day into a short, encouraging daily summary to send them: a compact meal-by-meal table (Meal | What you had | Note), then 2–3 lines of overall feedback and one gentle suggestion for tomorrow. Warm, concise.",
+    user,
+  );
 }
 
 export async function addRecipe(formData: FormData) {
