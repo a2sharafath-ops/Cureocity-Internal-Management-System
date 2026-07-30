@@ -11,6 +11,7 @@ import SegTabs from "@/components/SegTabs";
 import MetricCard from "@/components/MetricCard";
 import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClients";
 import MealMonitoringSection from "@/components/MealMonitoringSection";
+import BlueprintSection from "@/components/BlueprintSection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
@@ -226,7 +227,11 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   let consultSummaries: ConsultSummary[] = [];
   let consolidated: ConsolidatedRow[] = [];
   if (tab === "summaries") {
-    const bpClients = allClients.filter((c) => c.package_id === "bp1");
+    // BluePrint clients from client_packages (category blueprint), not the legacy
+    // clients.package_id === "bp1" hardcode.
+    const { data: bpCp } = await supabase.from("client_packages").select("client_id").eq("status", "active").eq("category", "blueprint");
+    const bpIdSet = new Set(((bpCp ?? []) as { client_id: string }[]).map((r) => r.client_id));
+    const bpClients = allClients.filter((c) => bpIdSet.has(c.id));
     const bpIds = bpClients.map((c) => c.id);
     const [{ data: cs }, signoffRes, bpRes, asgRes, signRes] = await Promise.all([
       supabase.from("consultations").select("id, client_id, summary, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),
@@ -489,6 +494,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MEAL MONITORING (dietitian) ---- */}
       {tab === "meals" && <MealMonitoringSection me={me} date={searchParams.d} />}
+
+      {/* ---- BLUEPRINT SIGN-OFF ---- */}
+      {tab === "bp" && <BlueprintSection me={me} />}
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} canStartAny={["Super Admin", "Administrator", "Manager"].includes(me.role) && !readOnly} />}
