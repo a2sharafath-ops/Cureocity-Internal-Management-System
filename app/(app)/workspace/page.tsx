@@ -96,6 +96,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const wsDiscKey = ({ doctor: "doctor", diet: "dietitian", trainer: "trainer", coach: "coach", psych: "psychologist" } as Record<string, string>)[roleKey];
   const { data: asgData } = await supabase.from("client_assignments").select("client_id").eq("discipline", wsDiscKey);
   const assignedIds = new Set(((asgData ?? []) as { client_id: string }[]).map((a) => a.client_id));
+  // Also treat a booked appointment as ownership: any client with a non-cancelled
+  // appointment whose provider is in this discipline belongs on the roster — a
+  // clinician shouldn't have an appointment with someone who isn't in "My
+  // clients". This covers the gap before the care-team row is written.
+  const { data: apptOwn } = await supabase
+    .from("appointments").select("client_id, staff:provider_id(role)").neq("status", "cancelled").not("client_id", "is", null);
+  for (const a of (apptOwn ?? []) as unknown as { client_id: string | null; staff: { role: string } | null }[]) {
+    if (a.client_id && WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind) assignedIds.add(a.client_id);
+  }
   const scoped = scopeClients(roleKey, allClients, trainingIds, assignedIds);
   const rosterRows: WsClientRow[] = scoped.map((c) => ({
     id: c.id, name: c.name, code: c.code,

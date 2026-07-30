@@ -56,6 +56,7 @@ export default function ConsultationItem({ c }: { c: Consult }) {
                 {c.shared ? "Unshare" : "Share with client"}
               </SubmitButton>
             </form>
+            <a href={`/consult/${c.id}/print?auto=1`} target="_blank" rel="noopener" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12, cursor: "pointer", color: "var(--ink)", textDecoration: "none" }}>PDF</a>
           </>
         )}
       </div>

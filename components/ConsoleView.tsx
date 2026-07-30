@@ -3,8 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { saveConsultSession, addVitals, createOrder, createPrescription } from "@/lib/actions";
+import FileUploadForm from "@/components/FileUploadForm";
 
 type Flag = { text: string; severity: string };
+
+export type ConsoleHealth = {
+  age: number | null; gender: string | null; height: number | null; weight: number | null;
+  bmi: number | null; bodyFat: number | null; muscle: number | null; visceral: number | null;
+  waist: number | null; hip: number | null; measuredOn: string | null;
+  inbodySummary: string | null; inbodyPdfUrl: string | null;
+  conditions: string | null; goals: string[]; allergies: string[]; bloodStatus: string | null;
+};
 
 const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
   critical: { bg: "var(--red-bg)", fg: "var(--red-text)", label: "Critical" },
@@ -13,7 +22,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools,
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health,
 }: {
   id: string;
   kind: string;
@@ -26,12 +35,17 @@ export default function ConsoleView({
   summary: string | null;
   status: string;
   canTools: boolean;
+  health?: ConsoleHealth;
 }) {
+  // Ambient scribe / AI co-pilot is opt-in: the clock only runs while recording,
+  // so the duration reflects real session time, not the tab being left open.
+  const [recording, setRecording] = useState(false);
   const [sec, setSec] = useState(0);
   useEffect(() => {
+    if (!recording) return;
     const t = setInterval(() => setSec((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [recording]);
   const mm = String(Math.floor(sec / 60)).padStart(2, "0");
   const ss = String(sec % 60).padStart(2, "0");
 
@@ -67,21 +81,28 @@ export default function ConsoleView({
         </div>
         <span style={{ flex: 1 }} />
         {status === "completed" && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px" }}>
-          <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--red)", display: "inline-block" }} />
-          <b style={{ fontVariantNumeric: "tabular-nums", fontSize: 14 }}>{mm}:{ss}</b>
-        </div>
+        {(recording || sec > 0) && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", opacity: recording ? 1 : 0.55 }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: recording ? "var(--red)" : "rgba(255,255,255,.5)", display: "inline-block" }} />
+            <b style={{ fontVariantNumeric: "tabular-nums", fontSize: 14 }}>{mm}:{ss}</b>
+          </div>
+        )}
       </div>
 
-      {/* Ambient + AI co-pilot panel — scaffold; wire a real STT + LLM here later. */}
+      {/* Ambient + AI co-pilot — optional; the clinician starts/stops it. Scaffold
+          for a real STT + LLM; nothing records until they press Start. */}
       <div style={{ ...box, padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "linear-gradient(180deg, #14141a, #23232c)", color: "#fff", border: "none" }}>
         <div style={{ minWidth: 0 }}>
-          <b style={{ fontSize: 14 }}>Live session with {client.name}</b>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>Ambient scribe · AI co-pilot</div>
+          <b style={{ fontSize: 14 }}>Ambient scribe · AI co-pilot <span style={{ fontWeight: 400, opacity: 0.6 }}>· optional</span></b>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>{recording ? `Recording ${client.name}… (simulated)` : "Off — start to capture this session"}</div>
         </div>
         <span style={{ flex: 1 }} />
-        <button type="button" disabled title="Connect an ambient recorder + AI scribe to enable" style={{ background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.7)", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "not-allowed" }}>Auto-fill from ambient (soon)</button>
-        <span style={{ background: "rgba(255,255,255,.12)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>Recording (simulated)</span>
+        <button type="button" disabled={!recording} title="Connect an ambient recorder + AI scribe to enable" style={{ background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.6)", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: recording ? "not-allowed" : "not-allowed", opacity: recording ? 1 : 0.5 }}>Auto-fill from ambient (soon)</button>
+        {recording ? (
+          <button type="button" onClick={() => setRecording(false)} style={{ background: "#fff", color: "#14141a", border: "none", borderRadius: 999, padding: "6px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>■ Stop</button>
+        ) : (
+          <button type="button" onClick={() => setRecording(true)} style={{ background: "var(--red)", color: "#fff", border: "none", borderRadius: 999, padding: "6px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>● Start recording</button>
+        )}
       </div>
 
       <form action={saveConsultSession} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
@@ -118,6 +139,55 @@ export default function ConsoleView({
 
         {/* Summary + flags + save */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 12 }}>
+          {/* Client health snapshot — what this clinician can see about the client */}
+          {health && (() => {
+            const metric = (label: string, val: string | number | null | undefined, unit = "") =>
+              val != null && val !== "" ? <div key={label}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px" }}>{label}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{val}{unit}</div></div> : null;
+            const metrics = [
+              metric("Age", health.age, " yrs"), metric("Gender", health.gender),
+              metric("Height", health.height, " cm"), metric("Weight", health.weight, " kg"),
+              metric("BMI", health.bmi), metric("Body fat", health.bodyFat, "%"),
+              metric("Muscle", health.muscle, " kg"), metric("Visceral", health.visceral),
+              metric("Waist", health.waist, " cm"), metric("Hip", health.hip, " cm"),
+            ].filter(Boolean);
+            const chipRow = (label: string, items: string[], bg: string, fg: string) => items.length ? (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 4 }}>{label}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{items.map((t, i) => <span key={i} style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{t}</span>)}</div>
+              </div>
+            ) : null;
+            return (
+              <div style={{ ...box, padding: "16px 18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700 }}>Client health</div>
+                  <span style={{ flex: 1 }} />
+                  {health.measuredOn && <span style={{ fontSize: 11, color: "var(--muted)" }}>InBody {health.measuredOn}</span>}
+                </div>
+                {metrics.length > 0
+                  ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 10 }}>{metrics}</div>
+                  : <div style={{ fontSize: 12, color: "var(--muted)" }}>No measurements on record yet.</div>}
+                {health.inbodySummary && (
+                  <div style={{ marginTop: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 3 }}>InBody summary</div>
+                    <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap" }}>{health.inbodySummary}</div>
+                  </div>
+                )}
+                {health.conditions && <div style={{ marginTop: 10 }}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 2 }}>Conditions</div><div style={{ fontSize: 12.5 }}>{health.conditions}</div></div>}
+                {chipRow("Allergies", health.allergies, "var(--red-bg)", "var(--red-text)")}
+                {chipRow("Goals", health.goals, "var(--brand-tint)", "var(--brand-text)")}
+                {health.bloodStatus && <div style={{ marginTop: 10, fontSize: 12 }}><span style={{ color: "var(--muted)" }}>Blood report: </span><b>{health.bloodStatus}</b></div>}
+                {/* InBody report PDF — view the uploaded machine report, or add one. */}
+                <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 6 }}>InBody report (PDF)</div>
+                  {health.inbodyPdfUrl
+                    ? <a href={health.inbodyPdfUrl} target="_blank" rel="noopener" style={{ display: "inline-block", marginBottom: 8, fontSize: 12.5, color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>📄 View InBody PDF →</a>
+                    : <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>No InBody PDF uploaded yet.</div>}
+                  <FileUploadForm variant="staff" clientId={client.id} kind="inbody" label={health.inbodyPdfUrl ? "Replace PDF" : "Add InBody PDF"} accept="application/pdf" />
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Medical flags */}
           <div style={{ ...box, padding: "16px 18px" }}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Flags raised {fl.length > 0 && <span style={{ color: "var(--red-text)" }}>· {fl.length}</span>}</div>
@@ -149,6 +219,11 @@ export default function ConsoleView({
               <button type="submit" name="complete" value="false" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save draft</button>
               <button type="submit" name="complete" value="true" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Complete &amp; summarize</button>
             </div>
+            {!client.isLead && (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
+                <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview PDF →</a> · reflects the last saved summary. Save first, review, edit if needed, then share from the consultations list.
+              </div>
+            )}
           </div>
           <div style={{ ...box, padding: "12px 16px" }}>
             <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "Open lead record →" : "Open full client card →"}</Link>
