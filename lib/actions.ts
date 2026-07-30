@@ -5069,6 +5069,26 @@ export async function reviewMeal(formData: FormData) {
   revalidatePath("/meals");
 }
 
+// dietitian: manually log / edit a meal on the client's behalf (phone, in
+// person, or correcting what they entered).
+export async function logMealByStaff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const meal = String(formData.get("meal"));
+  const description = String(formData.get("description") ?? "").trim();
+  if (!client_id || !meal || !description) return;
+  const supabase = createClient();
+  await supabase.from("meal_logs").upsert(
+    { client_id, date: todayISO(), meal, description, nudged: false, updated_at: new Date().toISOString() },
+    { onConflict: "client_id,date,meal" }
+  );
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Meal logged by staff", c?.name, meal);
+  revalidatePath("/meals");
+  revalidatePath("/workspace");
+}
+
 // dietitian: nudge a missing meal
 export async function nudgeMeal(formData: FormData) {
   const p = await getProfile();
