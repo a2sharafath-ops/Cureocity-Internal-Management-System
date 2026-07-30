@@ -204,6 +204,11 @@ export default function ConsoleView({
               <button type="submit" name="complete" value="false" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save draft</button>
               <button type="submit" name="complete" value="true" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Complete &amp; summarize</button>
             </div>
+            {!client.isLead && (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
+                <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview PDF →</a> · reflects the last saved summary. Save first, review, edit if needed, then share from the consultations list.
+              </div>
+            )}
           </div>
           <div style={{ ...box, padding: "12px 16px" }}>
             <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "Open lead record →" : "Open full client card →"}</Link>
