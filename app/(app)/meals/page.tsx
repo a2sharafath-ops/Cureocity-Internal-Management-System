@@ -31,7 +31,8 @@ export default async function MealsPage() {
   // A dietitian sees their OWN diet clients: those assigned to them for the diet
   // discipline, plus anyone they have a booked appointment with. Admin / Manager
   // keep the clinic-wide view.
-  if (isClinician(me.role) && me.staffId) {
+  const scopedToMe = isClinician(me.role) && Boolean(me.staffId);
+  if (scopedToMe) {
     const [{ data: asg }, { data: appt }] = await Promise.all([
       supabase.from("client_assignments").select("client_id").eq("discipline", "dietitian").eq("staff_id", me.staffId),
       supabase.from("appointments").select("client_id").eq("provider_id", me.staffId).neq("status", "cancelled").not("client_id", "is", null),
@@ -74,14 +75,16 @@ export default async function MealsPage() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["meal_logs", "meal_contacts"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Dietitian · Meal Monitoring</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Meal Monitoring{scopedToMe ? "" : " · all diet clients"}</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Today {todayLabel()} · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}
       </p>
 
       {clients.length === 0 ? (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", color: "var(--muted)", fontSize: 13 }}>
-          No diet clients (Comprehensive / BluePrint) yet.
+          {scopedToMe
+            ? "No diet clients assigned to you yet — a client shows here once they're on a Comprehensive / BluePrint plan and assigned or booked with you."
+            : "No clients on a Comprehensive / BluePrint package yet."}
         </div>
       ) : (
         clients.map((c) => {
