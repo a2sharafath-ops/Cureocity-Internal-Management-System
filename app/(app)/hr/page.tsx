@@ -11,14 +11,14 @@ import Chip from "@/components/Chip";
 import {
   addHrUpdate, toggleMonthTask, generatePayslip, addCommission, fileStatutory,
   advanceCandidate, setPurchaseStatus, addOffboarding,
-  saveLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc,
+  saveLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc, updateStaffEmployment,
 } from "@/lib/actions";
 import EmployeeDocUpload from "@/components/EmployeeDocUpload";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null };
+type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null };
 
 export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string } }) {
   const me = await getProfile();
@@ -38,7 +38,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     { data: updData }, { data: mtData }, { data: comData }, { data: statData }, { data: candData }, { data: docData }, { data: purData },
     { data: ltData }, { data: holData }, { data: monthAttData }, { data: yearLeaveData }, { data: empDocData }, { data: salData },
   ] = await Promise.all([
-    supabase.from("staff").select("id, name, designation, department, role, leave_balance").order("name"),
+    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at").order("name"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("leaves").select("id, staff_id, from_date, to_date, type, reason, status, staff(name, department)").order("created_at", { ascending: false }).limit(60),
     supabase.from("payroll").select("staff_id, base, lop_days, pf, net, status, payslip").eq("month", month),
@@ -50,7 +50,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     supabase.from("hr_candidates").select("id, name, role, source, stage").order("created_at", { ascending: false }),
     supabase.from("hr_documents").select("id, title, kind, person, doc_date, status").order("doc_date", { ascending: false }),
     supabase.from("hr_purchases").select("id, item, requested_by, req_date, status").order("req_date", { ascending: false }),
-    supabase.from("leave_types").select("code, name, annual_days, paid, active, seq, color").order("seq"),
+    supabase.from("leave_types").select("code, name, annual_days, paid, active, seq, color, note, gender, min_tenure_months, accrual").order("seq"),
     supabase.from("holidays").select("id, date, name, kind").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).order("date"),
     supabase.from("attendance").select("staff_id, date, status").gte("date", monthStart).lte("date", monthEnd),
     supabase.from("leaves").select("staff_id, type, from_date, to_date, status").eq("status", "approved").gte("from_date", `${year}-01-01`).lte("from_date", `${year}-12-31`),
@@ -74,8 +74,29 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const purchases = (purData ?? []) as { id: string; item: string; requested_by: string | null; req_date: string | null; status: string }[];
 
   // ---- HR expansion derived data --------------------------------------------
-  const leaveTypes = (ltData ?? []) as { code: string; name: string; annual_days: number; paid: boolean; active: boolean; seq: number; color: string | null }[];
+  const leaveTypes = (ltData ?? []) as { code: string; name: string; annual_days: number; paid: boolean; active: boolean; seq: number; color: string | null; note: string | null; gender: string; min_tenure_months: number; accrual: string }[];
   const activeTypes = leaveTypes.filter((t) => t.active);
+
+  // Entitlement for one staff member under a type's eligibility rules.
+  // Returns null when the type doesn't apply (e.g. ML for a male staff member),
+  // else the (possibly pro-rated / tenure-gated) number of days.
+  const monthsBetween = (fromISO: string, toISO: string) => {
+    const a = new Date(fromISO), b = new Date(toISO);
+    return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth()) - (b.getUTCDate() < a.getUTCDate() ? 1 : 0);
+  };
+  const entitledFor = (s: Staff, t: { annual_days: number; gender: string; min_tenure_months: number; accrual: string }): number | null => {
+    if (t.gender !== "any" && s.gender && s.gender.toLowerCase() !== t.gender) return null;
+    const joined = (s.date_of_joining ?? (s.created_at ? s.created_at.slice(0, 10) : today));
+    const tenure = monthsBetween(joined, today);
+    if (t.min_tenure_months > 0 && tenure < t.min_tenure_months) return 0;
+    if (t.accrual === "monthly") {
+      // 1 day per completed month this calendar year, from the later of Jan 1 / join.
+      const start = joined > `${year}-01-01` ? joined : `${year}-01-01`;
+      const completed = Math.max(0, monthsBetween(start, today));
+      return Math.min(t.annual_days, completed);
+    }
+    return t.annual_days;
+  };
   const holidays = (holData ?? []) as { id: string; date: string; name: string; kind: string }[];
   const empDocs = (empDocData ?? []) as { id: string; staff_id: string; title: string; kind: string; name: string | null; created_at: string }[];
   const salaries = new Map(((salData ?? []) as { staff_id: string; basic: number; hra: number; allowances: number; pf: number; esi: number; pt: number; tds: number; effective_from: string | null }[]).map((s) => [s.staff_id, s]));
@@ -240,7 +261,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                 <input type="hidden" name="code" value={t.code} />
                 <input type="hidden" name="name" value={t.name} />
                 <span style={{ minWidth: 40, fontWeight: 700, color: t.color ?? "var(--ink)" }}>{t.code}</span>
-                <span style={{ flex: 1, fontSize: 12.5 }}>{t.name}</span>
+                <span style={{ flex: 1, fontSize: 12.5 }}>{t.name}{t.note ? <span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}>{t.note}</span> : null}</span>
                 <input name="annual_days" type="number" min={0} defaultValue={t.annual_days} style={{ ...inp, width: 68 }} />
                 <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Save</button>
               </form>
@@ -260,9 +281,11 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                       <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
                         <td style={{ ...td, fontWeight: 600 }}>{s.name}</td>
                         {activeTypes.map((t) => {
+                          const ent = entitledFor(s, t);
+                          if (ent === null) return <td key={t.code} style={{ ...td, textAlign: "center", color: "var(--muted)" }}>—</td>;
                           const u = used?.get(t.code) ?? 0;
-                          const rem = t.annual_days - u;
-                          return <td key={t.code} style={{ ...td, textAlign: "center" }}><b style={{ color: rem <= 0 ? "var(--red-text)" : rem <= 2 ? "var(--amber-text)" : "var(--ink)" }}>{rem}</b><span style={{ color: "var(--muted)" }}> / {t.annual_days}</span></td>;
+                          const rem = ent - u;
+                          return <td key={t.code} style={{ ...td, textAlign: "center" }}><b style={{ color: rem <= 0 ? "var(--red-text)" : rem <= 2 ? "var(--amber-text)" : "var(--ink)" }}>{rem}</b><span style={{ color: "var(--muted)" }}> / {ent}</span></td>;
                         })}
                       </tr>
                     );
@@ -330,6 +353,13 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
               return (<>
                 <div style={{ ...box, padding: "16px 18px" }}>
                   <b style={{ fontSize: 15 }}>{selectedEmp.name}</b> <span style={{ color: "var(--muted)", fontSize: 12 }}>· {selectedEmp.designation ?? selectedEmp.role} · {selectedEmp.department ?? "—"}</span>
+                  <form action={updateStaffEmployment} style={{ display: "flex", gap: 10, alignItems: "end", marginTop: 12, flexWrap: "wrap" }}>
+                    <input type="hidden" name="staff_id" value={selectedEmp.id} />
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Date of joining<br /><input name="date_of_joining" type="date" defaultValue={selectedEmp.date_of_joining ?? ""} style={{ ...inp, marginTop: 4 }} /></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Gender<br /><select name="gender" defaultValue={selectedEmp.gender ?? ""} style={{ ...inp, marginTop: 4 }}><option value="">—</option><option value="female">Female</option><option value="male">Male</option></select></label>
+                    <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                    <span style={{ fontSize: 11, color: "var(--muted)" }}>Drives EL (after 1 yr) &amp; ML (female) eligibility.</span>
+                  </form>
                 </div>
                 <div style={{ ...box, padding: "16px 18px" }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}><b>Documents</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "onboarding forms · certificates · IDs")}</div>

@@ -3237,6 +3237,20 @@ export async function deleteHoliday(formData: FormData) {
   revalidatePath("/hr");
 }
 
+export async function updateStaffEmployment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("staff_id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("staff").update({
+    date_of_joining: String(formData.get("date_of_joining") || "") || null,
+    gender: String(formData.get("gender") || "") || null,
+  }).eq("id", id);
+  await logAudit(p, "Employment details updated", id, null);
+  revalidatePath("/hr");
+}
+
 export async function saveSalaryStructure(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
