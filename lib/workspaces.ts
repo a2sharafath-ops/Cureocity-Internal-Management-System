@@ -116,7 +116,9 @@ function withRoleTabs(extra: WsTab[]): WsTab[] {
 }
 
 export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
-  doctor: withRoleTabs([]),
+  doctor: withRoleTabs([
+    { key: "charts", label: "Diet chart review", live: true },
+  ]),
   psych: withRoleTabs([]),
   diet: withRoleTabs([
     { key: "meals", label: "Meal Monitoring", href: "/meals" },
