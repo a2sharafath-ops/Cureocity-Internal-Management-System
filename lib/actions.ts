@@ -3194,6 +3194,99 @@ export async function markAttendance(formData: FormData) {
   revalidatePath("/hr");
 }
 
+// ---- HR expansion: leave types, holidays, employee docs, salary breakup -----
+
+export async function saveLeaveType(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const code = String(formData.get("code") || "").trim().toUpperCase();
+  if (!code) return;
+  const supabase = createClient();
+  await supabase.from("leave_types").upsert({
+    code,
+    name: String(formData.get("name") || code).trim(),
+    annual_days: Math.max(0, Number(formData.get("annual_days")) || 0),
+    active: String(formData.get("active") ?? "true") !== "false",
+  }, { onConflict: "code" });
+  await logAudit(p, "Leave type saved", code, null);
+  revalidatePath("/hr");
+}
+
+export async function addHoliday(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const date = String(formData.get("date") || "");
+  const name = String(formData.get("name") || "").trim();
+  if (!date || !name) return;
+  const supabase = createClient();
+  await supabase.from("holidays").upsert(
+    { date, name, kind: String(formData.get("kind") || "Public"), created_by: p.name },
+    { onConflict: "date,name", ignoreDuplicates: true },
+  );
+  await logAudit(p, "Holiday added", name, date);
+  revalidatePath("/hr");
+}
+
+export async function deleteHoliday(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("holidays").delete().eq("id", id);
+  revalidatePath("/hr");
+}
+
+export async function saveSalaryStructure(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const staff_id = String(formData.get("staff_id") || "");
+  if (!staff_id) return;
+  const num = (k: string) => Math.max(0, Number(formData.get(k)) || 0);
+  const supabase = createClient();
+  await supabase.from("salary_structures").upsert({
+    staff_id, basic: num("basic"), hra: num("hra"), allowances: num("allowances"),
+    pf: num("pf"), esi: num("esi"), pt: num("pt"), tds: num("tds"),
+    effective_from: String(formData.get("effective_from") || "") || null,
+    updated_by: p.name, updated_at: new Date().toISOString(),
+  }, { onConflict: "staff_id" });
+  await logAudit(p, "Salary structure saved", staff_id, null);
+  revalidatePath("/hr");
+}
+
+export async function uploadEmployeeDoc(_prev: UploadState, formData: FormData): Promise<UploadState> {
+  const me = await getProfile();
+  if (!me || !canHr(me.role)) return { error: "Not authorized." };
+  const staff_id = String(formData.get("staff_id") || "");
+  const title = String(formData.get("title") || "").trim();
+  const kind = String(formData.get("kind") || "Document");
+  const file = formData.get("file");
+  if (!staff_id) return { error: "Pick an employee." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file." };
+  if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
+  const supabase = createClient();
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${staff_id}/${crypto.randomUUID()}-${safe}`;
+  const { error } = await supabase.storage.from("hr-files").upload(path, file, { contentType: file.type || undefined, upsert: false });
+  if (error) return { error: error.message };
+  await supabase.from("employee_documents").insert({ staff_id, title: title || file.name, kind, bucket: "hr-files", path, name: file.name, uploaded_by: me.name });
+  await logAudit(me, "Employee document uploaded", staff_id, `${kind}: ${file.name}`);
+  revalidatePath("/hr");
+  return { ok: "Uploaded." };
+}
+
+export async function deleteEmployeeDoc(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  const { data: d } = await supabase.from("employee_documents").select("path").eq("id", id).maybeSingle();
+  if ((d as { path: string } | null)?.path) await supabase.storage.from("hr-files").remove([(d as { path: string }).path]);
+  await supabase.from("employee_documents").delete().eq("id", id);
+  revalidatePath("/hr");
+}
+
 export async function addLeave(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
