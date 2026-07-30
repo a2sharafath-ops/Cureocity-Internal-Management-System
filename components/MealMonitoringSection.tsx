@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isClinician } from "@/lib/roles";
 import { MEALS, type MealLog } from "@/lib/meals";
 import MealStaffCell from "@/components/MealStaffCell";
 import MealContactLadder, { type Contact } from "@/components/MealContactLadder";
+import MealClientCard from "@/components/MealClientCard";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -69,12 +69,21 @@ export default async function MealMonitoringSection({
   const statusMap = await loadClientStatuses(supabase, ids, TODAY);
   const viewerDisc = disciplineForRole(me.role);
 
+  const pendingOf = (cid: string) => MEALS.filter((m) => {
+    const l = map.get(key(cid, m.key));
+    return (!l?.description && !l?.nudged) || (l?.description && !l?.review) || (l?.doubt && !l?.doubt_answer);
+  }).length;
+  // Clients needing action float to the top so a long list stays scannable.
+  const sorted = [...clients].sort((a, b) => pendingOf(b.id) - pendingOf(a.id) || a.name.localeCompare(b.name));
+  const needAction = sorted.filter((c) => pendingOf(c.id) > 0).length;
+
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["meal_logs", "meal_contacts"]} />
       {heading && <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Meal Monitoring{scopedToMe ? "" : " · all diet clients"}</h1>}
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Today {todayLabel()} · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}
+        Today {todayLabel()} · {clients.length} client{clients.length === 1 ? "" : "s"}
+        {clients.length > 0 && ` · ${needAction} need action`} · review logged meals, log or nudge missing ones, answer questions
       </p>
 
       {clients.length === 0 ? (
@@ -84,28 +93,24 @@ export default async function MealMonitoringSection({
             : "No clients on a Comprehensive / BluePrint package yet."}
         </div>
       ) : (
-        clients.map((c) => {
-          const pending = MEALS.filter((m) => {
-            const l = map.get(key(c.id, m.key));
-            return (!l?.description && !l?.nudged) || (l?.description && !l?.review) || (l?.doubt && !l?.doubt_answer);
-          }).length;
+        sorted.map((c) => {
+          const pending = pendingOf(c.id);
           return (
-            <div key={c.id} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px", marginBottom: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-                <Link href={`/clients/${c.id}`} style={{ fontWeight: 700, fontSize: 15, color: "var(--ink)", textDecoration: "none" }}>{c.name}</Link>
-                <span style={{ marginLeft: 8 }}><ClientStatusBadge status={clientStatus(statusMap.get(c.id), viewerDisc)} size="sm" /></span>
-                <span style={{ flex: 1 }} />
-                {pending > 0
-                  ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{pending} to action</span>
-                  : <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>All caught up</span>}
-              </div>
+            <MealClientCard
+              key={c.id}
+              clientId={c.id}
+              name={c.name}
+              pending={pending}
+              defaultOpen={pending > 0}
+              badge={<ClientStatusBadge status={clientStatus(statusMap.get(c.id), viewerDisc)} size="sm" />}
+            >
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
                 {MEALS.map((m) => (
                   <MealStaffCell key={m.key} clientId={c.id} meal={m.key} label={m.label} icon={m.icon} log={map.get(key(c.id, m.key)) ?? null} />
                 ))}
               </div>
               <MealContactLadder clientId={c.id} date={TODAY} logged={loggedSet.has(c.id)} contacts={contactsByClient.get(c.id) ?? []} />
-            </div>
+            </MealClientCard>
           );
         })
       )}
