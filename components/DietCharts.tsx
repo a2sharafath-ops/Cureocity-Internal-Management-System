@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { addDietChart, publishDietChart, deleteDietChart, submitDietChartForReview, reviewDietChart } from "@/lib/actions";
+import { addDietChart, updateDietChart, publishDietChart, deleteDietChart, submitDietChartForReview, reviewDietChart } from "@/lib/actions";
 
 export type DietChartRow = {
   id: string;
@@ -30,6 +30,11 @@ export default function DietCharts({ charts, clients, canReview = false, canComp
   const [open, setOpen] = useState(Boolean(focusClient));
   const [rows, setRows] = useState<[string, string][]>(DEFAULT_ROWS);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // In-place edit of a Draft chart (its own row + meal-row state).
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editRows, setEditRows] = useState<[string, string][]>([]);
+  const startEdit = (dc: DietChartRow) => { setEditing(dc.id); setEditRows(dc.meals.length ? dc.meals : DEFAULT_ROWS); };
+  const setEditRow = (i: number, j: 0 | 1, v: string) => setEditRows((r) => r.map((row, k) => (k === i ? (j === 0 ? [v, row[1]] : [row[0], v]) : row)));
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
@@ -89,7 +94,10 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
               })()}
               <button type="button" onClick={() => setExpanded((e) => (e === dc.id ? null : dc.id))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expanded === dc.id ? "Hide" : "View"}</button>
 
-              {dc.status === "Draft" && (
+              {dc.status === "Draft" && canCompose && (
+                <button type="button" onClick={() => (editing === dc.id ? setEditing(null) : startEdit(dc))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{editing === dc.id ? "Close" : "Edit"}</button>
+              )}
+              {dc.status === "Draft" && canCompose && (
                 <form action={submitDietChartForReview}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Submit for review</button></form>
               )}
               {dc.status === "In review" && (canReview ? (
@@ -113,6 +121,30 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
             )}
             {dc.status === "Approved" && dc.reviewed_by && (
               <div style={{ margin: "0 16px 12px", background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 8, padding: "7px 10px", fontSize: 12 }}>✅ Approved by {dc.reviewed_by} · ready to publish</div>
+            )}
+            {editing === dc.id && canCompose && (
+              <form action={updateDietChart} onSubmit={() => setTimeout(() => setEditing(null), 50)} style={{ ...box, margin: "0 16px 14px", padding: 12, display: "grid", gap: 8 }}>
+                <input type="hidden" name="id" value={dc.id} />
+                <div style={{ fontWeight: 700, fontSize: 13 }}>Edit draft — v{dc.version}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Meals</div>
+                {editRows.map((row, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "150px 1fr 30px", gap: 8 }}>
+                    <input name="meal_label" value={row[0]} onChange={(e) => setEditRow(i, 0, e.target.value)} placeholder="Meal" style={inpControl} />
+                    <input name="meal_detail" value={row[1]} onChange={(e) => setEditRow(i, 1, e.target.value)} placeholder="What to eat…" style={inpControl} />
+                    <button type="button" onClick={() => setEditRows((r) => r.filter((_, k) => k !== i))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, cursor: "pointer", color: "var(--red-text)" }}>✕</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setEditRows((r) => [...r, ["", ""]])} style={{ alignSelf: "start", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Add meal row</button>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <input name="calories" type="number" defaultValue={dc.calories ?? ""} placeholder="Calories (kcal/day)" style={inpControl} />
+                  <input name="protein" defaultValue={dc.protein ?? ""} placeholder="Protein target (e.g. 72 g)" style={inpControl} />
+                </div>
+                <textarea name="notes" rows={2} defaultValue={dc.notes ?? ""} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save changes</button>
+                  <button type="button" onClick={() => setEditing(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </form>
             )}
             {expanded === dc.id && (
               <div style={{ padding: "0 16px 14px 16px" }}>
