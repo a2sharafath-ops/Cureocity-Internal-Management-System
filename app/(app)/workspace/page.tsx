@@ -226,7 +226,11 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   let consultSummaries: ConsultSummary[] = [];
   let consolidated: ConsolidatedRow[] = [];
   if (tab === "summaries") {
-    const bpClients = allClients.filter((c) => c.package_id === "bp1");
+    // BluePrint clients from client_packages (category blueprint), not the legacy
+    // clients.package_id === "bp1" hardcode.
+    const { data: bpCp } = await supabase.from("client_packages").select("client_id").eq("status", "active").eq("category", "blueprint");
+    const bpIdSet = new Set(((bpCp ?? []) as { client_id: string }[]).map((r) => r.client_id));
+    const bpClients = allClients.filter((c) => bpIdSet.has(c.id));
     const bpIds = bpClients.map((c) => c.id);
     const [{ data: cs }, signoffRes, bpRes, asgRes, signRes] = await Promise.all([
       supabase.from("consultations").select("id, client_id, summary, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),

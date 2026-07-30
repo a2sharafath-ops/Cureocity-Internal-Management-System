@@ -23,12 +23,14 @@ export default async function BlueprintPage() {
   if (!me || !canSee(me.role, "/blueprint")) redirect("/dashboard");
 
   const supabase = createClient();
-  // BluePrint-package clients
-  const { data: clientData } = await supabase
-    .from("clients")
-    .select("id, name, code")
-    .eq("package_id", "bp1")
-    .order("code");
+  // BluePrint clients = clients on an active BluePrint package (client_packages —
+  // the source of truth, not the legacy clients.package_id / "bp1" hardcode).
+  const { data: cpRows } = await supabase
+    .from("client_packages").select("client_id").eq("status", "active").eq("category", "blueprint");
+  const bpClientIds = [...new Set(((cpRows ?? []) as { client_id: string }[]).map((r) => r.client_id))];
+  const { data: clientData } = bpClientIds.length
+    ? await supabase.from("clients").select("id, name, code").in("id", bpClientIds).order("code")
+    : { data: [] };
   const clients = (clientData ?? []) as { id: string; name: string; code: string | null }[];
 
   const ids = clients.map((c) => c.id);
@@ -47,7 +49,14 @@ export default async function BlueprintPage() {
       : Promise.resolve({ data: [] }),
   ]);
 
-  const blood = new Map((bloodData ?? []).map((b: { client_id: string }) => [b.client_id, b]));
+  // A client can have both a blueprint and a comprehensive blood request — keep
+  // the BluePrint panel for this board (fall back to whatever exists).
+  type BloodRow = { client_id: string; panel?: string | null; requested_at: string | null; submitted: boolean; submitted_date: string | null };
+  const blood = new Map<string, BloodRow>();
+  for (const b of (bloodData ?? []) as BloodRow[]) {
+    const cur = blood.get(b.client_id);
+    if (!cur || b.panel === "blueprint") blood.set(b.client_id, b);
+  }
   const bps = new Map((bpData ?? []).map((b: { client_id: string }) => [b.client_id, b]));
   const consultsBy = new Map<string, { kind: string; completedAt: string | null; approvedAt: string | null }[]>();
   for (const c of (consultData ?? []) as { client_id: string; kind: string; completed_at: string | null; approved_at: string | null }[]) {
