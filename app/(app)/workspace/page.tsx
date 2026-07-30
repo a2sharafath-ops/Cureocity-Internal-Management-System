@@ -11,6 +11,7 @@ import SegTabs from "@/components/SegTabs";
 import MetricCard from "@/components/MetricCard";
 import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClients";
 import MealMonitoringSection from "@/components/MealMonitoringSection";
+import BlueprintSection from "@/components/BlueprintSection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
@@ -493,6 +494,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MEAL MONITORING (dietitian) ---- */}
       {tab === "meals" && <MealMonitoringSection me={me} date={searchParams.d} />}
+
+      {/* ---- BLUEPRINT SIGN-OFF ---- */}
+      {tab === "bp" && <BlueprintSection me={me} />}
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} canStartAny={["Super Admin", "Administrator", "Manager"].includes(me.role) && !readOnly} />}
