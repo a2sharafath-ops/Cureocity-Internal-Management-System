@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { addDietChart, publishDietChart, deleteDietChart } from "@/lib/actions";
+import { addDietChart, publishDietChart, deleteDietChart, submitDietChartForReview, reviewDietChart } from "@/lib/actions";
 
 export type DietChartRow = {
   id: string;
@@ -17,11 +17,13 @@ export type DietChartRow = {
   meals: [string, string][];
   by_name: string | null;
   created_at: string;
+  review_note: string | null;
+  reviewed_by: string | null;
 };
 
 const DEFAULT_ROWS: [string, string][] = [["Early Morning", ""], ["Breakfast", ""], ["Mid-Morning", ""], ["Lunch", ""], ["Evening", ""], ["Dinner", ""]];
 
-export default function DietCharts({ charts, clients }: { charts: DietChartRow[]; clients: { id: string; name: string }[] }) {
+export default function DietCharts({ charts, clients, canReview = false, canCompose = true }: { charts: DietChartRow[]; clients: { id: string; name: string }[]; canReview?: boolean; canCompose?: boolean }) {
   // Deep-linked from a "diet chart pending" reminder: ?client=<id> opens the
   // builder straight away with that client pre-selected.
   const focusClient = useSearchParams().get("client") ?? "";
@@ -40,12 +42,12 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>Compose meal-by-meal plans, save as draft, then publish to the client&apos;s portal.</div>
+        <div style={{ fontSize: 13, color: "var(--muted)" }}>{canCompose ? "Compose a plan → submit for Medical-Director review → publish once approved." : "Review submitted diet charts: approve or send back with a note."}</div>
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setOpen((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{open ? "Cancel" : "+ New diet chart"}</button>
+        {canCompose && <button type="button" onClick={() => setOpen((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{open ? "Cancel" : "+ New diet chart"}</button>}
       </div>
 
-      {open && (
+      {open && canCompose && (
         <form action={addDietChart} onSubmit={() => setTimeout(() => { setOpen(false); setRows(DEFAULT_ROWS); }, 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 700 }}>Diet chart builder</div>
           <select name="client_id" required defaultValue={focusClient} style={inpControl}>
@@ -73,18 +75,45 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
       <div style={{ ...box, overflow: "hidden" }}>
         {charts.length ? charts.map((dc) => (
           <div key={dc.id} style={{ borderTop: "1px solid var(--border)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
                 <b style={{ fontSize: 13 }}>{dc.client_name ?? "—"} <span style={{ color: "var(--muted)", fontWeight: 500 }}>· v{dc.version}</span></b>
                 <div style={{ color: "var(--muted)", fontSize: 12 }}>{dc.calories ? `${dc.calories} kcal` : "—"}{dc.protein ? ` · ${dc.protein} protein` : ""} · {new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</div>
               </div>
-              <span style={{ background: dc.status === "Published" ? "var(--green-bg)" : "var(--amber-bg)", color: dc.status === "Published" ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{dc.status}</span>
+              {(() => {
+                const st = dc.status;
+                const green = st === "Published" || st === "Approved";
+                const bg = green ? "var(--green-bg)" : st === "In review" ? "var(--blue-bg)" : "var(--neutral-bg)";
+                const col = green ? "var(--green-text)" : st === "In review" ? "var(--blue-text)" : "var(--muted)";
+                return <span style={{ background: bg, color: col, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{st}</span>;
+              })()}
               <button type="button" onClick={() => setExpanded((e) => (e === dc.id ? null : dc.id))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expanded === dc.id ? "Hide" : "View"}</button>
+
               {dc.status === "Draft" && (
+                <form action={submitDietChartForReview}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Submit for review</button></form>
+              )}
+              {dc.status === "In review" && (canReview ? (
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                  <form action={reviewDietChart} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <input type="hidden" name="id" value={dc.id} />
+                    <input type="hidden" name="decision" value="changes" />
+                    <input name="note" placeholder="Change note…" style={{ ...inp, height: 32, width: 150 }} />
+                    <button style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--amber-text)", whiteSpace: "nowrap" }}>Request changes</button>
+                  </form>
+                  <form action={reviewDietChart}><input type="hidden" name="id" value={dc.id} /><input type="hidden" name="decision" value="approve" /><button style={{ background: "var(--green)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Approve</button></form>
+                </span>
+              ) : <span style={{ fontSize: 12, color: "var(--muted)" }}>Awaiting MD review</span>)}
+              {dc.status === "Approved" && (
                 <form action={publishDietChart}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Publish</button></form>
               )}
               <form action={deleteDietChart}><input type="hidden" name="id" value={dc.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 9px", fontSize: 12, cursor: "pointer", color: "var(--red-text)" }} title="Delete">✕</button></form>
             </div>
+            {dc.status === "Draft" && dc.review_note && (
+              <div style={{ margin: "0 16px 12px", background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 10px", fontSize: 12 }}>✏️ Changes requested{dc.reviewed_by ? ` by ${dc.reviewed_by}` : ""}: {dc.review_note}</div>
+            )}
+            {dc.status === "Approved" && dc.reviewed_by && (
+              <div style={{ margin: "0 16px 12px", background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 8, padding: "7px 10px", fontSize: 12 }}>✅ Approved by {dc.reviewed_by} · ready to publish</div>
+            )}
             {expanded === dc.id && (
               <div style={{ padding: "0 16px 14px 16px" }}>
                 <div style={{ background: "var(--bg)", borderRadius: 10, padding: "8px 12px" }}>

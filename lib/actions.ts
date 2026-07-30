@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -5365,12 +5365,58 @@ export async function addDietChart(formData: FormData) {
   revalidatePath("/workspace");
 }
 
+// Dietitian sends a draft to the Medical Director for review.
+export async function submitDietChartForReview(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  const { data: dc } = await supabase.from("diet_charts").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
+  await supabase.from("diet_charts").update({ status: "In review", submitted_at: new Date().toISOString(), review_note: null }).eq("id", id);
+  const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
+  await logAudit(p, "Diet chart submitted for review", who, id);
+  await notifyRoles(supabase, ["Doctor", "Administrator", "Super Admin"], {
+    title: "Diet chart awaiting review", body: `${who} · submitted by ${p.name}`,
+    href: "/workspace?role=doctor&tab=charts", icon: "🩺",
+  });
+  revalidatePath("/workspace");
+}
+
+// Medical Director approves the chart, or sends it back to Draft with a note.
+export async function reviewDietChart(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReviewDietChart(p.role)) return;
+  const id = String(formData.get("id"));
+  const decision = String(formData.get("decision") || "");
+  if (!id || !["approve", "changes"].includes(decision)) return;
+  const note = String(formData.get("note") || "").trim() || null;
+  const supabase = createClient();
+  const { data: dc } = await supabase.from("diet_charts").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
+  const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
+  if (decision === "approve") {
+    await supabase.from("diet_charts").update({ status: "Approved", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: null }).eq("id", id);
+  } else {
+    await supabase.from("diet_charts").update({ status: "Draft", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: note }).eq("id", id);
+  }
+  await logAudit(p, decision === "approve" ? "Diet chart approved" : "Diet chart changes requested", who, note ?? id);
+  await notifyRoles(supabase, ["Dietitian"], {
+    title: `Diet chart ${decision === "approve" ? "approved" : "sent back"} — ${who}`,
+    body: decision === "approve" ? `Approved by ${p.name} · ready to publish` : `${p.name}: ${note ?? "changes requested"}`,
+    href: "/workspace?role=diet&tab=charts", icon: decision === "approve" ? "✅" : "✏️",
+  });
+  revalidatePath("/workspace");
+}
+
 export async function publishDietChart(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
   const supabase = createClient();
+  // Gate: a chart can only reach the client once the Medical Director approves it.
+  const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
+  if ((dc as { status: string } | null)?.status !== "Approved") return; // not approved → no-op
   await supabase.from("diet_charts").update({ status: "Published" }).eq("id", id);
   await logAudit(p, "Diet chart published", id, null);
   revalidatePath("/workspace");

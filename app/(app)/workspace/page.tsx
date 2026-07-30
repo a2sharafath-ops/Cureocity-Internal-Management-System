@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
-import { canSee, isClinician } from "@/lib/roles";
+import { canSee, isClinician, canReviewDietChart } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
@@ -190,10 +190,11 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // Dietitian tools.
   let dietCharts: DietChartRow[] = [];
   if (tab === "charts") {
-    const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, meals, by_name, created_at, clients(name)").order("created_at", { ascending: false });
+    const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, meals, by_name, created_at, review_note, reviewed_by, clients(name)").order("created_at", { ascending: false });
     dietCharts = ((dc ?? []) as unknown as (DietChartRow & { clients: { name: string } | null })[]).map((r) => ({
       id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
       calories: r.calories, protein: r.protein, notes: r.notes, meals: (r.meals ?? []) as [string, string][], by_name: r.by_name, created_at: r.created_at,
+      review_note: r.review_note, reviewed_by: r.reviewed_by,
     }));
   }
   // Trainer tool: per-client workout plans (draft → publish), mirrors diet charts.
@@ -498,7 +499,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
-      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} />}
+      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} />}
 
       {/* ---- WORKOUT PLANNER (trainer) ---- */}
       {tab === "planner" && <WorkoutPlanner plans={workoutPlans} clients={clientOpts} />}

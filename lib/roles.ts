@@ -120,6 +120,13 @@ export function canManagePackages(role: string): boolean {
   return role === "Super Admin" || role === "Administrator";
 }
 
+// Who reviews / approves a diet chart before it can be published — the Medical
+// Director (Doctor), plus Admin / Super Admin oversight. Dietitians submit but
+// cannot approve their own charts.
+export function canReviewDietChart(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Doctor"].includes(role);
+}
+
 // Who can approve a leave-type entitlement change (Manager / Admin only). HR can
 // propose changes but not apply them.
 export function canApproveLeaveType(role: string): boolean {
