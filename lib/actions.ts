@@ -5491,6 +5491,36 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
   return r;
 }
 
+// Manually write / edit the saved summaries (same field the AI writes to), so a
+// clinician can type their own or tweak the AI one. Empty text clears it.
+export async function saveMeasurementSummary(client_id: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  const { data } = await supabase.from("measurements").select("id").eq("client_id", client_id).order("date", { ascending: false }).limit(1);
+  const id = (data ?? [])[0]?.id as string | undefined;
+  if (!id) return { error: "No InBody / measurement record to attach a summary to." };
+  await supabase.from("measurements").update({ ai_summary: text.trim() || null, ai_summary_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(me, "InBody summary edited", client_id, null);
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
+export async function saveConsultationSummary(client_id: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  const { data } = await supabase.from("consultations").select("id").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1);
+  const id = (data ?? [])[0]?.id as string | undefined;
+  if (!id) return { error: "No consultation record to attach a summary to." };
+  await supabase.from("consultations").update({ ai_summary: text.trim() || null, ai_summary_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(me, "Consultation summary edited", client_id, null);
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
 export async function aiConsultSummary(_prev: AiState, formData: FormData): Promise<AiState> {
   const me = await getProfile();
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
