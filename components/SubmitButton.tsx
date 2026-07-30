@@ -8,7 +8,7 @@ import { useFormStatus } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 
 export default function SubmitButton({
-  children, style, pendingLabel = "Saving…", doneLabel = "✓ Saved", doneMs = 1600, title,
+  children, style, pendingLabel = "Saving…", doneLabel = "✓ Saved", doneMs = 1600, title, persist = false,
 }: {
   children: React.ReactNode;
   style?: React.CSSProperties;
@@ -16,6 +16,10 @@ export default function SubmitButton({
   doneLabel?: string;
   doneMs?: number;
   title?: string;
+  /** Keep the "done" state (and disable the button) instead of reverting after
+   *  doneMs. Use for one-shot actions like a nudge, where a lasting "✓ sent"
+   *  is clearer than a flash the user can miss. */
+  persist?: boolean;
 }) {
   const { pending } = useFormStatus();
   const [done, setDone] = useState(false);
@@ -24,16 +28,17 @@ export default function SubmitButton({
   useEffect(() => {
     if (wasPending.current && !pending) {
       setDone(true);
-      const t = setTimeout(() => setDone(false), doneMs);
       wasPending.current = pending;
+      if (persist) return;              // leave it showing the done label
+      const t = setTimeout(() => setDone(false), doneMs);
       return () => clearTimeout(t);
     }
     wasPending.current = pending;
-  }, [pending, doneMs]);
+  }, [pending, doneMs, persist]);
 
   return (
-    <button type="submit" disabled={pending} title={title}
-      style={{ ...style, opacity: pending ? 0.7 : 1, cursor: pending ? "default" : (style?.cursor ?? "pointer") }}>
+    <button type="submit" disabled={pending || (persist && done)} title={title}
+      style={{ ...style, opacity: pending ? 0.7 : 1, cursor: pending || (persist && done) ? "default" : (style?.cursor ?? "pointer") }}>
       {pending ? pendingLabel : done ? doneLabel : children}
     </button>
   );

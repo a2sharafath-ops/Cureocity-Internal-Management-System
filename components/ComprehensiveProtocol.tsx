@@ -69,7 +69,7 @@ function Row({ g, dateOnly, bookHref, chase }: { g: Gate; dateOnly?: boolean; bo
             <input type="hidden" name="label" value={chase.label} />
             <input type="hidden" name="client_id" value={chase.clientId} />
             {chase.href && <input type="hidden" name="href" value={chase.href} />}
-            <SubmitButton pendingLabel="…" doneLabel="✓ Chased" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+            <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${chase.who} notified`} style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               Chase {chase.who}
             </SubmitButton>
           </form>

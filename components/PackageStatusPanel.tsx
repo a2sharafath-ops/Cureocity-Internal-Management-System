@@ -43,7 +43,7 @@ function List({ items, empty, clientId, canChase }: { items: StatusItem[]; empty
                 <input type="hidden" name="client_id" value={clientId} />
                 <input type="hidden" name="staff_id" value={it.ownerStaffId} />
                 <input type="hidden" name="label" value={it.label} />
-                <SubmitButton pendingLabel="…" doneLabel="✓ Chased" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
+                <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${it.ownerName ? firstName(it.ownerName) : "Owner"} notified`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>
                   Remind{it.ownerName ? ` ${firstName(it.ownerName)}` : ""}
                 </SubmitButton>
               </form>
@@ -60,7 +60,7 @@ function List({ items, empty, clientId, canChase }: { items: StatusItem[]; empty
                 <input type="hidden" name="label" value={it.label} />
                 <input type="hidden" name="client_id" value={clientId} />
                 {it.href && <input type="hidden" name="href" value={it.href} />}
-                <SubmitButton pendingLabel="Chasing…" doneLabel="✓ Chased" style={chaseBtn}>
+                <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${it.chaseWho ?? "Team"} notified`} style={chaseBtn}>
                   Chase {it.chaseWho ?? "team"}
                 </SubmitButton>
               </form>
