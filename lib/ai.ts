@@ -9,7 +9,7 @@
 export type AiResult = { text?: string; error?: string };
 export type AiState = AiResult; // for useFormState
 
-export async function openaiComplete(system: string, user: string, opts?: { model?: string; maxTokens?: number; temperature?: number }): Promise<AiResult> {
+export async function openaiComplete(system: string, user: string, opts?: { model?: string; maxTokens?: number; temperature?: number; json?: boolean }): Promise<AiResult> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return { error: "AI isn’t configured yet — add OPENAI_API_KEY to the app environment." };
   try {
@@ -20,6 +20,7 @@ export async function openaiComplete(system: string, user: string, opts?: { mode
         model: opts?.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini",
         temperature: opts?.temperature ?? 0.4,
         max_tokens: opts?.maxTokens ?? 800,
+        ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },

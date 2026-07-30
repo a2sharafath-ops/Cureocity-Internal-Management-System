@@ -5473,15 +5473,22 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
   if (!client_id) return { error: "Pick a client first." };
   const supabase = createClient();
   const { data } = await supabase.from("measurements")
-    .select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr")
+    .select("id, date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr")
     .eq("client_id", client_id).order("date", { ascending: false }).limit(2);
-  const rows = (data ?? []) as MeasRow[];
+  const rows = (data ?? []) as (MeasRow & { id: string })[];
   if (!rows.length) return { error: "No InBody / measurements recorded for this client yet." };
   const user = `Latest InBody — ${fmtMeas(rows[0])}` + (rows[1] ? `\nPrevious InBody — ${fmtMeas(rows[1])}` : "");
-  return openaiComplete(
+  const r = await openaiComplete(
     "You are a clinical dietitian assistant. Summarise a client's InBody / body-composition reading for the care team in 4–6 short lines: highlight the key metrics, note the change vs the previous reading if one is given (direction and magnitude), and add 2–3 concise practical observations. Plain text, no markdown headings.",
     user,
   );
+  // Save onto the latest measurements record.
+  if (r.text) {
+    await supabase.from("measurements").update({ ai_summary: r.text, ai_summary_at: new Date().toISOString() }).eq("id", rows[0].id);
+    await logAudit(me, "InBody AI summary saved", client_id, null);
+    revalidatePath(`/clients/${client_id}`);
+  }
+  return r;
 }
 
 export async function aiConsultSummary(_prev: AiState, formData: FormData): Promise<AiState> {
@@ -5491,11 +5498,11 @@ export async function aiConsultSummary(_prev: AiState, formData: FormData): Prom
   if (!client_id) return { error: "Pick a client first." };
   const supabase = createClient();
   const [{ data: cons }, { data: forms }, { data: cli }] = await Promise.all([
-    supabase.from("consultations").select("kind, status, notes, summary, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(4),
+    supabase.from("consultations").select("id, kind, status, notes, summary, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(4),
     supabase.from("form_responses").select("answers, status, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
     supabase.from("clients").select("goals, conditions").eq("id", client_id).maybeSingle(),
   ]);
-  const consults = (cons ?? []) as { kind: string; status: string; notes: string | null; summary: string | null }[];
+  const consults = (cons ?? []) as { id: string; kind: string; status: string; notes: string | null; summary: string | null }[];
   const answers = (forms ?? []) as { answers: Record<string, unknown> }[];
   const c = cli as { goals: string[] | null; conditions: string | null } | null;
   if (!consults.length && !answers.length) return { error: "No consultation notes or questionnaire answers found for this client." };
@@ -5504,10 +5511,65 @@ export async function aiConsultSummary(_prev: AiState, formData: FormData): Prom
   if (c?.conditions) parts.push(`Conditions: ${c.conditions}`);
   for (const cn of consults) parts.push(`${cn.kind} consult (${cn.status})${cn.summary ? ` — ${cn.summary}` : ""}${cn.notes ? ` · notes: ${cn.notes}` : ""}`);
   for (const a of answers) parts.push(`Questionnaire answers: ${JSON.stringify(a.answers).slice(0, 1500)}`);
-  return openaiComplete(
+  const r = await openaiComplete(
     "You are a clinical assistant. Write a clear, shareable consultation summary for a client from the notes and questionnaire answers provided. Cover: presenting goals/concerns, relevant history, key findings, and the plan/next steps. Neutral clinical tone, tidy short paragraphs or bullet lines.",
     parts.join("\n"),
   );
+  // Save onto the most recent consultation record.
+  if (r.text && consults.length) {
+    await supabase.from("consultations").update({ ai_summary: r.text, ai_summary_at: new Date().toISOString() }).eq("id", consults[0].id);
+    await logAudit(me, "Consultation AI summary saved", client_id, null);
+    revalidatePath(`/clients/${client_id}`);
+  }
+  return r;
+}
+
+// Structured first-draft plan for the diet-chart maker (fills the fields, not
+// copy-paste). Returns meal rows + calories/protein/notes as JSON.
+export type DietDraft = { meals?: [string, string][]; calories?: number | null; protein?: string | null; notes?: string | null; error?: string };
+export async function aiDietDraftStructured(client_id: string): Promise<DietDraft> {
+  const me = await getProfile();
+  if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
+  if (!client_id) return { error: "Pick a client first." };
+  const supabase = createClient();
+  const [{ data: cons }, { data: forms }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
+    supabase.from("consultations").select("kind, summary, notes").eq("client_id", client_id).eq("status", "completed"),
+    supabase.from("form_responses").select("answers").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
+    supabase.from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr").eq("client_id", client_id).order("date", { ascending: false }).limit(1),
+    supabase.from("clients").select("name, goals, conditions").eq("id", client_id).maybeSingle(),
+    supabase.from("client_workouts").select("name, type, mode").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1),
+  ]);
+  const c = cli as { name: string; goals: string[] | null; conditions: string | null } | null;
+  const parts: string[] = [];
+  if (c) parts.push(`Client: ${c.name}${c.goals?.length ? ` · goals: ${c.goals.join(", ")}` : ""}${c.conditions ? ` · conditions: ${c.conditions}` : ""}`);
+  const mrows = (meas ?? []) as MeasRow[];
+  if (mrows[0]) parts.push(`InBody — ${fmtMeas(mrows[0])}`);
+  for (const cn of ((cons ?? []) as { kind: string; summary: string | null; notes: string | null }[])) parts.push(`${cn.kind} consult: ${cn.summary ?? cn.notes ?? "—"}`);
+  for (const a of ((forms ?? []) as { answers: Record<string, unknown> }[])) parts.push(`Questionnaire: ${JSON.stringify(a.answers).slice(0, 1200)}`);
+  const w = (wk ?? [])[0] as { name: string; type: string; mode: string } | undefined;
+  if (w) parts.push(`Fitness plan: ${w.name} (${w.type}, ${w.mode})`);
+  if (parts.length <= 1) return { error: "Not enough client data yet (need consults / InBody / questionnaire)." };
+  const r = await openaiComplete(
+    'You are an expert clinical dietitian. Return ONLY a JSON object shaped as {"meals":[["Early Morning","..."],["Breakfast","..."],["Mid-Morning","..."],["Lunch","..."],["Evening","..."],["Dinner","..."]],"calories":<number kcal/day>,"protein":"<e.g. 72 g>","notes":"<short guidance for the client>"}. Each meal detail should be a concrete Indian-friendly suggestion with rough portions, aligned to the goals, conditions, InBody and fitness plan given.',
+    parts.join("\n"),
+    { json: true, maxTokens: 900 },
+  );
+  if (r.error) return { error: r.error };
+  try {
+    const parsed = JSON.parse(r.text ?? "{}") as { meals?: unknown; calories?: unknown; protein?: unknown; notes?: unknown };
+    const meals = Array.isArray(parsed.meals)
+      ? (parsed.meals as unknown[]).map((m) => Array.isArray(m) ? [String(m[0] ?? ""), String(m[1] ?? "")] as [string, string] : null).filter((x): x is [string, string] => Boolean(x && x[0]))
+      : [];
+    if (!meals.length) return { error: "The model didn't return a usable plan — try again." };
+    return {
+      meals,
+      calories: typeof parsed.calories === "number" ? parsed.calories : (Number(parsed.calories) || null),
+      protein: parsed.protein != null ? String(parsed.protein) : null,
+      notes: parsed.notes != null ? String(parsed.notes) : null,
+    };
+  } catch {
+    return { error: "Couldn't parse the AI plan — try again." };
+  }
 }
 
 export async function aiDietDraft(_prev: AiState, formData: FormData): Promise<AiState> {

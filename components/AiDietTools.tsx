@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import AiSummaryButton from "@/components/AiSummaryButton";
-import { aiInbodySummary, aiConsultSummary, aiDietDraft, aiDailyMealSummary } from "@/lib/actions";
+import { aiInbodySummary, aiConsultSummary, aiDailyMealSummary } from "@/lib/actions";
 
 // Dietitian AI toolkit: pick a client, then generate summaries / a first-draft
 // plan from the data already in Cureocity. Each result is a draft to copy into
@@ -30,7 +30,7 @@ export default function AiDietTools({ clients }: { clients: { id: string; name: 
         <div style={{ display: "grid", gap: 14 }}>
           <AiSummaryButton action={aiInbodySummary} label="InBody summary" clientId={client} />
           <AiSummaryButton action={aiConsultSummary} label="Consultation summary" clientId={client} />
-          <AiSummaryButton action={aiDietDraft} label="Draft diet plan" clientId={client} />
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Diet-plan draft now lives in the chart builder — hit “✨ Draft with AI” there to fill the fields.</div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <label style={{ fontSize: 12, color: "var(--muted)" }}>Daily meal summary for </label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inp} />
