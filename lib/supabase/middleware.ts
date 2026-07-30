@@ -59,8 +59,11 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isLogin = path === "/login";
+  // The password-recovery page must be reachable both with a temporary recovery
+  // session and (to show an "expired link" message) without one.
+  const isReset = path === "/reset-password";
 
-  if (!user && !isLogin) {
+  if (!user && !isLogin && !isReset) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -74,7 +77,7 @@ export async function updateSession(request: NextRequest) {
   // A module-scoped deployment serves only its own routes; anything else lands
   // back on the module rather than 404-ing or half-rendering.
   const scope = moduleScope();
-  if (user && scope && !isLogin && !scopeAllows(path)) {
+  if (user && scope && !isLogin && !isReset && !scopeAllows(path)) {
     const url = request.nextUrl.clone();
     url.pathname = scope.home;
     return NextResponse.redirect(url);

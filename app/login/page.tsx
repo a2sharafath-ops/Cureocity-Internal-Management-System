@@ -12,6 +12,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+
+  async function onForgot() {
+    setError(null); setResetMsg(null);
+    if (!email) { setError("Enter your email above first, then tap Forgot password."); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) { setError(error.message); return; }
+    setResetMsg("Check your email for a reset link. It opens a page to set a new password.");
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +75,17 @@ export default function LoginPage() {
             {error}
           </div>
         )}
+        {resetMsg && (
+          <div style={{ marginTop: 12, background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}>
+            {resetMsg}
+          </div>
+        )}
+
+        <div style={{ marginTop: 10, textAlign: "right" }}>
+          <button type="button" onClick={onForgot} style={{ background: "none", border: "none", padding: 0, color: "var(--brand-text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            Forgot password?
+          </button>
+        </div>
 
         <button
           type="submit"
