@@ -41,7 +41,7 @@ export default function InvoiceActions({
         {clientId && <input type="hidden" name="client_id" value={clientId} />}
         <input type="hidden" name="href" value="/billing" />
         <SubmitButton pendingLabel="Chasing…" doneLabel="✓ Chased" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-          Chase collector
+          Chase Front Desk
         </SubmitButton>
       </form>
     );
