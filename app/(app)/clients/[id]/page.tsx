@@ -6,6 +6,7 @@ import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
+import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
 import HabitForm from "@/components/HabitForm";
 import { WearableForm, WearableConnect } from "@/components/WearableForm";
 import { archiveHabit, removeWorkout } from "@/lib/actions";
@@ -115,6 +116,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { data: measureRows } = await supabase
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: false }).limit(12);
   const measures = (measureRows ?? []) as { id: string; date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; resting_hr: number | null; recorded_by: string | null }[];
+  // True baseline (first-ever record) for the initial-vs-latest comparison.
+  const { data: baselineRow } = await supabase
+    .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: true }).limit(1).maybeSingle();
 
   const canCoach = !ro && canConsult(me?.role ?? "");
   const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
@@ -701,6 +705,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             <div style={{ marginTop: 4, color: "var(--ink)" }}>{s}</div>
           </div>
         ) : null; })()}
+        {baselineRow && measures[0] && (baselineRow as Measure).date !== measures[0].date && (
+          <InBodyComparison baseline={baselineRow as Measure} latest={measures[0] as Measure} />
+        )}
         {measures.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>No measurements recorded yet.</div>
         ) : (
