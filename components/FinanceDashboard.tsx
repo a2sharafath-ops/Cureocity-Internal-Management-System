@@ -209,7 +209,6 @@ export default async function FinanceDashboard({ name }: { name: string }) {
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Link href="/expenses" style={qa}>Expenses</Link>
             <Link href="/finsheets" style={qa}>Finance Sheets</Link>
-            <Link href="/claims" style={qa}>Insurance</Link>
             <Link href="/reports" style={qa}>Reports</Link>
           </div>
         </div>
