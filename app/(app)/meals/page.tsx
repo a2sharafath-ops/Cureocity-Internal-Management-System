@@ -5,6 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { MEALS, type MealLog } from "@/lib/meals";
 import MealStaffCell from "@/components/MealStaffCell";
+import MealContactLadder, { type Contact } from "@/components/MealContactLadder";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 
@@ -37,12 +38,24 @@ export default async function MealsPage() {
   const key = (cid: string, meal: string) => cid + "|" + meal;
   const map = new Map(logs.map((l) => [key(l.client_id, l.meal), l]));
 
+  // Today's follow-up contact attempts (the escalation ladder), per client.
+  const { data: contactData } = ids.length
+    ? await supabase.from("meal_contacts").select("client_id, channel, outcome, note, staff, created_at").eq("date", TODAY).in("client_id", ids).order("created_at")
+    : { data: [] };
+  const contactsByClient = new Map<string, Contact[]>();
+  for (const c of (contactData ?? []) as (Contact & { client_id: string })[]) {
+    const arr = contactsByClient.get(c.client_id) ?? [];
+    arr.push({ channel: c.channel, outcome: c.outcome, note: c.note, staff: c.staff, created_at: c.created_at });
+    contactsByClient.set(c.client_id, arr);
+  }
+  const loggedSet = new Set(logs.filter((l) => l.description).map((l) => l.client_id));
+
   const statusMap = await loadClientStatuses(supabase, ids, TODAY);
   const viewerDisc = disciplineForRole(me.role);
 
   return (
     <div style={{ maxWidth: 1040 }}>
-      <RealtimeRefresh tables={["meal_logs"]} />
+      <RealtimeRefresh tables={["meal_logs", "meal_contacts"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Dietitian · Meal Monitoring</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
         Today {todayLabel()} · review logged meals, nudge missing ones, answer questions · {clients.length} client{clients.length === 1 ? "" : "s"}
@@ -73,6 +86,7 @@ export default async function MealsPage() {
                   <MealStaffCell key={m.key} clientId={c.id} meal={m.key} label={m.label} icon={m.icon} log={map.get(key(c.id, m.key)) ?? null} />
                 ))}
               </div>
+              <MealContactLadder clientId={c.id} date={TODAY} logged={loggedSet.has(c.id)} contacts={contactsByClient.get(c.id) ?? []} />
             </div>
           );
         })
