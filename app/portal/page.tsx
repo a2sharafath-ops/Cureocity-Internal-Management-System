@@ -63,6 +63,9 @@ export default async function PortalHome() {
 
   const { data: mealRows } = await supabase.from("meal_logs").select("*").eq("client_id", client.id).eq("date", TODAY);
   const mealMap = new Map(((mealRows ?? []) as MealLog[]).map((m) => [m.meal, m]));
+  // Daily meal summaries the dietitian has sent to this client.
+  const { data: daySummaryRows } = await supabase.from("meal_day_summaries").select("date, summary, sent_at").eq("client_id", client.id).not("sent_at", "is", null).order("date", { ascending: false }).limit(7);
+  const daySummaries = ((daySummaryRows ?? []) as { date: string; summary: string | null; sent_at: string | null }[]).filter((d) => d.summary);
   // A client can hold several packages (e.g. a Facility Membership AND
   // Comprehensive). Decide portal features from what they actually hold, not the
   // single legacy primary package — otherwise a facility-primary client with a
@@ -176,7 +179,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts","meal_day_summaries"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -433,6 +436,19 @@ export default async function PortalHome() {
               <div style={{ color: "var(--muted)", fontSize: 11 }}>
                 Always follow your doctor&apos;s instructions. Contact the centre if anything is unclear.
               </div>
+            </div>
+          )}
+
+          {/* Daily summaries the dietitian has sent. */}
+          {daySummaries.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>Daily summaries from your dietitian</div>
+              {daySummaries.map((d) => (
+                <div key={d.date} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: "var(--surface)", marginBottom: 8 }}>
+                  <b style={{ fontSize: 13 }}>{new Date(d.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })}</b>
+                  <div style={{ whiteSpace: "pre-wrap", fontSize: 13, marginTop: 4 }}>{d.summary}</div>
+                </div>
+              ))}
             </div>
           )}
 

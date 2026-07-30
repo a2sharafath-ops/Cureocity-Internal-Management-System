@@ -5655,6 +5655,27 @@ export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Pr
   return r;
 }
 
+// Send the day's summary to the client: surfaces it in their portal, stamps
+// sent_at, and drops a notification on their login. Saves the current text first.
+export async function sendMealDaySummary(client_id: string, date?: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const day = date || todayISO();
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  const { data: row } = await supabase.from("meal_day_summaries").select("summary").eq("client_id", client_id).eq("date", day).maybeSingle();
+  const summary = (row as { summary: string | null } | null)?.summary?.trim();
+  if (!summary) return { error: "Write or generate the summary first, then send." };
+  await supabase.from("meal_day_summaries").update({ sent_at: new Date().toISOString() }).eq("client_id", client_id).eq("date", day);
+  // Notify the client's login(s), if they have portal access.
+  const { data: profs } = await supabase.from("profiles").select("id").eq("client_id", client_id);
+  const rows = ((profs ?? []) as { id: string }[]).map((p) => ({ user_id: p.id, title: "Your daily diet summary", body: `Your summary for ${day} is ready in your portal.`, href: "/portal", icon: "🥗" }));
+  if (rows.length) await supabase.from("notifications").insert(rows);
+  await logAudit(me, "Daily meal summary sent", client_id, day);
+  revalidatePath("/portal");
+  return { ok: true };
+}
+
 // Manually write / edit the stored daily meal summary for a client + date.
 export async function saveMealDaySummary(client_id: string, text: string, date?: string): Promise<{ ok?: boolean; error?: string }> {
   const me = await getProfile();
