@@ -472,7 +472,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                   <td style={{ padding: "8px 6px" }}>{i.description}</td>
                   <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
                   <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "var(--neutral-bg)", color: i.status === "Paid" ? "var(--green-text)" : i.status === "Unpaid" ? "var(--amber-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
-                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{canInvoice && <InvoiceActions id={i.id} status={i.status} />}</td>
+                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{canInvoice && <InvoiceActions id={i.id} status={i.status} role={me?.role ?? ""} clientId={params.id} label={`INV-${String(i.num ?? 0).padStart(3, "0")} · ₹${Number(i.amount).toLocaleString("en-IN")}`} />}</td>
                 </tr>
               ))}
             </tbody>

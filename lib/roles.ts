@@ -179,6 +179,13 @@ export function canManageInvoices(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
 }
 
+// Admin / Manager oversee collections — they don't collect the cash themselves,
+// so on invoices they chase the assignee (Front Desk / Finance) instead of
+// marking an invoice paid. Finance stays the hands-on collector.
+export function isBillingOverseer(role: string): boolean {
+  return ["Administrator", "Manager"].includes(role);
+}
+
 // Who can message clients.
 export function canMessage(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
