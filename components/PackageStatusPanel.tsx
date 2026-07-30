@@ -13,6 +13,23 @@ const TONE: Record<string, { dot: string }> = {
 
 const firstName = (n: string) => n.split(" ")[0];
 
+// A label like "Doctor consultation — booked" carries its status in the text,
+// which reads the same as a to-do. Pull a recognised trailing status out into a
+// coloured badge so progress is obvious at a glance.
+const STATUS_TONES: { re: RegExp; bg: string; color: string }[] = [
+  { re: /^(booked|scheduled|drafted|created|sent|done|received|generated|approved|published|complete[d]?)$/i, bg: "var(--green-bg)", color: "var(--green-text)" },
+  { re: /^(overdue|unpaid|missed)$/i, bg: "var(--red-bg)", color: "var(--red-text)" },
+  { re: /(due|pending|awaiting|not )/i, bg: "var(--amber-bg)", color: "var(--amber-text)" },
+];
+function splitStatus(label: string): { main: string; badge?: { text: string; bg: string; color: string } } {
+  const m = label.match(/^(.*?)\s+[—-]\s+(.+)$/);
+  if (!m) return { main: label };
+  const suffix = m[2].trim();
+  const tone = STATUS_TONES.find((t) => t.re.test(suffix));
+  if (!tone) return { main: label };
+  return { main: m[1].trim(), badge: { text: suffix, bg: tone.bg, color: tone.color } };
+}
+
 const chaseBtn: React.CSSProperties = { border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
 
 // `canChase` = the viewer is an overseer (Super Admin / Admin / Manager). For
@@ -24,11 +41,13 @@ function List({ items, empty, clientId, canChase }: { items: StatusItem[]; empty
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       {items.map((it, i) => {
+        const { main, badge } = splitStatus(it.label);
         const body = (
           <>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: TONE[it.tone].dot, flexShrink: 0 }} />
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ color: "var(--ink)" }}>{it.label}</span>
+              <span style={{ color: "var(--ink)" }}>{main}</span>
+              {badge && <span style={{ marginLeft: 6, background: badge.bg, color: badge.color, borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700, textTransform: "capitalize", whiteSpace: "nowrap" }}>{badge.text}</span>}
               {it.detail ? <span style={{ color: "var(--muted)" }}> · {it.detail}</span> : null}
             </span>
           </>
