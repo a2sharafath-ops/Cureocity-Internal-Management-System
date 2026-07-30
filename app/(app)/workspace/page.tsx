@@ -15,7 +15,6 @@ import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
-import AiDietTools from "@/components/AiDietTools";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
@@ -498,10 +497,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
-      {tab === "summaries" && <>
-        <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />
-        {roleKey === "diet" && !readOnly && <AiDietTools clients={clientOpts} />}
-      </>}
+      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />}
 
       {/* ---- CONCERNS ---- */}
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
