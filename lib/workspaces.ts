@@ -101,8 +101,6 @@ function commonTabs(): WsTab[] {
     // common set rather than any one workspace's role tabs.
     { key: "whiteboard", label: "Whiteboard", live: true },
     { key: "concerns", label: "Concerns", live: true },
-    { key: "team", label: "Care Team Hub", live: true },
-    { key: "monitor", label: "Client Monitoring", live: true },
     { key: "library", label: "Resource Library", live: true },
     { key: "board", label: "MDT", live: true },
   ];
@@ -120,11 +118,22 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
     { key: "charts", label: "Diet chart review", live: true },
   ]),
   psych: withRoleTabs([]),
-  diet: withRoleTabs([
-    { key: "meals", label: "Meal Monitoring", live: true },
+  // Diet uses an explicit order (role tabs are interleaved with the common set,
+  // so the shared withRoleTabs insertion point can't express it).
+  diet: [
+    { key: "dash", label: "Dashboard", live: true },
+    { key: "clients", label: "My Clients", live: true },
+    { key: "appts", label: "Appointments", live: true },
+    { key: "summaries", label: "Summaries", live: true },
+    { key: "bp", label: "BluePrint", live: true },
     { key: "charts", label: "Diet Charts", live: true },
+    { key: "meals", label: "Meal Monitoring", live: true },
+    { key: "whiteboard", label: "Whiteboard", live: true },
+    { key: "concerns", label: "Concerns", live: true },
+    { key: "board", label: "MDT", live: true },
     { key: "recipes", label: "Recipes", live: true },
-  ]),
+    { key: "library", label: "Resource Library", live: true },
+  ],
   trainer: withRoleTabs([
     { key: "planner", label: "Workout Planner", live: true },
     { key: "exlib", label: "Exercise Library", live: true },
