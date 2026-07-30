@@ -479,6 +479,9 @@ export default async function PortalHome() {
                   </div>
                 ))}
                 {myChart.notes && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{myChart.notes}</div>}
+                <div style={{ marginTop: 8 }}>
+                  <a href={`/diet-chart/${myChart.id}/print?auto=1`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>⬇ Download PDF</a>
+                </div>
               </div>
             </div>
           )}

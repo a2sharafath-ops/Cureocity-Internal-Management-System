@@ -119,6 +119,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
                 return <span style={{ background: bg, color: col, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{st}</span>;
               })()}
               <button type="button" onClick={() => setExpanded((e) => (e === dc.id ? null : dc.id))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expanded === dc.id ? "Hide" : "View"}</button>
+              <a href={`/diet-chart/${dc.id}/print?auto=1`} target="_blank" rel="noopener" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)", textDecoration: "none" }}>PDF</a>
 
               {dc.status === "Draft" && canCompose && (
                 <button type="button" onClick={() => (editing === dc.id ? setEditing(null) : startEdit(dc))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{editing === dc.id ? "Close" : "Edit"}</button>
