@@ -12,6 +12,9 @@ import MetricCard from "@/components/MetricCard";
 import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClients";
 import MealMonitoringSection from "@/components/MealMonitoringSection";
 import BlueprintSection from "@/components/BlueprintSection";
+import WhiteboardSection from "@/components/WhiteboardSection";
+import CareTeamSection from "@/components/CareTeamSection";
+import ExerciseLibrarySection from "@/components/ExerciseLibrarySection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
@@ -497,6 +500,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- BLUEPRINT SIGN-OFF ---- */}
       {tab === "bp" && <BlueprintSection me={me} />}
+
+      {/* ---- WHITEBOARD ---- */}
+      {tab === "whiteboard" && <WhiteboardSection me={me} />}
+
+      {/* ---- CARE TEAM HUB ---- */}
+      {tab === "team" && <CareTeamSection me={me} />}
+
+      {/* ---- EXERCISE LIBRARY (trainer) ---- */}
+      {tab === "exlib" && <ExerciseLibrarySection />}
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} canStartAny={["Super Admin", "Administrator", "Manager"].includes(me.role) && !readOnly} />}

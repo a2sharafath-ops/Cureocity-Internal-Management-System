@@ -5713,6 +5713,7 @@ export async function openWhiteboard(formData: FormData) {
     await logAudit(p, "Whiteboard opened", date, branch);
   }
   revalidatePath("/whiteboard");
+  revalidatePath("/workspace");
 }
 
 export async function closeWhiteboard(formData: FormData) {
@@ -5724,6 +5725,7 @@ export async function closeWhiteboard(formData: FormData) {
     .update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Whiteboard closed", id, null);
   revalidatePath("/whiteboard");
+  revalidatePath("/workspace");
 }
 
 /** Put a client on today's board. */
@@ -5847,6 +5849,56 @@ export async function toggleWhiteboardNote(formData: FormData) {
   const supabase = createClient();
   await supabase.from("whiteboard_notes").update({ done: !done }).eq("id", id);
   revalidatePath("/whiteboard");
+}
+
+/**
+ * Answer a major whiteboard alert: the assigned person records WHY it happened
+ * and the SOLUTION. Upserts on (session, client, alert_key) so re-answering
+ * updates rather than duplicates. Any staff member may answer (an overseer can
+ * capture it on the assignee's behalf during the meeting).
+ */
+export async function answerWhiteboardAlert(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return;
+  const session_id = String(formData.get("session_id"));
+  const client_id = String(formData.get("client_id"));
+  const alert_key = String(formData.get("alert_key"));
+  if (!session_id || !client_id || !alert_key) return;
+  const why = String(formData.get("why") ?? "").trim();
+  const solution = String(formData.get("solution") ?? "").trim();
+  if (!why && !solution) return;
+  const supabase = createClient();
+  await supabase.from("whiteboard_alert_responses").upsert({
+    session_id, client_id, alert_key,
+    alert_label: String(formData.get("alert_label") ?? "") || null,
+    discipline: String(formData.get("discipline") ?? "") || null,
+    why: why || null, solution: solution || null,
+    resolved: Boolean(solution),
+    answered_by: p.name, updated_at: new Date().toISOString(),
+  }, { onConflict: "session_id,client_id,alert_key" });
+  revalidatePath("/whiteboard");
+  revalidatePath("/workspace");
+}
+
+/** Mark (or unmark) a client as walked through on today's board. */
+export async function markClientReviewed(formData: FormData) {
+  const p = await getProfile();
+  if (!p) return;
+  const session_id = String(formData.get("session_id"));
+  const client_id = String(formData.get("client_id"));
+  if (!session_id || !client_id) return;
+  const supabase = createClient();
+  if (String(formData.get("undo")) === "true") {
+    await supabase.from("whiteboard_reviews").delete().eq("session_id", session_id).eq("client_id", client_id);
+  } else {
+    await supabase.from("whiteboard_reviews").upsert({
+      session_id, client_id,
+      stage: String(formData.get("stage") ?? "") || null,
+      reviewed_by: p.name,
+    }, { onConflict: "session_id,client_id" });
+  }
+  revalidatePath("/whiteboard");
+  revalidatePath("/workspace");
 }
 
 // ---- quick drawer ----------------------------------------------------------

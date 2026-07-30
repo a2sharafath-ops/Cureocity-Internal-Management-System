@@ -99,9 +99,9 @@ function commonTabs(): WsTab[] {
     { key: "bp", label: "BluePrint", live: true },
     // The daily team meeting — every discipline takes part, so it sits in the
     // common set rather than any one workspace's role tabs.
-    { key: "whiteboard", label: "Whiteboard", href: "/whiteboard" },
+    { key: "whiteboard", label: "Whiteboard", live: true },
     { key: "concerns", label: "Concerns", live: true },
-    { key: "team", label: "Care Team Hub", href: "/careteam" },
+    { key: "team", label: "Care Team Hub", live: true },
     { key: "monitor", label: "Client Monitoring", live: true },
     { key: "library", label: "Resource Library", live: true },
     { key: "board", label: "MDT", live: true },
@@ -127,7 +127,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   ]),
   trainer: withRoleTabs([
     { key: "planner", label: "Workout Planner", live: true },
-    { key: "exlib", label: "Exercise Library", href: "/exlib" },
+    { key: "exlib", label: "Exercise Library", live: true },
   ]),
   coach: withRoleTabs([
     { key: "followups", label: "Follow-ups", live: true },
