@@ -5,8 +5,8 @@ import { reviewMeal, nudgeMeal, answerMealDoubt, logMealByStaff } from "@/lib/ac
 import type { MealLog } from "@/lib/meals";
 
 export default function MealStaffCell({
-  clientId, meal, label, icon, log,
-}: { clientId: string; meal: string; label: string; icon: string; log: MealLog | null }) {
+  clientId, meal, label, icon, log, readOnly = false,
+}: { clientId: string; meal: string; label: string; icon: string; log: MealLog | null; readOnly?: boolean }) {
   const [rev, setRev] = useState(false);
   const [ans, setAns] = useState(false);
   const [entry, setEntry] = useState(false);
@@ -34,12 +34,14 @@ export default function MealStaffCell({
           {log?.review ? (
             <div style={{ fontSize: 12, color: "var(--green-text)", marginTop: 4 }}>✔ {log.review}</div>
           ) : null}
+          {!readOnly && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button type="button" onClick={() => setRev((o) => !o)} style={{ marginTop: 6, border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>
               {rev ? "Cancel" : log?.review ? "Edit review" : "Add review"}
             </button>
             {!entry && <button type="button" onClick={() => setEntry(true)} style={{ marginTop: 6, border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>Edit meal</button>}
           </div>
+          )}
           {entry && entryForm}
           {rev && (
             <form action={reviewMeal} onSubmit={() => setTimeout(() => setRev(false), 50)} style={{ marginTop: 6 }}>
@@ -52,7 +54,9 @@ export default function MealStaffCell({
         </>
       ) : (
         <div style={{ marginTop: 6 }}>
-          {!entry && (
+          {readOnly ? (
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>Not logged.</span>
+          ) : !entry ? (
             <>
               <span style={{ fontSize: 12, color: "var(--muted)" }}>Not logged yet. </span>
               {log?.nudged ? (
@@ -66,8 +70,8 @@ export default function MealStaffCell({
               )}
               <button type="button" onClick={() => setEntry(true)} style={{ marginLeft: 6, border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 11, cursor: "pointer" }}>+ Log for them</button>
             </>
-          )}
-          {entry && entryForm}
+          ) : null}
+          {!readOnly && entry && entryForm}
         </div>
       )}
 
@@ -76,6 +80,8 @@ export default function MealStaffCell({
           <div style={{ fontSize: 12, color: "var(--amber-text)" }}>{log.doubt}</div>
           {log.doubt_answer ? (
             <div style={{ fontSize: 12, color: "var(--green-text)", marginTop: 3 }}>↳ {log.doubt_answer}</div>
+          ) : readOnly ? (
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>Unanswered</div>
           ) : ans ? (
             <form action={answerMealDoubt} onSubmit={() => setTimeout(() => setAns(false), 50)} style={{ marginTop: 4 }}>
               <input type="hidden" name="client_id" value={clientId} />

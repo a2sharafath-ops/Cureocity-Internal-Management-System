@@ -5,22 +5,28 @@ import MealStaffCell from "@/components/MealStaffCell";
 import MealContactLadder, { type Contact } from "@/components/MealContactLadder";
 import MealFollowupHistory from "@/components/MealFollowupHistory";
 import MealClientCard from "@/components/MealClientCard";
+import MealDayNav from "@/components/MealDayNav";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
-import { todayISO, todayLabel } from "@/lib/today";
+import { todayISO } from "@/lib/today";
 
 // Dietitian meal-monitoring — reused both as the standalone /meals page and as
 // the "Meal Monitoring" tab inside the workspace. Fetches its own data, scoped
 // to the viewing clinician (admins/managers see the clinic-wide view).
 export default async function MealMonitoringSection({
-  me, heading = false,
+  me, heading = false, date,
 }: {
   me: { role: string; staffId?: string | null };
   /** show a page-level H1 (standalone page); off inside the workspace tab. */
   heading?: boolean;
+  /** the day to show (YYYY-MM-DD); defaults to today. Past days are read-only. */
+  date?: string;
 }) {
-  const TODAY = todayISO();
+  const today = todayISO();
+  // Only accept a valid past/today date; never the future.
+  const TODAY = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today ? date : today;
+  const isToday = TODAY === today;
   const supabase = createClient();
 
   // Diet clients = clients on an active Comprehensive / BluePrint package.
@@ -93,10 +99,11 @@ export default async function MealMonitoringSection({
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["meal_logs", "meal_contacts"]} />
       {heading && <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Meal Monitoring{scopedToMe ? "" : " · all diet clients"}</h1>}
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Today {todayLabel()} · {clients.length} client{clients.length === 1 ? "" : "s"}
-        {clients.length > 0 && ` · ${needAction} need action`} · review logged meals, log or nudge missing ones, answer questions
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 12px" }}>
+        Daily log · {clients.length} client{clients.length === 1 ? "" : "s"}
+        {clients.length > 0 && isToday && ` · ${needAction} need action`} · {isToday ? "review logged meals, log or nudge missing ones, answer questions" : "read-only record for this day"}
       </p>
+      <MealDayNav date={TODAY} today={today} />
 
       {clients.length === 0 ? (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", color: "var(--muted)", fontSize: 13 }}>
@@ -118,10 +125,10 @@ export default async function MealMonitoringSection({
             >
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
                 {MEALS.map((m) => (
-                  <MealStaffCell key={m.key} clientId={c.id} meal={m.key} label={m.label} icon={m.icon} log={map.get(key(c.id, m.key)) ?? null} />
+                  <MealStaffCell key={m.key} clientId={c.id} meal={m.key} label={m.label} icon={m.icon} log={map.get(key(c.id, m.key)) ?? null} readOnly={!isToday} />
                 ))}
               </div>
-              <MealContactLadder clientId={c.id} date={TODAY} logged={loggedSet.has(c.id)} contacts={contactsByClient.get(c.id) ?? []} />
+              <MealContactLadder clientId={c.id} date={TODAY} logged={loggedSet.has(c.id)} contacts={contactsByClient.get(c.id) ?? []} readOnly={!isToday} />
               <MealFollowupHistory entries={pastByClient.get(c.id) ?? []} />
             </MealClientCard>
           );

@@ -36,7 +36,7 @@ export const dynamic = "force-dynamic";
 
 type ClientRow = WsClient & { used: number | null; packages: { name: string; sessions: number } | null };
 
-export default async function WorkspacePage({ searchParams }: { searchParams: { role?: string; tab?: string } }) {
+export default async function WorkspacePage({ searchParams }: { searchParams: { role?: string; tab?: string; d?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/workspace")) redirect("/dashboard");
 
@@ -489,7 +489,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "clients" && <WorkspaceClients role={roleKey} color={role.color} clients={rosterRows} linkQuery={roQuery} />}
 
       {/* ---- MEAL MONITORING (dietitian) ---- */}
-      {tab === "meals" && <MealMonitoringSection me={me} />}
+      {tab === "meals" && <MealMonitoringSection me={me} date={searchParams.d} />}
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} canStartAny={["Super Admin", "Administrator", "Manager"].includes(me.role) && !readOnly} />}
