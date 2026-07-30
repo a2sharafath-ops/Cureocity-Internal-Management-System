@@ -121,7 +121,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   ]),
   psych: withRoleTabs([]),
   diet: withRoleTabs([
-    { key: "meals", label: "Meal Monitoring", href: "/meals" },
+    { key: "meals", label: "Meal Monitoring", live: true },
     { key: "charts", label: "Diet Charts", live: true },
     { key: "recipes", label: "Recipes", live: true },
   ]),
