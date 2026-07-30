@@ -11,24 +11,32 @@ import Chip from "@/components/Chip";
 import {
   addHrUpdate, toggleMonthTask, generatePayslip, addCommission, fileStatutory,
   advanceCandidate, setPurchaseStatus, addOffboarding,
+  saveLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc,
 } from "@/lib/actions";
+import EmployeeDocUpload from "@/components/EmployeeDocUpload";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null };
 
-export default async function HrPage({ searchParams }: { searchParams: { tab?: string } }) {
+export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/hr")) redirect("/dashboard");
-  const tab = ["attendance", "leave", "payroll", "recruit", "boarding"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
+  const tab = ["attendance", "leave", "holidays", "payroll", "employees", "recruit", "boarding"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
 
   const today = todayISO();
+  // The monthly attendance sheet works on a chosen month (defaults to current).
+  const sheetMonth = /^\d{4}-\d{2}$/.test(searchParams.month ?? "") ? searchParams.month! : today.slice(0, 7);
+  const monthStart = `${sheetMonth}-01`;
+  const monthEnd = `${sheetMonth}-31`;
+  const year = today.slice(0, 4);
   const month = today.slice(0, 7);
   const supabase = createClient();
   const [
     { data: staffData }, { data: attData }, { data: leaveData }, { data: payData }, { data: obData },
     { data: updData }, { data: mtData }, { data: comData }, { data: statData }, { data: candData }, { data: docData }, { data: purData },
+    { data: ltData }, { data: holData }, { data: monthAttData }, { data: yearLeaveData }, { data: empDocData }, { data: salData },
   ] = await Promise.all([
     supabase.from("staff").select("id, name, designation, department, role, leave_balance").order("name"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
@@ -42,6 +50,12 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     supabase.from("hr_candidates").select("id, name, role, source, stage").order("created_at", { ascending: false }),
     supabase.from("hr_documents").select("id, title, kind, person, doc_date, status").order("doc_date", { ascending: false }),
     supabase.from("hr_purchases").select("id, item, requested_by, req_date, status").order("req_date", { ascending: false }),
+    supabase.from("leave_types").select("code, name, annual_days, paid, active, seq, color").order("seq"),
+    supabase.from("holidays").select("id, date, name, kind").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).order("date"),
+    supabase.from("attendance").select("staff_id, date, status").gte("date", monthStart).lte("date", monthEnd),
+    supabase.from("leaves").select("staff_id, type, from_date, to_date, status").eq("status", "approved").gte("from_date", `${year}-01-01`).lte("from_date", `${year}-12-31`),
+    supabase.from("employee_documents").select("id, staff_id, title, kind, name, created_at").order("created_at", { ascending: false }),
+    supabase.from("salary_structures").select("staff_id, basic, hra, allowances, pf, esi, pt, tds, effective_from"),
   ]);
 
   const staff = (staffData ?? []) as Staff[];
@@ -59,6 +73,34 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const documents = (docData ?? []) as { id: string; title: string; kind: string | null; person: string | null; doc_date: string | null; status: string }[];
   const purchases = (purData ?? []) as { id: string; item: string; requested_by: string | null; req_date: string | null; status: string }[];
 
+  // ---- HR expansion derived data --------------------------------------------
+  const leaveTypes = (ltData ?? []) as { code: string; name: string; annual_days: number; paid: boolean; active: boolean; seq: number; color: string | null }[];
+  const activeTypes = leaveTypes.filter((t) => t.active);
+  const holidays = (holData ?? []) as { id: string; date: string; name: string; kind: string }[];
+  const empDocs = (empDocData ?? []) as { id: string; staff_id: string; title: string; kind: string; name: string | null; created_at: string }[];
+  const salaries = new Map(((salData ?? []) as { staff_id: string; basic: number; hra: number; allowances: number; pf: number; esi: number; pt: number; tds: number; effective_from: string | null }[]).map((s) => [s.staff_id, s]));
+
+  // Monthly attendance sheet: staff_id → (day-of-month → status).
+  const daysInMonth = new Date(Number(sheetMonth.slice(0, 4)), Number(sheetMonth.slice(5, 7)), 0).getDate();
+  const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const monthAtt = new Map<string, Map<number, string>>();
+  for (const a of (monthAttData ?? []) as { staff_id: string; date: string; status: string }[]) {
+    const d = Number(a.date.slice(8, 10));
+    (monthAtt.get(a.staff_id) ?? monthAtt.set(a.staff_id, new Map()).get(a.staff_id)!).set(d, a.status);
+  }
+  const monthLabel = new Date(`${sheetMonth}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  const prevMonth = (() => { const d = new Date(`${sheetMonth}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
+  const nextMonth = (() => { const d = new Date(`${sheetMonth}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })();
+
+  // Leave taken this year per staff per type (inclusive day count of approved leaves).
+  const dayCount = (a: string, b: string) => Math.max(1, Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) + 1);
+  const leaveUsed = new Map<string, Map<string, number>>();
+  for (const l of (yearLeaveData ?? []) as { staff_id: string; type: string; from_date: string; to_date: string }[]) {
+    const m = leaveUsed.get(l.staff_id) ?? leaveUsed.set(l.staff_id, new Map()).get(l.staff_id)!;
+    m.set(l.type, (m.get(l.type) ?? 0) + dayCount(l.from_date, l.to_date ?? l.from_date));
+  }
+  const selectedEmp = staff.find((s) => s.id === searchParams.emp) ?? null;
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
   const td: React.CSSProperties = { padding: "11px 16px", fontSize: 13 };
@@ -74,21 +116,23 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
 
   return (
     <div style={{ maxWidth: 1220 }}>
-      <RealtimeRefresh tables={["attendance", "leaves", "payroll", "hr_updates", "hr_candidates", "hr_purchases", "onboarding"]} />
+      <RealtimeRefresh tables={["attendance", "leaves", "payroll", "hr_updates", "hr_candidates", "hr_purchases", "onboarding", "leave_types", "holidays", "employee_documents", "salary_structures"]} />
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
         <div>
           <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>HR</h1>
           <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Attendance, leave, payroll, recruitment, onboarding — all HR operations</p>
         </div>
         <span style={{ flex: 1 }} />
-        <LeaveForm staff={staff.map((s) => ({ id: s.id, name: s.name, role: s.role, department: s.department }))} />
+        <LeaveForm staff={staff.map((s) => ({ id: s.id, name: s.name, role: s.role, department: s.department }))} types={activeTypes.map((t) => ({ code: t.code, name: t.name }))} />
       </div>
 
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} items={[
           { key: "attendance", label: "Team & Attendance", href: "/hr?tab=attendance" },
           { key: "leave", label: "Leave", href: "/hr?tab=leave" },
+          { key: "holidays", label: "Holidays", href: "/hr?tab=holidays" },
           { key: "payroll", label: "Payroll & Statutory", href: "/hr?tab=payroll" },
+          { key: "employees", label: "Employees", href: "/hr?tab=employees" },
           { key: "recruit", label: "Recruitment & Docs", href: "/hr?tab=recruit" },
           { key: "boarding", label: "On / Offboarding", href: "/hr?tab=boarding" },
         ]} />
@@ -126,6 +170,49 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
             ))}
             {updates.length === 0 && <div style={{ color: "var(--muted)", fontSize: 13 }}>No updates yet.</div>}
           </div>
+
+          {/* ---- Monthly attendance sheet (spans full width under the two cols) ---- */}
+          <div style={{ ...box, overflow: "hidden", gridColumn: "1 / -1" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px" }}>
+              <b>Monthly attendance — {monthLabel}</b>
+              <span style={{ flex: 1 }} />
+              <a href={`/hr?tab=attendance&month=${prevMonth}`} style={{ ...inp, textDecoration: "none", color: "var(--brand-text)" }}>← Prev</a>
+              <a href={`/hr?tab=attendance&month=${nextMonth}`} style={{ ...inp, textDecoration: "none", color: "var(--brand-text)" }}>Next →</a>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", fontSize: 11, minWidth: "100%" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...th, position: "sticky", left: 0, background: "var(--card)", minWidth: 150 }}>Staff</th>
+                    {monthDays.map((d) => <th key={d} style={{ padding: "6px 4px", textAlign: "center", color: "var(--muted)", fontSize: 10 }}>{d}</th>)}
+                    <th style={{ padding: "6px 8px", textAlign: "center", color: "var(--muted)", fontSize: 10 }}>P</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staff.map((s) => {
+                    const row = monthAtt.get(s.id);
+                    const present = row ? Array.from(row.values()).filter((v) => v === "present" || v === "half").length : 0;
+                    const cell = (st: string | undefined) => {
+                      if (!st) return { t: "·", bg: "transparent", c: "var(--border)" };
+                      if (st === "present") return { t: "P", bg: "var(--green-bg)", c: "var(--green-text)" };
+                      if (st === "absent") return { t: "A", bg: "var(--red-bg)", c: "var(--red-text)" };
+                      if (st === "leave") return { t: "L", bg: "var(--amber-bg)", c: "var(--amber-text)" };
+                      if (st === "half") return { t: "½", bg: "var(--blue-bg)", c: "var(--blue-text)" };
+                      return { t: "·", bg: "transparent", c: "var(--muted)" };
+                    };
+                    return (
+                      <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td style={{ padding: "6px 10px", fontWeight: 600, fontSize: 12, position: "sticky", left: 0, background: "var(--card)" }}>{s.name}</td>
+                        {monthDays.map((d) => { const c = cell(row?.get(d)); return <td key={d} style={{ textAlign: "center", padding: "3px 0" }}><span style={{ display: "inline-block", minWidth: 16, borderRadius: 4, background: c.bg, color: c.c, fontWeight: 700 }}>{c.t}</span></td>; })}
+                        <td style={{ textAlign: "center", fontWeight: 700 }}>{present}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ padding: "8px 16px", color: "var(--muted)", fontSize: 11 }}>P present · A absent · L leave · ½ half-day · mark daily status on the Team panel above.</div>
+          </div>
         </div>
       )}
 
@@ -146,19 +233,151 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
             {leaves.length === 0 && <div style={{ color: "var(--muted)", fontSize: 13 }}>No leave requests.</div>}
           </div>
           <div style={{ ...box, padding: "16px 18px" }}>
-            <b>Leave Balances</b>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-              <thead><tr><th style={th}>Staff</th><th style={th}>Balance</th><th style={th}>Status</th></tr></thead>
+            <b>Leave types</b>
+            <div style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 8px" }}>Yearly entitlement per type — editable.</div>
+            {leaveTypes.map((t) => (
+              <form key={t.code} action={saveLeaveType} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
+                <input type="hidden" name="code" value={t.code} />
+                <input type="hidden" name="name" value={t.name} />
+                <span style={{ minWidth: 40, fontWeight: 700, color: t.color ?? "var(--ink)" }}>{t.code}</span>
+                <span style={{ flex: 1, fontSize: 12.5 }}>{t.name}</span>
+                <input name="annual_days" type="number" min={0} defaultValue={t.annual_days} style={{ ...inp, width: 68 }} />
+                <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Save</button>
+              </form>
+            ))}
+          </div>
+
+          {/* Leave balances per type per employee (spans both columns) */}
+          <div style={{ ...box, overflow: "hidden", gridColumn: "1 / -1" }}>
+            <div style={{ padding: "14px 16px" }}><b>Leave balances — {year}</b> <span style={{ color: "var(--muted)", fontSize: 12 }}>· remaining / entitled (used = approved days this year)</span></div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                <thead><tr><th style={th}>Staff</th>{activeTypes.map((t) => <th key={t.code} style={{ ...th, textAlign: "center" }}>{t.code}</th>)}</tr></thead>
+                <tbody>
+                  {staff.map((s) => {
+                    const used = leaveUsed.get(s.id);
+                    return (
+                      <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
+                        <td style={{ ...td, fontWeight: 600 }}>{s.name}</td>
+                        {activeTypes.map((t) => {
+                          const u = used?.get(t.code) ?? 0;
+                          const rem = t.annual_days - u;
+                          return <td key={t.code} style={{ ...td, textAlign: "center" }}><b style={{ color: rem <= 0 ? "var(--red-text)" : rem <= 2 ? "var(--amber-text)" : "var(--ink)" }}>{rem}</b><span style={{ color: "var(--muted)" }}> / {t.annual_days}</span></td>;
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= HOLIDAYS ================= */}
+      {tab === "holidays" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.8fr", gap: 16, alignItems: "start" }}>
+          <div style={{ ...box, padding: "16px 18px" }}>
+            <b>Add holiday</b>
+            <form action={addHoliday} style={{ display: "grid", gap: 8, marginTop: 10 }}>
+              <input name="date" type="date" required style={inp} />
+              <input name="name" placeholder="Holiday name" required style={inp} />
+              <select name="kind" defaultValue="Public" style={inp}><option>Public</option><option>Restricted</option><option>Optional</option></select>
+              <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Add holiday</button>
+            </form>
+          </div>
+          <div style={{ ...box, overflow: "hidden" }}>
+            <div style={{ padding: "14px 16px" }}><b>Holiday calendar — {year}</b> <span style={{ color: "var(--muted)", fontSize: 12 }}>· {holidays.length} holidays</span></div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={th}>Date</th><th style={th}>Holiday</th><th style={th}>Type</th><th style={th} /></tr></thead>
               <tbody>
-                {staff.map((s) => { const bal = s.leave_balance ?? 12; return (
-                  <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ ...td, fontWeight: 600 }}>{s.name}</td>
-                    <td style={td}>{bal} days</td>
-                    <td style={td}>{chip(bal <= 3 ? "var(--amber-bg)" : "var(--green-bg)", bal <= 3 ? "var(--amber-text)" : "var(--green-text)", bal <= 3 ? "Low" : "OK")}</td>
+                {holidays.map((h) => (
+                  <tr key={h.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ ...td, fontWeight: 600 }}>{new Date(h.date + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" })}</td>
+                    <td style={td}>{h.name}</td>
+                    <td style={td}>{chip("var(--blue-bg)", "var(--blue-text)", h.kind)}</td>
+                    <td style={{ ...td, textAlign: "right" }}><form action={deleteHoliday}><input type="hidden" name="id" value={h.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form></td>
                   </tr>
-                ); })}
+                ))}
+                {holidays.length === 0 && <tr><td colSpan={4} style={{ ...td, color: "var(--muted)" }}>No holidays added yet.</td></tr>}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ================= EMPLOYEES ================= */}
+      {tab === "employees" && (
+        <div style={{ display: "grid", gridTemplateColumns: "0.8fr 2fr", gap: 16, alignItems: "start" }}>
+          <div style={{ ...box, overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px" }}><b>Employees</b></div>
+            {staff.map((s) => (
+              <a key={s.id} href={`/hr?tab=employees&emp=${s.id}`} style={{ display: "block", padding: "10px 16px", borderTop: "1px solid var(--border)", textDecoration: "none", color: "inherit", background: selectedEmp?.id === s.id ? "var(--brand-tint)" : "transparent" }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</div>
+                <div style={{ color: "var(--muted)", fontSize: 11 }}>{s.designation ?? s.role} · {s.department ?? "—"}</div>
+              </a>
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: 16 }}>
+            {!selectedEmp ? (
+              <div style={{ ...box, padding: "24px", color: "var(--muted)", fontSize: 13 }}>Select an employee to manage documents and salary breakup.</div>
+            ) : (() => {
+              const sal = salaries.get(selectedEmp.id);
+              const salRec = (sal ?? {}) as Record<string, number>;
+              const docs = empDocs.filter((d) => d.staff_id === selectedEmp.id);
+              const gross = (sal?.basic ?? 0) + (sal?.hra ?? 0) + (sal?.allowances ?? 0);
+              const ded = (sal?.pf ?? 0) + (sal?.esi ?? 0) + (sal?.pt ?? 0) + (sal?.tds ?? 0);
+              return (<>
+                <div style={{ ...box, padding: "16px 18px" }}>
+                  <b style={{ fontSize: 15 }}>{selectedEmp.name}</b> <span style={{ color: "var(--muted)", fontSize: 12 }}>· {selectedEmp.designation ?? selectedEmp.role} · {selectedEmp.department ?? "—"}</span>
+                </div>
+                <div style={{ ...box, padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}><b>Documents</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "onboarding forms · certificates · IDs")}</div>
+                  <EmployeeDocUpload staffId={selectedEmp.id} />
+                  <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12 }}>
+                    <tbody>
+                      {docs.map((d) => (
+                        <tr key={d.id} style={{ borderTop: "1px solid var(--border)" }}>
+                          <td style={td}>{chip("var(--blue-bg)", "var(--blue-text)", d.kind)}</td>
+                          <td style={{ ...td, fontWeight: 600 }}>{d.title}<div style={{ color: "var(--muted)", fontSize: 11 }}>{d.name}</div></td>
+                          <td style={{ ...td, color: "var(--muted)" }}>{new Date(d.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</td>
+                          <td style={{ ...td, textAlign: "right" }}><form action={deleteEmployeeDoc}><input type="hidden" name="id" value={d.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form></td>
+                        </tr>
+                      ))}
+                      {docs.length === 0 && <tr><td colSpan={4} style={{ ...td, color: "var(--muted)" }}>No documents uploaded.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ ...box, padding: "16px 18px" }}>
+                  <b>Salary breakup</b>
+                  <form action={saveSalaryStructure} style={{ marginTop: 10 }}>
+                    <input type="hidden" name="staff_id" value={selectedEmp.id} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>Earnings</div>
+                        {([["basic", "Basic"], ["hra", "HRA"], ["allowances", "Allowances"]] as const).map(([k, l]) => (
+                          <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 13 }}><span style={{ flex: 1 }}>{l}</span><input name={k} type="number" min={0} defaultValue={salRec[k] ?? 0} style={{ ...inp, width: 120 }} /></label>
+                        ))}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>Deductions</div>
+                        {([["pf", "PF"], ["esi", "ESI"], ["pt", "Professional Tax"], ["tds", "TDS"]] as const).map(([k, l]) => (
+                          <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 13 }}><span style={{ flex: 1 }}>{l}</span><input name={k} type="number" min={0} defaultValue={salRec[k] ?? 0} style={{ ...inp, width: 120 }} /></label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8, borderTop: "1px solid var(--border)", paddingTop: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13 }}>Gross <b>{money(gross)}</b></span>
+                      <span style={{ fontSize: 13 }}>Deductions <b>{money(ded)}</b></span>
+                      <span style={{ fontSize: 13 }}>Net <b style={{ color: "var(--green-text)" }}>{money(gross - ded)}</b></span>
+                      <span style={{ flex: 1 }} />
+                      <label style={{ fontSize: 12, color: "var(--muted)" }}>Effective <input name="effective_from" type="date" defaultValue={sal?.effective_from ?? ""} style={inp} /></label>
+                      <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save</button>
+                    </div>
+                  </form>
+                </div>
+              </>);
+            })()}
           </div>
         </div>
       )}
