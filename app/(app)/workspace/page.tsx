@@ -499,8 +499,8 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
       {tab === "summaries" && <>
-        {roleKey === "diet" && !readOnly && <AiDietTools clients={clientOpts} />}
         <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />
+        {roleKey === "diet" && !readOnly && <AiDietTools clients={clientOpts} />}
       </>}
 
       {/* ---- CONCERNS ---- */}
