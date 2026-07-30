@@ -3,19 +3,21 @@ import { createClient } from "@/lib/supabase/server";
 import { canConsult } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { ageFromDob } from "@/lib/dob";
-import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
-import { boardCandidates, boardProgress, effectiveScores, type ScoreTweaks, type CandidateInput } from "@/lib/whiteboard";
+import { daysBetween } from "@/lib/whiteboard";
+import { stageClient, STAGE_META, STAGE_RANK, type StageKey, type StageInput } from "@/lib/whiteboard-stage";
 import type { BpScores } from "@/lib/blueprint";
-import { openWhiteboard, closeWhiteboard, addWhiteboardCard } from "@/lib/actions";
-import WhiteboardCard, { type CardData } from "@/components/WhiteboardCard";
+import { openWhiteboard, closeWhiteboard } from "@/lib/actions";
+import WhiteboardReviewRow, { type ReviewRowData, type RowAlert } from "@/components/WhiteboardReviewRow";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
 
-// Daily team whiteboard — reused as the standalone /whiteboard page and the
-// "Whiteboard" tab inside the workspace. Fetches its own data.
+const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach", psychologist: "Psychologist" };
+
+// Daily team whiteboard — the mandatory working-day walk through every alive
+// client. Reused as the standalone /whiteboard page and the workspace tab.
 export default async function WhiteboardSection({ me, heading = false }: { me: { role: string; branch?: string | null }; heading?: boolean }) {
   const supabase = createClient();
   const today = todayISO();
@@ -26,127 +28,165 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
   const session = sessionRow as { id: string; date: string; branch: string | null; status: string; facilitator: string | null } | null;
 
   const [
-    { data: clientData }, { data: bpData }, { data: bloodData }, { data: sessData },
-    { data: concernData }, { data: fuData }, { data: measureData }, { data: staffData },
-    { data: cardData }, { data: pastCardData }, { data: slaData },
+    { data: clientData }, { data: bpData }, { data: sessData }, { data: concernData },
+    { data: fuData }, { data: measureData }, { data: pkgData }, { data: asgData },
+    { data: staffData }, { data: slaData },
   ] = await Promise.all([
-    // Candidates aligned to the board's branch (legacy null-branch clients still
-    // show, so nobody is silently dropped).
-    supabase.from("clients").select("id, code, name, dob, gender, package_id, conditions, goals").or(`branch.eq.${branch},branch.is.null`),
+    supabase.from("clients").select("id, code, name, dob, gender, conditions, goals").or(`branch.eq.${branch},branch.is.null`),
     supabase.from("blueprints").select("client_id, scores, generated"),
-    supabase.from("blood_requests").select("client_id, panel, submitted"),
     supabase.from("sessions").select("client_id, status, date"),
-    supabase.from("concerns").select("client_id, status, body, role"),
-    supabase.from("followups").select("client_id, status, due_date"),
+    supabase.from("concerns").select("id, client_id, status, body, role").eq("status", "Open"),
+    supabase.from("followups").select("id, client_id, status, due_date, label").eq("status", "pending"),
     supabase.from("measurements").select("client_id, weight, body_fat, bmi, date").order("date", { ascending: false }),
-    supabase.from("staff").select("id, name, role").in("role", ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist"]),
-    session ? supabase.from("whiteboard_cards").select("*").eq("session_id", session.id).order("position") : Promise.resolve({ data: [] }),
-    supabase.from("whiteboard_cards").select("client_id, session_id, whiteboard_sessions(date)").order("created_at", { ascending: false }).limit(2000),
+    supabase.from("client_packages").select("client_id, category, status").eq("status", "active"),
+    supabase.from("client_assignments").select("client_id, discipline, staff_id"),
+    supabase.from("staff").select("id, name, role"),
     supabase.from("blueprint_sla_events").select("client_id, protocol").eq("kind", "breach"),
   ]);
 
-  const clients = (clientData ?? []) as { id: string; code: string | null; name: string; dob: string | null; gender: string | null; package_id: string | null; conditions: string | null; goals: string[] | null }[];
+  const clients = (clientData ?? []) as { id: string; code: string | null; name: string; dob: string | null; gender: string | null; conditions: string | null; goals: string[] | null }[];
   const bps = new Map(((bpData ?? []) as { client_id: string; scores: BpScores | null; generated: boolean }[]).map((b) => [b.client_id, b]));
-  // Prefer the BluePrint blood panel; fall back to whatever exists.
-  const bloods = new Map<string, { client_id: string; panel?: string | null; submitted: boolean }>();
-  for (const b of (bloodData ?? []) as { client_id: string; panel?: string | null; submitted: boolean }[]) {
-    const cur = bloods.get(b.client_id);
-    if (!cur || b.panel === "blueprint") bloods.set(b.client_id, b);
-  }
   const sessions = (sessData ?? []) as { client_id: string; status: string; date: string }[];
-  const concerns = (concernData ?? []) as { client_id: string; status: string; body: string; role: string }[];
-  const followups = (fuData ?? []) as { client_id: string; status: string; due_date: string }[];
+  const concerns = (concernData ?? []) as { id: string; client_id: string; status: string; body: string; role: string | null }[];
+  const followups = (fuData ?? []) as { id: string; client_id: string; status: string; due_date: string; label: string }[];
   const measurements = (measureData ?? []) as { client_id: string; weight: number | null; body_fat: number | null; bmi: number | null; date: string | null }[];
-  const staff = (staffData ?? []) as { id: string; name: string; role: string }[];
-  const cards = (cardData ?? []) as { id: string; client_id: string; reason: string | null; origin: string; status: string; headline: string | null; score_tweaks: ScoreTweaks }[];
+  const staff = new Map(((staffData ?? []) as { id: string; name: string; role: string }[]).map((s) => [s.id, s]));
 
-  const lastDiscussed = new Map<string, string>();
-  for (const r of (pastCardData ?? []) as unknown as { client_id: string; whiteboard_sessions: { date: string } | null }[]) {
-    const d = r.whiteboard_sessions?.date;
-    if (d && (!lastDiscussed.has(r.client_id) || d > lastDiscussed.get(r.client_id)!)) lastDiscussed.set(r.client_id, d);
+  // alive = has an active package; the category informs the SLA protocol owner.
+  const aliveCat = new Map<string, string[]>();
+  for (const p of (pkgData ?? []) as { client_id: string; category: string }[]) {
+    (aliveCat.get(p.client_id) ?? aliveCat.set(p.client_id, []).get(p.client_id)!).push(p.category);
   }
 
-  const breached = new Set(((slaData ?? []) as { client_id: string }[]).map((e) => e.client_id));
+  // owner resolution: client + discipline → staff name.
+  const asgByClient = new Map<string, { discipline: string; staff_id: string | null }[]>();
+  for (const a of (asgData ?? []) as { client_id: string; discipline: string; staff_id: string | null }[]) {
+    (asgByClient.get(a.client_id) ?? asgByClient.set(a.client_id, []).get(a.client_id)!).push(a);
+  }
+  const ownerName = (clientId: string, discipline: string | null): string => {
+    const rows = asgByClient.get(clientId) ?? [];
+    const exact = discipline ? rows.find((r) => r.discipline === discipline) : null;
+    const pick = exact ?? rows[0] ?? null;
+    const name = pick?.staff_id ? staff.get(pick.staff_id)?.name : null;
+    if (name) return discipline && !exact ? `${name} (care team)` : name;
+    return discipline ? `Unassigned ${DISC_LABEL[discipline] ?? discipline}` : "Unassigned";
+  };
 
-  const inputs: CandidateInput[] = clients.map((c) => {
+  const slaProtocol = new Map<string, string>();
+  for (const e of (slaData ?? []) as { client_id: string; protocol: string }[]) slaProtocol.set(e.client_id, e.protocol);
+  const breached = new Set(slaProtocol.keys());
+
+  // responses + reviews for today's board
+  let responses = new Map<string, { why: string | null; solution: string | null; resolved: boolean; answered_by: string | null }>();
+  let reviewed = new Set<string>();
+  if (session) {
+    const [{ data: respData }, { data: revData }] = await Promise.all([
+      supabase.from("whiteboard_alert_responses").select("client_id, alert_key, why, solution, resolved, answered_by").eq("session_id", session.id),
+      supabase.from("whiteboard_reviews").select("client_id").eq("session_id", session.id),
+    ]);
+    responses = new Map(((respData ?? []) as { client_id: string; alert_key: string; why: string | null; solution: string | null; resolved: boolean; answered_by: string | null }[])
+      .map((r) => [`${r.client_id}|${r.alert_key}`, r]));
+    reviewed = new Set(((revData ?? []) as { client_id: string }[]).map((r) => r.client_id));
+  }
+
+  // Build a staged view for every client.
+  type Staged = ReviewRowData & { alive: boolean; rank: number };
+  const staged: Staged[] = clients.map((c) => {
+    const alive = aliveCat.has(c.id);
+    const cats = aliveCat.get(c.id) ?? [];
     const mine = sessions.filter((s) => s.client_id === c.id);
     const done = mine.filter((s) => s.status === "completed").map((s) => s.date).sort();
-    return {
-      id: c.id, name: c.name,
+    const lastSession = done.length ? done[done.length - 1] : null;
+    const upcoming = mine.filter((s) => s.status === "scheduled" && s.date >= today).length;
+
+    const input: StageInput = {
       scores: bps.get(c.id)?.scores ?? null,
-      bloodSubmitted: Boolean(bloods.get(c.id)?.submitted),
-      blueprintGenerated: Boolean(bps.get(c.id)?.generated),
-      lastSession: done.length ? done[done.length - 1] : null,
-      upcoming: mine.filter((s) => s.status === "scheduled" && s.date >= today).length,
-      openConcerns: concerns.filter((x) => x.client_id === c.id && x.status === "Open").length,
-      overdueFollowups: followups.filter((f) => f.client_id === c.id && f.status === "pending" && f.due_date < today).length,
-      lastDiscussed: lastDiscussed.get(c.id) ?? null,
       slaBreached: breached.has(c.id),
+      slaProtocol: slaProtocol.get(c.id) ?? (cats.includes("blueprint") ? "blueprint" : cats[0] ?? null),
+      openConcerns: concerns.filter((x) => x.client_id === c.id).map((x) => ({ id: x.id, body: x.body, role: x.role })),
+      overdueFollowups: followups.filter((f) => f.client_id === c.id && f.due_date < today).map((f) => ({ id: f.id, label: f.label })),
+      nothingBooked: !upcoming && Boolean(lastSession),
+      daysQuiet: lastSession ? daysBetween(lastSession, today) : 0,
     };
-  });
-  const onBoard = new Set(cards.map((c) => c.client_id));
-  const suggestions = boardCandidates(inputs, today).filter((s) => !onBoard.has(s.id)).slice(0, 6);
+    const { alerts, stage } = stageClient(input);
 
-  const wbStatuses = await loadClientStatuses(supabase, cards.map((c) => c.client_id), today);
-  const wbDisc = disciplineForRole(me.role);
+    const rowAlerts: RowAlert[] = alerts.map((a) => {
+      const r = responses.get(`${c.id}|${a.key}`);
+      return {
+        key: a.key, kind: a.kind, label: a.label, detail: a.detail, severity: a.severity,
+        discipline: a.discipline, ownerName: ownerName(c.id, a.discipline),
+        area: `/clients/${c.id}`,
+        why: r?.why ?? null, solution: r?.solution ?? null, resolved: r?.resolved ?? false, answeredBy: r?.answered_by ?? null,
+      };
+    });
 
-  const notesByCard = new Map<string, CardData["notes"]>();
-  if (cards.length) {
-    const { data: noteData } = await supabase
-      .from("whiteboard_notes").select("*").in("card_id", cards.map((c) => c.id)).order("created_at");
-    for (const n of (noteData ?? []) as CardData["notes"] & { card_id: string }[]) {
-      const arr = notesByCard.get((n as unknown as { card_id: string }).card_id) ?? [];
-      arr.push(n);
-      notesByCard.set((n as unknown as { card_id: string }).card_id, arr);
-    }
-  }
+    const m = measurements.find((x) => x.client_id === c.id);
+    const facts = [
+      { label: "last session", value: lastSession ?? "—" },
+      { label: "upcoming", value: String(upcoming) },
+      { label: "weight", value: m?.weight != null ? `${m.weight}kg` : "—" },
+      { label: "conditions", value: c.conditions || "none" },
+    ];
 
-  const built: CardData[] = cards.map((card) => {
-    const c = clients.find((x) => x.id === card.client_id);
-    const bp = bps.get(card.client_id);
-    const mine = sessions.filter((s) => s.client_id === card.client_id);
-    const doneDates = mine.filter((s) => s.status === "completed").map((s) => s.date).sort();
-    const m = measurements.find((x) => x.client_id === card.client_id);
-    const openConcerns = concerns.filter((x) => x.client_id === card.client_id && x.status === "Open");
     return {
-      id: card.id, clientId: card.client_id, name: c?.name ?? "—", code: c?.code ?? null,
-      age: ageFromDob(c?.dob ?? null), reason: card.reason, origin: card.origin, status: card.status,
-      headline: card.headline, tweaks: card.score_tweaks ?? {},
-      scores: effectiveScores(bp?.scores ?? null, card.score_tweaks ?? {}),
-      notes: notesByCard.get(card.id) ?? [], blueprintGenerated: Boolean(bp?.generated),
-      careStatus: clientStatus(wbStatuses.get(card.client_id), wbDisc),
-      facts: [
-        { label: "Sessions done", value: String(doneDates.length) },
-        { label: "Last session", value: doneDates.length ? doneDates[doneDates.length - 1] : "—" },
-        { label: "Upcoming", value: String(mine.filter((s) => s.status === "scheduled" && s.date >= today).length) },
-        { label: "Open concerns", value: String(openConcerns.length) },
-        { label: "Weight", value: m?.weight != null ? `${m.weight} kg` : "—" },
-        { label: "Body fat", value: m?.body_fat != null ? `${m.body_fat}%` : "—" },
-        { label: "BMI", value: m?.bmi != null ? String(m.bmi) : "—" },
-        { label: "Conditions", value: c?.conditions || "None recorded" },
-        { label: "Goals", value: (c?.goals ?? []).join(", ") || "—" },
-      ],
+      sessionId: session?.id ?? "", clientId: c.id, name: c.name, code: c.code, age: ageFromDob(c.dob),
+      stage, alerts: rowAlerts, reviewed: reviewed.has(c.id), facts,
+      alive, rank: STAGE_RANK[stage],
     };
   });
 
-  const progress = boardProgress(cards);
+  const total = staged.length;
+  const aliveRows = staged.filter((s) => s.alive).sort((a, b) => b.rank - a.rank || a.name.localeCompare(b.name));
+  const deadRows = staged.filter((s) => !s.alive).sort((a, b) => a.name.localeCompare(b.name));
+  const alerted = aliveRows.filter((s) => s.alerts.length > 0);
+  const openAlerts = alerted.reduce((n, s) => n + s.alerts.filter((a) => !a.solution).length, 0);
+  const reviewedCount = aliveRows.filter((s) => s.reviewed).length;
+  const pct = aliveRows.length ? Math.round((reviewedCount / aliveRows.length) * 100) : 0;
+
+  const stageCounts = STAGE_RANK; // reuse keys order
+  const countByStage = (k: StageKey) => aliveRows.filter((s) => s.stage === k).length;
+
   const locked = session?.status === "closed" || !canConsult(me.role);
+
+  const statCard = (n: number | string, label: string, color: string) => (
+    <div style={{ ...box, padding: "12px 16px", flex: 1, minWidth: 120 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, color }}>{n}</div>
+      <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{label}</div>
+    </div>
+  );
 
   return (
     <div style={{ maxWidth: 1180 }}>
-      <RealtimeRefresh tables={["whiteboard_cards", "whiteboard_notes", "whiteboard_sessions"]} />
+      <RealtimeRefresh tables={["whiteboard_sessions", "whiteboard_alert_responses", "whiteboard_reviews", "concerns", "followups"]} />
       {heading && <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Whiteboard</h1>}
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>
-        Daily team meeting — clients needing attention today, reviewed together and turned into actions.
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>
+        Mandatory daily walk-through — every alive client, one by one. Alive in green, dropped in red. Where a client is flagged, the assigned person records why and the fix.
       </p>
+
+      {/* headline stats */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        {statCard(total, "Total clients", "var(--ink)")}
+        {statCard(aliveRows.length, "Alive (active package)", "#15803d")}
+        {statCard(deadRows.length, "Dropped (no active package)", "#b91c1c")}
+        {statCard(alerted.length, "With major alerts", alerted.length ? "#c2410c" : "var(--muted)")}
+      </div>
+
+      {/* stage legend */}
+      <div style={{ ...box, padding: "10px 14px", marginBottom: 16, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Stages:</span>
+        {(Object.keys(stageCounts) as StageKey[]).map((k) => (
+          <span key={k} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 999, background: STAGE_META[k].dot }} />
+            {STAGE_META[k].label}<b style={{ color: "var(--ink)" }}>{countByStage(k)}</b>
+          </span>
+        ))}
+      </div>
 
       {!session ? (
         <div style={{ ...box, padding: "26px 22px", textAlign: "center" }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>No board open for today</div>
           <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 14 }}>
-            {suggestions.length
-              ? `${suggestions.length} client${suggestions.length === 1 ? "" : "s"} look like they need discussing.`
-              : "Nothing is flagged — you can still open a board and add clients by hand."}
+            The whiteboard is mandatory every working day — open it to walk the team through all {aliveRows.length} alive clients.
           </div>
           <form action={openWhiteboard}>
             <input type="hidden" name="branch" value={branch} />
@@ -156,14 +196,14 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
       ) : (
         <>
           <div style={{ ...box, padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
-            <RingMeter value={progress.pct} size={58} stroke={7} centerText={`${progress.done}/${progress.total}`} />
+            <RingMeter value={pct} size={58} stroke={7} centerText={`${reviewedCount}/${aliveRows.length}`} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>
                 {new Date(today + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })}
                 {session.status === "closed" && <span style={{ marginLeft: 8, background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>Closed</span>}
               </div>
               <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                {branch}{session.facilitator ? ` · led by ${session.facilitator}` : ""} · {progress.total} client{progress.total === 1 ? "" : "s"} on the board
+                {branch}{session.facilitator ? ` · led by ${session.facilitator}` : ""} · {reviewedCount} of {aliveRows.length} reviewed{openAlerts ? ` · ${openAlerts} answer${openAlerts === 1 ? "" : "s"} needed` : ""}
               </div>
             </div>
             {session.status === "open" && canConsult(me.role) && (
@@ -174,56 +214,51 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
             )}
           </div>
 
-          {!locked && suggestions.length > 0 && (
-            <div style={{ ...box, padding: "14px 16px", marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Suggested for discussion</div>
-              {suggestions.map((s) => (
-                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderTop: "1px solid var(--border)", fontSize: 12.5 }}>
-                  <b style={{ minWidth: 130 }}>{s.name}</b>
-                  <span style={{ flex: 1, color: "var(--muted)", minWidth: 0 }}>{s.reason}</span>
-                  <form action={addWhiteboardCard}>
-                    <input type="hidden" name="session_id" value={session.id} />
-                    <input type="hidden" name="client_id" value={s.id} />
-                    <input type="hidden" name="reason" value={s.reason} />
-                    <input type="hidden" name="origin" value="flagged" />
-                    <button type="submit" style={{ ...btn, padding: "4px 10px", fontSize: 12 }}>Add to board</button>
-                  </form>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-            {built.length ? built.map((c) => (
-              <WhiteboardCard key={c.id} card={c} staff={staff} locked={locked} />
+          {/* summary: alive clients with major alerts */}
+          <div style={{ fontWeight: 700, fontSize: 14, margin: "4px 0 8px" }}>
+            Alive clients with major alerts · {alerted.length}
+            {openAlerts > 0 && <span style={{ marginLeft: 8, background: "rgba(220,38,38,0.10)", color: "#b91c1c", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{openAlerts} awaiting why + solution</span>}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+            {alerted.length ? alerted.map((s) => (
+              <WhiteboardReviewRow key={s.clientId} data={s} locked={locked} />
             )) : (
-              <div style={{ ...box, padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
-                Nothing on the board yet — add a client from the suggestions above, or pick one below.
+              <div style={{ ...box, padding: "18px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+                No major alerts on any alive client. 🎉
               </div>
             )}
           </div>
 
-          {!locked && (
-            <div style={{ ...box, padding: "14px 16px" }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Add a client</div>
-              <form action={addWhiteboardCard} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <input type="hidden" name="session_id" value={session.id} />
-                <select name="client_id" required defaultValue="" style={{ padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", minWidth: 200 }}>
-                  <option value="" disabled>— choose a client —</option>
-                  {clients.filter((c) => !onBoard.has(c.id)).map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}{c.code ? ` · ${c.code}` : ""}</option>
-                  ))}
-                </select>
-                <input name="reason" placeholder="Why are we discussing them?" style={{ padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", flex: 1, minWidth: 200 }} />
-                <button type="submit" style={{ ...btn, background: "var(--ink)", color: "#fff", border: "none" }}>Add</button>
-              </form>
-            </div>
+          {/* step by step: every alive client */}
+          <div style={{ fontWeight: 700, fontSize: 14, margin: "4px 0 8px" }}>Step by step — all alive clients · {aliveRows.length}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+            {aliveRows.map((s) => (
+              <WhiteboardReviewRow key={s.clientId} data={s} locked={locked} />
+            ))}
+          </div>
+
+          {/* dropped clients */}
+          {deadRows.length > 0 && (
+            <details style={{ ...box, padding: "12px 16px", marginBottom: 8 }}>
+              <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 14, color: "#b91c1c" }}>Dropped clients · {deadRows.length} <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>(no active package)</span></summary>
+              <div style={{ display: "grid", gap: 4, marginTop: 10 }}>
+                {deadRows.map((s) => (
+                  <Link key={s.clientId} href={`/clients/${s.clientId}`} style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit", padding: "3px 0" }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 999, background: "#dc2626", flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</span>
+                    {s.code && <span style={{ color: "var(--muted)", fontSize: 12 }}>· {s.code}</span>}
+                    <span style={{ flex: 1 }} />
+                    <span style={{ color: "var(--muted)", fontSize: 12 }}>no active package</span>
+                  </Link>
+                ))}
+              </div>
+            </details>
           )}
         </>
       )}
 
-      <div style={{ marginTop: 16, fontSize: 12, color: "var(--muted)" }}>
-        Adjustments made here are a dated working record. The signed-off <Link href="/blueprint" style={{ color: "var(--brand-text)" }}>BluePrint</Link> document is never overwritten.
+      <div style={{ marginTop: 12, fontSize: 12, color: "var(--muted)" }}>
+        Answers here are a dated working record. The signed-off <Link href="/blueprint" style={{ color: "var(--brand-text)" }}>BluePrint</Link> document is never overwritten.
       </div>
     </div>
   );
