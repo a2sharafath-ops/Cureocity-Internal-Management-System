@@ -14,6 +14,7 @@ import { currentStreak, last7Count } from "@/lib/habits";
 import { MEALS, type MealLog } from "@/lib/meals";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
 
 import { todayISO } from "@/lib/today";
 
@@ -75,9 +76,11 @@ export default async function PortalHome() {
   const holdsCare = careCats.has("comprehensive") || careCats.has("training") || careCats.has("blueprint");
   const showMeals = !pkg?.is_facility || holdsCare;
 
-  const { data: latestM } = await supabase
-    .from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat")
-    .eq("client_id", client.id).order("date", { ascending: false }).limit(1).maybeSingle();
+  const mCols = "date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr";
+  const [{ data: latestM }, { data: baseM }] = await Promise.all([
+    supabase.from("measurements").select(mCols).eq("client_id", client.id).order("date", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("measurements").select(mCols).eq("client_id", client.id).order("date", { ascending: true }).limit(1).maybeSingle(),
+  ]);
   const m = latestM as { date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
 
   const { data: invRows } = await supabase
@@ -292,6 +295,11 @@ export default async function PortalHome() {
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Muscle</div>{m.muscle_mass != null ? `${m.muscle_mass} kg` : "—"}</div>
             <div><div style={{ color: "var(--muted)", fontSize: 11 }}>Visceral fat</div>{m.visceral_fat ?? "—"}</div>
           </div>
+          {baseM && (baseM as Measure).date !== m.date && (
+            <div style={{ marginTop: 12 }}>
+              <InBodyComparison baseline={baseM as Measure} latest={latestM as Measure} />
+            </div>
+          )}
         </>
       )}
 
