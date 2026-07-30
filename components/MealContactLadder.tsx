@@ -13,17 +13,21 @@ const CH_LABEL: Record<string, string> = { portal: "Portal", whatsapp: "WhatsApp
 // person — until they reach the client (or the client starts logging). Each
 // action is recorded with a timestamp so the chase is auditable.
 const STEPS: { channel: string; icon: string; title: string; hint: string; actions: { outcome: string; label: string; primary?: boolean }[] }[] = [
-  { channel: "whatsapp", icon: "💬", title: "WhatsApp reminder", hint: "Send a quick nudge to log their meals", actions: [{ outcome: "no_response", label: "Reminder sent", primary: true }] },
+  { channel: "whatsapp", icon: "💬", title: "WhatsApp reminder", hint: "Nudge them to log — then record whether they replied", actions: [{ outcome: "replied", label: "Replied", primary: true }, { outcome: "not_replied", label: "Not replied" }] },
   { channel: "call", icon: "📞", title: "Phone call", hint: "No reply on WhatsApp — call them", actions: [{ outcome: "reached", label: "Reached them", primary: true }, { outcome: "no_response", label: "No answer" }] },
-  { channel: "meet", icon: "🧑‍🤝‍🧑", title: "In-person", hint: "Still no response — catch them at the centre", actions: [{ outcome: "reached", label: "Met in person", primary: true }] },
+  { channel: "meet", icon: "🧑‍🤝‍🧑", title: "In-person", hint: "Still no response — catch them at the centre", actions: [{ outcome: "reached", label: "Met in person", primary: true }, { outcome: "refused", label: "Refused to meet" }] },
 ];
+
+// Which outcomes mean we actually got the client's attention.
+const POSITIVE = new Set(["reached", "replied"]);
+const OUTCOME_LABEL: Record<string, string> = { reached: "reached", replied: "replied", no_response: "no answer", not_replied: "no reply", refused: "refused to meet" };
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 export default function MealContactLadder({ clientId, date, logged, contacts }: { clientId: string; date: string; logged: boolean; contacts: Contact[] }) {
   const [note, setNote] = useState("");
 
-  const reached = logged || contacts.some((c) => c.outcome === "reached");
+  const reached = logged || contacts.some((c) => POSITIVE.has(c.outcome));
   const attemptsOn = (ch: string) => contacts.filter((c) => c.channel === ch);
   const done = (ch: string) => attemptsOn(ch).length > 0;
   // The rung to do next: the first step with no attempt yet (only while the
@@ -45,14 +49,7 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
 
   return (
     <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>Follow-up ladder</span>
-        {reached
-          ? <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>Reached — waiting for logs</span>
-          : contacts.length
-          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>No response yet — keep escalating</span>
-          : <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>Not contacted yet</span>}
-      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 10 }}>Follow-up ladder</div>
 
       {/* A shared note that rides along with the next action you log. */}
       <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note to the next step (optional)…" style={{ ...inp, width: "100%", boxSizing: "border-box", marginBottom: 10 }} />
@@ -63,7 +60,7 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
           const attempts = attemptsOn(step.channel);
           const isDone = attempts.length > 0;
           const isNext = step.channel === nextChannel;
-          const reachedHere = attempts.some((a) => a.outcome === "reached");
+          const reachedHere = attempts.some((a) => POSITIVE.has(a.outcome));
           return (
             <div key={step.channel} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "9px 11px", borderRadius: 10, border: isNext ? "1px solid var(--brand-fill)" : "1px solid var(--border)", background: isNext ? "var(--brand-tint)" : reachedHere ? "var(--green-bg)" : isDone ? "var(--bg)" : "#fff" }}>
               {/* status dot */}
@@ -79,7 +76,7 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
                 {/* logged attempts on this rung */}
                 {attempts.map((a, j) => (
                   <div key={j} style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>
-                    {fmtTime(a.created_at)} · {a.outcome === "reached" ? "reached" : "no response"}{a.note ? ` — ${a.note}` : ""}{a.staff ? ` (${a.staff})` : ""}
+                    {fmtTime(a.created_at)} · {OUTCOME_LABEL[a.outcome] ?? a.outcome}{a.note ? ` — ${a.note}` : ""}{a.staff ? ` (${a.staff})` : ""}
                   </div>
                 ))}
                 {/* actions */}
@@ -104,6 +101,15 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
             </div>
           );
         })}
+      </div>
+
+      {/* One-line status of the chase, at the bottom. */}
+      <div style={{ marginTop: 10 }}>
+        {reached
+          ? <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 700 }}>Reached — waiting for them to log</span>
+          : contacts.length
+          ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 700 }}>No response yet — keep escalating</span>
+          : <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 700 }}>Not contacted yet</span>}
       </div>
     </div>
   );
