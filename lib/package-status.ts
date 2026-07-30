@@ -13,7 +13,11 @@ import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied }
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
-export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string };
+export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string };
+
+// Ops work with no single clinician owner (bookings, blood chase, invoices) is
+// owned by the front desk — overseers chase them rather than doing it themselves.
+const FRONT_DESK: Pick<StatusItem, "chaseRoles" | "chaseWho"> = { chaseRoles: ["Front Desk"], chaseWho: "Front Desk" };
 export type PackageStatus = { openNow: StatusItem[]; upcoming: StatusItem[] };
 
 const daysBetween = (a: string, b: string) =>
@@ -77,7 +81,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // package) and must not sit in "open now" waiting to be actioned.
   const SETTLED_INVOICE = new Set(["Paid", "Void", "Cancelled", "Refunded"]);
   for (const i of (inv ?? []) as { num: number | null; description: string | null; amount: number; status: string }[]) {
-    if (!SETTLED_INVOICE.has(i.status)) openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn" });
+    if (!SETTLED_INVOICE.has(i.status)) openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn", chaseRoles: ["Front Desk", "Finance"], chaseWho: "Front Desk" });
   }
 
   // ---- onboarding checklist (canonical) ----------------------------------
@@ -105,7 +109,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       // card on the client Overview, so don't also list it here — one flow, not
       // two.
       if (/session/i.test(step.label)) continue;
-      openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn" });
+      openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...FRONT_DESK });
     }
   }
 
@@ -115,7 +119,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // was *requested*; the client still owes the actual report.
   const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
   // Blood card + consolidated approval live on this same page, so no cross-link.
-  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn" });
+  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", ...FRONT_DESK });
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
   // nudge them, rather than linking to a workspace they can't act in.
   const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer");
@@ -123,8 +127,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
   // Day-2 diet chart explanation (a follow-up touchpoint the coach schedules).
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage)) {
-    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn" });
-    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info" });
+    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn", ...FRONT_DESK });
+    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info", ...FRONT_DESK });
   }
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
@@ -133,7 +137,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     const remaining = total - allSess.filter((s) => s.status === "completed").length;
     if (total > 0 && remaining > 0) {
       const next = allSess.filter((s) => s.status !== "completed" && s.date >= today).map((s) => s.date).sort()[0];
-      upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info" });
+      upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info", ...FRONT_DESK });
     }
   }
 
@@ -154,8 +158,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
         const satisfied = milestoneSatisfied((appts ?? []) as { type: string | null; date: string | null; status: string }[], { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
         if (satisfied) continue;
         const bookHref = milestoneBookHref(clientId, m.apptType, m.from, services);
-        if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: bookHref, tone: "warn" });
-        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: bookHref, tone: "info" });
+        if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: bookHref, tone: "warn", ...FRONT_DESK });
+        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: bookHref, tone: "info", ...FRONT_DESK });
       }
     }
   }
