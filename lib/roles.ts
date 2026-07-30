@@ -120,6 +120,12 @@ export function canManagePackages(role: string): boolean {
   return role === "Super Admin" || role === "Administrator";
 }
 
+// Who can approve a leave-type entitlement change (Manager / Admin only). HR can
+// propose changes but not apply them.
+export function canApproveLeaveType(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role);
+}
+
 // Who can void a package added to a client (soft-cancel, keeps the audit row).
 // Admin + Manager only — front desk sells but doesn't reverse a sale.
 export function canVoidPackage(role: string): boolean {

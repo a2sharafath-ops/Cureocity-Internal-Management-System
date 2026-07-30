@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee } from "@/lib/roles";
+import { canSee, canApproveLeaveType } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { AttendanceButtons, LeaveForm, LeaveActions } from "@/components/HrControls";
@@ -11,7 +11,7 @@ import Chip from "@/components/Chip";
 import {
   addHrUpdate, toggleMonthTask, generatePayslip, addCommission, fileStatutory,
   advanceCandidate, setPurchaseStatus, addOffboarding,
-  saveLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc, updateStaffEmployment,
+  saveLeaveType, decideLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc, updateStaffEmployment,
 } from "@/lib/actions";
 import EmployeeDocUpload from "@/components/EmployeeDocUpload";
 
@@ -50,7 +50,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     supabase.from("hr_candidates").select("id, name, role, source, stage").order("created_at", { ascending: false }),
     supabase.from("hr_documents").select("id, title, kind, person, doc_date, status").order("doc_date", { ascending: false }),
     supabase.from("hr_purchases").select("id, item, requested_by, req_date, status").order("req_date", { ascending: false }),
-    supabase.from("leave_types").select("code, name, annual_days, paid, active, seq, color, note, gender, min_tenure_months, accrual").order("seq"),
+    supabase.from("leave_types").select("code, name, annual_days, paid, active, seq, color, note, gender, min_tenure_months, accrual, pending_days, pending_by").order("seq"),
     supabase.from("holidays").select("id, date, name, kind").gte("date", `${year}-01-01`).lte("date", `${year}-12-31`).order("date"),
     supabase.from("attendance").select("staff_id, date, status").gte("date", monthStart).lte("date", monthEnd),
     supabase.from("leaves").select("staff_id, type, from_date, to_date, status").eq("status", "approved").gte("from_date", `${year}-01-01`).lte("from_date", `${year}-12-31`),
@@ -74,8 +74,9 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const purchases = (purData ?? []) as { id: string; item: string; requested_by: string | null; req_date: string | null; status: string }[];
 
   // ---- HR expansion derived data --------------------------------------------
-  const leaveTypes = (ltData ?? []) as { code: string; name: string; annual_days: number; paid: boolean; active: boolean; seq: number; color: string | null; note: string | null; gender: string; min_tenure_months: number; accrual: string }[];
+  const leaveTypes = (ltData ?? []) as { code: string; name: string; annual_days: number; paid: boolean; active: boolean; seq: number; color: string | null; note: string | null; gender: string; min_tenure_months: number; accrual: string; pending_days: number | null; pending_by: string | null }[];
   const activeTypes = leaveTypes.filter((t) => t.active);
+  const canApproveLeave = canApproveLeaveType(me.role);
 
   // Entitlement for one staff member under a type's eligibility rules.
   // Returns null when the type doesn't apply (e.g. ML for a male staff member),
@@ -255,16 +256,29 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
           </div>
           <div style={{ ...box, padding: "16px 18px" }}>
             <b>Leave types</b>
-            <div style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 8px" }}>Yearly entitlement per type — editable.</div>
+            <div style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 8px" }}>Yearly entitlement per type. {canApproveLeave ? "Changes apply immediately." : "HR proposes a change; a Manager/Admin approves it."}</div>
             {leaveTypes.map((t) => (
-              <form key={t.code} action={saveLeaveType} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-                <input type="hidden" name="code" value={t.code} />
-                <input type="hidden" name="name" value={t.name} />
-                <span style={{ minWidth: 40, fontWeight: 700, color: t.color ?? "var(--ink)" }}>{t.code}</span>
-                <span style={{ flex: 1, fontSize: 12.5 }}>{t.name}{t.note ? <span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}>{t.note}</span> : null}</span>
-                <input name="annual_days" type="number" min={0} defaultValue={t.annual_days} style={{ ...inp, width: 68 }} />
-                <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>Save</button>
-              </form>
+              <div key={t.code} style={{ padding: "6px 0", borderTop: "1px solid var(--border)" }}>
+                <form action={saveLeaveType} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="hidden" name="code" value={t.code} />
+                  <span style={{ minWidth: 40, fontWeight: 700, color: t.color ?? "var(--ink)" }}>{t.code}</span>
+                  <span style={{ flex: 1, fontSize: 12.5 }}>{t.name}{t.note ? <span style={{ display: "block", color: "var(--muted)", fontSize: 11 }}>{t.note}</span> : null}</span>
+                  <input name="annual_days" type="number" min={0} defaultValue={t.annual_days} style={{ ...inp, width: 68 }} />
+                  <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>{canApproveLeave ? "Save" : "Request"}</button>
+                </form>
+                {t.pending_days !== null && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "5px 9px", fontSize: 12 }}>
+                    <span>Proposed → <b>{t.pending_days} days</b>{t.pending_by ? ` · by ${t.pending_by}` : ""}</span>
+                    <span style={{ flex: 1 }} />
+                    {canApproveLeave ? (
+                      <>
+                        <form action={decideLeaveType}><input type="hidden" name="code" value={t.code} /><input type="hidden" name="decision" value="approve" /><button style={{ background: "var(--green)", color: "#fff", border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Approve</button></form>
+                        <form action={decideLeaveType}><input type="hidden" name="code" value={t.code} /><input type="hidden" name="decision" value="reject" /><button style={{ background: "#fff", color: "var(--red-text)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Reject</button></form>
+                      </>
+                    ) : <span style={{ fontSize: 11 }}>awaiting manager approval</span>}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
