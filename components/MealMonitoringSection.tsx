@@ -7,6 +7,8 @@ import MealFollowupHistory from "@/components/MealFollowupHistory";
 import MealClientCard from "@/components/MealClientCard";
 import MealDayNav from "@/components/MealDayNav";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
+import SummaryEditor from "@/components/SummaryEditor";
+import { aiDailyMealSummary, saveMealDaySummary, sendMealDaySummary } from "@/lib/actions";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { todayISO } from "@/lib/today";
@@ -84,6 +86,13 @@ export default async function MealMonitoringSection({
     pastByClient.set(c.client_id, arr);
   }
 
+  // Saved daily meal summaries for the day, to prefill the per-client editor.
+  const { data: dsData } = ids.length
+    ? await supabase.from("meal_day_summaries").select("client_id, summary").eq("date", TODAY).in("client_id", ids)
+    : { data: [] };
+  const summaryByClient = new Map<string, string>();
+  for (const r of (dsData ?? []) as { client_id: string; summary: string | null }[]) summaryByClient.set(r.client_id, r.summary ?? "");
+
   const statusMap = await loadClientStatuses(supabase, ids, TODAY);
   const viewerDisc = disciplineForRole(me.role);
 
@@ -129,6 +138,12 @@ export default async function MealMonitoringSection({
                 ))}
               </div>
               <MealContactLadder clientId={c.id} date={TODAY} logged={loggedSet.has(c.id)} contacts={contactsByClient.get(c.id) ?? []} readOnly={!isToday} />
+              {isToday && (
+                <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Daily meal summary</div>
+                  <SummaryEditor label="Summary for today" clientId={c.id} date={TODAY} initial={summaryByClient.get(c.id) ?? ""} aiAction={aiDailyMealSummary} saveAction={saveMealDaySummary} sendAction={sendMealDaySummary} />
+                </div>
+              )}
               <MealFollowupHistory entries={pastByClient.get(c.id) ?? []} />
             </MealClientCard>
           );

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { saveConsultSession, addVitals, createOrder, createPrescription } from "@/lib/actions";
+import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbodySummary, saveMeasurementSummary, aiConsultSummary, saveConsultationSummary } from "@/lib/actions";
 import FileUploadForm from "@/components/FileUploadForm";
+import SummaryEditor from "@/components/SummaryEditor";
 
 type Flag = { text: string; severity: string };
 
@@ -166,10 +167,9 @@ export default function ConsoleView({
                 {metrics.length > 0
                   ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 10 }}>{metrics}</div>
                   : <div style={{ fontSize: 12, color: "var(--muted)" }}>No measurements on record yet.</div>}
-                {health.inbodySummary && (
-                  <div style={{ marginTop: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
-                    <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 3 }}>InBody summary</div>
-                    <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap" }}>{health.inbodySummary}</div>
+                {!client.isLead && (
+                  <div style={{ marginTop: 10 }}>
+                    <SummaryEditor label="InBody summary" clientId={client.id} initial={health.inbodySummary ?? ""} aiAction={aiInbodySummary} saveAction={saveMeasurementSummary} />
                   </div>
                 )}
                 {health.conditions && <div style={{ marginTop: 10 }}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 2 }}>Conditions</div><div style={{ fontSize: 12.5 }}>{health.conditions}</div></div>}
@@ -225,6 +225,13 @@ export default function ConsoleView({
               </div>
             )}
           </div>
+          {!client.isLead && (
+            <div style={{ ...box, padding: "16px 18px" }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>AI consultation summary</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Generate a shareable summary from this client&apos;s data, or write your own.</div>
+              <SummaryEditor label="Consultation summary" clientId={client.id} aiAction={aiConsultSummary} saveAction={saveConsultationSummary} />
+            </div>
+          )}
           <div style={{ ...box, padding: "12px 16px" }}>
             <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "Open lead record →" : "Open full client card →"}</Link>
           </div>
