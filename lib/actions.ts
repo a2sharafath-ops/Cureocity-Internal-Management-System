@@ -5643,10 +5643,28 @@ export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Pr
   const logs = (data ?? []) as { meal: string; description: string | null; review: string | null; doubt: string | null; doubt_answer: string | null }[];
   if (!logs.length) return { error: `No meals logged for ${date}.` };
   const user = `Meals logged on ${date}:\n` + logs.map((l) => `- ${l.meal}: ${l.description ?? "—"}${l.review ? ` [dietitian: ${l.review}]` : ""}${l.doubt ? ` [client asked: ${l.doubt}${l.doubt_answer ? ` → ${l.doubt_answer}` : ""}]` : ""}`).join("\n");
-  return openaiComplete(
+  const r = await openaiComplete(
     "You are a friendly dietitian. Turn a client's logged meals for the day into a short, encouraging daily summary to send them: a compact meal-by-meal table (Meal | What you had | Note), then 2–3 lines of overall feedback and one gentle suggestion for tomorrow. Warm, concise.",
     user,
   );
+  // Save onto the day's record so it's kept (and can later be sent to the client).
+  if (r.text) {
+    await supabase.from("meal_day_summaries").upsert({ client_id, date, summary: r.text, updated_by: me.name, updated_at: new Date().toISOString() }, { onConflict: "client_id,date" });
+    await logAudit(me, "Daily meal summary saved", client_id, date);
+  }
+  return r;
+}
+
+// Manually write / edit the stored daily meal summary for a client + date.
+export async function saveMealDaySummary(client_id: string, text: string, date?: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const day = date || todayISO();
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  await supabase.from("meal_day_summaries").upsert({ client_id, date: day, summary: text.trim() || null, updated_by: me.name, updated_at: new Date().toISOString() }, { onConflict: "client_id,date" });
+  await logAudit(me, "Daily meal summary edited", client_id, day);
+  return { ok: true };
 }
 
 export async function addRecipe(formData: FormData) {

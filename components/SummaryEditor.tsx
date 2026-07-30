@@ -7,13 +7,14 @@ import type { AiState } from "@/lib/ai";
 // anywhere a saved summary lives (InBody, consultation). The AI action already
 // persists; the manual Save writes the (possibly edited) text to the same field.
 export default function SummaryEditor({
-  label, clientId, initial = "", aiAction, saveAction,
+  label, clientId, initial = "", date, aiAction, saveAction,
 }: {
   label: string;
   clientId: string;
   initial?: string;
+  date?: string;
   aiAction?: (prev: AiState, formData: FormData) => Promise<AiState>;
-  saveAction: (clientId: string, text: string) => Promise<{ ok?: boolean; error?: string }>;
+  saveAction: (clientId: string, text: string, date?: string) => Promise<{ ok?: boolean; error?: string }>;
 }) {
   const [text, setText] = useState(initial);
   const [msg, setMsg] = useState<string | null>(null);
@@ -26,6 +27,7 @@ export default function SummaryEditor({
     start(async () => {
       const fd = new FormData();
       fd.set("client_id", clientId);
+      if (date !== undefined) fd.set("date", date);
       const r = await aiAction!({}, fd);
       if (r.error) setErr(r.error);
       else { setText(r.text ?? ""); setMsg("Generated & saved — edit if needed."); }

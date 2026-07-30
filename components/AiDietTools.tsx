@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import AiSummaryButton from "@/components/AiSummaryButton";
 import SummaryEditor from "@/components/SummaryEditor";
-import { aiInbodySummary, aiConsultSummary, aiDailyMealSummary, saveMeasurementSummary, saveConsultationSummary } from "@/lib/actions";
+import { aiInbodySummary, aiConsultSummary, aiDailyMealSummary, saveMeasurementSummary, saveConsultationSummary, saveMealDaySummary } from "@/lib/actions";
 
 // Dietitian AI toolkit: pick a client, then generate summaries / a first-draft
 // plan from the data already in Cureocity. Each result is a draft to copy into
@@ -35,8 +34,9 @@ export default function AiDietTools({ clients }: { clients: { id: string; name: 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <label style={{ fontSize: 12, color: "var(--muted)" }}>Daily meal summary for </label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inp} />
-            <AiSummaryButton action={aiDailyMealSummary} label="Daily meal summary" clientId={client} date={date} />
           </div>
+          <SummaryEditor label={`Daily meal summary · ${date}`} clientId={client} date={date} aiAction={aiDailyMealSummary} saveAction={saveMealDaySummary} />
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Generated / typed summaries are saved on the day&apos;s record. Sending to the client is the next step.</div>
         </div>
       )}
     </div>
