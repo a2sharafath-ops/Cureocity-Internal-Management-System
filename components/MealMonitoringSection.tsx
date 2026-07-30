@@ -57,12 +57,12 @@ export default async function MealMonitoringSection({
   const map = new Map(logs.map((l) => [key(l.client_id, l.meal), l]));
 
   const { data: contactData } = ids.length
-    ? await supabase.from("meal_contacts").select("client_id, channel, outcome, note, staff, created_at").eq("date", TODAY).in("client_id", ids).order("created_at")
+    ? await supabase.from("meal_contacts").select("id, client_id, channel, outcome, note, staff, created_at").eq("date", TODAY).in("client_id", ids).order("created_at")
     : { data: [] };
   const contactsByClient = new Map<string, Contact[]>();
   for (const c of (contactData ?? []) as (Contact & { client_id: string })[]) {
     const arr = contactsByClient.get(c.client_id) ?? [];
-    arr.push({ channel: c.channel, outcome: c.outcome, note: c.note, staff: c.staff, created_at: c.created_at });
+    arr.push({ id: c.id, channel: c.channel, outcome: c.outcome, note: c.note, staff: c.staff, created_at: c.created_at });
     contactsByClient.set(c.client_id, arr);
   }
   const loggedSet = new Set(logs.filter((l) => l.description).map((l) => l.client_id));
