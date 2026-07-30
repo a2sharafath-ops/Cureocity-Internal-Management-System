@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canClaims, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -3196,19 +3196,55 @@ export async function markAttendance(formData: FormData) {
 
 // ---- HR expansion: leave types, holidays, employee docs, salary breakup -----
 
+// Change a leave type's yearly entitlement. Manager/Admin apply it immediately;
+// HR can only *propose* a change (parked in pending_days) that a Manager/Admin
+// must approve. Names/active flags follow the same gate.
 export async function saveLeaveType(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
   const code = String(formData.get("code") || "").trim().toUpperCase();
   if (!code) return;
+  const days = Math.max(0, Number(formData.get("annual_days")) || 0);
   const supabase = createClient();
-  await supabase.from("leave_types").upsert({
-    code,
-    name: String(formData.get("name") || code).trim(),
-    annual_days: Math.max(0, Number(formData.get("annual_days")) || 0),
-    active: String(formData.get("active") ?? "true") !== "false",
-  }, { onConflict: "code" });
-  await logAudit(p, "Leave type saved", code, null);
+  if (canApproveLeaveType(p.role)) {
+    // Approver → applies directly and clears any pending proposal.
+    await supabase.from("leave_types").update({ annual_days: days, pending_days: null, pending_by: null, pending_at: null }).eq("code", code);
+    await logAudit(p, "Leave type entitlement set", code, `${days} days`);
+  } else {
+    // HR → records a proposal awaiting approval; entitlement itself unchanged.
+    await supabase.from("leave_types").update({ pending_days: days, pending_by: p.name, pending_at: new Date().toISOString() }).eq("code", code);
+    await logAudit(p, "Leave type change proposed", code, `${days} days`);
+    await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+      title: "Leave entitlement change requested",
+      body: `${code} → ${days} days · proposed by ${p.name}`,
+      href: "/hr?tab=leave", icon: "📝",
+    });
+  }
+  revalidatePath("/hr");
+}
+
+// Manager/Admin approves or rejects a proposed leave-type entitlement change.
+export async function decideLeaveType(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canApproveLeaveType(p.role)) return;
+  const code = String(formData.get("code") || "").trim().toUpperCase();
+  const decision = String(formData.get("decision") || "");
+  if (!code || !["approve", "reject"].includes(decision)) return;
+  const supabase = createClient();
+  const { data: lt } = await supabase.from("leave_types").select("pending_days, pending_by").eq("code", code).maybeSingle();
+  const row = lt as { pending_days: number | null; pending_by: string | null } | null;
+  if (!row || row.pending_days === null) return;
+  if (decision === "approve") {
+    await supabase.from("leave_types").update({ annual_days: row.pending_days, pending_days: null, pending_by: null, pending_at: null }).eq("code", code);
+  } else {
+    await supabase.from("leave_types").update({ pending_days: null, pending_by: null, pending_at: null }).eq("code", code);
+  }
+  await logAudit(p, decision === "approve" ? "Leave type change approved" : "Leave type change rejected", code, `${row.pending_days} days`);
+  await notifyRoles(supabase, ["HR"], {
+    title: `Leave entitlement change ${decision === "approve" ? "approved" : "rejected"}`,
+    body: `${code} → ${row.pending_days} days · by ${p.name}`,
+    href: "/hr?tab=leave", icon: decision === "approve" ? "✅" : "🚫",
+  });
   revalidatePath("/hr");
 }
 
