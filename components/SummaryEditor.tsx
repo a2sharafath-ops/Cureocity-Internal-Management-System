@@ -7,7 +7,7 @@ import type { AiState } from "@/lib/ai";
 // anywhere a saved summary lives (InBody, consultation). The AI action already
 // persists; the manual Save writes the (possibly edited) text to the same field.
 export default function SummaryEditor({
-  label, clientId, initial = "", date, aiAction, saveAction,
+  label, clientId, initial = "", date, aiAction, saveAction, sendAction,
 }: {
   label: string;
   clientId: string;
@@ -15,6 +15,7 @@ export default function SummaryEditor({
   date?: string;
   aiAction?: (prev: AiState, formData: FormData) => Promise<AiState>;
   saveAction: (clientId: string, text: string, date?: string) => Promise<{ ok?: boolean; error?: string }>;
+  sendAction?: (clientId: string, date?: string) => Promise<{ ok?: boolean; error?: string }>;
 }) {
   const [text, setText] = useState(initial);
   const [msg, setMsg] = useState<string | null>(null);
@@ -37,9 +38,21 @@ export default function SummaryEditor({
     if (!clientId) { setErr("Pick a client first."); return; }
     setErr(null); setMsg(null);
     start(async () => {
-      const r = await saveAction(clientId, text);
+      const r = await saveAction(clientId, text, date);
       if (r.error) setErr(r.error);
       else setMsg("Saved.");
+    });
+  };
+  const send = () => {
+    if (!clientId) { setErr("Pick a client first."); return; }
+    if (!text.trim()) { setErr("Nothing to send — write or generate it first."); return; }
+    setErr(null); setMsg(null);
+    start(async () => {
+      const s = await saveAction(clientId, text, date);
+      if (s.error) { setErr(s.error); return; }
+      const r = await sendAction!(clientId, date);
+      if (r.error) setErr(r.error);
+      else setMsg("Sent to client.");
     });
   };
 
@@ -55,6 +68,7 @@ export default function SummaryEditor({
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} placeholder="Generate with AI, or write the summary here…" style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", resize: "vertical", boxSizing: "border-box" }} />
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
         <button type="button" onClick={save} disabled={busy} style={{ ...btn, border: "none", background: "var(--ink)", color: "#fff" }}>{busy ? "Saving…" : "Save"}</button>
+        {sendAction && <button type="button" onClick={send} disabled={busy} style={{ ...btn, border: "none", background: "var(--brand-fill)", color: "#fff" }}>Send to client</button>}
         {msg && <span style={{ color: "var(--green-text)", fontSize: 12 }}>{msg}</span>}
         {err && <span style={{ color: "var(--red-text)", fontSize: 12 }}>{err}</span>}
       </div>
