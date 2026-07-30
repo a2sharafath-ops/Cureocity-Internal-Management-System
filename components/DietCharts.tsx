@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { addDietChart, updateDietChart, publishDietChart, deleteDietChart, submitDietChartForReview, reviewDietChart } from "@/lib/actions";
+import { addDietChart, updateDietChart, publishDietChart, deleteDietChart, submitDietChartForReview, reviewDietChart, aiDietDraftStructured } from "@/lib/actions";
 
 export type DietChartRow = {
   id: string;
@@ -30,6 +30,26 @@ export default function DietCharts({ charts, clients, canReview = false, canComp
   const [open, setOpen] = useState(Boolean(focusClient));
   const [rows, setRows] = useState<[string, string][]>(DEFAULT_ROWS);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Builder fields are controlled so the "Draft with AI" button can fill them.
+  const [bClient, setBClient] = useState(focusClient);
+  const [bCal, setBCal] = useState("");
+  const [bProtein, setBProtein] = useState("");
+  const [bNotes, setBNotes] = useState("");
+  const [draftErr, setDraftErr] = useState<string | null>(null);
+  const [drafting, startDraft] = useTransition();
+  const resetBuilder = () => { setRows(DEFAULT_ROWS); setBCal(""); setBProtein(""); setBNotes(""); setDraftErr(null); };
+  const runAiDraft = () => {
+    setDraftErr(null);
+    if (!bClient) { setDraftErr("Select a client first."); return; }
+    startDraft(async () => {
+      const r = await aiDietDraftStructured(bClient);
+      if (r.error) { setDraftErr(r.error); return; }
+      setRows(r.meals && r.meals.length ? r.meals : DEFAULT_ROWS);
+      setBCal(r.calories != null ? String(r.calories) : "");
+      setBProtein(r.protein ?? "");
+      setBNotes(r.notes ?? "");
+    });
+  };
   // In-place edit of a Draft chart (its own row + meal-row state).
   const [editing, setEditing] = useState<string | null>(null);
   const [editRows, setEditRows] = useState<[string, string][]>([]);
@@ -53,13 +73,18 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
       </div>
 
       {open && canCompose && (
-        <form action={addDietChart} onSubmit={() => setTimeout(() => { setOpen(false); setRows(DEFAULT_ROWS); }, 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
-          <div style={{ fontWeight: 700 }}>Diet chart builder</div>
-          <select name="client_id" required defaultValue={focusClient} style={inpControl}>
+        <form action={addDietChart} onSubmit={() => setTimeout(() => { setOpen(false); resetBuilder(); }, 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontWeight: 700 }}>Diet chart builder</div>
+            <span style={{ flex: 1 }} />
+            <button type="button" onClick={runAiDraft} disabled={drafting || !bClient} style={{ background: "var(--brand-tint)", color: "var(--brand-text)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: drafting || !bClient ? "default" : "pointer", opacity: drafting || !bClient ? 0.6 : 1 }}>{drafting ? "Drafting…" : "✨ Draft with AI"}</button>
+          </div>
+          <select name="client_id" required value={bClient} onChange={(e) => setBClient(e.target.value)} style={inpControl}>
             <option value="" disabled>Select client…</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Meals</div>
+          {draftErr && <div style={{ color: "var(--red-text)", fontSize: 12 }}>{draftErr}</div>}
+          <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Meals {drafting && <span style={{ fontWeight: 400 }}>· generating…</span>}</div>
           {rows.map((row, i) => (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "150px 1fr 30px", gap: 8 }}>
               <input name="meal_label" value={row[0]} onChange={(e) => setRow(i, 0, e.target.value)} placeholder="Meal" style={inpControl} />
@@ -69,10 +94,11 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
           ))}
           <button type="button" onClick={() => setRows((r) => [...r, ["", ""]])} style={{ alignSelf: "start", border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>+ Add meal row</button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <input name="calories" type="number" placeholder="Calories (kcal/day)" style={inpControl} />
-            <input name="protein" placeholder="Protein target (e.g. 72 g)" style={inpControl} />
+            <input name="calories" type="number" value={bCal} onChange={(e) => setBCal(e.target.value)} placeholder="Calories (kcal/day)" style={inpControl} />
+            <input name="protein" value={bProtein} onChange={(e) => setBProtein(e.target.value)} placeholder="Protein target (e.g. 72 g)" style={inpControl} />
           </div>
-          <textarea name="notes" rows={2} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
+          <textarea name="notes" rows={2} value={bNotes} onChange={(e) => setBNotes(e.target.value)} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Tip: “Draft with AI” fills the fields from the client’s data — review &amp; edit, then Save as draft and submit for review.</div>
           <div><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save as draft</button></div>
         </form>
       )}

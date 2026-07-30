@@ -14,6 +14,7 @@ import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
+import AiDietTools from "@/components/AiDietTools";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
@@ -499,7 +500,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
-      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} />}
+      {tab === "charts" && <>
+        {roleKey === "diet" && !readOnly && <AiDietTools clients={clientOpts} />}
+        <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} />
+      </>}
 
       {/* ---- WORKOUT PLANNER (trainer) ---- */}
       {tab === "planner" && <WorkoutPlanner plans={workoutPlans} clients={clientOpts} />}
