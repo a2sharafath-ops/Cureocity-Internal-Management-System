@@ -69,7 +69,6 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   // Medical records & orders are Doctor-owned (enforced by RLS in 0068).
   "/emr": ["Administrator", "Manager", "Doctor"],
   "/orders": ["Administrator", "Manager", "Doctor"],
-  "/claims": ["Administrator", "Manager", "Finance"],
   "/reports": ["Administrator", "Manager", "Finance"],
   // Managers see a read-only roster with the sign-in controls only; role,
   // branch, rename, delete and add-staff remain Administrator / Super Admin
@@ -179,6 +178,13 @@ export function canManageInvoices(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
 }
 
+// Admin / Manager oversee collections — they don't collect the cash themselves,
+// so on invoices they chase the assignee (Front Desk / Finance) instead of
+// marking an invoice paid. Finance stays the hands-on collector.
+export function isBillingOverseer(role: string): boolean {
+  return ["Administrator", "Manager"].includes(role);
+}
+
 // Who can message clients.
 export function canMessage(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
@@ -209,8 +215,9 @@ export function canEmr(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Doctor"].includes(role);
 }
 
-// Who can manage insurance & claims.
-export function canClaims(role: string): boolean {
+// Finance-ops gate: manage the petty-cash float, top-ups and reimbursement
+// review in Finance Sheets. Admin / Manager / Finance (Super Admin implied).
+export function canFinanceOps(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
 }
 
@@ -254,7 +261,7 @@ const AREA_LABEL: Record<string, string> = {
   "/blueprint": "blueprint", "/trainer": "trainer", "/emr": "emr", "/orders": "orders",
   "/packages": "packages", "/services": "services", "/billing": "invoices", "/expenses": "expenses",
   "/finsheets": "finsheets", "/subscriptions": "subscriptions", "/pos": "pos", "/passes": "passes",
-  "/claims": "insurance", "/reports": "reports", "/compliance": "governance", "/users": "users",
+  "/reports": "reports", "/compliance": "governance", "/users": "users",
   "/hr": "hr", "/exlib": "exlib", "/notifications": "notifications", "/audit": "audit",
   "/kb": "kb", "/tasks": "tasks", "/classes": "classes", "/campaigns": "campaigns",
 };

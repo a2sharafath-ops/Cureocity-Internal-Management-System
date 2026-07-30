@@ -25,7 +25,6 @@ export const PAGE_META: Record<string, PageMeta> = {
   "/subscriptions": { title: "Subscriptions" },
   "/pos":           { title: "Retail Store" },
   "/passes":        { title: "Gym Passes" },
-  "/claims":        { title: "Insurance" },
   "/reports":       { title: "Reports" },
   "/packages":      { title: "Packages" },
   "/users":         { title: "Users & Roles" },

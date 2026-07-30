@@ -133,7 +133,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
                 {editable && <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
                     {i.status === "Unpaid" && <PayOnlineButton invoiceId={i.id} configured={pay.configured} />}
-                    <InvoiceActions id={i.id} status={i.status} />
+                    <InvoiceActions id={i.id} status={i.status} role={me.role} clientId={i.clients?.id} label={`INV-${String(i.num ?? 0).padStart(3, "0")} · ${money(i.amount)}`} />
                   </div>
                 </td>}
               </tr>

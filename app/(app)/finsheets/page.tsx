@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canReimburseSubmit, canReimburseApprove, canClaims } from "@/lib/roles";
+import { canSee, canReimburseSubmit, canReimburseApprove, canFinanceOps } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { PayableForm, EstimateForm, LedgerForm, ReimbursementForm, TopUpForm, EditFloatForm } from "@/components/FinanceForms";
 import { PayPayable, EstimateActions, ReimbursementActions } from "@/components/FinanceActions";
@@ -57,7 +57,7 @@ export default async function FinsheetsPage({ searchParams }: { searchParams: { 
   const cashPayments = cash.filter((l) => l.direction === "out");
   const floatAmount = Number(pettyCfg?.float_amount ?? 0);
   const lowThreshold = Number(pettyCfg?.low_threshold ?? 0);
-  const canManageFinance = canClaims(me.role); // Admin/Manager/Finance/Super Admin manage the float + top-ups
+  const canManageFinance = canFinanceOps(me.role); // Admin/Manager/Finance/Super Admin manage the float + top-ups
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
