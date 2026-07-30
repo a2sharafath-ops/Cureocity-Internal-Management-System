@@ -5025,14 +5025,19 @@ export async function logMealContact(formData: FormData) {
   const channel = String(formData.get("channel") || "");
   const outcome = String(formData.get("outcome") || "no_response");
   if (!client_id || !["portal", "whatsapp", "call", "meet"].includes(channel)) return;
+  // Two stages per channel: an attempt marker (sent / called / visited), then an
+  // outcome — positive (replied / reached / met) or negative (not_replied /
+  // no_answer / refused). no_response kept for legacy rows.
+  const OK = ["sent", "called", "visited", "replied", "reached", "met", "not_replied", "no_answer", "no_response", "refused"];
   const supabase = createClient();
   await supabase.from("meal_contacts").insert({
     client_id, date: String(formData.get("date") || todayISO()),
-    channel, outcome: ["reached", "no_response"].includes(outcome) ? outcome : "no_response",
+    channel, outcome: OK.includes(outcome) ? outcome : "no_response",
     note: String(formData.get("note") ?? "").trim() || null, staff: p.name,
   });
   await logAudit(p, "Meal-monitoring contact", client_id, `${channel} · ${outcome}`);
   revalidatePath("/meals");
+  revalidatePath("/workspace");
 }
 
 // ---- meal monitoring -------------------------------------------------------
