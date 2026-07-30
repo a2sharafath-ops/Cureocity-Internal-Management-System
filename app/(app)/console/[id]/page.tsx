@@ -48,11 +48,20 @@ export default async function ConsolePage({ params }: { params: { id: string } }
     const mm = m as { date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null; waist: number | null; hip: number | null; ai_summary: string | null } | null;
     const age = cc?.dob ? Math.floor((Date.now() - new Date(cc.dob).getTime()) / 31557600000) : null;
     const bloodRows = (blood ?? []) as { panel: string | null; submitted: boolean }[];
+    // Latest uploaded InBody report PDF, if any — a signed link the clinician
+    // can open. Uploading a new one is offered in the health card.
+    const { data: inbodyFile } = await supabase
+      .from("files").select("path, created_at").eq("client_id", row.client_id).eq("kind", "inbody").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    let inbodyPdfUrl: string | null = null;
+    if (inbodyFile) {
+      const { data: signed } = await supabase.storage.from("client-files").createSignedUrl((inbodyFile as { path: string }).path, 3600);
+      inbodyPdfUrl = signed?.signedUrl ?? null;
+    }
     health = {
       age, gender: cc?.gender ?? null, height: cc?.height ?? null, weight: mm?.weight ?? cc?.weight ?? null,
       bmi: mm?.bmi ?? null, bodyFat: mm?.body_fat ?? null, muscle: mm?.muscle_mass ?? null, visceral: mm?.visceral_fat ?? null,
       waist: mm?.waist ?? null, hip: mm?.hip ?? null, measuredOn: mm?.date ?? null,
-      inbodySummary: mm?.ai_summary ?? null,
+      inbodySummary: mm?.ai_summary ?? null, inbodyPdfUrl,
       conditions: cc?.conditions ?? null, goals: (cc?.goals ?? []) as string[],
       allergies: ((alg ?? []) as { substance: string; severity: string }[]).map((a) => `${a.substance}${a.severity ? ` (${a.severity})` : ""}`),
       bloodStatus: bloodRows.length ? (bloodRows.every((b) => b.submitted) ? "Report received" : "Awaiting report") : null,

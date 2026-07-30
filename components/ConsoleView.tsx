@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { saveConsultSession, addVitals, createOrder, createPrescription } from "@/lib/actions";
+import FileUploadForm from "@/components/FileUploadForm";
 
 type Flag = { text: string; severity: string };
 
@@ -10,7 +11,7 @@ export type ConsoleHealth = {
   age: number | null; gender: string | null; height: number | null; weight: number | null;
   bmi: number | null; bodyFat: number | null; muscle: number | null; visceral: number | null;
   waist: number | null; hip: number | null; measuredOn: string | null;
-  inbodySummary: string | null;
+  inbodySummary: string | null; inbodyPdfUrl: string | null;
   conditions: string | null; goals: string[]; allergies: string[]; bloodStatus: string | null;
 };
 
@@ -175,6 +176,14 @@ export default function ConsoleView({
                 {chipRow("Allergies", health.allergies, "var(--red-bg)", "var(--red-text)")}
                 {chipRow("Goals", health.goals, "var(--brand-tint)", "var(--brand-text)")}
                 {health.bloodStatus && <div style={{ marginTop: 10, fontSize: 12 }}><span style={{ color: "var(--muted)" }}>Blood report: </span><b>{health.bloodStatus}</b></div>}
+                {/* InBody report PDF — view the uploaded machine report, or add one. */}
+                <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 6 }}>InBody report (PDF)</div>
+                  {health.inbodyPdfUrl
+                    ? <a href={health.inbodyPdfUrl} target="_blank" rel="noopener" style={{ display: "inline-block", marginBottom: 8, fontSize: 12.5, color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>📄 View InBody PDF →</a>
+                    : <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>No InBody PDF uploaded yet.</div>}
+                  <FileUploadForm variant="staff" clientId={client.id} kind="inbody" label={health.inbodyPdfUrl ? "Replace PDF" : "Add InBody PDF"} accept="application/pdf" />
+                </div>
               </div>
             );
           })()}
