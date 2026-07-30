@@ -5105,6 +5105,25 @@ export async function addMeasurement(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
+// Log a meal-monitoring contact attempt (the escalation ladder: portal →
+// WhatsApp → call → in-person). Recorded per client per day.
+export async function logMealContact(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  const channel = String(formData.get("channel") || "");
+  const outcome = String(formData.get("outcome") || "no_response");
+  if (!client_id || !["portal", "whatsapp", "call", "meet"].includes(channel)) return;
+  const supabase = createClient();
+  await supabase.from("meal_contacts").insert({
+    client_id, date: String(formData.get("date") || todayISO()),
+    channel, outcome: ["reached", "no_response"].includes(outcome) ? outcome : "no_response",
+    note: String(formData.get("note") ?? "").trim() || null, staff: p.name,
+  });
+  await logAudit(p, "Meal-monitoring contact", client_id, `${channel} · ${outcome}`);
+  revalidatePath("/meals");
+}
+
 // ---- meal monitoring -------------------------------------------------------
 
 // client logs a meal / asks a question (portal)
