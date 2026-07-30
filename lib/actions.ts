@@ -5365,6 +5365,31 @@ export async function addDietChart(formData: FormData) {
   revalidatePath("/workspace");
 }
 
+// Edit a Draft diet chart in place (same row/version). Only Drafts are editable —
+// once it's In review / Approved / Published it's locked, so a change goes back
+// through review. Used for the "request changes → edit → resubmit" loop.
+export async function updateDietChart(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
+  if ((dc as { status: string } | null)?.status !== "Draft") return; // only drafts are editable
+  const labels = formData.getAll("meal_label").map((v) => String(v).trim());
+  const details = formData.getAll("meal_detail").map((v) => String(v).trim());
+  const meals = labels.map((l, i) => [l, details[i] ?? ""]).filter(([l, d]) => l && d);
+  if (meals.length === 0) return;
+  await supabase.from("diet_charts").update({
+    meals,
+    calories: Number(formData.get("calories")) || null,
+    protein: String(formData.get("protein") || "").trim() || null,
+    notes: String(formData.get("notes") || "").trim() || null,
+  }).eq("id", id);
+  await logAudit(p, "Diet chart edited", id, null);
+  revalidatePath("/workspace");
+}
+
 // Dietitian sends a draft to the Medical Director for review.
 export async function submitDietChartForReview(formData: FormData) {
   const p = await getProfile();
