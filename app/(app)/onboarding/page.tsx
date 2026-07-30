@@ -8,6 +8,7 @@ import { disciplinesForCategory } from "@/lib/assignment";
 import { onboardingRow, CATEGORY_LABEL, type ClientInput, type ConsultState } from "@/lib/onboarding";
 import { cancelBooking, repairClientJourney, nudgeRole } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import SubmitButton from "@/components/SubmitButton";
 
 const DISC_LABEL: Record<string, string> = {
   doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist",
@@ -218,7 +219,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
                                   <input type="hidden" name="label" value={s.label} />
                                   <input type="hidden" name="client_id" value={r.clientId} />
                                   <input type="hidden" name="href" value={s.action.href} />
-                                  <button type="submit" style={{ ...btn(isNext, "#fff"), background: "var(--brand-fill)", border: "none", cursor: "pointer" }}>Chase Front Desk</button>
+                                  <SubmitButton persist pendingLabel="Sending…" doneLabel="✓ Front Desk notified" style={{ ...btn(isNext, "#fff"), background: "var(--brand-fill)", border: "none", cursor: "pointer" }}>Chase Front Desk</SubmitButton>
                                 </form>
                               )}
                               {!s.done && s.action && (

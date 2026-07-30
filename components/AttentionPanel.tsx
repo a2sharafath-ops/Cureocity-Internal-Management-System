@@ -142,7 +142,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
                   <input type="hidden" name="client_id" value={f.nudge.clientId} />
                   <input type="hidden" name="staff_id" value={f.nudge.staffId} />
                   <input type="hidden" name="label" value={f.nudge.label} />
-                  <SubmitButton pendingLabel="Chasing…" doneLabel="✓ Chased" style={chaseBtn}>
+                  <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${f.nudge.who ? firstName(f.nudge.who) : "Person"} notified`} style={chaseBtn}>
                     {f.nudge.who ? `Chase ${firstName(f.nudge.who)}` : "Chase"}
                   </SubmitButton>
                 </form>
@@ -152,7 +152,7 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
                   <input type="hidden" name="label" value={f.chaseRole.label} />
                   {f.chaseRole.clientId && <input type="hidden" name="client_id" value={f.chaseRole.clientId} />}
                   {f.chaseRole.href && <input type="hidden" name="href" value={f.chaseRole.href} />}
-                  <SubmitButton pendingLabel="Chasing…" doneLabel="✓ Chased" style={chaseBtn}>
+                  <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${f.chaseRole.who} notified`} style={chaseBtn}>
                     {`Chase ${f.chaseRole.who}`}
                   </SubmitButton>
                 </form>
