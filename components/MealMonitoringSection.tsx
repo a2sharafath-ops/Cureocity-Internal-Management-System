@@ -3,6 +3,7 @@ import { isClinician } from "@/lib/roles";
 import { MEALS, type MealLog } from "@/lib/meals";
 import MealStaffCell from "@/components/MealStaffCell";
 import MealContactLadder, { type Contact } from "@/components/MealContactLadder";
+import MealFollowupHistory from "@/components/MealFollowupHistory";
 import MealClientCard from "@/components/MealClientCard";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
@@ -56,15 +57,26 @@ export default async function MealMonitoringSection({
   const map = new Map(logs.map((l) => [key(l.client_id, l.meal), l]));
 
   const { data: contactData } = ids.length
-    ? await supabase.from("meal_contacts").select("client_id, channel, outcome, note, staff, created_at").eq("date", TODAY).in("client_id", ids).order("created_at")
+    ? await supabase.from("meal_contacts").select("id, client_id, channel, outcome, note, staff, created_at").eq("date", TODAY).in("client_id", ids).order("created_at")
     : { data: [] };
   const contactsByClient = new Map<string, Contact[]>();
   for (const c of (contactData ?? []) as (Contact & { client_id: string })[]) {
     const arr = contactsByClient.get(c.client_id) ?? [];
-    arr.push({ channel: c.channel, outcome: c.outcome, note: c.note, staff: c.staff, created_at: c.created_at });
+    arr.push({ id: c.id, channel: c.channel, outcome: c.outcome, note: c.note, staff: c.staff, created_at: c.created_at });
     contactsByClient.set(c.client_id, arr);
   }
   const loggedSet = new Set(logs.filter((l) => l.description).map((l) => l.client_id));
+
+  // Past-days follow-up attempts, for the per-client history view.
+  const { data: pastData } = ids.length
+    ? await supabase.from("meal_contacts").select("client_id, channel, outcome, note, staff, created_at").in("client_id", ids).lt("date", TODAY).order("created_at", { ascending: false }).limit(300)
+    : { data: [] };
+  const pastByClient = new Map<string, Contact[]>();
+  for (const c of (pastData ?? []) as (Contact & { client_id: string })[]) {
+    const arr = pastByClient.get(c.client_id) ?? [];
+    arr.push({ channel: c.channel, outcome: c.outcome, note: c.note, staff: c.staff, created_at: c.created_at });
+    pastByClient.set(c.client_id, arr);
+  }
 
   const statusMap = await loadClientStatuses(supabase, ids, TODAY);
   const viewerDisc = disciplineForRole(me.role);
@@ -110,6 +122,7 @@ export default async function MealMonitoringSection({
                 ))}
               </div>
               <MealContactLadder clientId={c.id} date={TODAY} logged={loggedSet.has(c.id)} contacts={contactsByClient.get(c.id) ?? []} />
+              <MealFollowupHistory entries={pastByClient.get(c.id) ?? []} />
             </MealClientCard>
           );
         })

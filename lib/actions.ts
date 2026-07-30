@@ -5040,6 +5040,19 @@ export async function logMealContact(formData: FormData) {
   revalidatePath("/workspace");
 }
 
+// Undo a follow-up attempt logged in error — removes that single ladder entry.
+export async function undoMealContact(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("meal_contacts").delete().eq("id", id);
+  await logAudit(p, "Meal-monitoring contact undone", null, id);
+  revalidatePath("/meals");
+  revalidatePath("/workspace");
+}
+
 // ---- meal monitoring -------------------------------------------------------
 
 // client logs a meal / asks a question (portal)
