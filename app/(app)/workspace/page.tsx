@@ -498,7 +498,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
-      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />}
+      {tab === "summaries" && <>
+        {roleKey === "diet" && !readOnly && <AiDietTools clients={clientOpts} />}
+        <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />
+      </>}
 
       {/* ---- CONCERNS ---- */}
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
@@ -513,10 +516,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
-      {tab === "charts" && <>
-        {roleKey === "diet" && !readOnly && <AiDietTools clients={clientOpts} />}
-        <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} />
-      </>}
+      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} />}
 
       {/* ---- WORKOUT PLANNER (trainer) ---- */}
       {tab === "planner" && <WorkoutPlanner plans={workoutPlans} clients={clientOpts} />}

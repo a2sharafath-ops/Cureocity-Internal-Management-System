@@ -17,8 +17,8 @@ export default function AiDietTools({ clients }: { clients: { id: string; name: 
   return (
     <div style={{ ...box, padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-        <b>AI assist</b>
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>· summaries &amp; a first-draft plan from this client&apos;s data</span>
+        <b>AI assist · Summaries</b>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>· generate or write summaries from this client&apos;s data</span>
       </div>
       <select value={client} onChange={(e) => setClient(e.target.value)} style={{ ...inp, minWidth: 220, marginBottom: 12 }}>
         <option value="">Select client…</option>
