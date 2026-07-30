@@ -14,11 +14,20 @@ export default function PasswordRecoveryRedirect() {
   const pathname = usePathname();
 
   useEffect(() => {
+    if (pathname === "/reset-password") return;
+    // 1) URL marker check — the recovery redirect carries `type=recovery` in the
+    //    hash (implicit) or query (?code=... with recovery). This catches the
+    //    case where the auth event already fired before this mounted.
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    if (/type=recovery/.test(hash) || /type=recovery/.test(search)) {
+      router.replace(`/reset-password${hash || search}`);
+      return;
+    }
+    // 2) Event fallback for anything that arrives just after mount.
     const supabase = createClient();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" && pathname !== "/reset-password") {
-        router.replace("/reset-password");
-      }
+      if (event === "PASSWORD_RECOVERY") router.replace("/reset-password");
     });
     return () => sub.subscription.unsubscribe();
   }, [router, pathname]);
