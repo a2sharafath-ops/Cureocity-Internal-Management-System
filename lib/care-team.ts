@@ -93,7 +93,13 @@ export async function assignCareTeam(
   // PT gets trainer + coach, membership gets none.
   const disciplines = opts.disciplines ?? disciplinesForCategory(await resolveCategory(supabase, clientId));
   const want = new Set<string>(disciplines);
-  planned = planned.filter((a) => want.has(a.discipline));
+  // Keep the disciplines this package needs — PLUS any discipline the client was
+  // explicitly booked into. Booking a diet/doctor/psych consult means that
+  // clinician owns the client for that discipline, even if the package category
+  // (e.g. a membership) wouldn't otherwise pull in a full clinical team. Without
+  // this, the clinician has the appointment but the client never lands in their
+  // "My clients" roster.
+  planned = planned.filter((a) => want.has(a.discipline) || a.method === "booking");
 
   const toWrite = opts.reassign ? planned : planned.filter((a) => !existing.has(a.discipline));
   if (!toWrite.length) return [];
