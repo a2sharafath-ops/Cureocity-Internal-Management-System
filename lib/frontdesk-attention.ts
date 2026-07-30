@@ -41,7 +41,7 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
   // ---- blood report awaited from the client --------------------------------
   for (const b of (blood ?? []) as { client_id: string | null; panel: string | null; submitted: boolean }[]) {
     if (b.submitted || !b.client_id) continue;
-    flags.push({ sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`, detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · chase the client`, href: `/clients/${b.client_id}`, cta: "View", chaseRole: { roles: ["Health Coach", "Doctor"], who: "the team", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` } });
+    flags.push({ sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`, detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · chase the client`, href: `/clients/${b.client_id}`, cta: "View", chaseRole: { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` } });
   }
 
   // ---- new tablet intakes to complete --------------------------------------

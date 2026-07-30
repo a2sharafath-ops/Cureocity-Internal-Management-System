@@ -119,7 +119,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // was *requested*; the client still owes the actual report.
   const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
   // Blood card + consolidated approval live on this same page, so no cross-link.
-  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", ...FRONT_DESK });
+  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
   // nudge them, rather than linking to a workspace they can't act in.
   const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer");
