@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import AiSummaryButton from "@/components/AiSummaryButton";
-import { aiInbodySummary, aiConsultSummary, aiDailyMealSummary } from "@/lib/actions";
+import SummaryEditor from "@/components/SummaryEditor";
+import { aiInbodySummary, aiConsultSummary, aiDailyMealSummary, saveMeasurementSummary, saveConsultationSummary, saveMealDaySummary } from "@/lib/actions";
 
 // Dietitian AI toolkit: pick a client, then generate summaries / a first-draft
 // plan from the data already in Cureocity. Each result is a draft to copy into
@@ -28,14 +28,15 @@ export default function AiDietTools({ clients }: { clients: { id: string; name: 
         <div style={{ color: "var(--muted)", fontSize: 13 }}>Pick a client to enable the AI tools.</div>
       ) : (
         <div style={{ display: "grid", gap: 14 }}>
-          <AiSummaryButton action={aiInbodySummary} label="InBody summary" clientId={client} />
-          <AiSummaryButton action={aiConsultSummary} label="Consultation summary" clientId={client} />
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Diet-plan draft now lives in the chart builder — hit “✨ Draft with AI” there to fill the fields.</div>
+          <SummaryEditor label="InBody summary" clientId={client} aiAction={aiInbodySummary} saveAction={saveMeasurementSummary} />
+          <SummaryEditor label="Consultation summary" clientId={client} aiAction={aiConsultSummary} saveAction={saveConsultationSummary} />
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Generate with AI or type your own — either way it saves onto the record. Diet-plan draft lives in the chart builder (“✨ Draft with AI”).</div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <label style={{ fontSize: 12, color: "var(--muted)" }}>Daily meal summary for </label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inp} />
-            <AiSummaryButton action={aiDailyMealSummary} label="Daily meal summary" clientId={client} date={date} />
           </div>
+          <SummaryEditor label={`Daily meal summary · ${date}`} clientId={client} date={date} aiAction={aiDailyMealSummary} saveAction={saveMealDaySummary} />
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Generated / typed summaries are saved on the day&apos;s record. Sending to the client is the next step.</div>
         </div>
       )}
     </div>

@@ -643,7 +643,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                       {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
                     </div>
                     {cs.summary && <div style={{ marginTop: 5, fontSize: 13, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{cs.summary}</div>}
-                    {cs.ai_summary && <div style={{ marginTop: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, whiteSpace: "pre-wrap" }}><span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>AI summary</span><div style={{ marginTop: 4, color: "var(--ink)" }}>{cs.ai_summary}</div></div>}
+                    {cs.ai_summary && <div style={{ marginTop: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, whiteSpace: "pre-wrap" }}><span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>Summary</span><div style={{ marginTop: 4, color: "var(--ink)" }}>{cs.ai_summary}</div></div>}
                   </div>
                 ))}
               </div>
@@ -697,7 +697,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
         {(() => { const s = (measures[0] as { ai_summary?: string | null } | undefined)?.ai_summary; return s ? (
           <div style={{ marginBottom: 12, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, whiteSpace: "pre-wrap" }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>AI summary · latest InBody</span>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>Summary · latest InBody</span>
             <div style={{ marginTop: 4, color: "var(--ink)" }}>{s}</div>
           </div>
         ) : null; })()}

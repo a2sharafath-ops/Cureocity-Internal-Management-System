@@ -5491,6 +5491,36 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
   return r;
 }
 
+// Manually write / edit the saved summaries (same field the AI writes to), so a
+// clinician can type their own or tweak the AI one. Empty text clears it.
+export async function saveMeasurementSummary(client_id: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  const { data } = await supabase.from("measurements").select("id").eq("client_id", client_id).order("date", { ascending: false }).limit(1);
+  const id = (data ?? [])[0]?.id as string | undefined;
+  if (!id) return { error: "No InBody / measurement record to attach a summary to." };
+  await supabase.from("measurements").update({ ai_summary: text.trim() || null, ai_summary_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(me, "InBody summary edited", client_id, null);
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
+export async function saveConsultationSummary(client_id: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  const { data } = await supabase.from("consultations").select("id").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1);
+  const id = (data ?? [])[0]?.id as string | undefined;
+  if (!id) return { error: "No consultation record to attach a summary to." };
+  await supabase.from("consultations").update({ ai_summary: text.trim() || null, ai_summary_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(me, "Consultation summary edited", client_id, null);
+  revalidatePath(`/clients/${client_id}`);
+  return { ok: true };
+}
+
 export async function aiConsultSummary(_prev: AiState, formData: FormData): Promise<AiState> {
   const me = await getProfile();
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
@@ -5613,10 +5643,28 @@ export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Pr
   const logs = (data ?? []) as { meal: string; description: string | null; review: string | null; doubt: string | null; doubt_answer: string | null }[];
   if (!logs.length) return { error: `No meals logged for ${date}.` };
   const user = `Meals logged on ${date}:\n` + logs.map((l) => `- ${l.meal}: ${l.description ?? "—"}${l.review ? ` [dietitian: ${l.review}]` : ""}${l.doubt ? ` [client asked: ${l.doubt}${l.doubt_answer ? ` → ${l.doubt_answer}` : ""}]` : ""}`).join("\n");
-  return openaiComplete(
+  const r = await openaiComplete(
     "You are a friendly dietitian. Turn a client's logged meals for the day into a short, encouraging daily summary to send them: a compact meal-by-meal table (Meal | What you had | Note), then 2–3 lines of overall feedback and one gentle suggestion for tomorrow. Warm, concise.",
     user,
   );
+  // Save onto the day's record so it's kept (and can later be sent to the client).
+  if (r.text) {
+    await supabase.from("meal_day_summaries").upsert({ client_id, date, summary: r.text, updated_by: me.name, updated_at: new Date().toISOString() }, { onConflict: "client_id,date" });
+    await logAudit(me, "Daily meal summary saved", client_id, date);
+  }
+  return r;
+}
+
+// Manually write / edit the stored daily meal summary for a client + date.
+export async function saveMealDaySummary(client_id: string, text: string, date?: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const day = date || todayISO();
+  if (!client_id) return { error: "Missing client." };
+  const supabase = createClient();
+  await supabase.from("meal_day_summaries").upsert({ client_id, date: day, summary: text.trim() || null, updated_by: me.name, updated_at: new Date().toISOString() }, { onConflict: "client_id,date" });
+  await logAudit(me, "Daily meal summary edited", client_id, day);
+  return { ok: true };
 }
 
 export async function addRecipe(formData: FormData) {
