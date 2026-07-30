@@ -3,7 +3,7 @@
 // milestones (the reassessment and the session blocks). Server component; the
 // clocks are computed once at render.
 
-import { togglePTHold } from "@/lib/actions";
+import { togglePTHold, nudgeRole } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 import { ptSla, formatLeft, SLA_TONE, type Gate } from "@/lib/pt-sla";
 import { MILESTONES } from "@/lib/pt";
@@ -28,7 +28,9 @@ const when = (iso: string | null) =>
 const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
 
-function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?: string | null }) {
+type Chase = { roles: string[]; who: string; label: string; href?: string; clientId: string };
+
+function Row({ g, dateOnly, bookHref, chase }: { g: Gate; dateOnly?: boolean; bookHref?: string | null; chase?: Chase | null }) {
   const tone = SLA_TONE[g.clock.status];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 0", fontSize: 12.5, borderTop: "1px solid var(--border)" }}>
@@ -37,16 +39,37 @@ function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?
       <span style={{ color: "var(--muted)", fontSize: 11.5, minWidth: 108, textAlign: "right", whiteSpace: "nowrap" }}>
         {g.clock.status === "waiting" ? "—" : `${formatLeft(g.clock.msLeft)} · ${dateOnly ? day(g.clock.dueAt) : when(g.clock.dueAt)}`}
       </span>
-      {bookHref
+      {chase ? (
+        <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+          <form action={nudgeRole}>
+            <input type="hidden" name="roles" value={chase.roles.join(",")} />
+            <input type="hidden" name="label" value={chase.label} />
+            <input type="hidden" name="client_id" value={chase.clientId} />
+            {chase.href && <input type="hidden" name="href" value={chase.href} />}
+            <SubmitButton pendingLabel="…" doneLabel="✓ Chased" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              Chase {chase.who}
+            </SubmitButton>
+          </form>
+          {bookHref && <a href={bookHref} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Book →</a>}
+        </span>
+      ) : bookHref
         ? <a href={bookHref} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Book →</a>
         : <span style={{ width: 52 }} />}
     </div>
   );
 }
 
-export default function PTProtocol({ clientId, view, canHold, canBook, services = [] }: { clientId: string; view: View; canHold: boolean; canBook?: boolean; services?: SvcRow[] }) {
+export default function PTProtocol({ clientId, view, canHold, canBook, overseer = false, services = [] }: { clientId: string; view: View; canHold: boolean; canBook?: boolean; overseer?: boolean; services?: SvcRow[] }) {
   const r = ptSla(view);
   const held = Boolean(view.hold.holdSince);
+
+  // Overseers chase rather than do: the trainer owes the turnaround work, the
+  // front desk owns the bookings.
+  const OWED = new Set(["running", "due_soon", "breached"]);
+  const turnaroundChase = (g: Gate): Chase | null =>
+    overseer && OWED.has(g.clock.status) ? { roles: ["Fitness Trainer"], who: "Trainer", label: g.label, clientId } : null;
+  const milestoneChase = (g: Gate, href: string | null): Chase | null =>
+    overseer && href ? { roles: ["Front Desk"], who: "Front Desk", label: g.label, href, clientId } : null;
 
   // The reassessment is an appointment; the session block isn't. Offer a
   // one-click "Book →" that pre-fills the calendar with the client, discipline
@@ -62,7 +85,11 @@ export default function PTProtocol({ clientId, view, canHold, canBook, services 
   const section = (title: string, gates: Gate[], dateOnly?: boolean) => (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 2 }}>{title}</div>
-      {gates.map((g) => <Row key={g.gate} g={g} dateOnly={dateOnly} bookHref={dateOnly ? bookHref(g) : null} />)}
+      {gates.map((g) => {
+        const href = dateOnly ? bookHref(g) : null;
+        const chase = dateOnly ? milestoneChase(g, href) : turnaroundChase(g);
+        return <Row key={g.gate} g={g} dateOnly={dateOnly} bookHref={href} chase={chase} />;
+      })}
     </div>
   );
 

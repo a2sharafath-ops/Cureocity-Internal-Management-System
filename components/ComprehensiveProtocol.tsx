@@ -14,9 +14,9 @@
 // precision and a needless client bundle, and the page already refreshes on
 // Realtime changes.
 
-import { toggleComprehensiveHold } from "@/lib/actions";
+import { toggleComprehensiveHold, nudgeRole } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
-import { comprehensiveSla, formatLeft, SLA_TONE, type Gate } from "@/lib/comprehensive-sla";
+import { comprehensiveSla, formatLeft, SLA_TONE, OWNER_ROLES, type Gate } from "@/lib/comprehensive-sla";
 import { MILESTONES } from "@/lib/comprehensive";
 import { milestoneBookHref } from "@/lib/appt-match";
 import type { Hold } from "@/lib/sla-clock";
@@ -46,7 +46,9 @@ const day = (iso: string | null) => {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 };
 
-function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?: string | null }) {
+type Chase = { roles: string[]; who: string; label: string; href?: string; clientId: string };
+
+function Row({ g, dateOnly, bookHref, chase }: { g: Gate; dateOnly?: boolean; bookHref?: string | null; chase?: Chase | null }) {
   const tone = SLA_TONE[g.clock.status];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 0", fontSize: 12.5, borderTop: "1px solid var(--border)" }}>
@@ -59,7 +61,21 @@ function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?
           ? "—"
           : `${formatLeft(g.clock.msLeft)} · ${dateOnly ? day(g.clock.dueAt) : when(g.clock.dueAt)}`}
       </span>
-      {bookHref
+      {/* Overseer → chase the responsible person/team; keep the direct link too. */}
+      {chase ? (
+        <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+          <form action={nudgeRole}>
+            <input type="hidden" name="roles" value={chase.roles.join(",")} />
+            <input type="hidden" name="label" value={chase.label} />
+            <input type="hidden" name="client_id" value={chase.clientId} />
+            {chase.href && <input type="hidden" name="href" value={chase.href} />}
+            <SubmitButton pendingLabel="…" doneLabel="✓ Chased" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              Chase {chase.who}
+            </SubmitButton>
+          </form>
+          {bookHref && <a href={bookHref} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Book →</a>}
+        </span>
+      ) : bookHref
         ? <a href={bookHref} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 7, padding: "2px 9px", fontSize: 11, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Book →</a>
         : <span style={{ width: 52 }} />}
     </div>
@@ -69,10 +85,21 @@ function Row({ g, dateOnly, bookHref }: { g: Gate; dateOnly?: boolean; bookHref?
 const OWNER_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach" };
 
 export default function ComprehensiveProtocol({
-  clientId, view, canHold, canBook, services = [],
-}: { clientId: string; view: View; canHold: boolean; canBook?: boolean; services?: SvcRow[] }) {
+  clientId, view, canHold, canBook, overseer = false, services = [],
+}: { clientId: string; view: View; canHold: boolean; canBook?: boolean; overseer?: boolean; services?: SvcRow[] }) {
   const r = comprehensiveSla(view);
   const held = Boolean(view.hold.holdSince);
+
+  // Overseers (Super Admin / Admin / Manager) chase the person who owes the
+  // work rather than doing it themselves: the owning clinician for a work-owed
+  // turnaround, front desk for a calendar booking.
+  const OWED = new Set(["running", "due_soon", "breached"]);
+  const turnaroundChase = (g: Gate): Chase | null =>
+    overseer && OWED.has(g.clock.status)
+      ? { roles: OWNER_ROLES[g.owner], who: OWNER_DISC[g.owner] ?? "clinician", label: g.label, clientId }
+      : null;
+  const milestoneChase = (g: Gate, href: string | null): Chase | null =>
+    overseer && href ? { roles: ["Front Desk"], who: "Front Desk", label: g.label, href, clientId } : null;
 
   // A milestone that's an appointment (not the strength-session block) and isn't
   // done yet gets a one-click "Book →" that pre-fills the calendar with this
@@ -91,7 +118,11 @@ export default function ComprehensiveProtocol({
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".5px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 2 }}>
         {title}
       </div>
-      {gates.map((g) => <Row key={g.gate} g={g} dateOnly={dateOnly} bookHref={dateOnly ? bookHref(g) : null} />)}
+      {gates.map((g) => {
+        const href = dateOnly ? bookHref(g) : null;
+        const chase = dateOnly ? milestoneChase(g, href) : turnaroundChase(g);
+        return <Row key={g.gate} g={g} dateOnly={dateOnly} bookHref={href} chase={chase} />;
+      })}
     </div>
   );
 
