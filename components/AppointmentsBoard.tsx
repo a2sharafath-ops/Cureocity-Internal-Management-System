@@ -47,8 +47,11 @@ export default function AppointmentsBoard({ appts, today, myStaffId = null, canS
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const chip = (bg: string, c: string, t: string) => <span style={{ background: bg, color: c, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{t}</span>;
+  const todayDone = todayList.filter((a) => a.status === "completed").length;
+  const todayPending = todayList.length - todayDone;
+
   // The three stat cards double as the filter — click one to drill into that list.
-  const statCard = (k: "upcoming" | "today" | "completed", label: string, n: number) => {
+  const statCard = (k: "upcoming" | "today" | "completed", label: string, n: number, sub?: React.ReactNode) => {
     const on = view === k;
     return (
       <button type="button" onClick={() => setView(k)} aria-pressed={on} style={{
@@ -58,15 +61,21 @@ export default function AppointmentsBoard({ appts, today, myStaffId = null, canS
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "var(--muted)", fontSize: 12, fontWeight: 600 }}>{label}<span style={{ color: "var(--brand-text)", fontSize: 12 }}>{on ? "● showing" : "view →"}</span></div>
         <div style={{ fontSize: 22, fontWeight: 800, color: on ? "var(--brand-text)" : "var(--ink)" }}>{n}</div>
+        {sub && <div style={{ marginTop: 2 }}>{sub}</div>}
       </button>
     );
   };
+
+  const pill = (text: string, bg: string, fg: string) => <span style={{ background: bg, color: fg, borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>{text}</span>;
 
   return (
     <div>
       <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
         {statCard("upcoming", "Upcoming", upcoming.length)}
-        {statCard("today", "Today", todayList.length)}
+        {statCard("today", "Today", todayList.length,
+          todayList.length > 0
+            ? <span style={{ display: "inline-flex", gap: 5, flexWrap: "wrap" }}>{pill(`${todayPending} to do`, "var(--amber-bg)", "var(--amber-text)")}{pill(`${todayDone} done`, "var(--green-bg)", "var(--green-text)")}</span>
+            : undefined)}
         {statCard("completed", "Completed", completed.length)}
       </div>
 
