@@ -74,7 +74,7 @@ export default function ConsoleView({
       {/* Console chrome */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
         <Link href="/pro" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← Consultations</Link>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--ink)", color: "#fff", display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>
+        {icon && <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--ink)", color: "#fff", display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>}
         <div>
           <h1 style={{ fontSize: 19, margin: 0 }}>{label}</h1>
           <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{client.name}{client.code ? ` · ${client.code}` : ""} · {kind} consultation</div>
@@ -114,7 +114,7 @@ export default function ConsoleView({
         {/* Intake questionnaire + unfilled tracker */}
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <div style={{ fontWeight: 700 }}>{icon} Intake questionnaire</div>
+            <div style={{ fontWeight: 700 }}>{icon ? `${icon} ` : ""}Intake questionnaire</div>
             <span style={{ flex: 1 }} />
             <span style={{ background: filled === questions.length ? "var(--green-bg)" : "var(--amber-bg)", color: filled === questions.length ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700 }}>
               {filled}/{questions.length} answered

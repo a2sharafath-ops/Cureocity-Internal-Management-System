@@ -19,7 +19,7 @@ export const CONSULT_QUESTIONS: Record<string, ConsultQ> = {
     ],
   },
   Diet: {
-    label: "Diet & Lifestyle Intake", icon: "🥗",
+    label: "Diet & Lifestyle Intake", icon: "",
     questions: [
       "Diet preference (Veg / Non-veg / Vegan / Eggetarian)",
       "Typical breakfast",
