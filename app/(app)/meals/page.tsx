@@ -5,8 +5,8 @@ import MealMonitoringSection from "@/components/MealMonitoringSection";
 
 export const dynamic = "force-dynamic";
 
-export default async function MealsPage() {
+export default async function MealsPage({ searchParams }: { searchParams: { d?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/meals")) redirect("/dashboard");
-  return <MealMonitoringSection me={me} heading />;
+  return <MealMonitoringSection me={me} heading date={searchParams.d} />;
 }

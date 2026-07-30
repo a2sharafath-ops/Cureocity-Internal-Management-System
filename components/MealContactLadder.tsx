@@ -35,12 +35,35 @@ const OUTCOME_LABEL: Record<string, string> = {
 };
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const CH_LABEL = (ch: string) => (({ portal: "Portal", whatsapp: "WhatsApp", call: "Call", meet: "In-person" } as Record<string, string>)[ch] ?? ch);
 
-export default function MealContactLadder({ clientId, date, logged, contacts }: { clientId: string; date: string; logged: boolean; contacts: Contact[] }) {
+export default function MealContactLadder({ clientId, date, logged, contacts, readOnly = false }: { clientId: string; date: string; logged: boolean; contacts: Contact[]; readOnly?: boolean }) {
   const [note, setNote] = useState("");
 
   const attemptsOn = (ch: string) => contacts.filter((c) => c.channel === ch);
   const reached = logged || contacts.some((c) => POSITIVE.has(c.outcome));
+
+  // Read-only (a past day): show only what was recorded, no controls.
+  if (readOnly) {
+    if (logged) return (
+      <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10, fontSize: 12, color: "var(--green-text)" }}>✓ Logged via the portal that day</div>
+    );
+    if (!contacts.length) return (
+      <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10, fontSize: 12, color: "var(--muted)" }}>No follow-up recorded this day.</div>
+    );
+    return (
+      <div style={{ marginTop: 10, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 6 }}>Follow-up that day</div>
+        <div style={{ display: "grid", gap: 3 }}>
+          {[...contacts].sort((a, b) => a.created_at.localeCompare(b.created_at)).map((a, i) => (
+            <div key={i} style={{ fontSize: 12, color: "var(--muted)" }}>
+              {fmtTime(a.created_at)} · {CH_LABEL(a.channel)} · {OUTCOME_LABEL[a.outcome] ?? a.outcome}{a.note ? ` — ${a.note}` : ""}{a.staff ? ` (${a.staff})` : ""}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   let current: string | null = null;
   if (!logged && !reached) {
