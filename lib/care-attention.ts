@@ -85,13 +85,13 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       const comp = rows.find((r) => r.category === "comprehensive");
       const sub = bloodBy.get(clientId)?.get("comprehensive");
       if (sub === false) {
-        // Chasing the client for the report is the care team's job — chase the
-        // relationship owner (coach first, then the ordering doctor). If no one
-        // is assigned yet, chase the team by role so the button always works.
-        const o = ownerFor(clientId, "coach") ?? ownerFor(clientId, "doctor") ?? ownerFor(clientId, "dietitian") ?? ownerFor(clientId, "trainer");
+        // Chasing the client for the report is the Health Coach's job (they own
+        // the client relationship for PT / Comprehensive). Nudge the assigned
+        // coach; if none is assigned yet, chase the Health Coach role.
+        const o = ownerFor(clientId, "coach");
         flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: "View",
           nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
-          chaseRole: o ? undefined : { roles: ["Health Coach", "Doctor", "Front Desk"], who: "the team", label: "Blood report — awaiting client", clientId, href: clientHref } });
+          chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: clientHref } });
       }
       if (done.has("Diet") && !hasChart.has(clientId)) {
         const o = ownerFor(clientId, "dietitian");
