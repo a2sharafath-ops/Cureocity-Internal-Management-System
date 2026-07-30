@@ -2,11 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee } from "@/lib/roles";
+import { canSee, isBillingOverseer } from "@/lib/roles";
 import { packageCategory } from "@/lib/packages";
 import { disciplinesForCategory } from "@/lib/assignment";
 import { onboardingRow, CATEGORY_LABEL, type ClientInput, type ConsultState } from "@/lib/onboarding";
-import { cancelBooking, repairClientJourney } from "@/lib/actions";
+import { cancelBooking, repairClientJourney, nudgeRole } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 
 const DISC_LABEL: Record<string, string> = {
@@ -21,6 +21,9 @@ const CATS = ["blueprint", "comprehensive", "training", "membership"] as const;
 export default async function OnboardingPage({ searchParams }: { searchParams: { cat?: string; done?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/onboarding")) redirect("/dashboard");
+  // Overseers (Super Admin / Admin / Manager) chase the front desk to do the
+  // booking rather than booking it themselves.
+  const overseer = isBillingOverseer(me.role);
 
   const supabase = createClient();
   const [{ data: clientsD }, { data: pkgsD }, { data: cpsD }, { data: invD }, { data: bloodD }, { data: bpD }, { data: consultD }, { data: sessD }, { data: staffD }, { data: apptD }, { data: assignD }] =
@@ -209,6 +212,15 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
                             <span style={{ width: 14, flexShrink: 0, textAlign: "center", color: s.done ? "var(--green-text)" : "var(--muted)", fontSize: 12 }}>{s.done ? "✓" : "○"}</span>
                             <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.35, color: s.done ? "var(--muted)" : "var(--ink)", fontWeight: isNext ? 600 : 400, textDecoration: s.done ? "line-through" : "none" }}>{s.label}</span>
                             <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                              {!s.done && s.action && overseer && (
+                                <form action={nudgeRole} style={{ margin: 0 }}>
+                                  <input type="hidden" name="roles" value="Front Desk" />
+                                  <input type="hidden" name="label" value={s.label} />
+                                  <input type="hidden" name="client_id" value={r.clientId} />
+                                  <input type="hidden" name="href" value={s.action.href} />
+                                  <button type="submit" style={{ ...btn(isNext, "#fff"), background: "var(--brand-fill)", border: "none", cursor: "pointer" }}>Chase Front Desk</button>
+                                </form>
+                              )}
                               {!s.done && s.action && (
                                 <Link href={s.action.href} style={btn(isNext, "var(--brand-text)")}>{s.action.cta} →</Link>
                               )}
