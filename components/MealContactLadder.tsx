@@ -1,15 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { logMealContact } from "@/lib/actions";
-import SubmitButton from "@/components/SubmitButton";
 
 export type Contact = { channel: string; outcome: string; note: string | null; staff: string | null; created_at: string };
 
 // The escalation ladder for a client who isn't logging their meals. Each rung is
 // two stages: first record the attempt (nudged / called / visited), then whether
-// they responded. Positive outcomes resolve the chase; negative ones escalate to
-// the next rung.
+// they responded. Positive outcomes resolve the chase; negative ones escalate.
 type Step = {
   channel: string; icon: string; title: string; hint: string;
   attempt: { outcome: string; label: string };
@@ -39,20 +37,35 @@ const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hou
 
 export default function MealContactLadder({ clientId, date, logged, contacts }: { clientId: string; date: string; logged: boolean; contacts: Contact[] }) {
   const [note, setNote] = useState("");
+  // Optimistic attempts logged this session, so a rung advances to its outcome
+  // buttons instantly — without waiting for a full server round-trip.
+  const [extra, setExtra] = useState<Contact[]>([]);
+  const [busy, startLog] = useTransition();
+  const all = [...contacts, ...extra];
 
-  const attemptsOn = (ch: string) => contacts.filter((c) => c.channel === ch);
-  const reached = logged || contacts.some((c) => POSITIVE.has(c.outcome));
+  const log = (channel: string, outcome: string) => {
+    const noteVal = note.trim() || null;
+    setExtra((e) => [...e, { channel, outcome, note: noteVal, staff: null, created_at: new Date().toISOString() }]);
+    setNote("");
+    startLog(async () => {
+      const fd = new FormData();
+      fd.set("client_id", clientId); fd.set("date", date);
+      fd.set("channel", channel); fd.set("outcome", outcome); fd.set("note", noteVal ?? "");
+      await logMealContact(fd);
+    });
+  };
 
-  // The rung that needs action now: first step that isn't positively resolved
-  // and hasn't been escalated past (a negative outcome moves to the next rung).
+  const attemptsOn = (ch: string) => all.filter((c) => c.channel === ch);
+  const reached = logged || all.some((c) => POSITIVE.has(c.outcome));
+
   let current: string | null = null;
   if (!logged && !reached) {
     for (const s of STEPS) {
       const a = attemptsOn(s.channel);
       if (a.some((x) => POSITIVE.has(x.outcome))) { current = null; break; }
-      if (a.length === 0) { current = s.channel; break; }          // needs an attempt
-      if (a.some((x) => NEGATIVE.has(x.outcome))) continue;         // escalate
-      current = s.channel; break;                                   // attempted, awaiting outcome
+      if (a.length === 0) { current = s.channel; break; }
+      if (a.some((x) => NEGATIVE.has(x.outcome))) continue;
+      current = s.channel; break;
     }
   }
 
@@ -67,19 +80,15 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
   }
 
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", fontSize: 12.5, background: "#fff" };
-  const btn = (primary: boolean): React.CSSProperties => primary
-    ? { border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }
-    : { border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
-
-  const actionForm = (channel: string, outcome: string, label: string, primary: boolean) => (
-    <form key={outcome} action={logMealContact}>
-      <input type="hidden" name="client_id" value={clientId} />
-      <input type="hidden" name="date" value={date} />
-      <input type="hidden" name="channel" value={channel} />
-      <input type="hidden" name="outcome" value={outcome} />
-      <input type="hidden" name="note" value={note} />
-      <SubmitButton persist pendingLabel="Saving…" doneLabel="✓ Logged" style={btn(primary)}>{label}</SubmitButton>
-    </form>
+  const btnStyle = (primary: boolean): React.CSSProperties => ({
+    border: primary ? "none" : "1px solid var(--border)",
+    background: primary ? "var(--brand-fill)" : "#fff",
+    color: primary ? "#fff" : "var(--ink)",
+    borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600,
+    cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1, whiteSpace: "nowrap",
+  });
+  const Btn = ({ channel, outcome, label, primary }: { channel: string; outcome: string; label: string; primary: boolean }) => (
+    <button type="button" disabled={busy} onClick={() => log(channel, outcome)} style={btnStyle(primary)}>{label}</button>
   );
 
   return (
@@ -110,14 +119,12 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
                     {fmtTime(a.created_at)} · {OUTCOME_LABEL[a.outcome] ?? a.outcome}{a.note ? ` — ${a.note}` : ""}{a.staff ? ` (${a.staff})` : ""}
                   </div>
                 ))}
-                {/* Stage 1: not attempted → log the attempt. Stage 2: attempted,
-                    unresolved → log whether they responded. */}
-                <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                  {!attempted && actionForm(step.channel, step.attempt.outcome, step.attempt.label, isNext)}
+                <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  {!attempted && <Btn channel={step.channel} outcome={step.attempt.outcome} label={step.attempt.label} primary={isNext} />}
                   {attempted && !positive && !negative && (
                     <>
-                      <span style={{ fontSize: 11.5, color: "var(--muted)", alignSelf: "center" }}>Did they respond?</span>
-                      {step.resolve.map((r) => actionForm(step.channel, r.outcome, r.label, Boolean(r.positive)))}
+                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Did they respond?</span>
+                      {step.resolve.map((r) => <Btn key={r.outcome} channel={step.channel} outcome={r.outcome} label={r.label} primary={Boolean(r.positive)} />)}
                     </>
                   )}
                 </div>
@@ -133,7 +140,7 @@ export default function MealContactLadder({ clientId, date, logged, contacts }: 
       <div style={{ marginTop: 8 }}>
         {reached
           ? <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 700 }}>Reached — waiting for them to log</span>
-          : contacts.length
+          : all.length
           ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 700 }}>No response yet — keep escalating</span>
           : <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 700 }}>Not contacted yet</span>}
       </div>
