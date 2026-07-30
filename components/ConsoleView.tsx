@@ -10,6 +10,7 @@ export type ConsoleHealth = {
   age: number | null; gender: string | null; height: number | null; weight: number | null;
   bmi: number | null; bodyFat: number | null; muscle: number | null; visceral: number | null;
   waist: number | null; hip: number | null; measuredOn: string | null;
+  inbodySummary: string | null;
   conditions: string | null; goals: string[]; allergies: string[]; bloodStatus: string | null;
 };
 
@@ -164,11 +165,16 @@ export default function ConsoleView({
                 {metrics.length > 0
                   ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 10 }}>{metrics}</div>
                   : <div style={{ fontSize: 12, color: "var(--muted)" }}>No measurements on record yet.</div>}
+                {health.inbodySummary && (
+                  <div style={{ marginTop: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 3 }}>InBody summary</div>
+                    <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap" }}>{health.inbodySummary}</div>
+                  </div>
+                )}
                 {health.conditions && <div style={{ marginTop: 10 }}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 2 }}>Conditions</div><div style={{ fontSize: 12.5 }}>{health.conditions}</div></div>}
                 {chipRow("Allergies", health.allergies, "var(--red-bg)", "var(--red-text)")}
                 {chipRow("Goals", health.goals, "var(--brand-tint)", "var(--brand-text)")}
                 {health.bloodStatus && <div style={{ marginTop: 10, fontSize: 12 }}><span style={{ color: "var(--muted)" }}>Blood report: </span><b>{health.bloodStatus}</b></div>}
-                <Link href={`/clients/${client.id}`} style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Full health record →</Link>
               </div>
             );
           })()}
