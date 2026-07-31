@@ -5439,19 +5439,23 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return { error: "Pick a client first." };
+  // The dietitian can paste the InBody report text (e.g. copied from the PDF)
+  // into the box and hit Generate — the AI then summarises what they pasted.
+  const pasted = String(formData.get("text") || "").trim();
   const supabase = createClient();
   const { data } = await supabase.from("measurements")
     .select("id, date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr")
     .eq("client_id", client_id).order("date", { ascending: false }).limit(2);
   const rows = (data ?? []) as (MeasRow & { id: string })[];
-  if (!rows.length) return { error: "No InBody / measurements recorded for this client yet." };
-  const user = `Latest InBody — ${fmtMeas(rows[0])}` + (rows[1] ? `\nPrevious InBody — ${fmtMeas(rows[1])}` : "");
+  if (!rows.length && !pasted) return { error: "No InBody data yet — enter the measurements, or paste the InBody report text into the box, then Generate." };
+  const metricLines = rows.length ? `Recorded metrics — Latest: ${fmtMeas(rows[0])}` + (rows[1] ? `\nPrevious: ${fmtMeas(rows[1])}` : "") : "";
+  const user = [metricLines, pasted ? `InBody report text provided by the dietitian:\n${pasted.slice(0, 4000)}` : ""].filter(Boolean).join("\n\n");
   const r = await openaiComplete(
-    "You are a clinical dietitian assistant. Summarise a client's InBody / body-composition reading for the care team in 4–6 short lines: highlight the key metrics, note the change vs the previous reading if one is given (direction and magnitude), and add 2–3 concise practical observations. Plain text, no markdown headings.",
+    "You are a clinical dietitian assistant. Summarise the client's InBody / body-composition report for the care team in 4–6 short lines: highlight the key metrics, note the change vs the previous reading if one is given (direction and magnitude), and add 2–3 concise practical observations. If the dietitian pasted report text, base the summary on it; if structured metrics are also given, reconcile and use them. Plain text, no markdown headings.",
     user,
   );
-  // Save onto the latest measurements record.
-  if (r.text) {
+  // Save onto the latest measurements record (if one exists to attach to).
+  if (r.text && rows.length) {
     await supabase.from("measurements").update({ ai_summary: r.text, ai_summary_at: new Date().toISOString() }).eq("id", rows[0].id);
     await logAudit(me, "InBody AI summary saved", client_id, null);
     revalidatePath(`/clients/${client_id}`);
@@ -5495,23 +5499,43 @@ export async function aiConsultSummary(_prev: AiState, formData: FormData): Prom
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return { error: "Pick a client first." };
   const supabase = createClient();
-  const [{ data: cons }, { data: forms }, { data: cli }] = await Promise.all([
-    supabase.from("consultations").select("id, kind, status, notes, summary, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(4),
-    supabase.from("form_responses").select("answers, status, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
+  const [{ data: cons }, { data: meas }, { data: cli }] = await Promise.all([
+    // Every discipline's consult (doctor / dietitian / trainer / psychologist),
+    // newest first — we keep the latest per discipline and use its questionnaire
+    // answers + summary.
+    supabase.from("consultations").select("id, kind, status, answers, summary, created_at").eq("client_id", client_id).order("created_at", { ascending: false }).limit(20),
+    // The InBody summary (manual or AI) lives on the latest measurements row.
+    supabase.from("measurements").select("ai_summary, date").eq("client_id", client_id).not("ai_summary", "is", null).order("date", { ascending: false }).limit(1),
     supabase.from("clients").select("goals, conditions").eq("id", client_id).maybeSingle(),
   ]);
-  const consults = (cons ?? []) as { id: string; kind: string; status: string; notes: string | null; summary: string | null }[];
-  const answers = (forms ?? []) as { answers: Record<string, unknown> }[];
+  const consults = (cons ?? []) as { id: string; kind: string; status: string; answers: [string, string][] | null; summary: string | null }[];
+  const inbodySummary = ((meas ?? []) as { ai_summary: string | null }[])[0]?.ai_summary ?? null;
   const c = cli as { goals: string[] | null; conditions: string | null } | null;
-  if (!consults.length && !answers.length) return { error: "No consultation notes or questionnaire answers found for this client." };
+  if (!consults.length && !inbodySummary) return { error: "No questionnaire answers or InBody summary found for this client yet." };
+
   const parts: string[] = [];
   if (c?.goals?.length) parts.push(`Goals: ${c.goals.join(", ")}`);
   if (c?.conditions) parts.push(`Conditions: ${c.conditions}`);
-  for (const cn of consults) parts.push(`${cn.kind} consult (${cn.status})${cn.summary ? ` — ${cn.summary}` : ""}${cn.notes ? ` · notes: ${cn.notes}` : ""}`);
-  for (const a of answers) parts.push(`Questionnaire answers: ${JSON.stringify(a.answers).slice(0, 1500)}`);
+  if (inbodySummary) parts.push(`InBody / body-composition summary:\n${inbodySummary}`);
+
+  // Latest consult per discipline, with its questionnaire answers.
+  const seen = new Set<string>();
+  for (const cn of consults) {
+    if (seen.has(cn.kind)) continue;
+    seen.add(cn.kind);
+    const qa = Array.isArray(cn.answers) && cn.answers.length
+      ? cn.answers.map(([q, a]) => `  - ${q}: ${a}`).join("\n")
+      : null;
+    parts.push(
+      `${cn.kind} questionnaire (${cn.status}):` +
+      (qa ? `\n${qa}` : " (no answers recorded)") +
+      (cn.summary ? `\n  Summary: ${cn.summary}` : ""),
+    );
+  }
+
   const r = await openaiComplete(
-    "You are a clinical assistant. Write a clear, shareable consultation summary for a client from the notes and questionnaire answers provided. Cover: presenting goals/concerns, relevant history, key findings, and the plan/next steps. Neutral clinical tone, tidy short paragraphs or bullet lines.",
-    parts.join("\n"),
+    "You are a clinical assistant writing a consolidated, shareable consultation summary for a client. Draw together EVERY discipline's questionnaire answers provided (doctor, dietitian, fitness trainer, psychologist) and the InBody summary into one coherent overview. Cover: presenting goals/concerns, relevant history, key findings across disciplines, body-composition status, and the combined plan / next steps. Neutral clinical tone; tidy short paragraphs or bullet lines; no markdown headings.",
+    parts.join("\n\n"),
   );
   // Save onto the most recent consultation record.
   if (r.text && consults.length) {

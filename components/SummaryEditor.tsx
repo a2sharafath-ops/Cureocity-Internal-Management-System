@@ -29,6 +29,9 @@ export default function SummaryEditor({
       const fd = new FormData();
       fd.set("client_id", clientId);
       if (date !== undefined) fd.set("date", date);
+      // Pass whatever is already in the box (e.g. InBody report text the user
+      // pasted) so the AI can summarise it, not just the recorded data.
+      if (text.trim()) fd.set("text", text.trim());
       const r = await aiAction!({}, fd);
       if (r.error) setErr(r.error);
       else { setText(r.text ?? ""); setMsg("Generated & saved — edit if needed."); }
