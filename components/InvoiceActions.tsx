@@ -11,13 +11,16 @@ const METHODS = ["Cash", "Card", "UPI", "Bank", "Online"];
 const COLLECTOR_ROLES = "Front Desk,Finance";
 
 export default function InvoiceActions({
-  id, status, role = "", clientId, label,
-}: { id: string; status: string; role?: string; clientId?: string; label?: string }) {
+  id, status, role = "", canRefund = true, clientId, label,
+}: { id: string; status: string; role?: string; canRefund?: boolean; clientId?: string; label?: string }) {
   const [open, setOpen] = useState(false);
 
   if (status === "Refunded") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
 
   if (status === "Paid") {
+    // Only invoice managers can reverse a settled invoice; collectors (Front
+    // Desk) who can mark paid don't get a refund control.
+    if (!canRefund) return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
     return (
       <form action={refundInvoice}>
         <input type="hidden" name="id" value={id} />
@@ -47,7 +50,7 @@ export default function InvoiceActions({
     );
   }
 
-  // Collector (Finance / Super Admin) marks it paid.
+  // Collector (Front Desk / Finance) marks it paid.
   return open ? (
     <form action={markInvoicePaid} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
       <input type="hidden" name="id" value={id} />

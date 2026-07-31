@@ -176,9 +176,17 @@ export function canBill(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }
 
-// Who can CREATE / EDIT invoices (mark paid, refund). Front Desk is view-only.
+// Who can CREATE / EDIT invoices (raise, void, refund). Front Desk is view-only
+// for these — they don't originate or reverse invoices.
 export function canManageInvoices(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Finance"].includes(role);
+}
+
+// Who actually COLLECTS the money and marks an invoice paid. Front Desk is the
+// front-line collector (they're the ones chased to collect), Finance is the
+// hands-on collector, and overseers can settle directly if needed.
+export function canRecordPayment(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Finance"].includes(role);
 }
 
 // Super Admin / Admin / Manager oversee collections — they don't collect the
