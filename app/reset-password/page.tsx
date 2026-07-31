@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "var(--bg)" }}>
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>✚</div>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "#fff", border: "1px solid var(--border)", display: "grid", placeItems: "center", overflow: "hidden" }}><img src="/cureocity-mark.png?v=2" alt="Cureocity" style={{ maxWidth: 26, maxHeight: 26, display: "block" }} /></div>
           <b style={{ fontSize: 18 }}>Cureocity</b>
         </div>
 

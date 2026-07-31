@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
+import { getAppSettings, brandLogo } from "@/lib/settings";
 import { submitTabletIntake } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +17,13 @@ export default async function IntakePage({ searchParams }: { searchParams: { don
   const me = await getProfile();
   if (!me || !canSee(me.role, "/intake")) redirect("/dashboard");
   const done = searchParams.done === "1";
+  const logo = brandLogo(await getAppSettings());
 
   return (
     <div style={{ maxWidth: 760, margin: "0 auto" }}>
       {/* kiosk header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>✚</div>
+        <div style={{ width: 34, height: 34, borderRadius: 9, background: "#fff", border: "1px solid var(--border)", display: "grid", placeItems: "center", overflow: "hidden" }}><img src={logo} alt="Cureocity" style={{ maxWidth: 26, maxHeight: 26, display: "block" }} /></div>
         <b style={{ fontSize: 17 }}>Cureocity</b>
         <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "3px 11px", fontSize: 12, fontWeight: 600 }}>New Client Registration</span>
         <span style={{ flex: 1 }} />
