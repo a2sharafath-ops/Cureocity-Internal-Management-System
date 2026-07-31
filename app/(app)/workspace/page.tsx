@@ -30,6 +30,8 @@ import ClientStatusBadge from "@/components/ClientStatusBadge";
 import SubmitButton from "@/components/SubmitButton";
 import { startConsultFromAppointment, markSessionComplete } from "@/lib/actions";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
+import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { careWorkFlags } from "@/lib/care-attention";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
   visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
@@ -110,6 +112,20 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     if (a.client_id && WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind) assignedIds.add(a.client_id);
   }
   const scoped = scopeClients(roleKey, allClients, trainingIds, assignedIds);
+
+  // "Needs your attention" for the clinician — their own outstanding care-work
+  // deliverables (diet chart, workout plan, blood-report chasing, etc.),
+  // filtered from the clinic-wide queue to items this clinician owns. Buttons
+  // are stripped to a plain "View" (a clinician doesn't nudge themselves).
+  let myAttention: Flag[] = [];
+  if (me.staffId && isClinician(me.role)) {
+    const scopedIdSet = new Set(scoped.map((c) => c.id));
+    const allFlags = await careWorkFlags(today);
+    myAttention = allFlags
+      .filter((f) => f.nudge?.staffId === me.staffId && (!f.nudge.clientId || scopedIdSet.has(f.nudge.clientId)))
+      .map((f) => ({ sev: f.sev, title: f.title, detail: f.detail, href: f.href, cta: f.cta ?? "View" }));
+  }
+
   const rosterRows: WsClientRow[] = scoped.map((c) => ({
     id: c.id, name: c.name, code: c.code,
     pkg: (c as ClientRow).packages?.name ?? c.package_id,
@@ -403,6 +419,12 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
             <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} href={`/workspace?role=${roleKey}&tab=concerns`} />
             <MetricCard label="MDT updates" value={mdtNotes.length} href={`/workspace?role=${roleKey}&tab=board`} />
           </div>
+
+          {me.staffId && isClinician(me.role) && (
+            <div style={{ marginBottom: 16 }}>
+              <AttentionPanel flags={myAttention} />
+            </div>
+          )}
 
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
             <div style={{ ...box, overflow: "hidden" }}>
