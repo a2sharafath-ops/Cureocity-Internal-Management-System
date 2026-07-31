@@ -5384,7 +5384,7 @@ export async function updateDietChart(formData: FormData) {
   revalidatePath("/workspace");
 }
 
-// Dietitian sends a draft to the Medical Director for review.
+// Dietitian sends a draft to the Super Admin for review.
 export async function submitDietChartForReview(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
@@ -5395,14 +5395,14 @@ export async function submitDietChartForReview(formData: FormData) {
   await supabase.from("diet_charts").update({ status: "In review", submitted_at: new Date().toISOString(), review_note: null }).eq("id", id);
   const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
   await logAudit(p, "Diet chart submitted for review", who, id);
-  await notifyRoles(supabase, ["Doctor", "Administrator", "Super Admin"], {
+  await notifyRoles(supabase, ["Super Admin", "Administrator"], {
     title: "Diet chart awaiting review", body: `${who} · submitted by ${p.name}`,
-    href: "/workspace?role=doctor&tab=charts", icon: "🩺",
+    href: "/workspace?role=diet&tab=charts", icon: "🥗",
   });
   revalidatePath("/workspace");
 }
 
-// Medical Director approves the chart, or sends it back to Draft with a note.
+// Super Admin approves the chart, or sends it back to Draft with a note.
 export async function reviewDietChart(formData: FormData) {
   const p = await getProfile();
   if (!p || !canReviewDietChart(p.role)) return;
@@ -5433,7 +5433,7 @@ export async function publishDietChart(formData: FormData) {
   const id = String(formData.get("id"));
   if (!id) return;
   const supabase = createClient();
-  // Gate: a chart can only reach the client once the Medical Director approves it.
+  // Gate: a chart can only reach the client once the Super Admin approves it.
   const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
   if ((dc as { status: string } | null)?.status !== "Approved") return; // not approved → no-op
   await supabase.from("diet_charts").update({ status: "Published" }).eq("id", id);

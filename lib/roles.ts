@@ -124,7 +124,8 @@ export function canManagePackages(role: string): boolean {
 // Director (Doctor), plus Admin / Super Admin oversight. Dietitians submit but
 // cannot approve their own charts.
 export function canReviewDietChart(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Doctor"].includes(role);
+  // Diet-chart sign-off sits with the Super Admin (with Administrator as backup).
+  return role === "Super Admin" || role === "Administrator";
 }
 
 // Who can approve a leave-type entitlement change (Manager / Admin only). HR can
