@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAppSettings, brandLogo } from "@/lib/settings";
 import PrintTrigger from "@/components/PrintTrigger";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export default async function DietChartPrintPage({
 
   const meals = Array.isArray(dc.meals) ? dc.meals : [];
   const created = new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+  const settings = await getAppSettings();
+  const logo = brandLogo(settings);
 
   return (
     <div style={{ background: "#f3f4f6", minHeight: "100vh", padding: "24px 0" }}>
@@ -50,10 +53,13 @@ export default async function DietChartPrintPage({
 
       <div className="sheet" style={{ maxWidth: 720, margin: "0 auto", background: "#fff", borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,.12)", padding: "40px 44px", color: "#111", fontFamily: "system-ui, -apple-system, sans-serif" }}>
         {/* Letterhead */}
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", borderBottom: "2px solid #111", paddingBottom: 12, marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.5px" }}>Cureocity</div>
-            <div style={{ fontSize: 12, color: "#666" }}>Personalised Diet Plan</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "2px solid #111", paddingBottom: 12, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img src={logo} alt="" width={38} height={38} style={{ display: "block", maxWidth: 44, maxHeight: 44 }} />
+            <div>
+              <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.5px" }}>Cureocity</div>
+              <div style={{ fontSize: 12, color: "#666" }}>Personalised Diet Plan</div>
+            </div>
           </div>
           <div style={{ textAlign: "right", fontSize: 12, color: "#444" }}>
             <div>Version {dc.version} · {dc.status}</div>
@@ -115,10 +121,14 @@ export default async function DietChartPrintPage({
           </div>
         )}
 
+        {settings.diet.footerNote.trim() && (
+          <div style={{ marginTop: 20, fontSize: 12.5, lineHeight: 1.5, color: "#555", whiteSpace: "pre-wrap" }}>{settings.diet.footerNote}</div>
+        )}
+
         {/* Footer */}
         <div style={{ marginTop: 34, paddingTop: 12, borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#777" }}>
-          <span>{dc.by_name ? `Prepared by ${dc.by_name}` : "Cureocity Nutrition"}</span>
-          <span>Cureocity · Kochi</span>
+          <span>{dc.by_name ? `Prepared by ${dc.by_name}` : settings.letterhead.name}</span>
+          <span>{settings.letterhead.website}</span>
         </div>
       </div>
     </div>

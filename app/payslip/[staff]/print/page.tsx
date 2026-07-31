@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canHr } from "@/lib/roles";
+import { getAppSettings, brandLogo } from "@/lib/settings";
 import PrintTrigger from "@/components/PrintTrigger";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,10 @@ export default async function PayslipPrintPage({
   const st = s as { name: string; designation: string | null; role: string; department: string | null; work_location: string | null; date_of_joining: string | null; emp_code: string | null; bank_name: string | null; bank_account: string | null; ifsc: string | null };
   const sr = (sal ?? {}) as { basic?: number; hra?: number; allowances?: number; pf?: number; esi?: number; pt?: number; tds?: number };
 
+  const settings = await getAppSettings();
+  const logo = brandLogo(settings);
+  const companyName = (settings.letterhead.name || "Cureocity Healthtech").toUpperCase();
+
   const [y, m] = month.split("-").map(Number);
   const totalDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const monthLabel = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).toUpperCase();
@@ -83,9 +88,9 @@ export default async function PayslipPrintPage({
       <div className="sheet" style={{ maxWidth: 800, margin: "0 auto", background: "#fff", boxShadow: "0 1px 6px rgba(0,0,0,.12)", color: "#111", fontFamily: "system-ui, -apple-system, sans-serif" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, borderBottom: "2px solid #111", padding: "16px 18px" }}>
-          <div style={{ width: 46, height: 46, borderRadius: 10, background: "var(--brand-fill, #e11d48)", color: "#fff", display: "grid", placeItems: "center", fontSize: 24, fontWeight: 800 }}>C</div>
+          <img src={logo} alt="Cureocity" width={46} height={46} style={{ display: "block", maxWidth: 54, maxHeight: 54, borderRadius: 8 }} />
           <div style={{ textAlign: "center", flex: 1 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.3px" }}>CUREOCITY HEALTHTECH LLP</div>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.3px" }}>{companyName}</div>
             <div style={{ fontSize: 13, fontWeight: 700 }}>PAYSLIP FOR THE MONTH OF {monthLabel}</div>
           </div>
         </div>

@@ -21,6 +21,7 @@ import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary"
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
+import { getAppSettings } from "@/lib/settings";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
@@ -554,7 +555,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
-      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} />}
+      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} defaultRows={(await getAppSettings()).diet.defaultRows} />}
 
       {/* ---- WORKOUT PLANNER (trainer) ---- */}
       {tab === "planner" && <WorkoutPlanner plans={workoutPlans} clients={clientOpts} />}

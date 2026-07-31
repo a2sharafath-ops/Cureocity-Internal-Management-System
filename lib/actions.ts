@@ -3296,6 +3296,21 @@ export async function updateStaffEmployment(formData: FormData) {
   revalidatePath("/hr");
 }
 
+// Templates & Branding — save the editable settings blob. Admins / Super Admins
+// only. `payload` is the full AppSettings JSON from the editor.
+export async function saveAppSettings(payload: string): Promise<{ ok?: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !["Administrator", "Super Admin"].includes(p.role)) return { error: "Not authorized." };
+  let data: unknown;
+  try { data = JSON.parse(payload); } catch { return { error: "Invalid data." }; }
+  const supabase = createClient();
+  const { error } = await supabase.from("app_settings").upsert({ id: 1, data, updated_by: p.name, updated_at: new Date().toISOString() }, { onConflict: "id" });
+  if (error) return { error: error.message };
+  await logAudit(p, "Templates & branding updated", null, null);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function saveSalaryStructure(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;

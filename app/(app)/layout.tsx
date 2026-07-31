@@ -9,6 +9,7 @@ import HeaderTitle from "@/components/HeaderTitle";
 import NotificationBell from "@/components/NotificationBell";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
+import { getAppSettings, brandLogo } from "@/lib/settings";
 import { signOut } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       <Suspense fallback={null}><RouteProgress /></Suspense>
       <PasswordRecoveryRedirect />
-      <Sidebar role={role} />
+      <Sidebar role={role} logo={brandLogo(await getAppSettings())} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Floating glass header.
             The outer element is the sticky rail — transparent, full width, and

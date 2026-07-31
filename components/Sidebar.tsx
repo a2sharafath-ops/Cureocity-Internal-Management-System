@@ -47,6 +47,7 @@ const SECTIONS: NavSection[] = [
       { href: "/packages", label: "Packages", icon: "▦" },
       { href: "/services", label: "Services", icon: "≣" },
       { href: "/users", label: "Users & Roles", icon: "⚙" },
+      { href: "/templates", label: "Templates & Branding", icon: "🎨" },
       { href: "/notifications", label: "Email Log", icon: "✉" },
       { href: "/audit", label: "Audit Log", icon: "☰" },
     ],
@@ -82,7 +83,7 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-export default function Sidebar({ role = "Staff" }: { role?: string }) {
+export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?: string }) {
   const pathname = usePathname();
 
   // Exactly one home item survives the filter: clinicians' /dashboard redirects
@@ -131,7 +132,7 @@ export default function Sidebar({ role = "Staff" }: { role?: string }) {
             display: "grid", placeItems: "center", flexShrink: 0,
           }}
         >
-          <img src="/cureocity-mark.png" alt="" width={19} height={19} style={{ display: "block" }} />
+          <img src={logo || "/cureocity-mark.png?v=2"} alt="" width={19} height={19} style={{ display: "block", maxWidth: 24, maxHeight: 24 }} />
         </div>
         <div style={{ lineHeight: 1.05 }}>
           <div style={{ color: "#fff", fontSize: 16, fontWeight: 700, letterSpacing: "-0.2px" }}>
