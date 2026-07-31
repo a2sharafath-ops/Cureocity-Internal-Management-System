@@ -6,6 +6,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { usePass } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import OpsTabs from "@/components/OpsTabs";
 import MetricCard from "@/components/MetricCard";
 import PassSell from "@/components/PassSell";
 
@@ -41,7 +42,7 @@ export default async function PassesPage() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["passes"]} />
-      <Link href="/dashboard" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
+      <OpsTabs active="passes" />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Gym Passes</h1>
         <span style={{ flex: 1 }} />

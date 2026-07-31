@@ -9,6 +9,7 @@ import ManagerDashboard from "@/components/ManagerDashboard";
 import FinanceDashboard from "@/components/FinanceDashboard";
 import HrDashboard from "@/components/HrDashboard";
 import AttentionPanel from "@/components/AttentionPanel";
+import OpsTabs from "@/components/OpsTabs";
 import { frontDeskFlags } from "@/lib/frontdesk-attention";
 import { careWorkFlags } from "@/lib/care-attention";
 import TodayAgenda from "@/components/TodayAgenda";
@@ -35,13 +36,14 @@ const money = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN");
 
 const card: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
-function Kpi({ icon, iconBg, iconColor, label, value, sub, href }: { icon: string; iconBg: string; iconColor: string; label: string; value: number | string; sub: string; href: string }) {
+// Icon props are accepted but no longer rendered — the cards read cleaner
+// without them. Kept optional so existing call sites don't need editing.
+function Kpi({ label, value, sub, href }: { icon?: string; iconBg?: string; iconColor?: string; label: string; value: number | string; sub: string; href: string }) {
   return (
     <Link href={href} style={{ textDecoration: "none", color: "inherit", flex: 1, minWidth: 210 }}>
-      <div style={{ ...card, padding: "16px 18px", height: "100%" }}>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: iconBg, color: iconColor, display: "grid", placeItems: "center", fontSize: 20, marginBottom: 10 }}>{icon}</div>
+      <div style={{ ...card, padding: "18px 20px", height: "100%" }}>
         <div style={{ color: "var(--muted)", fontSize: 13 }}>{label}</div>
-        <div style={{ fontSize: 30, fontWeight: 800, margin: "1px 0 2px" }}>{value}</div>
+        <div style={{ fontSize: 30, fontWeight: 800, margin: "4px 0 2px" }}>{value}</div>
         <div style={{ color: "var(--muted)", fontSize: 12 }}>{sub} →</div>
       </div>
     </Link>
@@ -111,9 +113,6 @@ export default async function DashboardPage() {
   const fuToday = ((fuTodayRes.data ?? []) as { id: string; priority: string; day: number | null; label: string | null }[]).filter((f) => !isCoachOwnedFu(f));
   const fuMandatory = fuToday.filter((f) => f.priority === "mandatory").length;
 
-  const pill = (label: string, href: string, active = false) => (
-    <Link href={href} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600, textDecoration: "none", border: "1px solid var(--border)", background: active ? "var(--brand-fill)" : "#fff", color: active ? "#fff" : "var(--muted)" }}>{label}</Link>
-  );
   const sectionTitle: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: ".4px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" };
 
   // ---- Non-ops focused view (clinicians / others) ----
@@ -170,16 +169,13 @@ export default async function DashboardPage() {
       <AttentionPanel flags={opsFlags} />
 
       {/* controls: tabs (left) + quick actions (right) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-        {pill("Overview", "/dashboard", true)}
-        {pill("Access & Check-in", "/access")}
-        {pill("Passes", "/passes")}
-        {pill("Store", "/pos")}
-        <span style={{ flex: 1 }} />
-        <span style={{ color: "var(--muted)", fontSize: 13, marginRight: 4 }}>{fullDate}</span>
-        <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Book a slot</Link>
-        <Link href="/leads" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add Lead</Link>
-      </div>
+      <OpsTabs active="overview" right={
+        <>
+          <span style={{ color: "var(--muted)", fontSize: 13, marginRight: 4 }}>{fullDate}</span>
+          <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Book a slot</Link>
+          <Link href="/leads" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add Lead</Link>
+        </>
+      } />
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>

@@ -17,24 +17,29 @@ export default function TodayAgenda({ agenda, dateLabel }: { agenda: Agenda; dat
   };
 
   const row = (item: AgendaItem) => (
-    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: "1px solid var(--border)" }}>
-      <span style={{ width: 74, color: "var(--muted)", fontSize: 12.5, flexShrink: 0 }}>{item.time ?? "—"}</span>
-      {item.clientId
-        ? <Link href={`/clients/${item.clientId}`} style={{ fontWeight: 600, fontSize: 13.5, textDecoration: "none", color: "inherit", whiteSpace: "nowrap" }}>{item.clientName}</Link>
-        : <span style={{ fontSize: 13.5 }}>{item.clientName}</span>}
-      <span style={{ color: "var(--muted)", fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {item.label}</span>
-      <span style={{ flex: 1 }} />
-      {statusPill(item)}
-      {item.kind === "session" && !item.done && item.sessionId && (
-        <form action={markSessionComplete}>
-          <input type="hidden" name="id" value={item.sessionId} />
-          <input type="hidden" name="client_id" value={item.clientId ?? ""} />
-          <SubmitButton style={{ border: "1px solid var(--ink)", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Mark done</SubmitButton>
-        </form>
-      )}
-      {item.kind !== "session" && !item.done && (
-        <Link href={item.href} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Open</Link>
-      )}
+    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: "1px solid var(--border)" }}>
+      <span style={{ width: 62, color: "var(--muted)", fontSize: 12.5, flexShrink: 0 }}>{item.time ?? "—"}</span>
+      {/* name + label share the flexible middle column and truncate together */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 6, overflow: "hidden" }}>
+        {item.clientId
+          ? <Link href={`/clients/${item.clientId}`} style={{ fontWeight: 600, fontSize: 13.5, textDecoration: "none", color: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>{item.clientName}</Link>
+          : <span style={{ fontSize: 13.5, whiteSpace: "nowrap", flexShrink: 0 }}>{item.clientName}</span>}
+        <span style={{ color: "var(--muted)", fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {item.label}</span>
+      </div>
+      {/* fixed-width status column so pills line up down the card */}
+      <span style={{ width: 74, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>{statusPill(item)}</span>
+      {/* fixed-width action column so buttons line up too */}
+      <span style={{ width: 82, flexShrink: 0, display: "flex", justifyContent: "flex-end" }}>
+        {item.kind === "session" && !item.done && item.sessionId ? (
+          <form action={markSessionComplete}>
+            <input type="hidden" name="id" value={item.sessionId} />
+            <input type="hidden" name="client_id" value={item.clientId ?? ""} />
+            <SubmitButton style={{ border: "1px solid var(--ink)", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Mark done</SubmitButton>
+          </form>
+        ) : item.kind !== "session" && !item.done ? (
+          <Link href={item.href} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>Open</Link>
+        ) : null}
+      </span>
     </div>
   );
 
