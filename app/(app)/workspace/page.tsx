@@ -128,6 +128,30 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       .map((f) => ({ sev: f.sev, title: f.title, detail: f.detail, href: f.href, cta: f.cta ?? "View" }));
   }
 
+  // Health Coach owns scheduling the Day-2 diet chart explanation. Surface it
+  // straight from this coach's scoped clients (any due/overdue Day-2 explanation
+  // follow-up still open) so it always reaches the assigned coach — independent
+  // of care-team owner resolution.
+  if (roleKey === "coach" && scoped.length) {
+    const scopedIds = scoped.map((c) => c.id);
+    const { data: deRows } = await supabase
+      .from("followups").select("client_id, label, day, due_date, stage, clients(name)")
+      .in("client_id", scopedIds).eq("day", 2).lte("due_date", today);
+    const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
+    const fmtD = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+    for (const f of (deRows ?? []) as unknown as { client_id: string; label: string; due_date: string; stage: string; clients: { name: string } | null }[]) {
+      if (!/explanation/i.test(f.label) || FU_CLOSED.has(f.stage)) continue;
+      const overdue = f.due_date < today;
+      myAttention.unshift({
+        sev: overdue ? "high" : "med",
+        title: `${f.clients?.name ?? "Client"} — diet chart explanation due`,
+        detail: `Day 2 · ${overdue ? `was due ${fmtD(f.due_date)}` : "due today"} — schedule & deliver`,
+        href: `/workspace?role=coach&tab=followups`,
+        cta: "Schedule",
+      });
+    }
+  }
+
   const rosterRows: WsClientRow[] = scoped.map((c) => ({
     id: c.id, name: c.name, code: c.code,
     pkg: (c as ClientRow).packages?.name ?? c.package_id,
