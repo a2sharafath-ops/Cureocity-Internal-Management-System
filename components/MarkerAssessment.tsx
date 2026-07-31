@@ -37,6 +37,9 @@ export default function MarkerAssessment({ clientId, marker, tool, range }: { cl
   };
 
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12.5, background: "#fff" };
+  // times are stored as minutes-since-midnight so the score stays numeric.
+  const toHHMM = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+  const fromHHMM = (s: string) => { const [h, m] = s.split(":").map(Number); return (h || 0) * 60 + (m || 0); };
 
   if (!open) {
     return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)" }}>＋ Assess</button>;
@@ -63,6 +66,8 @@ export default function MarkerAssessment({ clientId, marker, tool, range }: { cl
                     return <button type="button" key={o.label} onClick={() => setAns((p) => ({ ...p, [it.id]: o.v }))} style={{ border: `1px solid ${on ? "var(--brand-fill)" : "var(--border)"}`, background: on ? "var(--brand-tint)" : "#fff", color: on ? "var(--brand-text)" : "var(--ink)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>{o.label}</button>;
                   })}
                 </div>
+              ) : it.kind === "time" ? (
+                <input type="time" value={ans[it.id] != null ? toHHMM(ans[it.id]) : ""} onChange={(e) => setAns((p) => ({ ...p, [it.id]: fromHHMM(e.target.value) }))} style={{ ...inp, width: 130 }} />
               ) : (
                 <input type="number" min={it.min ?? 0} value={ans[it.id] ?? ""} onChange={(e) => setAns((p) => ({ ...p, [it.id]: Number(e.target.value) }))} style={{ ...inp, width: 120 }} placeholder={it.unit} />
               )}
