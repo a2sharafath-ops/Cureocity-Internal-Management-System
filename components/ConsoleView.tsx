@@ -83,6 +83,37 @@ export default function ConsoleView({
     });
   };
 
+  // Questionnaire completion → reveals a Word export + a copy-paste summary.
+  const [qDone, setQDone] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const answeredQA = questions.map((q, i) => ({ q, a: (ans[i] ?? "").trim() })).filter((x) => x.a);
+  const qHeader = `${label || `${kind} consultation`} — ${client.name}${client.code ? ` (${client.code})` : ""}`;
+  const qDate = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const qSummaryText = `${qHeader}\n${qDate}\n\n${answeredQA.map((x, idx) => `${idx + 1}. ${x.q}\n${x.a}`).join("\n\n")}`;
+
+  const copyQSummary = async () => {
+    try { await navigator.clipboard.writeText(qSummaryText); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
+  };
+
+  const downloadWord = () => {
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const body = answeredQA
+      .map((x, idx) => `<p style="margin:0 0 3px;font-weight:bold">${idx + 1}. ${esc(x.q)}</p><p style="margin:0 0 12px">${esc(x.a).replace(/\n/g, "<br/>")}</p>`)
+      .join("");
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head>`
+      + `<body style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#14141a">`
+      + `<h2 style="margin:0 0 2px">${esc(label || `${kind} consultation`)}</h2>`
+      + `<p style="margin:0 0 2px;color:#555">${esc(client.name)}${client.code ? ` · ${esc(client.code)}` : ""}</p>`
+      + `<p style="margin:0 0 14px;color:#555">${qDate}</p>`
+      + body + `</body></html>`;
+    const blob = new Blob(["﻿", html], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `Questionnaire - ${client.name}.doc`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", width: "100%", boxSizing: "border-box", resize: "vertical" };
   const sm: React.CSSProperties = { ...inp, padding: "6px 8px", fontSize: 12.5 };
@@ -130,6 +161,8 @@ export default function ConsoleView({
         <input type="hidden" name="duration_min" value={Math.max(1, Math.round(sec / 60))} />
         <input type="hidden" name="flags" value={JSON.stringify(fl)} />
 
+        {/* Left column stacks the questionnaire and its exportable summary. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Intake questionnaire + unfilled tracker */}
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -154,6 +187,32 @@ export default function ConsoleView({
               </div>
             );
           })}
+
+          {/* Complete the questionnaire → reveals Word export + copyable summary */}
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {!qDone ? (
+              <button type="button" onClick={() => setQDone(true)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Complete questionnaire</button>
+            ) : (
+              <>
+                <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>
+                <button type="button" onClick={downloadWord} disabled={!answeredQA.length} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: answeredQA.length ? "pointer" : "default", opacity: answeredQA.length ? 1 : 0.5 }}>⬇ Download as Word</button>
+                <button type="button" onClick={() => setQDone(false)} style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>Edit answers</button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {qDone && (
+          <div style={{ ...box, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ fontWeight: 700 }}>Questionnaire summary</div>
+              <span style={{ flex: 1 }} />
+              <button type="button" onClick={copyQSummary} disabled={!answeredQA.length} style={{ border: "1px solid var(--border)", background: copied ? "var(--green-bg)" : "#fff", color: copied ? "var(--green-text)" : "var(--ink)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: answeredQA.length ? "pointer" : "default" }}>{copied ? "✓ Copied" : "Copy"}</button>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>The answered questionnaire, ready to copy &amp; paste.</div>
+            <textarea readOnly value={qSummaryText} rows={12} style={inp} />
+          </div>
+        )}
         </div>
 
         {/* Summary + flags + save */}
