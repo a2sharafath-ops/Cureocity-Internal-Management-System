@@ -3327,15 +3327,22 @@ export async function saveCoachAssessment(formData: FormData) {
   if (!Number.isFinite(score)) return;
   const b = bandFor(marker as never, score);
   const note = String(formData.get("note") || "").trim() || null;
+  // The instrument may override the band (e.g. DAST-10 ≥3 makes substance use
+  // "positive" even when AUDIT-C alone is low).
+  const forceBad = String(formData.get("force_bad") || "") === "1";
+  const tone = forceBad ? "bad" : (b?.tone ?? null);
+  const band = forceBad ? "Positive" : (b?.label ?? null);
+  let detail: unknown = null;
+  try { const d = String(formData.get("detail") || ""); if (d) detail = JSON.parse(d); } catch { detail = null; }
   const supabase = createClient();
   await supabase.from("coach_assessments").insert({
-    client_id, marker, score, band: b?.label ?? null, tone: b?.tone ?? null, note, assessed_by: p.name,
+    client_id, marker, score, band, tone, note, detail, assessed_by: p.name,
   });
   // A "bad" band is an SOP action/referral trigger — surface it as a concern.
-  if (b?.tone === "bad") {
+  if (tone === "bad") {
     await supabase.from("concerns").insert({
       client_id, role: "coach", category: "Health Coaching",
-      body: `${m.label}: ${b.label} (score ${score}) — SOP action/referral trigger.`,
+      body: `${m.label}: ${band ?? "flagged"} (score ${score}) — SOP action/referral trigger.`,
       raised_by: p.name, status: "Open",
     });
   }
