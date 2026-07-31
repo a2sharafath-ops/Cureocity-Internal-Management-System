@@ -18,20 +18,41 @@ export const CONSULT_QUESTIONS: Record<string, ConsultQ> = {
       "Overall wellbeing (1–10)",
     ],
   },
+  // Initial diet consultation — also used for the Day-21 review. Mirrors the
+  // clinic's "Revised dietitian questionnaire" (Section 2 + Section 3).
   Diet: {
     label: "Diet & Lifestyle Intake", icon: "",
     questions: [
-      "Diet preference (Veg / Non-veg / Vegan / Eggetarian)",
-      "Typical breakfast",
-      "Typical lunch",
-      "Typical dinner",
-      "Meal pattern (meals + snacks per day)",
-      "Cravings",
-      "Food dislikes / intolerances",
-      "Water intake per day",
-      "Digestive issues (bloating / acidity / irregular bowel)",
-      "Energy levels through the day",
-      "Adherence to current plan (if any)",
+      "Daily dietary habits (meals, snacks, portion sizes, timings)",
+      "Diet quality check — how often: staple grains, whole grains, roots/tubers, legumes, vitamin-A orange veg, dark leafy greens, other veg, vitamin-A fruits, citrus, other fruits, grain sweets, other sweets, eggs, cheese, yogurt, processed meat, unprocessed red meat (ruminant & non-ruminant), poultry, fish/seafood, nuts & seeds, packaged salty snacks, instant noodles, deep-fried foods, fluid milk, sweetened tea/coffee/milk drinks, fruit juice, SSBs, fast food",
+      "Special diets followed (low-carb/keto/Atkins · plant-based veg/vegan/pescatarian · fasting IF/OMAD/religious · high-protein/paleo/zone) — or Nil",
+      "Water intake",
+      "Food preferences / intolerances / allergies",
+      "Cravings and comfort foods",
+      "Eating-out frequency",
+      "Cultural or religious dietary restrictions",
+      "Food aversions or dislikes",
+      "Stress — stressful situations",
+      "Stress — coping mechanisms",
+      "Gut health — bowel habits (frequency, consistency)",
+      "Gut/digestive concerns (bloating, IBS, acid reflux, irregular bowel)",
+      "Fiber intake",
+      "History of antibiotics / probiotics use",
+      "Family history of metabolic diseases (diabetes, hypertension, obesity)",
+      "Weight patterns over life (fluctuating / steady)",
+      "History of weight-loss attempts (successful or not)",
+      "Lifestyle changes impacting health (shift work, pregnancy, major life events)",
+      "Health goals (weight loss/gain, fitness, manage conditions, energy, muscle mass, gut/digestive goals)",
+      "24-hour recall — Breakfast",
+      "24-hour recall — Mid-morning snack",
+      "24-hour recall — Lunch",
+      "24-hour recall — Evening snack",
+      "24-hour recall — Dinner",
+      "24-hour recall — Late-night snack",
+      "24-hour recall — Beverages",
+      "Evaluation — macronutrient distribution (carbs, protein, fat)",
+      "Evaluation — micronutrient deficiencies (iron, calcium, etc.)",
+      "Evaluation — caloric intake vs requirement",
     ],
   },
   Coach: {
@@ -77,6 +98,30 @@ export const CONSULT_QUESTIONS: Record<string, ConsultQ> = {
   },
 };
 
-export function consultQ(kind: string): ConsultQ {
+// Dietitian's 10th-day check-in (short, 5–7 min). Used only for the day-10 diet
+// follow-up; the initial and day-21 consults use the full Diet intake above.
+export const DIET_FOLLOWUP_10: ConsultQ = {
+  label: "10-Day Diet Follow-Up", icon: "",
+  questions: [
+    "How are you feeling overall after starting the new diet plan? (positive changes or difficulties noticed)",
+    "Main challenges in following the plan (timing, food prep, cravings, social situations, travel, etc.)",
+    "Energy levels — on waking, during workouts, and through the rest of the day",
+    "Any digestive issues? (bloating, constipation, acidity, irregular bowel habits)",
+    "Cravings or hunger spikes/crashes — what foods, when (morning/evening/post-dinner), and can you control them?",
+    "Able to maintain water intake? (if not, what gets in the way?)",
+    "Sleep over the past few days (do you wake up feeling fresh?)",
+    "Changes in mood, focus, or alertness? (lighter/calmer/more productive, or fatigue/irritability)",
+    "Monitoring & updates — sending meal pictures regularly? any reason not to? change method/timing?",
+    "Any suggestions or changes you'd like in your plan or our process?",
+  ],
+};
+
+/**
+ * The questionnaire for a consultation. `dietFollowup` swaps the Diet intake for
+ * the short 10th-day check-in (initial and day-21 diet consults keep the full
+ * intake).
+ */
+export function consultQ(kind: string, dietFollowup = false): ConsultQ {
+  if (kind === "Diet" && dietFollowup) return DIET_FOLLOWUP_10;
   return CONSULT_QUESTIONS[kind] ?? CONSULT_QUESTIONS.Doctor;
 }
