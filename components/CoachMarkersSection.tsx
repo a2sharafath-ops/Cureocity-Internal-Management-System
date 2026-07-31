@@ -2,8 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import { MARKERS, TONE_STYLE, type MarkerKey } from "@/lib/coach-markers";
-import { saveCoachAssessment } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import MarkerAssessment from "@/components/MarkerAssessment";
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -94,13 +94,7 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
                         <span style={{ flex: 1 }} />
                         <span style={{ fontSize: 10.5, fontWeight: 600, color: dueBad ? "var(--amber-text)" : "var(--muted)" }}>{dueLabel}</span>
                       </div>
-                      <form action={saveCoachAssessment} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <input type="hidden" name="client_id" value={c.id} />
-                        <input type="hidden" name="marker" value={m.key} />
-                        <input name="score" type="number" step="any" placeholder={m.tool} title={`${m.tool} · ${m.range}`} style={{ width: 90, border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12.5, background: "#fff" }} />
-                        <input name="note" placeholder="note (optional)" style={{ flex: 1, minWidth: 0, border: "1px solid var(--border)", borderRadius: 8, padding: "5px 8px", fontSize: 12.5, background: "#fff" }} />
-                        <button type="submit" style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                      </form>
+                      <MarkerAssessment clientId={c.id} marker={m.key} tool={m.tool} range={m.range} />
                     </div>
                   );
                 })}
