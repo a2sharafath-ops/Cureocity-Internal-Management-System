@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canMessage, canCampaigns } from "@/lib/roles";
+import { canMessage, canCampaigns } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import CommsHub, { type CClient, type CMsg, type CTemplate, type CCampaign } from "@/components/CommsHub";
 
@@ -11,7 +11,9 @@ const AVATAR_COLORS = ["#e11f34", "var(--blue)", "var(--purple)", "#d97706", "#d
 
 export default async function MessagesPage() {
   const me = await getProfile();
-  if (!me || !canSee(me.role, "/messages")) redirect("/dashboard");
+  // Communications is hidden from the nav (Super Admin only) but stays reachable
+  // via deep links (e.g. Retention "Reach out") for any staff member.
+  if (!me) redirect("/login");
   const canMsg = canMessage(me.role);
   const canCamp = canCampaigns(me.role);
 
