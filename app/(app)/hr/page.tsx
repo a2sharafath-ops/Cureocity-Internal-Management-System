@@ -447,7 +447,17 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr><th style={th}>Staff</th><th style={th}>Base</th><th style={th}>LOP</th><th style={th}>PF</th><th style={th}>Net pay</th><th style={th}>Payslip</th></tr></thead>
               <tbody>
-                {staff.map((s) => { const r = pay.get(s.id); const base = r?.base ?? 0; const lop = r?.lop_days ?? 0; const pf = r?.pf ?? 1800; const net = r?.net ?? Math.max(0, base - lop * (base / 30) - pf);
+                {staff.map((s) => {
+                  const r = pay.get(s.id);
+                  // The Salary breakup is the source of truth: base = gross,
+                  // deductions = PF + ESI + PT + TDS, net = gross − deductions − LOP.
+                  const sal = salaries.get(s.id);
+                  const gross = sal ? (sal.basic ?? 0) + (sal.hra ?? 0) + (sal.allowances ?? 0) : 0;
+                  const ded = sal ? (sal.pf ?? 0) + (sal.esi ?? 0) + (sal.pt ?? 0) + (sal.tds ?? 0) : (r?.pf ?? 0);
+                  const base = gross || r?.base || 0;
+                  const lop = r?.lop_days ?? 0;
+                  const pf = sal?.pf ?? r?.pf ?? 0;
+                  const net = base ? Math.max(0, base - ded - lop * (base / 30)) : 0;
                   return (
                     <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
                       <td style={{ ...td, fontWeight: 600 }}>{s.name}<div style={{ color: "var(--muted)", fontSize: 11 }}>{s.designation ?? ""}</div></td>
@@ -456,11 +466,15 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                       <td style={td}>{money(pf)}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{base ? money(net) : "—"}</td>
                       <td style={{ ...td, textAlign: "right" }}>
-                        <form action={generatePayslip}>
-                          <input type="hidden" name="staff_id" value={s.id} /><input type="hidden" name="month" value={month} />
-                          <input type="hidden" name="base" value={base || 85000} /><input type="hidden" name="lop_days" value={lop} /><input type="hidden" name="pf" value={pf} />
-                          <button style={{ border: "1px solid var(--border)", background: r?.payslip ? "var(--green-bg)" : "#fff", color: r?.payslip ? "var(--green-text)" : "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r?.payslip ? "✓ Payslip" : "Generate payslip"}</button>
-                        </form>
+                        {base ? (
+                          <form action={generatePayslip}>
+                            <input type="hidden" name="staff_id" value={s.id} /><input type="hidden" name="month" value={month} />
+                            <input type="hidden" name="base" value={base} /><input type="hidden" name="lop_days" value={lop} /><input type="hidden" name="pf" value={pf} /><input type="hidden" name="deductions" value={ded} />
+                            <button style={{ border: "1px solid var(--border)", background: r?.payslip ? "var(--green-bg)" : "#fff", color: r?.payslip ? "var(--green-text)" : "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r?.payslip ? "✓ Payslip" : "Generate payslip"}</button>
+                          </form>
+                        ) : (
+                          <span style={{ fontSize: 11.5, color: "var(--muted)" }} title="Set this employee's Salary breakup first (Employees tab)">Set salary first</span>
+                        )}
                       </td>
                     </tr>
                   );
