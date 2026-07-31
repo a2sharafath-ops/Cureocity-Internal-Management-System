@@ -7,6 +7,7 @@ import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
 import CheckinForm from "@/components/CheckinForm";
+import OpsTabs from "@/components/OpsTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ export default async function AccessPage() {
   return (
     <div style={{ maxWidth: 1040 }}>
       <RealtimeRefresh tables={["checkins"]} />
-      <Link href="/dashboard" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
+      <OpsTabs active="access" />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Access &amp; Check-in</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Front-desk member entry — biometric · card · manual · QR. Today's activity.</p>
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
@@ -6,6 +5,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { restockProduct } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import OpsTabs from "@/components/OpsTabs";
 import MetricCard from "@/components/MetricCard";
 import PosCart from "@/components/PosCart";
 import ProductForm from "@/components/ProductForm";
@@ -41,7 +41,7 @@ export default async function StorePage() {
   return (
     <div style={{ maxWidth: 1120 }}>
       <RealtimeRefresh tables={["products", "sales"]} />
-      <Link href="/dashboard" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none", display: "inline-block", marginBottom: 10 }}>← Dashboard</Link>
+      <OpsTabs active="store" />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Retail Store</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Point-of-sale for supplements, merchandise &amp; accessories. Every sale posts a paid invoice into Billing.</p>
 
