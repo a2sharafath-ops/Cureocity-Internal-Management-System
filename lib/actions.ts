@@ -3286,6 +3286,11 @@ export async function updateStaffEmployment(formData: FormData) {
   await supabase.from("staff").update({
     date_of_joining: String(formData.get("date_of_joining") || "") || null,
     gender: String(formData.get("gender") || "") || null,
+    emp_code: String(formData.get("emp_code") || "").trim() || null,
+    work_location: String(formData.get("work_location") || "").trim() || null,
+    bank_name: String(formData.get("bank_name") || "").trim() || null,
+    bank_account: String(formData.get("bank_account") || "").trim() || null,
+    ifsc: String(formData.get("ifsc") || "").trim().toUpperCase() || null,
   }).eq("id", id);
   await logAudit(p, "Employment details updated", id, null);
   revalidatePath("/hr");
