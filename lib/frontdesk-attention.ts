@@ -17,7 +17,7 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
     sb.from("clients").select("id, name"),
     sb.from("blood_requests").select("client_id, panel, submitted"),
     sb.from("tablet_submissions").select("id, first_name, last_name").eq("status", "pending"),
-    sb.from("followups").select("id, due_date, status").eq("status", "pending"),
+    sb.from("followups").select("id, due_date, status, day, label").eq("status", "pending"),
   ]);
 
   const nameOf = (id: string | null) => (id && ((clients ?? []) as { id: string; name: string }[]).find((c) => c.id === id)?.name) || "Client";
@@ -68,7 +68,11 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
   }
 
   // ---- overdue follow-ups (one summary line) -------------------------------
-  const overdue = ((fu ?? []) as { due_date: string }[]).filter((f) => f.due_date < today).length;
+  // The Day-2 diet chart explanation is the Health Coach's to schedule now, not
+  // front desk's — exclude it so it isn't double-counted against ops.
+  const isCoachOwned = (f: { day: number | null; label: string | null }) => f.day === 2 && /explanation/i.test(f.label ?? "");
+  const overdue = ((fu ?? []) as { due_date: string; day: number | null; label: string | null }[])
+    .filter((f) => f.due_date < today && !isCoachOwned(f)).length;
   if (overdue) flags.push({ sev: "high", title: `${overdue} overdue follow-up${overdue === 1 ? "" : "s"}`, detail: "Calls / bookings past due", href: "/followups", cta: "Open queue" });
 
   const order = { high: 0, med: 1, low: 2 };
