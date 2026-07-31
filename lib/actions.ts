@@ -3311,6 +3311,77 @@ export async function saveAppSettings(payload: string): Promise<{ ok?: boolean; 
   return { ok: true };
 }
 
+// ---- attendance kiosk ------------------------------------------------------
+
+type PunchResult = { ok?: boolean; name?: string; action?: "in" | "out" | "already"; at?: string; hours?: number; error?: string };
+
+// Toggle today's in/out for a staff member. First punch = check-in (present);
+// second = check-out + work hours; third is ignored.
+async function doPunch(staffId: string, staffName: string, mode: string): Promise<PunchResult> {
+  const supabase = createClient();
+  const today = todayISO();
+  const now = new Date().toISOString();
+  const { data: row } = await supabase.from("attendance")
+    .select("id, check_in, check_out").eq("staff_id", staffId).eq("date", today).maybeSingle();
+  const r = row as { id: string; check_in: string | null; check_out: string | null } | null;
+
+  if (!r || !r.check_in) {
+    await supabase.from("attendance").upsert(
+      { staff_id: staffId, date: today, status: "present", check_in: now, mode, marked_by: "kiosk" },
+      { onConflict: "staff_id,date" });
+    revalidatePath("/hr");
+    return { ok: true, name: staffName, action: "in", at: now };
+  }
+  if (!r.check_out) {
+    const hrs = Math.round(((Date.now() - Date.parse(r.check_in)) / 3600000) * 100) / 100;
+    await supabase.from("attendance").update({ check_out: now, work_hours: hrs }).eq("id", r.id);
+    revalidatePath("/hr");
+    return { ok: true, name: staffName, action: "out", at: now, hours: hrs };
+  }
+  return { ok: true, name: staffName, action: "already" };
+}
+
+/** Kiosk: punch by scanned badge code. */
+export async function punchByBadge(code: string): Promise<PunchResult> {
+  const p = await getProfile();
+  if (!p) return { error: "Kiosk not signed in." };
+  const c = (code || "").trim();
+  if (!c) return { error: "No badge scanned." };
+  const supabase = createClient();
+  const { data: s } = await supabase.from("staff").select("id, name").eq("badge_code", c).maybeSingle();
+  const st = s as { id: string; name: string } | null;
+  if (!st) return { error: "Badge not recognised." };
+  return doPunch(st.id, st.name, "kiosk");
+}
+
+/** Kiosk: punch by name + PIN (manual identify). */
+export async function punchByPin(staffId: string, pin: string): Promise<PunchResult> {
+  const p = await getProfile();
+  if (!p) return { error: "Kiosk not signed in." };
+  const supabase = createClient();
+  const { data: s } = await supabase.from("staff").select("id, name, pin").eq("id", staffId).maybeSingle();
+  const st = s as { id: string; name: string; pin: string | null } | null;
+  if (!st) return { error: "Staff not found." };
+  if (!st.pin || st.pin !== (pin || "").trim()) return { error: "Wrong PIN." };
+  return doPunch(st.id, st.name, "manual");
+}
+
+/** HR: assign / regenerate a staff member's badge code and PIN. */
+export async function setStaffBadge(formData: FormData): Promise<{ ok?: boolean; badge?: string; pin?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return { error: "Not authorized." };
+  const staff_id = String(formData.get("staff_id") || "");
+  if (!staff_id) return { error: "Missing staff." };
+  const supabase = createClient();
+  const badge = "CURB" + Math.random().toString(36).slice(2, 10).toUpperCase();
+  const pin = String(Math.floor(1000 + Math.random() * 9000));
+  const { error } = await supabase.from("staff").update({ badge_code: badge, pin }).eq("id", staff_id);
+  if (error) return { error: error.message };
+  await logAudit(p, "Attendance badge issued", staff_id, null);
+  revalidatePath("/hr");
+  return { ok: true, badge, pin };
+}
+
 export async function saveSalaryStructure(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
@@ -3319,7 +3390,7 @@ export async function saveSalaryStructure(formData: FormData) {
   const num = (k: string) => Math.max(0, Number(formData.get(k)) || 0);
   const supabase = createClient();
   await supabase.from("salary_structures").upsert({
-    staff_id, basic: num("basic"), hra: num("hra"), allowances: num("allowances"),
+    staff_id, basic: num("basic"), hra: num("hra"), allowances: num("allowances"), gst: num("gst"),
     pf: num("pf"), esi: num("esi"), pt: num("pt"), tds: num("tds"),
     effective_from: String(formData.get("effective_from") || "") || null,
     updated_by: p.name, updated_at: new Date().toISOString(),
