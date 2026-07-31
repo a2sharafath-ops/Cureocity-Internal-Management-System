@@ -40,12 +40,14 @@ function ShareChartButton({ id }: { id: string }) {
   );
 }
 
-export default function DietCharts({ charts, clients, canReview = false, canCompose = true }: { charts: DietChartRow[]; clients: { id: string; name: string }[]; canReview?: boolean; canCompose?: boolean }) {
+export default function DietCharts({ charts, clients, canReview = false, canCompose = true, defaultRows }: { charts: DietChartRow[]; clients: { id: string; name: string }[]; canReview?: boolean; canCompose?: boolean; defaultRows?: string[] }) {
+  // Meal-row template comes from Templates & Branding when set.
+  const defRows: [string, string][] = (defaultRows && defaultRows.length ? defaultRows : DEFAULT_ROWS.map((r) => r[0])).map((l) => [l, ""] as [string, string]);
   // Deep-linked from a "diet chart pending" reminder: ?client=<id> opens the
   // builder straight away with that client pre-selected.
   const focusClient = useSearchParams().get("client") ?? "";
   const [open, setOpen] = useState(Boolean(focusClient));
-  const [rows, setRows] = useState<[string, string][]>(DEFAULT_ROWS);
+  const [rows, setRows] = useState<[string, string][]>(defRows);
   const [expanded, setExpanded] = useState<string | null>(null);
   // Builder fields are controlled so the "Draft with AI" button can fill them.
   const [bClient, setBClient] = useState(focusClient);
@@ -55,7 +57,7 @@ export default function DietCharts({ charts, clients, canReview = false, canComp
   const [bSummary, setBSummary] = useState("");
   const [draftErr, setDraftErr] = useState<string | null>(null);
   const [drafting, startDraft] = useTransition();
-  const resetBuilder = () => { setRows(DEFAULT_ROWS); setBCal(""); setBProtein(""); setBNotes(""); setBSummary(""); setDraftErr(null); };
+  const resetBuilder = () => { setRows(defRows); setBCal(""); setBProtein(""); setBNotes(""); setBSummary(""); setDraftErr(null); };
   const runAiDraft = () => {
     setDraftErr(null);
     if (!bClient) { setDraftErr("Select a client first."); return; }

@@ -80,6 +80,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/exlib": ["Administrator", "Manager", ...CLIN],
   "/notifications": ["Administrator", "Manager"],
   "/audit": ["Administrator"],
+  "/templates": ["Administrator", "Manager"],
 };
 
 /**
