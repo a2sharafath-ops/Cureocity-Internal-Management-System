@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MessageThread, { type Msg } from "@/components/MessageThread";
 import MessageReply from "@/components/MessageReply";
@@ -12,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ThreadPage({ params }: { params: { id: string } }) {
   const me = await getProfile();
-  if (!me || !canSee(me.role, "/messages")) redirect("/dashboard");
+  if (!me) redirect("/login");
 
   const supabase = createClient();
   const { data: client } = await supabase.from("clients").select("id, name, code").eq("id", params.id).maybeSingle();

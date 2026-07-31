@@ -34,7 +34,8 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/onboarding": ["Administrator", "Manager", "Front Desk"],
   "/leads": ["Administrator", "Manager", "Front Desk"],
-  "/messages": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  // Communications is Super-Admin-only for now (Super Admin bypasses this map).
+  "/messages": [],
   "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/classes": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/appointments": ["Administrator", "Manager", "Front Desk", ...CLIN],
