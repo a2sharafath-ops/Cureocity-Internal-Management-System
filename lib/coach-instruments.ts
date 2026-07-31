@@ -4,7 +4,7 @@
 
 import type { MarkerKey } from "@/lib/coach-markers";
 
-export type AItem = { id: string; text: string; kind: "opt" | "num"; options?: { label: string; v: number }[]; unit?: string; min?: number };
+export type AItem = { id: string; text: string; kind: "opt" | "num" | "time"; options?: { label: string; v: number }[]; unit?: string; min?: number };
 export type Instrument = {
   marker: MarkerKey;
   title: string;
@@ -53,20 +53,60 @@ const PSS: Instrument = {
   },
 };
 
-// ---- SLEEP · PSQI (7 component scores) -------------------------------------
+// ---- SLEEP · PSQI (full — 7 components computed from raw items) -------------
+// Global 0–21 = sum of 7 component scores (each 0–3), computed per the standard
+// Pittsburgh Sleep Quality Index scoring.
 const PSQI: Instrument = {
-  marker: "sleep", title: "PSQI · Pittsburgh Sleep Quality Index (component-rated)",
-  instruction: "Rate each component for the past month (0 = none, 3 = severe).",
+  marker: "sleep", title: "PSQI · Pittsburgh Sleep Quality Index",
+  instruction: "Answer for the past month. Component & global scores auto-compute.",
   items: [
-    { id: "c1", text: "1. Subjective sleep quality", kind: "opt", options: [{ label: "Very good", v: 0 }, { label: "Fairly good", v: 1 }, { label: "Fairly bad", v: 2 }, { label: "Very bad", v: 3 }] },
-    { id: "c2", text: "2. Sleep latency (time to fall asleep)", kind: "opt", options: PSQI4 },
-    { id: "c3", text: "3. Sleep duration", kind: "opt", options: [{ label: ">7 hrs", v: 0 }, { label: "6–7 hrs", v: 1 }, { label: "5–6 hrs", v: 2 }, { label: "<5 hrs", v: 3 }] },
-    { id: "c4", text: "4. Habitual sleep efficiency", kind: "opt", options: [{ label: ">85%", v: 0 }, { label: "75–84%", v: 1 }, { label: "65–74%", v: 2 }, { label: "<65%", v: 3 }] },
-    { id: "c5", text: "5. Sleep disturbances (waking, pain, etc.)", kind: "opt", options: PSQI4 },
-    { id: "c6", text: "6. Use of sleep medication", kind: "opt", options: PSQI4 },
-    { id: "c7", text: "7. Daytime dysfunction", kind: "opt", options: PSQI4 },
+    { id: "q1_bed", text: "1. Usual bedtime", kind: "time" },
+    { id: "q3_wake", text: "3. Usual getting-up time", kind: "time" },
+    { id: "q2_lat", text: "2. Minutes to fall asleep each night", kind: "num", unit: "min", min: 0 },
+    { id: "q4_hrs", text: "4. Hours of actual sleep per night", kind: "num", unit: "hrs", min: 0 },
+    { id: "q5a", text: "5a. Cannot get to sleep within 30 minutes", kind: "opt", options: PSQI4 },
+    { id: "q5b", text: "5b. Wake in the middle of the night or early morning", kind: "opt", options: PSQI4 },
+    { id: "q5c", text: "5c. Have to get up to use the bathroom", kind: "opt", options: PSQI4 },
+    { id: "q5d", text: "5d. Cannot breathe comfortably", kind: "opt", options: PSQI4 },
+    { id: "q5e", text: "5e. Cough or snore loudly", kind: "opt", options: PSQI4 },
+    { id: "q5f", text: "5f. Feel too cold", kind: "opt", options: PSQI4 },
+    { id: "q5g", text: "5g. Feel too hot", kind: "opt", options: PSQI4 },
+    { id: "q5h", text: "5h. Have bad dreams", kind: "opt", options: PSQI4 },
+    { id: "q5i", text: "5i. Have pain", kind: "opt", options: PSQI4 },
+    { id: "q5j", text: "5j. Other disturbance(s)", kind: "opt", options: PSQI4 },
+    { id: "q6", text: "6. Use medicine to help sleep", kind: "opt", options: PSQI4 },
+    { id: "q7", text: "7. Trouble staying awake (driving, meals, activities)", kind: "opt", options: PSQI4 },
+    { id: "q8", text: "8. Problem keeping up enthusiasm to get things done", kind: "opt", options: [{ label: "No problem", v: 0 }, { label: "Slight", v: 1 }, { label: "Somewhat", v: 2 }, { label: "Very big", v: 3 }] },
+    { id: "q9", text: "9. Overall sleep quality", kind: "opt", options: [{ label: "Very good", v: 0 }, { label: "Fairly good", v: 1 }, { label: "Fairly bad", v: 2 }, { label: "Very bad", v: 3 }] },
   ],
-  compute: (a) => { const s = sum(a, ["c1", "c2", "c3", "c4", "c5", "c6", "c7"]); return { score: s, detail: { psqi_global: s } }; },
+  compute: (a) => {
+    const band = (x: number, cuts: number[]) => cuts.findIndex((c) => x <= c) === -1 ? 3 : cuts.findIndex((c) => x <= c);
+    // C1 quality
+    const c1 = a.q9 || 0;
+    // C2 latency: minutes→0-3 + q5a, summed→0-3
+    const latMin = band(a.q2_lat || 0, [15, 30, 60]);
+    const c2 = band(latMin + (a.q5a || 0), [0, 2, 4]);
+    // C3 duration
+    const h = a.q4_hrs || 0;
+    const c3 = h > 7 ? 0 : h >= 6 ? 1 : h >= 5 ? 2 : 3;
+    // C4 efficiency = slept / in-bed
+    const bed = a.q1_bed ?? null, wake = a.q3_wake ?? null;
+    let c4 = 0;
+    if (bed != null && wake != null) {
+      let inBed = (wake - bed + 1440) % 1440; if (inBed === 0) inBed = 1440;
+      const eff = inBed ? ((h * 60) / inBed) * 100 : 0;
+      c4 = eff >= 85 ? 0 : eff >= 75 ? 1 : eff >= 65 ? 2 : 3;
+    }
+    // C5 disturbances (5b–5j)
+    const dist = sum(a, ["q5b", "q5c", "q5d", "q5e", "q5f", "q5g", "q5h", "q5i", "q5j"]);
+    const c5 = dist === 0 ? 0 : dist <= 9 ? 1 : dist <= 18 ? 2 : 3;
+    // C6 med use
+    const c6 = a.q6 || 0;
+    // C7 daytime dysfunction
+    const c7 = band((a.q7 || 0) + (a.q8 || 0), [0, 2, 4]);
+    const global = c1 + c2 + c3 + c4 + c5 + c6 + c7;
+    return { score: global, detail: { psqi_global: global, c1, c2, c3, c4, c5, c6, c7 } };
+  },
 };
 
 // ---- PHYSICAL ACTIVITY · PAR-Q + IPAQ-SF ----------------------------------
