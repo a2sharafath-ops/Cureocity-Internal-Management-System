@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canSee, canWrite, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -2688,7 +2688,7 @@ export async function raiseInvoiceForClient(formData: FormData) {
 
 export async function markInvoicePaid(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canManageInvoices(p.role)) return;
+  if (!p || !canRecordPayment(p.role)) return;
   const id = String(formData.get("id"));
   const method = String(formData.get("method") ?? "").trim() || "Cash";
   const supabase = createClient();

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canManageInvoices } from "@/lib/roles";
+import { canSee, canManageInvoices, canRecordPayment } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
@@ -59,6 +59,9 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   const unpaid = unpaidInv.reduce((s, i) => s + Number(i.amount), 0);
   const refunded = invoices.filter((i) => i.status === "Refunded");
   const editable = canManageInvoices(me.role);
+  // The per-row action column also serves collectors (Front Desk) who only mark
+  // invoices paid — they can't raise/void invoices, so `editable` stays separate.
+  const canAct = editable || canRecordPayment(me.role);
   const pay = paymentStatus();
 
   // dunning = unpaid, aged oldest-first
@@ -116,7 +119,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
           <tr>
             <th style={th}>#</th><th style={th}>Client</th><th style={th}>Description</th>
             {mode === "dunning" && <th style={th}>Overdue</th>}
-            <th style={th}>Amount</th><th style={th}>Status</th>{editable && <th style={th} />}
+            <th style={th}>Amount</th><th style={th}>Status</th>{canAct && <th style={th} />}
           </tr>
         </thead>
         <tbody>
@@ -130,16 +133,16 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
                 {mode === "dunning" && <td style={{ ...td, fontWeight: 600, color: od >= 30 ? "var(--red)" : od >= 15 ? "var(--amber-text-soft)" : "var(--muted)" }}>{od > 0 ? `${od}d` : "—"}</td>}
                 <td style={{ ...td, fontWeight: 600 }}>{money(i.amount)}</td>
                 <td style={td}>{statusChip(i.status)}</td>
-                {editable && <td style={{ ...td, textAlign: "right" }}>
+                {canAct && <td style={{ ...td, textAlign: "right" }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
                     {i.status === "Unpaid" && <PayOnlineButton invoiceId={i.id} configured={pay.configured} />}
-                    <InvoiceActions id={i.id} status={i.status} role={me.role} clientId={i.clients?.id} label={`INV-${String(i.num ?? 0).padStart(3, "0")} · ${money(i.amount)}`} />
+                    <InvoiceActions id={i.id} status={i.status} role={me.role} canRefund={editable} clientId={i.clients?.id} label={`INV-${String(i.num ?? 0).padStart(3, "0")} · ${money(i.amount)}`} />
                   </div>
                 </td>}
               </tr>
             );
           })}
-          {list.length === 0 && <tr><td colSpan={editable ? (mode === "dunning" ? 7 : 6) : (mode === "dunning" ? 6 : 5)} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>Nothing here.</td></tr>}
+          {list.length === 0 && <tr><td colSpan={canAct ? (mode === "dunning" ? 7 : 6) : (mode === "dunning" ? 6 : 5)} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>Nothing here.</td></tr>}
         </tbody>
       </table>
     </div>
