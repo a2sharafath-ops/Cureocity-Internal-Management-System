@@ -18,7 +18,7 @@ import EmployeeDocUpload from "@/components/EmployeeDocUpload";
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null };
+type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; bank_name?: string | null; bank_account?: string | null; ifsc?: string | null };
 
 export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string } }) {
   const me = await getProfile();
@@ -38,7 +38,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     { data: updData }, { data: mtData }, { data: comData }, { data: statData }, { data: candData }, { data: docData }, { data: purData },
     { data: ltData }, { data: holData }, { data: monthAttData }, { data: yearLeaveData }, { data: empDocData }, { data: salData },
   ] = await Promise.all([
-    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at").order("name"),
+    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at, emp_code, work_location, bank_name, bank_account, ifsc").order("name"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("leaves").select("id, staff_id, from_date, to_date, type, reason, status, staff(name, department)").order("created_at", { ascending: false }).limit(60),
     supabase.from("payroll").select("staff_id, base, lop_days, pf, net, status, payslip").eq("month", month),
@@ -369,10 +369,16 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                   <b style={{ fontSize: 15 }}>{selectedEmp.name}</b> <span style={{ color: "var(--muted)", fontSize: 12 }}>· {selectedEmp.designation ?? selectedEmp.role} · {selectedEmp.department ?? "—"}</span>
                   <form action={updateStaffEmployment} style={{ display: "flex", gap: 10, alignItems: "end", marginTop: 12, flexWrap: "wrap" }}>
                     <input type="hidden" name="staff_id" value={selectedEmp.id} />
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Employee ID<br /><input name="emp_code" defaultValue={selectedEmp.emp_code ?? ""} placeholder="CUR1051" style={{ ...inp, marginTop: 4, width: 120 }} /></label>
                     <label style={{ fontSize: 12, color: "var(--muted)" }}>Date of joining<br /><input name="date_of_joining" type="date" defaultValue={selectedEmp.date_of_joining ?? ""} style={{ ...inp, marginTop: 4 }} /></label>
                     <label style={{ fontSize: 12, color: "var(--muted)" }}>Gender<br /><select name="gender" defaultValue={selectedEmp.gender ?? ""} style={{ ...inp, marginTop: 4 }}><option value="">—</option><option value="female">Female</option><option value="male">Male</option></select></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Work location<br /><input name="work_location" defaultValue={selectedEmp.work_location ?? ""} placeholder="Kochi" style={{ ...inp, marginTop: 4, width: 120 }} /></label>
+                    <span style={{ width: "100%", height: 0 }} />
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Bank name<br /><input name="bank_name" defaultValue={selectedEmp.bank_name ?? ""} placeholder="SBI" style={{ ...inp, marginTop: 4, width: 120 }} /></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Bank A/c No<br /><input name="bank_account" defaultValue={selectedEmp.bank_account ?? ""} placeholder="38334927412" style={{ ...inp, marginTop: 4, width: 160 }} /></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>IFSC<br /><input name="ifsc" defaultValue={selectedEmp.ifsc ?? ""} placeholder="SBIN0070425" style={{ ...inp, marginTop: 4, width: 140 }} /></label>
                     <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
-                    <span style={{ fontSize: 11, color: "var(--muted)" }}>Drives EL (after 1 yr) &amp; ML (female) eligibility.</span>
+                    <span style={{ fontSize: 11, color: "var(--muted)" }}>Bank &amp; ID appear on the payslip. DOJ drives EL (after 1 yr) &amp; ML (female) eligibility.</span>
                   </form>
                 </div>
                 <div style={{ ...box, padding: "16px 18px" }}>
@@ -467,11 +473,14 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                       <td style={{ ...td, fontWeight: 700 }}>{base ? money(net) : "—"}</td>
                       <td style={{ ...td, textAlign: "right" }}>
                         {base ? (
-                          <form action={generatePayslip}>
-                            <input type="hidden" name="staff_id" value={s.id} /><input type="hidden" name="month" value={month} />
-                            <input type="hidden" name="base" value={base} /><input type="hidden" name="lop_days" value={lop} /><input type="hidden" name="pf" value={pf} /><input type="hidden" name="deductions" value={ded} />
-                            <button style={{ border: "1px solid var(--border)", background: r?.payslip ? "var(--green-bg)" : "#fff", color: r?.payslip ? "var(--green-text)" : "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{r?.payslip ? "✓ Payslip" : "Generate payslip"}</button>
-                          </form>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
+                            <a href={`/payslip/${s.id}/print?month=${month}&auto=1`} target="_blank" rel="noopener" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)", textDecoration: "none", whiteSpace: "nowrap" }}>Open / Download</a>
+                            <form action={generatePayslip}>
+                              <input type="hidden" name="staff_id" value={s.id} /><input type="hidden" name="month" value={month} />
+                              <input type="hidden" name="base" value={base} /><input type="hidden" name="lop_days" value={lop} /><input type="hidden" name="pf" value={pf} /><input type="hidden" name="deductions" value={ded} />
+                              <button style={{ border: "1px solid var(--border)", background: r?.payslip ? "var(--green-bg)" : "#fff", color: r?.payslip ? "var(--green-text)" : "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{r?.payslip ? "✓ Payslip" : "Generate payslip"}</button>
+                            </form>
+                          </div>
                         ) : (
                           <span style={{ fontSize: 11.5, color: "var(--muted)" }} title="Set this employee's Salary breakup first (Employees tab)">Set salary first</span>
                         )}
