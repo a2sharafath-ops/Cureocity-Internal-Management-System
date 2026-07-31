@@ -31,6 +31,7 @@ import ClientStatusBadge from "@/components/ClientStatusBadge";
 import SubmitButton from "@/components/SubmitButton";
 import { startConsultFromAppointment, markSessionComplete } from "@/lib/actions";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
+import CoachMarkersSection from "@/components/CoachMarkersSection";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { careWorkFlags } from "@/lib/care-attention";
 import {
@@ -535,6 +536,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- APPOINTMENTS ---- */}
       {tab === "appts" && <AppointmentsBoard appts={apptRows} today={today} myStaffId={me?.staffId ?? null} canStartAny={["Super Admin", "Administrator", "Manager"].includes(me.role) && !readOnly} />}
+
+      {/* ---- HEALTH COACHING (coach) ---- */}
+      {tab === "coaching" && <CoachMarkersSection me={me} />}
 
       {/* ---- FOLLOW-UPS (coach) ---- */}
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}

@@ -3311,6 +3311,38 @@ export async function saveAppSettings(payload: string): Promise<{ ok?: boolean; 
   return { ok: true };
 }
 
+// ---- health-coach marker assessments ---------------------------------------
+
+/** Record a coach marker score (stress/sleep/activity/nutrition/substance/anxiety).
+ *  Bands are derived from the SOP; a "bad" band raises a concern on the client. */
+export async function saveCoachAssessment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !["Administrator", "Super Admin", "Manager", "Health Coach"].includes(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  const marker = String(formData.get("marker") || "");
+  const { MARKER_BY_KEY, bandFor } = await import("@/lib/coach-markers");
+  const m = (MARKER_BY_KEY as Record<string, { label: string }>)[marker];
+  if (!client_id || !m) return;
+  const score = Number(formData.get("score"));
+  if (!Number.isFinite(score)) return;
+  const b = bandFor(marker as never, score);
+  const note = String(formData.get("note") || "").trim() || null;
+  const supabase = createClient();
+  await supabase.from("coach_assessments").insert({
+    client_id, marker, score, band: b?.label ?? null, tone: b?.tone ?? null, note, assessed_by: p.name,
+  });
+  // A "bad" band is an SOP action/referral trigger — surface it as a concern.
+  if (b?.tone === "bad") {
+    await supabase.from("concerns").insert({
+      client_id, role: "coach", category: "Health Coaching",
+      body: `${m.label}: ${b.label} (score ${score}) — SOP action/referral trigger.`,
+      raised_by: p.name, status: "Open",
+    });
+  }
+  await logAudit(p, "Coach assessment recorded", `${marker}=${score}`, client_id);
+  revalidatePath("/workspace");
+}
+
 // ---- attendance kiosk ------------------------------------------------------
 
 type PunchResult = { ok?: boolean; name?: string; action?: "in" | "out" | "already"; at?: string; hours?: number; error?: string };
