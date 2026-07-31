@@ -122,13 +122,18 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
   // nudge them, rather than linking to a workspace they can't act in.
-  const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer");
+  const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer"), coach = ownerBy.get("coach");
   if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
   if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
-  // Day-2 diet chart explanation (a follow-up touchpoint the coach schedules).
+  // Day-2 diet chart explanation — the Health Coach owns scheduling it (once the
+  // dietitian's chart draft exists), so it's named/chased against the assigned
+  // coach rather than front desk.
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage)) {
-    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn", ...FRONT_DESK });
-    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info", ...FRONT_DESK });
+    const coachOwned: Pick<StatusItem, "ownerStaffId" | "ownerName" | "chaseRoles" | "chaseWho"> =
+      coach ? { ownerStaffId: coach.id, ownerName: coach.name, chaseRoles: ["Health Coach"], chaseWho: "Health Coach" }
+            : { chaseRoles: ["Health Coach"], chaseWho: "Health Coach" };
+    if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn", ...coachOwned });
+    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info", ...coachOwned });
   }
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
