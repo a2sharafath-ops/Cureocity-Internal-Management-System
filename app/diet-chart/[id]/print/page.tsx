@@ -13,13 +13,13 @@ export default async function DietChartPrintPage({
   const supabase = createClient();
   const { data } = await supabase
     .from("diet_charts")
-    .select("id, client_id, version, status, calories, protein, notes, meals, by_name, created_at")
+    .select("id, client_id, version, status, calories, protein, notes, summary, meals, by_name, created_at")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) notFound();
   const dc = data as {
     client_id: string | null; version: number; status: string;
-    calories: number | null; protein: string | null; notes: string | null;
+    calories: number | null; protein: string | null; notes: string | null; summary: string | null;
     meals: [string, string][]; by_name: string | null; created_at: string;
   };
 
@@ -79,6 +79,14 @@ export default async function DietChartPrintPage({
             </div>
           </div>
         </div>
+
+        {/* Plan summary */}
+        {dc.summary && (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#888", marginBottom: 4 }}>Plan summary</div>
+            <div style={{ fontSize: 13.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{dc.summary}</div>
+          </div>
+        )}
 
         {/* Meals */}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>

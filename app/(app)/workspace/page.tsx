@@ -220,10 +220,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // Dietitian tools.
   let dietCharts: DietChartRow[] = [];
   if (tab === "charts") {
-    const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, meals, by_name, created_at, review_note, reviewed_by, clients(name)").order("created_at", { ascending: false });
+    const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, summary, meals, by_name, created_at, review_note, reviewed_by, clients(name)").order("created_at", { ascending: false });
     dietCharts = ((dc ?? []) as unknown as (DietChartRow & { clients: { name: string } | null })[]).map((r) => ({
       id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
-      calories: r.calories, protein: r.protein, notes: r.notes, meals: (r.meals ?? []) as [string, string][], by_name: r.by_name, created_at: r.created_at,
+      calories: r.calories, protein: r.protein, notes: r.notes, summary: r.summary ?? null, meals: (r.meals ?? []) as [string, string][], by_name: r.by_name, created_at: r.created_at,
       review_note: r.review_note, reviewed_by: r.reviewed_by,
     }));
   }
