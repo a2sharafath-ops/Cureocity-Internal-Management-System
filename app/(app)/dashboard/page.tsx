@@ -90,8 +90,8 @@ export default async function DashboardPage() {
     supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active").lte("renews_on", in30),
     supabase.from("invoices").select("id", { count: "exact", head: true }).eq("status", "Unpaid").lte("issued_date", overdueCut),
     supabase.from("consultations").select("id, kind, clients(id, name)").neq("status", "completed").order("created_at", { ascending: false }).limit(8),
-    supabase.from("followups").select("id", { count: "exact", head: true }).eq("status", "pending").lt("due_date", TODAY),
-    supabase.from("followups").select("id, priority").eq("status", "pending").eq("due_date", TODAY),
+    supabase.from("followups").select("id, day, label").eq("status", "pending").lt("due_date", TODAY),
+    supabase.from("followups").select("id, priority, day, label").eq("status", "pending").eq("due_date", TODAY),
   ]);
 
   const appts = (apptRes.data ?? []) as unknown as { id: string; type: string | null; hour: number; status: string; clients: { id: string; name: string } | null }[];
@@ -104,8 +104,11 @@ export default async function DashboardPage() {
   const trainToday = sessions.filter((s) => s.status === "scheduled");
   const revenue = paid.reduce((s, i) => s + Number(i.amount), 0);
   const checkedIn = sessions.filter((s) => s.status === "completed").length;
-  const fuOverdue = fuOverdueC.count ?? 0;
-  const fuToday = (fuTodayRes.data ?? []) as { id: string; priority: string }[];
+  // The Day-2 diet chart explanation is the Health Coach's to schedule now, so
+  // it's excluded from the front desk's follow-up counts.
+  const isCoachOwnedFu = (f: { day: number | null; label: string | null }) => f.day === 2 && /explanation/i.test(f.label ?? "");
+  const fuOverdue = ((fuOverdueC.data ?? []) as { id: string; day: number | null; label: string | null }[]).filter((f) => !isCoachOwnedFu(f)).length;
+  const fuToday = ((fuTodayRes.data ?? []) as { id: string; priority: string; day: number | null; label: string | null }[]).filter((f) => !isCoachOwnedFu(f));
   const fuMandatory = fuToday.filter((f) => f.priority === "mandatory").length;
 
   const pill = (label: string, href: string, active = false) => (
