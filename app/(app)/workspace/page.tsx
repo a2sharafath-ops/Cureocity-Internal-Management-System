@@ -146,7 +146,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
         sev: overdue ? "high" : "med",
         title: `${f.clients?.name ?? "Client"} — diet chart explanation due`,
         detail: `Day 2 · ${overdue ? `was due ${fmtD(f.due_date)}` : "due today"} — schedule & deliver`,
-        href: `/workspace?role=coach&tab=followups`,
+        href: `/followups?client=${f.client_id}`,
         cta: "Schedule",
       });
     }

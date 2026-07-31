@@ -39,7 +39,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/classes": ["Administrator", "Manager", "Front Desk", ...CLIN],
   "/appointments": ["Administrator", "Manager", "Front Desk", ...CLIN],
-  "/followups": ["Administrator", "Manager", "Front Desk"],
+  "/followups": ["Administrator", "Manager", "Front Desk", "Health Coach"],
   "/intake": ["Administrator", "Manager", "Front Desk"],
   "/access": ["Administrator", "Manager", "Front Desk"],
   "/trainer": ["Administrator", "Manager", ...CLIN],
@@ -109,6 +109,13 @@ export function canSee(role: string, href: string): boolean {
 // Who can create/edit clients and move leads.
 export function canWrite(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role);
+}
+
+// Who can work the follow-up queue (call → link → review → book/close). The
+// front-desk writers plus the Health Coach, who owns the Day-2 diet chart
+// explanation and other coaching touchpoints.
+export function canWorkFollowups(role: string): boolean {
+  return canWrite(role) || role === "Health Coach";
 }
 
 // Who can reschedule / complete strength sessions (front desk + clinicians).
