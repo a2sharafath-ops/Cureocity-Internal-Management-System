@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbodySummary, saveMeasurementSummary, aiConsultSummary, saveConsultationSummary } from "@/lib/actions";
+import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbodySummary, saveMeasurementSummary, aiConsultSummary } from "@/lib/actions";
 import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
 
@@ -64,6 +64,24 @@ export default function ConsoleView({
 
   // Quick prescription (single drug) — Doctor tool.
   const [rx, setRx] = useState({ drug: "", dose: "", frequency: "", duration: "" });
+
+  // Consultation summary — one field, optionally AI-drafted. This same text is
+  // what "Save draft" / "Complete & summarize" submit (name="summary"), so there
+  // is a single source of truth for the shareable summary.
+  const [summaryText, setSummaryText] = useState(summary ?? "");
+  const [aiBusy, startAi] = useTransition();
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+  const generateSummary = () => {
+    if (client.isLead) return;
+    setAiMsg(null);
+    startAi(async () => {
+      const fd = new FormData();
+      fd.set("client_id", client.id);
+      const r = await aiConsultSummary({}, fd);
+      if (r.error) setAiMsg(r.error);
+      else { setSummaryText(r.text ?? ""); setAiMsg("Drafted — review and edit, then Complete & summarize."); }
+    });
+  };
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", width: "100%", boxSizing: "border-box", resize: "vertical" };
@@ -212,9 +230,16 @@ export default function ConsoleView({
           </div>
 
           <div style={{ ...box, padding: "16px 18px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>Consultation summary</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>This becomes the shareable summary that feeds the Blueprint sign-off.</div>
-            <textarea name="summary" rows={10} defaultValue={summary ?? ""} placeholder="Session notes, findings, plan…" style={inp} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <div style={{ fontWeight: 700 }}>Consultation summary</div>
+              <span style={{ flex: 1 }} />
+              {!client.isLead && (
+                <button type="button" onClick={generateSummary} disabled={aiBusy} style={{ border: "1px solid var(--border)", background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: aiBusy ? "default" : "pointer" }}>{aiBusy ? "Working…" : "✨ Generate with AI"}</button>
+              )}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>This becomes the shareable summary that feeds the Blueprint sign-off. Generate a draft from the client&apos;s data, or write your own.</div>
+            <textarea name="summary" rows={10} value={summaryText} onChange={(e) => setSummaryText(e.target.value)} placeholder="Session notes, findings, plan…" style={inp} />
+            {aiMsg && <div style={{ marginTop: 6, fontSize: 12, color: "var(--brand-text)" }}>{aiMsg}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
               <button type="submit" name="complete" value="false" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save draft</button>
               <button type="submit" name="complete" value="true" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Complete &amp; summarize</button>
@@ -225,13 +250,6 @@ export default function ConsoleView({
               </div>
             )}
           </div>
-          {!client.isLead && (
-            <div style={{ ...box, padding: "16px 18px" }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>AI consultation summary</div>
-              <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Generate a shareable summary from this client&apos;s data, or write your own.</div>
-              <SummaryEditor label="Consultation summary" clientId={client.id} aiAction={aiConsultSummary} saveAction={saveConsultationSummary} />
-            </div>
-          )}
           <div style={{ ...box, padding: "12px 16px" }}>
             <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "Open lead record →" : "Open full client card →"}</Link>
           </div>
