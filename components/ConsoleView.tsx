@@ -54,7 +54,6 @@ export default function ConsoleView({
   // Controlled answers → live unfilled tracker.
   const [ans, setAns] = useState<string[]>(questions.map((q) => amap.get(q) ?? ""));
   const filled = ans.filter((a) => a.trim()).length;
-  const unfilled = questions.map((q, i) => ({ q, i })).filter(({ i }) => !ans[i]?.trim());
 
   // Flags raised in-session.
   const [fl, setFl] = useState<Flag[]>(flags ?? []);
@@ -126,7 +125,6 @@ export default function ConsoleView({
       <div style={{ marginBottom: 16 }}>
         <Link href="/pro" style={{ display: "inline-block", color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600, marginBottom: 10 }}>← Consultations</Link>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          {icon && <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--ink)", color: "#fff", display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>}
           <div style={{ minWidth: 0 }}>
             <h1 style={{ fontSize: 19, margin: 0, lineHeight: 1.2 }}>{label}</h1>
             <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 2 }}>{client.name}{client.code ? ` · ${client.code}` : ""} · {kind} consultation</div>
@@ -223,17 +221,12 @@ export default function ConsoleView({
         {/* Intake questionnaire + unfilled tracker */}
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <div style={{ fontWeight: 700 }}>{icon ? `${icon} ` : ""}Intake questionnaire</div>
+            <div style={{ fontWeight: 700 }}>Intake questionnaire</div>
             <span style={{ flex: 1 }} />
             <span style={{ background: filled === questions.length ? "var(--green-bg)" : "var(--amber-bg)", color: filled === questions.length ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700 }}>
               {filled}/{questions.length} answered
             </span>
           </div>
-          {unfilled.length > 0 && (
-            <div style={{ fontSize: 12, color: "var(--amber-text)", background: "var(--amber-bg)", borderRadius: 8, padding: "7px 10px", marginBottom: 10 }}>
-              {unfilled.length} unfilled: {unfilled.map(({ i }) => `Q${i + 1}`).join(", ")}
-            </div>
-          )}
           {questions.map((q, i) => {
             const empty = !ans[i]?.trim();
             return (
