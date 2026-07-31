@@ -19,10 +19,15 @@ export default async function RootLayout({
   const overrides =
     `:root{--brand:${color};--brand-fill:${color};--brand-text:${color};--brand-tint:${color}1a;}` +
     (brand.font ? `body{font-family:${brand.font};}` : "");
+  const favicon = brand.logo?.trim() || "/cureocity-mark.png?v=2";
 
   return (
     <html lang="en">
-      <head><style dangerouslySetInnerHTML={{ __html: overrides }} /></head>
+      <head>
+        <link rel="icon" href={favicon} />
+        <link rel="apple-touch-icon" href={favicon} />
+        <style dangerouslySetInnerHTML={{ __html: overrides }} />
+      </head>
       <body>{children}</body>
     </html>
   );

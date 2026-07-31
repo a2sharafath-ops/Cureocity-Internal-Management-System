@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { moduleScope } from "@/lib/deployment";
 import { createClient } from "@/lib/supabase/client";
@@ -13,6 +13,14 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState<string | null>(null);
+  // Branding logo (public read) — falls back to the bundled mark.
+  const [logo, setLogo] = useState("/cureocity-mark.png?v=2");
+  useEffect(() => {
+    supabase.from("app_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {
+      const l = (data as { data?: { brand?: { logo?: string } } } | null)?.data?.brand?.logo;
+      if (l) setLogo(l);
+    });
+  }, [supabase]);
 
   async function onForgot() {
     setError(null); setResetMsg(null);
@@ -53,8 +61,8 @@ export default function LoginPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 800 }}>
-            ✚
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: "#fff", border: "1px solid var(--border)", display: "grid", placeItems: "center", overflow: "hidden" }}>
+            <img src={logo} alt="Cureocity" style={{ maxWidth: 26, maxHeight: 26, display: "block" }} />
           </div>
           <b style={{ fontSize: 18 }}>Cureocity</b>
         </div>
