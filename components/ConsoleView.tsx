@@ -121,22 +121,25 @@ export default function ConsoleView({
 
   return (
     <div style={{ maxWidth: 1120 }}>
-      {/* Console chrome */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-        <Link href="/pro" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← Consultations</Link>
-        {icon && <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--ink)", color: "#fff", display: "grid", placeItems: "center", fontSize: 20 }}>{icon}</div>}
-        <div>
-          <h1 style={{ fontSize: 19, margin: 0 }}>{label}</h1>
-          <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{client.name}{client.code ? ` · ${client.code}` : ""} · {kind} consultation</div>
-        </div>
-        <span style={{ flex: 1 }} />
-        {status === "completed" && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
-        {(recording || sec > 0) && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", opacity: recording ? 1 : 0.55 }}>
-            <span style={{ width: 9, height: 9, borderRadius: "50%", background: recording ? "var(--red)" : "rgba(255,255,255,.5)", display: "inline-block" }} />
-            <b style={{ fontVariantNumeric: "tabular-nums", fontSize: 14 }}>{mm}:{ss}</b>
+      {/* Console chrome — back link on its own row, then a clean title row with
+          status + timer aligned to the right. */}
+      <div style={{ marginBottom: 16 }}>
+        <Link href="/pro" style={{ display: "inline-block", color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600, marginBottom: 10 }}>← Consultations</Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {icon && <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--ink)", color: "#fff", display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>{icon}</div>}
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 19, margin: 0, lineHeight: 1.2 }}>{label}</h1>
+            <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 2 }}>{client.name}{client.code ? ` · ${client.code}` : ""} · {kind} consultation</div>
           </div>
-        )}
+          <span style={{ flex: 1 }} />
+          {status === "completed" && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
+          {(recording || sec > 0) && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", opacity: recording ? 1 : 0.55 }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: recording ? "var(--red)" : "rgba(255,255,255,.5)", display: "inline-block" }} />
+              <b style={{ fontVariantNumeric: "tabular-nums", fontSize: 14 }}>{mm}:{ss}</b>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Ambient + AI co-pilot — optional; the clinician starts/stops it. Scaffold
@@ -154,6 +157,60 @@ export default function ConsoleView({
           <button type="button" onClick={() => setRecording(true)} style={{ background: "var(--red)", color: "#fff", border: "none", borderRadius: 999, padding: "6px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>● Start recording</button>
         )}
       </div>
+
+      {/* Client context — full width so the metrics and InBody read clearly and
+          sit above the working area, visible to every discipline. */}
+      {health && (() => {
+        const metric = (label: string, val: string | number | null | undefined, unit = "") =>
+          val != null && val !== "" ? <div key={label}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px" }}>{label}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{val}{unit}</div></div> : null;
+        const metrics = [
+          metric("Age", health.age, " yrs"), metric("Gender", health.gender),
+          metric("Height", health.height, " cm"), metric("Weight", health.weight, " kg"),
+          metric("BMI", health.bmi), metric("Body fat", health.bodyFat, "%"),
+          metric("Muscle", health.muscle, " kg"), metric("Visceral", health.visceral),
+          metric("Waist", health.waist, " cm"), metric("Hip", health.hip, " cm"),
+        ].filter(Boolean);
+        const chipRow = (label: string, items: string[], bg: string, fg: string) => items.length ? (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 4 }}>{label}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{items.map((t, i) => <span key={i} style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{t}</span>)}</div>
+          </div>
+        ) : null;
+        return (
+          <div style={{ ...box, padding: "16px 18px", marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700 }}>Client health</div>
+              <span style={{ flex: 1 }} />
+              {health.measuredOn && <span style={{ fontSize: 11, color: "var(--muted)" }}>InBody {health.measuredOn}</span>}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20, alignItems: "start" }}>
+              {/* Left: the numbers + flags of this client */}
+              <div>
+                {metrics.length > 0
+                  ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(76px, 1fr))", gap: 12 }}>{metrics}</div>
+                  : <div style={{ fontSize: 12, color: "var(--muted)" }}>No measurements on record yet.</div>}
+                {health.conditions && <div style={{ marginTop: 10 }}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 2 }}>Conditions</div><div style={{ fontSize: 12.5 }}>{health.conditions}</div></div>}
+                {chipRow("Allergies", health.allergies, "var(--red-bg)", "var(--red-text)")}
+                {chipRow("Goals", health.goals, "var(--brand-tint)", "var(--brand-text)")}
+                {health.bloodStatus && <div style={{ marginTop: 10, fontSize: 12 }}><span style={{ color: "var(--muted)" }}>Blood report: </span><b>{health.bloodStatus}</b></div>}
+              </div>
+              {/* Right: InBody summary + the uploaded machine report */}
+              <div>
+                {!client.isLead && (
+                  <SummaryEditor label="InBody summary" clientId={client.id} initial={health.inbodySummary ?? ""} aiAction={aiInbodySummary} saveAction={saveMeasurementSummary} />
+                )}
+                <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
+                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 6 }}>InBody report (PDF)</div>
+                  {health.inbodyPdfUrl
+                    ? <a href={health.inbodyPdfUrl} target="_blank" rel="noopener" style={{ display: "inline-block", marginBottom: 8, fontSize: 12.5, color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>📄 View InBody PDF →</a>
+                    : <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>No InBody PDF uploaded yet.</div>}
+                  <FileUploadForm variant="staff" clientId={client.id} kind="inbody" label={health.inbodyPdfUrl ? "Replace PDF" : "Add InBody PDF"} accept="application/pdf" />
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <form action={saveConsultSession} style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, alignItems: "start" }}>
         <input type="hidden" name="id" value={id} />
@@ -215,56 +272,8 @@ export default function ConsoleView({
         )}
         </div>
 
-        {/* Summary + flags + save */}
+        {/* Flags + consultation summary (the working outputs) */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 12 }}>
-          {/* Client health snapshot — what this clinician can see about the client */}
-          {health && (() => {
-            const metric = (label: string, val: string | number | null | undefined, unit = "") =>
-              val != null && val !== "" ? <div key={label}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px" }}>{label}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{val}{unit}</div></div> : null;
-            const metrics = [
-              metric("Age", health.age, " yrs"), metric("Gender", health.gender),
-              metric("Height", health.height, " cm"), metric("Weight", health.weight, " kg"),
-              metric("BMI", health.bmi), metric("Body fat", health.bodyFat, "%"),
-              metric("Muscle", health.muscle, " kg"), metric("Visceral", health.visceral),
-              metric("Waist", health.waist, " cm"), metric("Hip", health.hip, " cm"),
-            ].filter(Boolean);
-            const chipRow = (label: string, items: string[], bg: string, fg: string) => items.length ? (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 4 }}>{label}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{items.map((t, i) => <span key={i} style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 600 }}>{t}</span>)}</div>
-              </div>
-            ) : null;
-            return (
-              <div style={{ ...box, padding: "16px 18px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <div style={{ fontWeight: 700 }}>Client health</div>
-                  <span style={{ flex: 1 }} />
-                  {health.measuredOn && <span style={{ fontSize: 11, color: "var(--muted)" }}>InBody {health.measuredOn}</span>}
-                </div>
-                {metrics.length > 0
-                  ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))", gap: 10 }}>{metrics}</div>
-                  : <div style={{ fontSize: 12, color: "var(--muted)" }}>No measurements on record yet.</div>}
-                {!client.isLead && (
-                  <div style={{ marginTop: 10 }}>
-                    <SummaryEditor label="InBody summary" clientId={client.id} initial={health.inbodySummary ?? ""} aiAction={aiInbodySummary} saveAction={saveMeasurementSummary} />
-                  </div>
-                )}
-                {health.conditions && <div style={{ marginTop: 10 }}><div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 2 }}>Conditions</div><div style={{ fontSize: 12.5 }}>{health.conditions}</div></div>}
-                {chipRow("Allergies", health.allergies, "var(--red-bg)", "var(--red-text)")}
-                {chipRow("Goals", health.goals, "var(--brand-tint)", "var(--brand-text)")}
-                {health.bloodStatus && <div style={{ marginTop: 10, fontSize: 12 }}><span style={{ color: "var(--muted)" }}>Blood report: </span><b>{health.bloodStatus}</b></div>}
-                {/* InBody report PDF — view the uploaded machine report, or add one. */}
-                <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
-                  <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 6 }}>InBody report (PDF)</div>
-                  {health.inbodyPdfUrl
-                    ? <a href={health.inbodyPdfUrl} target="_blank" rel="noopener" style={{ display: "inline-block", marginBottom: 8, fontSize: 12.5, color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>📄 View InBody PDF →</a>
-                    : <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>No InBody PDF uploaded yet.</div>}
-                  <FileUploadForm variant="staff" clientId={client.id} kind="inbody" label={health.inbodyPdfUrl ? "Replace PDF" : "Add InBody PDF"} accept="application/pdf" />
-                </div>
-              </div>
-            );
-          })()}
-
           {/* Medical flags */}
           <div style={{ ...box, padding: "16px 18px" }}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Flags raised {fl.length > 0 && <span style={{ color: "var(--red-text)" }}>· {fl.length}</span>}</div>
