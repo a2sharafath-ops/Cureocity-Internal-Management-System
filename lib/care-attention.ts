@@ -15,7 +15,7 @@ const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 
 export async function careWorkFlags(today: string): Promise<Flag[]> {
   const sb = createClient();
-  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: appts }] = await Promise.all([
+  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: appts }, { data: fus }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
     sb.from("consultations").select("client_id, kind, status"),
@@ -25,6 +25,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("blueprints").select("client_id, generated"),
     sb.from("care_protocols").select("client_id, start_date, approved_at").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
+    sb.from("followups").select("client_id, label, day, due_date, stage"),
   ]);
 
   // Who owns each clinician deliverable, so ops can nudge them from the dashboard.
@@ -73,6 +74,12 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
   for (const a of (appts ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push(a);
   }
+  // Day-2 diet chart explanation follow-up, per client. The coach schedules it.
+  const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
+  const dietExplainBy = new Map<string, { due_date: string; stage: string }>();
+  for (const f of (fus ?? []) as { client_id: string; label: string; day: number | null; due_date: string; stage: string }[]) {
+    if (f.day === 2 && /explanation/i.test(f.label)) dietExplainBy.set(f.client_id, { due_date: f.due_date, stage: f.stage });
+  }
 
   const flags: Flag[] = [];
   for (const [clientId, rows] of catsBy) {
@@ -99,6 +106,18 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: "View",
           nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
           chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: clientHref } });
+      }
+      // Day-2 diet chart explanation — surfaces on the assigned coach's
+      // dashboard once the chart draft exists and the touchpoint is due. The
+      // coach owns scheduling and delivering it.
+      const de = dietExplainBy.get(clientId);
+      if (de && hasChart.has(clientId) && !FU_CLOSED.has(de.stage) && de.due_date <= today) {
+        const o = ownerFor(clientId, "coach");
+        const fuHref = `/followups?client=${clientId}`;
+        flags.push({ sev: de.due_date < today ? "high" : "med", title: `${who} — diet chart explanation due`, detail: o ? `Owed by ${o.name} · Day 2` : "Schedule the Day-2 explanation", href: fuHref, cta: "Schedule",
+          dedupeKey: `dietexplain:${clientId}`,
+          nudge: o ? { clientId, staffId: o.id, label: "Diet chart explanation — due", who: o.name } : undefined,
+          chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Diet chart explanation — due", clientId, href: fuHref } });
       }
       if (done.has("Trainer") && !hasWorkout.has(clientId)) {
         const o = ownerFor(clientId, "trainer");
