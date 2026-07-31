@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canConsult } from "@/lib/roles";
 import { consultQ } from "@/lib/consult-questions";
+import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
 import ConsoleView, { type ConsoleHealth } from "@/components/ConsoleView";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,47 @@ export default async function ConsolePage({ params }: { params: { id: string } }
     client_id: string | null; lead_id: string | null;
     clients: { name: string; code: string | null } | null; leads: { name: string } | null;
   };
-  const q = consultQ(row.kind);
+  // For a diet consult, pick the questionnaire by the booked milestone: only the
+  // Day-10 follow-up uses the short check-in; the initial (day 0) and Day-21
+  // review use the full intake. We match this consult's booked appointment date
+  // to the nearest milestone anchor off the comprehensive package start date.
+  let dietFollowup = false;
+  if (row.kind === "Diet" && row.client_id) {
+    const { data: consAppt } = await supabase.from("consultations").select("appointment_id").eq("id", row.id).maybeSingle();
+    const apptId = (consAppt as { appointment_id: string | null } | null)?.appointment_id ?? null;
+    let apptDate: string | null = null;
+    if (apptId) {
+      const { data: appt } = await supabase.from("appointments").select("date").eq("id", apptId).maybeSingle();
+      apptDate = (appt as { date: string | null } | null)?.date ?? null;
+    }
+    const { data: cp } = await supabase.from("client_packages")
+      .select("start_date, end_date").eq("client_id", row.client_id).eq("category", COMPREHENSIVE_CATEGORY)
+      .order("start_date", { ascending: false }).limit(1).maybeSingle();
+    const start = (cp as { start_date: string | null } | null)?.start_date ?? null;
+    const end = (cp as { end_date: string | null } | null)?.end_date ?? null;
+
+    if (apptDate && start) {
+      const days = end ? Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) : null;
+      // Anchors: the day-0 initial + every dated diet milestone (day-10, day-21, per cycle).
+      const anchors: { key: string; date: string }[] = [
+        { key: "diet_initial", date: start },
+        ...milestoneDates(start, cyclesFor(days)).filter((m) => m.owner === "dietitian").map((m) => ({ key: m.key, date: m.dueDate })),
+      ];
+      let bestKey = "diet_initial", bestDist = Infinity;
+      for (const a of anchors) {
+        const dist = Math.abs(Date.parse(`${a.date}T00:00:00Z`) - Date.parse(`${apptDate}T00:00:00Z`));
+        if (dist < bestDist) { bestDist = dist; bestKey = a.key; }
+      }
+      dietFollowup = bestKey === "diet_10";
+    } else {
+      // Fallback when there's no booked date / package start: chronological order
+      // (index 0 initial, 1 day-10, 2 day-21, alternating).
+      const { data: dietRows } = await supabase.from("consultations").select("id").eq("client_id", row.client_id).eq("kind", "Diet").order("created_at", { ascending: true });
+      const idx = ((dietRows ?? []) as { id: string }[]).findIndex((c) => c.id === row.id);
+      dietFollowup = idx >= 0 && idx % 2 === 1;
+    }
+  }
+  const q = consultQ(row.kind, dietFollowup);
 
   // A consultation is on a client or (for a pre-sale trial) a lead. Render the
   // right subject and point the "open card" link at the right record.
