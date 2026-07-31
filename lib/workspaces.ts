@@ -114,9 +114,7 @@ function withRoleTabs(extra: WsTab[]): WsTab[] {
 }
 
 export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
-  doctor: withRoleTabs([
-    { key: "charts", label: "Diet chart review", live: true },
-  ]),
+  doctor: withRoleTabs([]),
   psych: withRoleTabs([]),
   // Diet uses an explicit order (role tabs are interleaved with the common set,
   // so the shared withRoleTabs insertion point can't express it).

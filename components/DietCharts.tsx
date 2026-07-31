@@ -88,7 +88,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>{canCompose ? "Compose a plan → submit for Medical-Director review → publish once approved." : "Review submitted diet charts: approve or send back with a note."}</div>
+        <div style={{ fontSize: 13, color: "var(--muted)" }}>{canCompose ? "Compose a plan → submit for Super Admin review → publish once approved." : "Review submitted diet charts: approve or send back with a note."}</div>
         <span style={{ flex: 1 }} />
         {canCompose && <button type="button" onClick={() => setOpen((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{open ? "Cancel" : "+ New diet chart"}</button>}
       </div>
