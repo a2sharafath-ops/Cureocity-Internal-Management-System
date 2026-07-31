@@ -5328,6 +5328,7 @@ export async function addDietChart(formData: FormData) {
     calories: Number(formData.get("calories")) || null,
     protein: String(formData.get("protein") || "").trim() || null,
     notes: String(formData.get("notes") || "").trim() || null,
+    summary: String(formData.get("summary") || "").trim() || null,
     meals, by_name: p.name,
   });
   await logAudit(p, "Diet chart drafted", c?.name, `v${(count ?? 0) + 1}`);
@@ -5354,6 +5355,7 @@ export async function updateDietChart(formData: FormData) {
     calories: Number(formData.get("calories")) || null,
     protein: String(formData.get("protein") || "").trim() || null,
     notes: String(formData.get("notes") || "").trim() || null,
+    summary: String(formData.get("summary") || "").trim() || null,
   }).eq("id", id);
   await logAudit(p, "Diet chart edited", id, null);
   revalidatePath("/workspace");
@@ -5554,20 +5556,34 @@ export async function aiDietDraftStructured(client_id: string): Promise<DietDraf
   if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
   if (!client_id) return { error: "Pick a client first." };
   const supabase = createClient();
-  const [{ data: cons }, { data: forms }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
-    supabase.from("consultations").select("kind, summary, notes").eq("client_id", client_id).eq("status", "completed"),
-    supabase.from("form_responses").select("answers").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
-    supabase.from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr").eq("client_id", client_id).order("date", { ascending: false }).limit(1),
+  const [{ data: cons }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
+    // Every discipline's consult, newest first — we keep the latest per kind and
+    // use its saved summary (AI or manual) + questionnaire answers.
+    supabase.from("consultations").select("kind, summary, ai_summary, answers, created_at").eq("client_id", client_id).order("created_at", { ascending: false }),
+    supabase.from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr, ai_summary").eq("client_id", client_id).order("date", { ascending: false }).limit(1),
     supabase.from("clients").select("name, goals, conditions").eq("id", client_id).maybeSingle(),
     supabase.from("client_workouts").select("name, type, mode").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1),
   ]);
   const c = cli as { name: string; goals: string[] | null; conditions: string | null } | null;
   const parts: string[] = [];
   if (c) parts.push(`Client: ${c.name}${c.goals?.length ? ` · goals: ${c.goals.join(", ")}` : ""}${c.conditions ? ` · conditions: ${c.conditions}` : ""}`);
-  const mrows = (meas ?? []) as MeasRow[];
-  if (mrows[0]) parts.push(`InBody — ${fmtMeas(mrows[0])}`);
-  for (const cn of ((cons ?? []) as { kind: string; summary: string | null; notes: string | null }[])) parts.push(`${cn.kind} consult: ${cn.summary ?? cn.notes ?? "—"}`);
-  for (const a of ((forms ?? []) as { answers: Record<string, unknown> }[])) parts.push(`Questionnaire: ${JSON.stringify(a.answers).slice(0, 1200)}`);
+
+  // InBody summary (dietitian's saved/AI summary) — the body-composition picture.
+  const mrows = (meas ?? []) as (MeasRow & { ai_summary?: string | null })[];
+  if (mrows[0]?.ai_summary) parts.push(`InBody summary:\n${mrows[0].ai_summary}`);
+  else if (mrows[0]) parts.push(`InBody — ${fmtMeas(mrows[0])}`);
+
+  // Latest consult per discipline (dietitian, doctor, trainer, psychologist):
+  // prefer the saved summary, else compile the questionnaire answers.
+  const seenKind = new Set<string>();
+  for (const cn of ((cons ?? []) as { kind: string; summary: string | null; ai_summary: string | null; answers: [string, string][] | null }[])) {
+    if (seenKind.has(cn.kind)) continue;
+    seenKind.add(cn.kind);
+    const qa = Array.isArray(cn.answers) && cn.answers.length ? cn.answers.map(([q, a]) => `${q}: ${a}`).join("; ") : null;
+    const body = cn.ai_summary || cn.summary || qa;
+    if (body) parts.push(`${cn.kind} questionnaire summary:\n${body.slice(0, 1500)}`);
+  }
+
   const w = (wk ?? [])[0] as { name: string; type: string; mode: string } | undefined;
   if (w) parts.push(`Fitness plan: ${w.name} (${w.type}, ${w.mode})`);
   if (parts.length <= 1) return { error: "Not enough client data yet (need consults / InBody / questionnaire)." };

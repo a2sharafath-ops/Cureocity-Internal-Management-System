@@ -14,6 +14,7 @@ export type DietChartRow = {
   calories: number | null;
   protein: string | null;
   notes: string | null;
+  summary: string | null;
   meals: [string, string][];
   by_name: string | null;
   created_at: string;
@@ -35,9 +36,10 @@ export default function DietCharts({ charts, clients, canReview = false, canComp
   const [bCal, setBCal] = useState("");
   const [bProtein, setBProtein] = useState("");
   const [bNotes, setBNotes] = useState("");
+  const [bSummary, setBSummary] = useState("");
   const [draftErr, setDraftErr] = useState<string | null>(null);
   const [drafting, startDraft] = useTransition();
-  const resetBuilder = () => { setRows(DEFAULT_ROWS); setBCal(""); setBProtein(""); setBNotes(""); setDraftErr(null); };
+  const resetBuilder = () => { setRows(DEFAULT_ROWS); setBCal(""); setBProtein(""); setBNotes(""); setBSummary(""); setDraftErr(null); };
   const runAiDraft = () => {
     setDraftErr(null);
     if (!bClient) { setDraftErr("Select a client first."); return; }
@@ -48,6 +50,7 @@ export default function DietCharts({ charts, clients, canReview = false, canComp
       setBCal(r.calories != null ? String(r.calories) : "");
       setBProtein(r.protein ?? "");
       setBNotes(r.notes ?? "");
+      if (r.notes) setBSummary(r.notes);
     });
   };
   // In-place edit of a Draft chart (its own row + meal-row state).
@@ -98,7 +101,11 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
             <input name="protein" value={bProtein} onChange={(e) => setBProtein(e.target.value)} placeholder="Protein target (e.g. 72 g)" style={inpControl} />
           </div>
           <textarea name="notes" rows={2} value={bNotes} onChange={(e) => setBNotes(e.target.value)} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
-          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Tip: “Draft with AI” fills the fields from the client’s data — review &amp; edit, then Save as draft and submit for review.</div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>Plan summary <span style={{ fontWeight: 400 }}>· type or paste — appears on the PDF</span></div>
+            <textarea name="summary" rows={5} value={bSummary} onChange={(e) => setBSummary(e.target.value)} placeholder="A short summary of the diet plan and rationale for the client…" style={{ ...inp, resize: "vertical", width: "100%", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Tip: “Draft with AI” fills the fields from the client’s data (questionnaire summaries + InBody) — review &amp; edit, then Save as draft. Once saved, use <b>PDF</b> to export, <b>Edit</b> to change, and <b>Publish</b> to share with the client.</div>
           <div><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save as draft</button></div>
         </form>
       )}
@@ -167,6 +174,8 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
                   <input name="protein" defaultValue={dc.protein ?? ""} placeholder="Protein target (e.g. 72 g)" style={inpControl} />
                 </div>
                 <textarea name="notes" rows={2} defaultValue={dc.notes ?? ""} placeholder="Notes for the client…" style={{ ...inp, resize: "vertical" }} />
+                <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Plan summary</div>
+                <textarea name="summary" rows={5} defaultValue={dc.summary ?? ""} placeholder="A short summary of the diet plan and rationale for the client…" style={{ ...inp, resize: "vertical" }} />
                 <div style={{ display: "flex", gap: 8 }}>
                   <button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save changes</button>
                   <button type="button" onClick={() => setEditing(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
@@ -182,6 +191,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
                       <div style={{ flex: 1, color: "var(--ink)" }}>{detail}</div>
                     </div>
                   ))}
+                  {dc.summary && <div style={{ marginTop: 8, fontSize: 12.5, whiteSpace: "pre-wrap" }}><b>Plan summary:</b> {dc.summary}</div>}
                   {dc.notes && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>{dc.notes}</div>}
                   {dc.client_id && <div style={{ marginTop: 8 }}><Link href={`/clients/${dc.client_id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>Open client card →</Link></div>}
                 </div>
