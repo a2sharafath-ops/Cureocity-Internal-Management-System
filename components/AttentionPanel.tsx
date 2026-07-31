@@ -19,6 +19,9 @@ export type Flag = {
   nudge?: { clientId: string; staffId: string; label: string; who?: string };
   /** chase a whole role/team (ops work no single person is assigned) */
   chaseRole?: { roles: string[]; who: string; label: string; clientId?: string; href?: string };
+  /** when set, only the first flag with a given key is shown (dedupes the same
+   *  underlying task raised by more than one queue). */
+  dedupeKey?: string;
 };
 
 const firstName = (n: string) => n.split(" ")[0];
