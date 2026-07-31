@@ -22,6 +22,15 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
 
   const nameOf = (id: string | null) => (id && ((clients ?? []) as { id: string; name: string }[]).find((c) => c.id === id)?.name) || "Client";
   const hasInvoice = new Set(((inv ?? []) as { client_id: string | null }[]).map((i) => i.client_id).filter(Boolean) as string[]);
+
+  // The client's assigned Health Coach — so a blood-report chase names the same
+  // person the care-work queue does, instead of a generic "Health Coach".
+  const { data: asg } = await sb.from("client_assignments").select("client_id, staff_id, staff:staff_id(name)").eq("discipline", "coach");
+  const coachBy = new Map<string, { id: string; name: string }>();
+  for (const a of (asg ?? []) as unknown as { client_id: string; staff_id: string | null; staff: { name: string } | null }[]) {
+    if (a.staff_id) coachBy.set(a.client_id, { id: a.staff_id, name: a.staff?.name ?? "Health Coach" });
+  }
+
   const flags: Flag[] = [];
 
   // ---- unbilled active packages (front desk raises the invoice) -------------
@@ -41,7 +50,16 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
   // ---- blood report awaited from the client --------------------------------
   for (const b of (blood ?? []) as { client_id: string | null; panel: string | null; submitted: boolean }[]) {
     if (b.submitted || !b.client_id) continue;
-    flags.push({ sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`, detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · chase the client`, href: `/clients/${b.client_id}`, cta: "View", chaseRole: { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` } });
+    const coach = coachBy.get(b.client_id);
+    flags.push({
+      sev: "med", title: `${nameOf(b.client_id)} — blood report awaited`,
+      detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · ${coach ? `follow-up owed by ${coach.name}` : "chase the client"}`,
+      href: `/clients/${b.client_id}`, cta: "View",
+      dedupeKey: `blood:${b.client_id}`,
+      // Name the assigned coach when there is one; otherwise chase the role.
+      nudge: coach ? { clientId: b.client_id, staffId: coach.id, label: "Blood report — awaiting client", who: coach.name } : undefined,
+      chaseRole: coach ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` },
+    });
   }
 
   // ---- new tablet intakes to complete --------------------------------------

@@ -90,6 +90,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         // coach; if none is assigned yet, chase the Health Coach role.
         const o = ownerFor(clientId, "coach");
         flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: "View",
+          dedupeKey: `blood:${clientId}`,
           nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
           chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: clientHref } });
       }

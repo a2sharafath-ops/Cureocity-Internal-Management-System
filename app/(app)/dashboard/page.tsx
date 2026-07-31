@@ -152,7 +152,13 @@ export default async function DashboardPage() {
   // Package-status panel already offer. One capability, one behaviour everywhere.
   const [fdFlags, careFlags, agenda] = await Promise.all([frontDeskFlags(TODAY), careWorkFlags(TODAY), todayAgenda(TODAY)]);
   const sevRank = { high: 0, med: 1, low: 2 } as const;
-  const opsFlags = [...fdFlags, ...careFlags].sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
+  // Dedupe tasks raised by both queues (e.g. a blood report appears in both the
+  // front-desk and care-work lists). Care flags go first so the named-owner
+  // version wins over the generic one.
+  const seenKey = new Set<string>();
+  const opsFlags = [...careFlags, ...fdFlags]
+    .filter((f) => { if (!f.dedupeKey) return true; if (seenKey.has(f.dedupeKey)) return false; seenKey.add(f.dedupeKey); return true; })
+    .sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
   const agendaDate = new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
   return (
     <div style={{ maxWidth: 1180 }}>
