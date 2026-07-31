@@ -38,12 +38,12 @@ export default async function PayslipPrintPage({
   const supabase = createClient();
   const [{ data: s }, { data: sal }, { data: pay }] = await Promise.all([
     supabase.from("staff").select("id, name, designation, role, department, work_location, date_of_joining, emp_code, bank_name, bank_account, ifsc").eq("id", params.staff).maybeSingle(),
-    supabase.from("salary_structures").select("basic, hra, allowances, pf, esi, pt, tds").eq("staff_id", params.staff).maybeSingle(),
+    supabase.from("salary_structures").select("basic, hra, allowances, gst, pf, esi, pt, tds").eq("staff_id", params.staff).maybeSingle(),
     supabase.from("payroll").select("lop_days").eq("staff_id", params.staff).eq("month", month).maybeSingle(),
   ]);
   if (!s) notFound();
   const st = s as { name: string; designation: string | null; role: string; department: string | null; work_location: string | null; date_of_joining: string | null; emp_code: string | null; bank_name: string | null; bank_account: string | null; ifsc: string | null };
-  const sr = (sal ?? {}) as { basic?: number; hra?: number; allowances?: number; pf?: number; esi?: number; pt?: number; tds?: number };
+  const sr = (sal ?? {}) as { basic?: number; hra?: number; allowances?: number; gst?: number; pf?: number; esi?: number; pt?: number; tds?: number };
 
   const settings = await getAppSettings();
   const logo = brandLogo(settings);
@@ -55,16 +55,16 @@ export default async function PayslipPrintPage({
   const lop = Number((pay as { lop_days?: number } | null)?.lop_days ?? 0);
   const paidDays = Math.max(0, totalDays - lop);
 
-  const basic = sr.basic ?? 0, hra = sr.hra ?? 0, allow = sr.allowances ?? 0;
+  const basic = sr.basic ?? 0, hra = sr.hra ?? 0, allow = sr.allowances ?? 0, gst = sr.gst ?? 0;
   const pf = sr.pf ?? 0, esi = sr.esi ?? 0, pt = sr.pt ?? 0, tds = sr.tds ?? 0;
-  const gross = basic + hra + allow;
+  const gross = basic + hra + allow + gst;
   const lopAmount = Math.round(lop * (gross / 30));
   const totalDeductions = pf + esi + pt + tds + lopAmount;
   const net = Math.max(0, gross - totalDeductions);
 
   const earnings: [string, number][] = [
     ["Basic Salary + DA", basic], ["House Rent Allowances", hra], ["Company Allowance", allow],
-    ["Conveyance Allowance", 0], ["Other Allowance", 0], ["Training Commission", 0], ["Sales Commission", 0], ["Over time work", 0],
+    ["GST", gst], ["Other Allowance", 0], ["Training Commission", 0], ["Sales Commission", 0], ["Over time work", 0],
   ];
   const deductions: [string, number][] = [
     ["EPF", pf], ["Health Insurance/ESI", esi], ["Professional Tax", pt], ["Advance Salary", 0],

@@ -14,11 +14,12 @@ import {
   saveLeaveType, decideLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc, updateStaffEmployment,
 } from "@/lib/actions";
 import EmployeeDocUpload from "@/components/EmployeeDocUpload";
+import BadgeIssuer from "@/components/BadgeIssuer";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; bank_name?: string | null; bank_account?: string | null; ifsc?: string | null };
+type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; bank_name?: string | null; bank_account?: string | null; ifsc?: string | null; badge_code?: string | null; pin?: string | null };
 
 export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string } }) {
   const me = await getProfile();
@@ -38,7 +39,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     { data: updData }, { data: mtData }, { data: comData }, { data: statData }, { data: candData }, { data: docData }, { data: purData },
     { data: ltData }, { data: holData }, { data: monthAttData }, { data: yearLeaveData }, { data: empDocData }, { data: salData },
   ] = await Promise.all([
-    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at, emp_code, work_location, bank_name, bank_account, ifsc").order("name"),
+    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at, emp_code, work_location, bank_name, bank_account, ifsc, badge_code, pin").order("name"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("leaves").select("id, staff_id, from_date, to_date, type, reason, status, staff(name, department)").order("created_at", { ascending: false }).limit(60),
     supabase.from("payroll").select("staff_id, base, lop_days, pf, net, status, payslip").eq("month", month),
@@ -55,7 +56,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     supabase.from("attendance").select("staff_id, date, status").gte("date", monthStart).lte("date", monthEnd),
     supabase.from("leaves").select("staff_id, type, from_date, to_date, status").eq("status", "approved").gte("from_date", `${year}-01-01`).lte("from_date", `${year}-12-31`),
     supabase.from("employee_documents").select("id, staff_id, title, kind, name, created_at").order("created_at", { ascending: false }),
-    supabase.from("salary_structures").select("staff_id, basic, hra, allowances, pf, esi, pt, tds, effective_from"),
+    supabase.from("salary_structures").select("staff_id, basic, hra, allowances, gst, pf, esi, pt, tds, effective_from"),
   ]);
 
   const staff = (staffData ?? []) as Staff[];
@@ -100,7 +101,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   };
   const holidays = (holData ?? []) as { id: string; date: string; name: string; kind: string }[];
   const empDocs = (empDocData ?? []) as { id: string; staff_id: string; title: string; kind: string; name: string | null; created_at: string }[];
-  const salaries = new Map(((salData ?? []) as { staff_id: string; basic: number; hra: number; allowances: number; pf: number; esi: number; pt: number; tds: number; effective_from: string | null }[]).map((s) => [s.staff_id, s]));
+  const salaries = new Map(((salData ?? []) as { staff_id: string; basic: number; hra: number; allowances: number; gst: number; pf: number; esi: number; pt: number; tds: number; effective_from: string | null }[]).map((s) => [s.staff_id, s]));
 
   // Monthly attendance sheet: staff_id → (day-of-month → status).
   const daysInMonth = new Date(Number(sheetMonth.slice(0, 4)), Number(sheetMonth.slice(5, 7)), 0).getDate();
@@ -164,7 +165,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
       {tab === "attendance" && (
         <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16, alignItems: "start" }}>
           <div style={{ ...box, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", padding: "14px 16px" }}><b>Attendance — today</b><span style={{ flex: 1 }} />{chip("var(--neutral-bg)", "var(--muted)", "Odoo portal + monthly sheet")}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px" }}><b>Attendance — today</b><span style={{ flex: 1 }} /><a href="/kiosk/attendance" target="_blank" rel="noopener" style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none" }}>📷 Open attendance kiosk</a></div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead><tr><th style={th}>Staff</th><th style={th}>Type</th><th style={th}>Today</th></tr></thead>
               <tbody>
@@ -362,7 +363,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
               const sal = salaries.get(selectedEmp.id);
               const salRec = (sal ?? {}) as Record<string, number>;
               const docs = empDocs.filter((d) => d.staff_id === selectedEmp.id);
-              const gross = (sal?.basic ?? 0) + (sal?.hra ?? 0) + (sal?.allowances ?? 0);
+              const gross = (sal?.basic ?? 0) + (sal?.hra ?? 0) + (sal?.allowances ?? 0) + (sal?.gst ?? 0);
               const ded = (sal?.pf ?? 0) + (sal?.esi ?? 0) + (sal?.pt ?? 0) + (sal?.tds ?? 0);
               return (<>
                 <div style={{ ...box, padding: "16px 18px" }}>
@@ -398,6 +399,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                     </tbody>
                   </table>
                 </div>
+                <BadgeIssuer staffId={selectedEmp.id} badge={selectedEmp.badge_code ?? null} pin={selectedEmp.pin ?? null} />
                 <div style={{ ...box, padding: "16px 18px" }}>
                   <b>Salary breakup</b>
                   <form action={saveSalaryStructure} style={{ marginTop: 10 }}>
@@ -405,7 +407,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
                       <div>
                         <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", marginBottom: 6 }}>Earnings</div>
-                        {([["basic", "Basic"], ["hra", "HRA"], ["allowances", "Allowances"]] as const).map(([k, l]) => (
+                        {([["basic", "Basic"], ["hra", "HRA"], ["allowances", "Allowances"], ["gst", "GST"]] as const).map(([k, l]) => (
                           <label key={k} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, fontSize: 13 }}><span style={{ flex: 1 }}>{l}</span><input name={k} type="number" min={0} defaultValue={salRec[k] ?? 0} style={{ ...inp, width: 120 }} /></label>
                         ))}
                       </div>
@@ -458,7 +460,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                   // The Salary breakup is the source of truth: base = gross,
                   // deductions = PF + ESI + PT + TDS, net = gross − deductions − LOP.
                   const sal = salaries.get(s.id);
-                  const gross = sal ? (sal.basic ?? 0) + (sal.hra ?? 0) + (sal.allowances ?? 0) : 0;
+                  const gross = sal ? (sal.basic ?? 0) + (sal.hra ?? 0) + (sal.allowances ?? 0) + (sal.gst ?? 0) : 0;
                   const ded = sal ? (sal.pf ?? 0) + (sal.esi ?? 0) + (sal.pt ?? 0) + (sal.tds ?? 0) : (r?.pf ?? 0);
                   const base = gross || r?.base || 0;
                   const lop = r?.lop_days ?? 0;
