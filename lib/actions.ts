@@ -3069,9 +3069,12 @@ export async function generatePayslip(formData: FormData) {
   const month = String(formData.get("month"));
   const base = Number(formData.get("base")) || 0;
   const lop_days = Number(formData.get("lop_days")) || 0;
-  const pf = Number(formData.get("pf")) || 1800;
+  const pf = Number(formData.get("pf")) || 0;
+  // Total statutory deductions from the salary breakup (PF + ESI + PT + TDS),
+  // so net matches the employee's Salary breakup, not just PF.
+  const deductions = Number(formData.get("deductions")) || pf;
   const perDay = base / 30;
-  const net = Math.max(0, base - lop_days * perDay - pf);
+  const net = Math.max(0, base - lop_days * perDay - deductions);
   const supabase = createClient();
   await supabase.from("payroll").upsert({ staff_id, month, base, lop_days, pf, net, payslip: true }, { onConflict: "staff_id,month" });
   await logAudit(p, "Payslip generated", null, month);
@@ -5415,6 +5418,21 @@ export async function publishDietChart(formData: FormData) {
   if ((dc as { status: string } | null)?.status !== "Approved") return; // not approved → no-op
   await supabase.from("diet_charts").update({ status: "Published" }).eq("id", id);
   await logAudit(p, "Diet chart published", id, null);
+  revalidatePath("/workspace");
+}
+
+// Publish & share directly, skipping MD review — for charts that don't need it.
+// Dietitian-owned; works from Draft / In review / Approved.
+export async function publishDietChartDirect(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
+  const id = String(formData.get("id"));
+  if (!id) return;
+  const supabase = createClient();
+  const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
+  if ((dc as { status: string } | null)?.status === "Published") return; // already live
+  await supabase.from("diet_charts").update({ status: "Published", published_at: new Date().toISOString() }).eq("id", id);
+  await logAudit(p, "Diet chart shared (published without review)", id, null);
   revalidatePath("/workspace");
 }
 

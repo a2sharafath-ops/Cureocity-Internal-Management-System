@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { addDietChart, updateDietChart, publishDietChart, deleteDietChart, submitDietChartForReview, reviewDietChart, aiDietDraftStructured } from "@/lib/actions";
+import { addDietChart, updateDietChart, publishDietChart, publishDietChartDirect, deleteDietChart, submitDietChartForReview, reviewDietChart, aiDietDraftStructured } from "@/lib/actions";
 
 export type DietChartRow = {
   id: string;
@@ -23,6 +23,22 @@ export type DietChartRow = {
 };
 
 const DEFAULT_ROWS: [string, string][] = [["Early Morning", ""], ["Breakfast", ""], ["Mid-Morning", ""], ["Lunch", ""], ["Evening", ""], ["Dinner", ""]];
+
+// Share a published chart: the client already sees it in their portal; this
+// copies the printable link so the dietitian can also send it directly.
+function ShareChartButton({ id }: { id: string }) {
+  const [done, setDone] = useState(false);
+  const share = async () => {
+    const url = `${window.location.origin}/diet-chart/${id}/print`;
+    try {
+      if (navigator.share) { await navigator.share({ title: "Diet plan", url }); }
+      else { await navigator.clipboard.writeText(url); setDone(true); setTimeout(() => setDone(false), 1800); }
+    } catch { /* dismissed */ }
+  };
+  return (
+    <button type="button" onClick={share} style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{done ? "✓ Link copied" : "Share"}</button>
+  );
+}
 
 export default function DietCharts({ charts, clients, canReview = false, canCompose = true }: { charts: DietChartRow[]; clients: { id: string; name: string }[]; canReview?: boolean; canCompose?: boolean }) {
   // Deep-linked from a "diet chart pending" reminder: ?client=<id> opens the
@@ -127,12 +143,18 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
               })()}
               <button type="button" onClick={() => setExpanded((e) => (e === dc.id ? null : dc.id))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expanded === dc.id ? "Hide" : "View"}</button>
               <a href={`/diet-chart/${dc.id}/print?auto=1`} target="_blank" rel="noopener" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)", textDecoration: "none" }}>PDF</a>
+              {dc.status === "Published" && <ShareChartButton id={dc.id} />}
 
               {dc.status === "Draft" && canCompose && (
                 <button type="button" onClick={() => (editing === dc.id ? setEditing(null) : startEdit(dc))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{editing === dc.id ? "Close" : "Edit"}</button>
               )}
               {dc.status === "Draft" && canCompose && (
                 <form action={submitDietChartForReview}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Submit for review</button></form>
+              )}
+              {/* Share now — publish directly when review isn't needed. Available
+                  on Draft and In review, alongside the review path. */}
+              {(dc.status === "Draft" || dc.status === "In review") && canCompose && (
+                <form action={publishDietChartDirect}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }} title="Publish to the client without MD review">Share now</button></form>
               )}
               {dc.status === "In review" && (canReview ? (
                 <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
