@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite } from "@/lib/roles";
+import { canSee, canWrite, canWorkFollowups } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { generateFollowups } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -13,7 +13,10 @@ export const dynamic = "force-dynamic";
 export default async function FollowupsPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/followups")) redirect("/dashboard");
-  const writer = canWrite(me.role);
+  const writer = canWorkFollowups(me.role);
+  // Bulk "Generate due" stays an ops action; the coach works the queue but
+  // doesn't regenerate it.
+  const canGenerate = canWrite(me.role);
   const today = todayISO();
   const supabase = createClient();
 
@@ -45,7 +48,7 @@ export default async function FollowupsPage() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 2 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Follow-ups</h1>
         <span style={{ flex: 1 }} />
-        {writer && (
+        {canGenerate && (
           <form action={generateFollowups}>
             <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Generate due</button>
           </form>
