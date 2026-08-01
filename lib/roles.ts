@@ -218,8 +218,18 @@ export function canClasses(role: string): boolean {
 }
 
 // Who can book / manage calendar appointments.
+// Who can VIEW the appointment calendar — ops roles plus every clinician (they
+// need to see their own schedule).
 export function canAppointments(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
+}
+
+// Who can EDIT the calendar — book, reschedule, cancel, change status. Front
+// desk owns scheduling; the Health Coach coordinates the client's journey and so
+// also books. The other clinicians (doctor/dietitian/trainer/psychologist) get a
+// read-only calendar and conduct the consults front desk / the coach booked.
+export function canEditAppointments(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk", "Health Coach"].includes(role);
 }
 
 // Who can manage retention (at-risk, NPS, referrals).

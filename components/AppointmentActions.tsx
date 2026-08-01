@@ -10,10 +10,12 @@ const hourLabel = (h: number) => { const am = h < 12; const hr = h % 12 === 0 ? 
 
 // Update or reschedule a booked appointment. Reschedule reveals a date/time
 // picker and calls rescheduleAppointment (no cancel-and-rebook needed).
-export default function AppointmentActions({ id, status, date, hour }: { id: string; status: string; date?: string; hour?: number }) {
+export default function AppointmentActions({ id, status, date, hour, canEdit = true }: { id: string; status: string; date?: string; hour?: number; canEdit?: boolean }) {
   const [open, setOpen] = useState(false);
   const [resch, setResch] = useState(false);
-  if (status !== "scheduled") return null;
+  // Read-only roles (non-editing clinicians) see the calendar but get no
+  // status / reschedule / cancel controls.
+  if (!canEdit || status !== "scheduled") return null;
   if (!open) {
     return <button type="button" onClick={() => setOpen(true)} style={{ ...btn, borderColor: "transparent", color: "var(--muted)", padding: "0 4px" }} title="Update">⋯</button>;
   }

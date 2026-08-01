@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -4331,7 +4331,7 @@ export async function toggleHabitSelf(formData: FormData) {
 
 export async function createAppointment(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const p = await getProfile();
-  if (!p || !canAppointments(p.role)) return { ok: false, error: "Not permitted" };
+  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
   const client_id = String(formData.get("client_id"));
   const date = String(formData.get("date") || "");
   if (!client_id || !date) return { ok: false, error: "Missing client or date" };
@@ -4449,7 +4449,7 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
 
 export async function setAppointmentStatus(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canAppointments(p.role)) return;
+  if (!p || !canEditAppointments(p.role)) return;
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["scheduled", "completed", "cancelled", "no_show"].includes(status)) return;
@@ -4464,7 +4464,7 @@ export async function setAppointmentStatus(formData: FormData) {
 // and the slot/clinician can be picked again. The care-team assignment is kept.
 export async function cancelBooking(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canAppointments(p.role)) return;
+  if (!p || !canEditAppointments(p.role)) return;
   const id = String(formData.get("appt_id") || "");
   if (!id) return;
   const supabase = createClient();
@@ -4479,7 +4479,7 @@ export async function cancelBooking(formData: FormData) {
 
 export async function rescheduleAppointment(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canAppointments(p.role)) return;
+  if (!p || !canEditAppointments(p.role)) return;
   const id = String(formData.get("id"));
   const date = String(formData.get("date") || "");
   const hour = Number(formData.get("hour"));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canSee, canBill, canManageInvoices, canEmr, canFinanceOps, canCompliance, canAppointments, canPos, canConsult } from "@/lib/roles";
+import { canSee, canBill, canManageInvoices, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canPos, canConsult } from "@/lib/roles";
 
 describe("canSee", () => {
   it("dashboard is visible to everyone", () => {
@@ -68,6 +68,21 @@ describe("permission helpers", () => {
     expect(canPos("Finance")).toBe(true);
     expect(canConsult("Psychologist")).toBe(true);
     expect(canConsult("Front Desk")).toBe(false);
+  });
+
+  it("appointment editing is limited; other clinicians view only", () => {
+    // Can edit: SA / Admin / Manager / Front Desk / Health Coach.
+    for (const r of ["Super Admin", "Administrator", "Manager", "Front Desk", "Health Coach"]) {
+      expect(canEditAppointments(r)).toBe(true);
+    }
+    // Can view but NOT edit: the other clinicians.
+    for (const r of ["Doctor", "Dietitian", "Fitness Trainer", "Psychologist"]) {
+      expect(canAppointments(r)).toBe(true);
+      expect(canEditAppointments(r)).toBe(false);
+    }
+    // No calendar access at all.
+    expect(canEditAppointments("Finance")).toBe(false);
+    expect(canEditAppointments("HR")).toBe(false);
   });
 });
 
