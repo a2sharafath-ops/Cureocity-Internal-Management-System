@@ -101,7 +101,11 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       // card on the client Overview, so don't also list it here — one flow, not
       // two.
       if (/session/i.test(step.label)) continue;
-      openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...FRONT_DESK });
+      // A booked-but-not-yet-held consult isn't an open ops action — it's
+      // scheduled and waiting on the clinician. Show it under Upcoming, not
+      // Open now, so Open now only lists work that still needs doing.
+      if (step.booked) upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info" });
+      else openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...FRONT_DESK });
     }
   }
 
