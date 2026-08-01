@@ -146,10 +146,11 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
         sev: overdue ? "high" : "med",
         title: `${f.clients?.name ?? "Client"} — diet chart explanation due`,
         detail: `Day 2 · ${overdue ? `was due ${fmtD(f.due_date)}` : "due today"} — schedule & deliver`,
-        // Take the coach straight to the Appointment Calendar, prefilled with
-        // this client + the coach discipline, so "Schedule" opens the booking
-        // screen (not their own workspace).
-        href: `/appointments?client=${f.client_id}&disc=${encodeURIComponent("Health Coach")}`,
+        // Open the Appointment Calendar prefilled to book the Day-2 diet chart
+        // explanation: it's a Diet Consultation delivered by the dietitian (the
+        // coach only owns scheduling it), so filter to Dietitian and set the
+        // correct type — not the coach as provider.
+        href: `/appointments?client=${f.client_id}&disc=Dietitian&type=${encodeURIComponent("Diet Chart Explanation")}`,
         cta: "Schedule",
       });
     }
