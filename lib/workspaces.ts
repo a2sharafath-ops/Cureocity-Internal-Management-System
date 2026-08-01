@@ -163,24 +163,29 @@ const COACH_GOALS = ["healthy living", "regulate mood disorders", "manage health
 const PSYCH_GOALS = ["regulate mood disorders", "mental wellbeing", "manage stress", "sleep", "anxiety"];
 
 // Which clients belong in a given role's workspace.
-export function scopeClients(role: WsRoleKey, clients: WsClient[], trainingClientIds: Set<string>, assignedIds: Set<string> = new Set()): WsClient[] {
-  // Care-team assignment is the source of truth — a client assigned to this
-  // discipline always shows, regardless of legacy package_id / goal heuristics.
+export function scopeClients(role: WsRoleKey, clients: WsClient[], trainingClientIds: Set<string>, assignedIds: Set<string> = new Set(), otherClinicianIds: Set<string> = new Set()): WsClient[] {
+  // Care-team assignment is the source of truth — a client assigned to THIS
+  // clinician always shows, regardless of legacy package_id / goal heuristics.
   const assigned = (c: WsClient) => assignedIds.has(c.id);
+  // …and a client explicitly assigned to a *different* clinician of the same
+  // discipline must never leak in via those heuristics (so a new coach doesn't
+  // inherit another coach's roster just because the client is Comprehensive).
+  const ownedByOther = (c: WsClient) => otherClinicianIds.has(c.id) && !assignedIds.has(c.id);
+  const heuristic = (c: WsClient, match: boolean) => match && !ownedByOther(c);
   switch (role) {
     case "trainer":
-      return clients.filter((c) => assigned(c) || trainingClientIds.has(c.id) || isDietPkg(c.package_id));
+      return clients.filter((c) => assigned(c) || heuristic(c, trainingClientIds.has(c.id) || isDietPkg(c.package_id)));
     case "diet":
-      return clients.filter((c) => assigned(c) || isDietPkg(c.package_id));
+      return clients.filter((c) => assigned(c) || heuristic(c, isDietPkg(c.package_id)));
     case "doctor":
-      return clients.filter((c) => assigned(c) || hasCondition(c) || isBluePrint(c.package_id));
+      return clients.filter((c) => assigned(c) || heuristic(c, hasCondition(c) || isBluePrint(c.package_id)));
     case "coach":
       return clients.filter(
-        (c) => assigned(c) || isBluePrint(c.package_id) || (c.goals ?? []).some((g) => COACH_GOALS.includes(g.toLowerCase())),
+        (c) => assigned(c) || heuristic(c, isBluePrint(c.package_id) || (c.goals ?? []).some((g) => COACH_GOALS.includes(g.toLowerCase()))),
       );
     case "psych":
       return clients.filter(
-        (c) => assigned(c) || isBluePrint(c.package_id) || (c.goals ?? []).some((g) => PSYCH_GOALS.some((p) => g.toLowerCase().includes(p))),
+        (c) => assigned(c) || heuristic(c, isBluePrint(c.package_id) || (c.goals ?? []).some((g) => PSYCH_GOALS.some((p) => g.toLowerCase().includes(p)))),
       );
     default:
       return clients;

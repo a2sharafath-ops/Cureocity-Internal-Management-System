@@ -102,18 +102,29 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // Clients whose care team includes this workspace's discipline — the source of
   // truth, so PT/Comprehensive clients show for their assigned trainer/coach.
   const wsDiscKey = ({ doctor: "doctor", diet: "dietitian", trainer: "trainer", coach: "coach", psych: "psychologist" } as Record<string, string>)[roleKey];
-  const { data: asgData } = await supabase.from("client_assignments").select("client_id").eq("discipline", wsDiscKey);
-  const assignedIds = new Set(((asgData ?? []) as { client_id: string }[]).map((a) => a.client_id));
-  // Also treat a booked appointment as ownership: any client with a non-cancelled
-  // appointment whose provider is in this discipline belongs on the roster — a
-  // clinician shouldn't have an appointment with someone who isn't in "My
-  // clients". This covers the gap before the care-team row is written.
-  const { data: apptOwn } = await supabase
-    .from("appointments").select("client_id, staff:provider_id(role)").neq("status", "cancelled").not("client_id", "is", null);
-  for (const a of (apptOwn ?? []) as unknown as { client_id: string | null; staff: { role: string } | null }[]) {
-    if (a.client_id && WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind) assignedIds.add(a.client_id);
+  const { data: asgData } = await supabase.from("client_assignments").select("client_id, staff_id").eq("discipline", wsDiscKey);
+  // A real clinician login sees only THEIR assigned clients; an admin previewing
+  // a persona (no staffId) sees the whole discipline. Clients assigned to a
+  // *different* clinician of this discipline are tracked separately so the
+  // heuristic fallback in scopeClients never leaks them onto this roster (e.g. a
+  // newly added coach must not inherit another coach's clients).
+  const assignedIds = new Set<string>();
+  const otherClinicianIds = new Set<string>();
+  for (const a of (asgData ?? []) as { client_id: string; staff_id: string | null }[]) {
+    if (!scopeToStaff || a.staff_id === me.staffId) assignedIds.add(a.client_id);
+    else if (a.staff_id) otherClinicianIds.add(a.client_id);
   }
-  const scoped = scopeClients(roleKey, allClients, trainingIds, assignedIds);
+  // Also treat a booked appointment as ownership: a non-cancelled appointment
+  // whose provider is this clinician (or this discipline, in persona preview)
+  // puts the client on the roster before the care-team row is written.
+  const { data: apptOwn } = await supabase
+    .from("appointments").select("client_id, provider_id, staff:provider_id(role)").neq("status", "cancelled").not("client_id", "is", null);
+  for (const a of (apptOwn ?? []) as unknown as { client_id: string | null; provider_id: string | null; staff: { role: string } | null }[]) {
+    if (!a.client_id || WS_ROLE_TO_KIND[a.staff?.role ?? ""] !== role.kind) continue;
+    if (!scopeToStaff || a.provider_id === me.staffId) assignedIds.add(a.client_id);
+    else if (a.provider_id) otherClinicianIds.add(a.client_id);
+  }
+  const scoped = scopeClients(roleKey, allClients, trainingIds, assignedIds, otherClinicianIds);
 
   // "Needs your attention" for the clinician — their own outstanding care-work
   // deliverables (diet chart, workout plan, blood-report chasing, etc.),
