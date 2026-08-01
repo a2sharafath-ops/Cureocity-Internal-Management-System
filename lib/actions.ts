@@ -780,61 +780,11 @@ export async function updateLead(formData: FormData) {
 // Convert a lead into a client on a chosen package — creates the client,
 // auto-schedules sessions, raises the package invoice, and lands on the client's
 // billing so payment can be collected.
-export async function convertLeadWithPackage(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canWrite(p.role)) return;
-  const id = String(formData.get("id"));
-  const package_id = String(formData.get("package_id") || "") || null;
-  const joined = String(formData.get("joined") || todayISO());
-  const supabase = createClient();
-  const { data: lead } = await supabase.from("leads").select("name, phone").eq("id", id).maybeSingle();
-  if (!lead?.name) return;
-
-  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
-  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
-  const { data: inserted } = await supabase.from("clients").insert({
-    code, name: lead.name, phone: lead.phone ?? null, joined,
-    package_id, used: 0, verified: true, converted_from: id, pro_id: "t0",
-  }).select("id").single();
-
-  // Experience bookings move across before anything else, so the client's
-  // history starts at their first visit rather than at payment.
-  if (inserted) await carryExperienceToClient(supabase, id, inserted.id);
-
-  if (inserted && package_id) {
-    const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
-    // Diagnostic (BluePrint) and front-desk-booked tracks (PT / Comprehensive)
-    // don't auto-schedule strength workouts.
-    const cat = packageCategory(package_id, pkg?.is_facility ?? false);
-    const autoBuildSessions = cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY && cat !== "blueprint";
-    if (pkg && !pkg.is_facility && pkg.sessions > 0 && autoBuildSessions) {
-      await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
-      await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, joined, pkg.sessions));
-    }
-    if (pkg) {
-      // Record the package in client_packages too — not just the legacy
-      // clients.package_id — so membership checks, renewals and status panels
-      // all see it. Without this a membership sold here is invisible to the
-      // membership-prerequisite rule and blocks later PT/Comprehensive sales.
-      await supabase.from("client_packages").insert({
-        client_id: inserted.id, package_id, package_name: pkg.name,
-        category: cat, start_date: joined,
-        end_date: pkg.validity ? addDaysISO(joined, pkg.validity) : null,
-        price: pkg.price ?? 0, status: "active", created_by: p.name,
-      });
-      const num = await nextInvoiceNum(supabase);
-      await supabase.from("invoices").insert({
-        num, client_id: inserted.id, description: `${pkg.name} package`, amount: pkg.price ?? 0,
-        status: "Unpaid", issued_date: todayISO(), created_by: p.name,
-      });
-    }
-  }
-  await supabase.from("leads").update({ stage: "5-Close" }).eq("id", id);
-  await logAudit(p, "Lead converted to client", lead.name, code);
-  // On a CRM-only deployment the client card isn't reachable, so send them
-  // back to the pipeline rather than bouncing them off a page that redirects.
-  if (inserted) redirect(canSee(p.role, "/clients") ? `/clients/${inserted.id}?tab=timeline` : "/leads");
-}
+// NOTE: the package-carrying quick-convert (convertLeadWithPackage) was removed.
+// It duplicated convertLeadVerified but skipped care-team assignment, journey
+// start and the membership-prerequisite rule, and only IT carried the trial
+// history across — so it produced half-built clients. Conversion now has a
+// single entry point: sendLeadOtp → convertLeadVerified (below).
 
 // Send a 6-digit OTP to the lead's phone for conversion consent. SMS isn't
 // wired, so the code is returned for the front desk to read to the client; once
@@ -894,16 +844,24 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
     }
   }
 
-  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
-  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
+  const code = await nextClientCode(supabase);
   // pro_id is left null here — the assignment engine fills it in below, once
   // it knows the client's booking and the current rotation state.
   const { data: inserted } = await supabase.from("clients").insert({
     code, name: lead.name, phone: lead.phone ?? null, joined,
     package_id, used: 0, verified: true, consent_tnc: true, consent_waiver: true, converted_from: id,
   }).select("id").single();
+  // Guard the insert explicitly. Previously a failed insert fell through to the
+  // `{ ok: true }` at the end and reported a success that never happened.
+  if (!inserted) return { ok: false, error: "Could not create the client — please try again." };
 
-  if (inserted && package_id) {
+  // Move the lead's trial assessment — its appointment / session and the
+  // consultation + summary that sold the package — onto the new client, so the
+  // visit that closed the sale becomes part of their record. (The retired
+  // quick-convert did this; the live path must too, or the history is orphaned.)
+  await carryExperienceToClient(supabase, id, inserted.id);
+
+  if (package_id) {
     const { data: pkg } = await supabase.from("packages").select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
     const cat0 = packageCategory(package_id, pkg?.is_facility ?? false);
 
@@ -2622,8 +2580,23 @@ export async function markThreadRead(clientId: string) {
 // ---- billing / invoices ----------------------------------------------------
 
 async function nextInvoiceNum(supabase: ReturnType<typeof createClient>) {
-  const { data } = await supabase.from("invoices").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
-  return ((data?.num as number | null) ?? 0) + 1;
+  // Race-safe: a Postgres sequence (next_invoice_num) hands out each number
+  // exactly once, so two concurrent conversions can't collide. Falls back to
+  // max()+1 when the DB function isn't present yet (i.e. before the migration
+  // is run), so a deploy is safe regardless of ordering.
+  const { data, error } = await supabase.rpc("next_invoice_num");
+  if (!error && typeof data === "number") return data;
+  const { data: row } = await supabase.from("invoices").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
+  return ((row?.num as number | null) ?? 0) + 1;
+}
+
+async function nextClientCode(supabase: ReturnType<typeof createClient>) {
+  // Same idea for the CUR-### code — a sequence avoids collisions and the reuse
+  // that count()+1 caused when a client was deleted. Falls back pre-migration.
+  const { data, error } = await supabase.rpc("next_client_code");
+  if (!error && typeof data === "string" && data) return data;
+  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
+  return "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
 }
 
 export async function createInvoice(formData: FormData) {
@@ -5300,8 +5273,7 @@ export async function createClientRecord(formData: FormData) {
   if (!c.name) return;
 
   // next client code
-  const { count } = await supabase.from("clients").select("id", { count: "exact", head: true });
-  const code = "CUR-" + String((count ?? 0) + 1).padStart(3, "0");
+  const code = await nextClientCode(supabase);
 
   const { data: inserted } = await supabase
     .from("clients")
