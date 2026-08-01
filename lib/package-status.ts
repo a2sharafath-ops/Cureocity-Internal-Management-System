@@ -9,10 +9,9 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
-import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
-import { buildOwnerResolver, outstandingDeliverables, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
 
 export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
 
@@ -157,15 +156,10 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       // the catalogue (name/category/day) to build a pre-filled Book link.
       const { data: svcData } = await sb.from("services").select("name, category, day_offset");
       const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
-      const catOf = makeCatOf(services);
       const spanDays = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
-      for (const m of milestoneDates(start, cyclesFor(spanDays))) {
-        const svc = serviceForMilestone(m.apptType, m.from, services);
-        const satisfied = milestoneSatisfied((appts ?? []) as { type: string | null; date: string | null; status: string }[], { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
-        if (satisfied) continue;
-        const bookHref = milestoneBookHref(clientId, m.apptType, m.from, services);
-        if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: bookHref, tone: "warn", ...FRONT_DESK });
-        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: bookHref, tone: "info", sortKey: m.dueDate, ...FRONT_DESK });
+      for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(spanDays)), (appts ?? []) as ApptMatchRow[], services)) {
+        if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: m.bookHref, tone: "warn", ...FRONT_DESK });
+        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: m.bookHref, tone: "info", sortKey: m.dueDate, ...FRONT_DESK });
       }
     }
   }

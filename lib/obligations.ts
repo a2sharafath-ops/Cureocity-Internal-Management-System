@@ -6,6 +6,8 @@
 // can't drift. No behaviour change — callers get the same results, from one
 // implementation.
 
+import { makeCatOf, serviceForMilestone, milestoneSatisfied, milestoneBookHref } from "@/lib/appt-match";
+
 // Provider staff role → care-team discipline key.
 export const ROLE_TO_DISC: Record<string, string> = {
   Doctor: "doctor",
@@ -54,6 +56,32 @@ export function buildOwnerResolver(
 //   • dietchart — Comprehensive client whose diet consult is done but no chart.
 //   • workout   — Comprehensive OR PT client whose fitness assessment is done
 //     but no workout plan exists.
+// ---- calendar milestones ----------------------------------------------------
+// The comprehensive/PT milestone loop (resolve each milestone's service, then
+// check whether a booking already satisfies it) was copy-pasted across
+// package-status, care-attention and today-agenda. This centralises the
+// satisfied-check + pre-filled Book link; callers still decide WHICH milestones
+// to surface (overdue / upcoming / due-today) and how to render them.
+export type MilestoneLike = { apptType: string; from: number; fromDate: string; dueDate: string; label: string; gate: string };
+export type ServiceRow = { name: string; category: string; day_offset: number | null };
+export type ApptMatchRow = { type: string | null; date: string | null; status: string };
+
+export function unsatisfiedMilestones(
+  clientId: string,
+  dated: MilestoneLike[],
+  appts: ApptMatchRow[],
+  services: ServiceRow[],
+): (MilestoneLike & { bookHref: string })[] {
+  const catOf = makeCatOf(services);
+  const out: (MilestoneLike & { bookHref: string })[] = [];
+  for (const m of dated) {
+    const svc = serviceForMilestone(m.apptType, m.from, services);
+    if (milestoneSatisfied(appts, { category: m.apptType, fromDate: m.fromDate, service: svc, catOf })) continue;
+    out.push({ ...m, bookHref: milestoneBookHref(clientId, m.apptType, m.from, services) });
+  }
+  return out;
+}
+
 export type DeliverableKey = "compblood" | "dietchart" | "workout";
 
 export function outstandingDeliverables(x: {

@@ -13,7 +13,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { COMPREHENSIVE_CATEGORY, milestoneDates as compMilestones, cyclesFor as compCycles } from "@/lib/comprehensive";
 import { PT_CATEGORY, milestoneDates as ptMilestones, cyclesFor as ptCycles } from "@/lib/pt";
-import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
+import { unsatisfiedMilestones } from "@/lib/obligations";
 
 export type AgendaKind = "appointment" | "session" | "followup" | "deadline";
 
@@ -95,7 +95,6 @@ export async function todayAgenda(today: string): Promise<Agenda> {
 
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
   const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
-  const catOf = makeCatOf(services);
   const deadlines: AgendaItem[] = [];
   for (const cp of (cps ?? []) as { client_id: string; category: string; start_date: string | null; end_date: string | null }[]) {
     const start = protoStart.get(cp.client_id) ?? cp.start_date;
@@ -105,15 +104,13 @@ export async function todayAgenda(today: string): Promise<Agenda> {
     const dated = cp.category === PT_CATEGORY
       ? ptMilestones(start, ptCycles(spanDays))
       : compMilestones(start, compCycles(spanDays));
-    for (const m of dated) {
+    // Shared satisfied-check + Book link; we only surface milestones due *today*.
+    for (const m of unsatisfiedMilestones(cp.client_id, dated, clientAppts, services)) {
       if (m.dueDate !== today) continue;
-      const svc = serviceForMilestone(m.apptType, m.from, services);
-      const satisfied = milestoneSatisfied(clientAppts, { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
-      if (satisfied) continue;
       deadlines.push({
         id: `${cp.client_id}-${m.gate}`, kind: "deadline", clientId: cp.client_id, clientName: nameOf.get(cp.client_id) ?? "—",
         label: `${m.label} due`, time: null, done: false, overdue: false,
-        href: milestoneBookHref(cp.client_id, m.apptType, m.from, services),
+        href: m.bookHref,
       });
     }
   }

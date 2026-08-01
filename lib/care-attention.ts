@@ -7,8 +7,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
-import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
-import { buildOwnerResolver, outstandingDeliverables, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -40,7 +39,6 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
   // Service catalogue → category resolver + pre-filled Book links.
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
   const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
-  const catOf = makeCatOf(services);
 
   const name = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
   const catsBy = new Map<string, { category: string; start_date: string | null; end_date: string | null }[]>();
@@ -111,15 +109,10 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
       if (start) {
         const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
-        for (const m of milestoneDates(start, cyclesFor(span))) {
-          if (today <= m.dueDate) continue;
-          const svc = serviceForMilestone(m.apptType, m.from, services);
-          const satisfied = milestoneSatisfied(apptsBy.get(clientId) ?? [], { category: m.apptType, fromDate: m.fromDate, service: svc, catOf });
-          if (!satisfied) {
-            const bookHref = milestoneBookHref(clientId, m.apptType, m.from, services);
-            flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: bookHref, cta: "Book",
-              chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: `Book ${m.label}`, clientId, href: bookHref } });
-          }
+        for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(span)), apptsBy.get(clientId) ?? [], services)) {
+          if (today <= m.dueDate) continue; // dashboard shows only overdue milestones
+          flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: m.bookHref, cta: "Book",
+            chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: `Book ${m.label}`, clientId, href: m.bookHref } });
         }
       }
     }
