@@ -125,10 +125,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer"), coach = ownerBy.get("coach");
   if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
   if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
-  // Day-2 diet chart explanation — the Health Coach owns scheduling it (once the
-  // dietitian's chart draft exists), so it's named/chased against the assigned
-  // coach rather than front desk.
-  if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage)) {
+  // Day-2 diet chart explanation — the Health Coach owns scheduling it, but only
+  // once the dietitian's chart draft exists (you can't explain a chart that
+  // hasn't been written). Until then the "Diet chart — not drafted" item above
+  // is what's outstanding. Chased against the assigned coach, not front desk.
+  const hasChart = ((charts ?? []) as unknown[]).length > 0;
+  if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && hasChart) {
     const coachOwned: Pick<StatusItem, "ownerStaffId" | "ownerName" | "chaseRoles" | "chaseWho"> =
       coach ? { ownerStaffId: coach.id, ownerName: coach.name, chaseRoles: ["Health Coach"], chaseWho: "Health Coach" }
             : { chaseRoles: ["Health Coach"], chaseWho: "Health Coach" };

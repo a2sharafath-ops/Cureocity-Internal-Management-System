@@ -145,13 +145,18 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // of care-team owner resolution.
   if (roleKey === "coach" && scoped.length) {
     const scopedIds = scoped.map((c) => c.id);
-    const { data: deRows } = await supabase
-      .from("followups").select("client_id, label, day, due_date, stage, clients(name)")
-      .in("client_id", scopedIds).eq("day", 2).lte("due_date", today);
+    const [{ data: deRows }, { data: chartRows }] = await Promise.all([
+      supabase.from("followups").select("client_id, label, day, due_date, stage, clients(name)")
+        .in("client_id", scopedIds).eq("day", 2).lte("due_date", today),
+      supabase.from("diet_charts").select("client_id").in("client_id", scopedIds),
+    ]);
+    // The explanation is only actionable once the dietitian's chart draft exists
+    // — you can't explain a chart that hasn't been written.
+    const hasChart = new Set(((chartRows ?? []) as { client_id: string }[]).map((r) => r.client_id));
     const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
     const fmtD = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
     for (const f of (deRows ?? []) as unknown as { client_id: string; label: string; due_date: string; stage: string; clients: { name: string } | null }[]) {
-      if (!/explanation/i.test(f.label) || FU_CLOSED.has(f.stage)) continue;
+      if (!/explanation/i.test(f.label) || FU_CLOSED.has(f.stage) || !hasChart.has(f.client_id)) continue;
       const overdue = f.due_date < today;
       myAttention.unshift({
         sev: overdue ? "high" : "med",
