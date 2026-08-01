@@ -39,8 +39,16 @@ export async function loadPool(supabase: DB, branch?: string | null): Promise<Re
   const { data: staffRows } = await q;
   const staff = (staffRows ?? []) as { id: string; name: string; role: string; created_at: string }[];
 
-  const { data: assignRows } = await supabase.from("client_assignments").select("staff_id, discipline");
-  const assigns = (assignRows ?? []) as { staff_id: string | null; discipline: string }[];
+  const [{ data: assignRows }, { data: activeCps }] = await Promise.all([
+    supabase.from("client_assignments").select("staff_id, discipline, client_id"),
+    supabase.from("client_packages").select("client_id").eq("status", "active"),
+  ]);
+  const assigns = (assignRows ?? []) as { staff_id: string | null; discipline: string; client_id: string }[];
+  // Rotation load = CURRENT active caseload, not lifetime. Assignments for
+  // churned clients (no active package) don't count — otherwise a coach who has
+  // cycled through many clients shows a permanently high load and stops getting
+  // new ones even when their live caseload is small.
+  const activeClients = new Set(((activeCps ?? []) as { client_id: string }[]).map((r) => r.client_id));
 
   const pool = {} as Record<Discipline, Candidate[]>;
   for (const d of DISCIPLINES) {
@@ -50,7 +58,7 @@ export async function loadPool(supabase: DB, branch?: string | null): Promise<Re
         id: s.id,
         name: s.name,
         joined: s.created_at ?? "",
-        load: assigns.filter((a) => a.staff_id === s.id && a.discipline === d).length,
+        load: assigns.filter((a) => a.staff_id === s.id && a.discipline === d && activeClients.has(a.client_id)).length,
       }));
   }
   return pool;
@@ -70,15 +78,24 @@ export async function assignCareTeam(
     .from("clients").select("id, branch").eq("id", clientId).maybeSingle();
   if (!client) return [];
 
-  const [{ data: apptRows }, { data: busyRows }, { data: existingRows }] = await Promise.all([
+  const [{ data: apptRows }, { data: busyRows }, { data: apptBusyRows }, { data: existingRows }] = await Promise.all([
     supabase.from("appointments").select("provider_id, type, date, hour, status").eq("client_id", clientId),
     supabase.from("sessions").select("trainer_id, date, hour").eq("status", "scheduled"),
+    supabase.from("appointments").select("provider_id, date, hour, status").neq("status", "cancelled"),
     supabase.from("client_assignments").select("discipline, staff_id").eq("client_id", clientId),
   ]);
 
   const bookings = (apptRows ?? []) as Booking[];
-  const busy = ((busyRows ?? []) as { trainer_id: string | null; date: string; hour: number }[])
-    .filter((b): b is Busy => Boolean(b.trainer_id));
+  // A trainer is "busy" at a slot if they have a scheduled strength session OR a
+  // (non-cancelled) appointment there — a fitness assessment blocks the slot too.
+  // freeAt matches on the trainer's id, so non-trainer providers in this list
+  // simply never collide with a trainer candidate.
+  const busy: Busy[] = [
+    ...((busyRows ?? []) as { trainer_id: string | null; date: string; hour: number }[])
+      .filter((b): b is Busy => Boolean(b.trainer_id)),
+    ...((apptBusyRows ?? []) as { provider_id: string | null; date: string; hour: number }[])
+      .filter((a) => a.provider_id).map((a) => ({ trainer_id: a.provider_id as string, date: a.date, hour: a.hour })),
+  ];
   const existing = new Set(
     ((existingRows ?? []) as { discipline: string; staff_id: string | null }[])
       .filter((r) => r.staff_id).map((r) => r.discipline)
