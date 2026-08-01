@@ -45,3 +45,29 @@ export function buildOwnerResolver(
   }
   return (clientId, discipline) => assigned.get(`${clientId}|${discipline}`) ?? fallback.get(`${clientId}|${discipline}`);
 }
+
+// The clinician deliverables the onboarding ladder doesn't track: the
+// comprehensive blood report, the diet chart, and the workout plan. Pure
+// detection only — each caller maps these keys to its own label / owner / link.
+//   • compblood — Comprehensive client with a comprehensive blood row that
+//     hasn't been submitted (null = no row on file yet → not outstanding here).
+//   • dietchart — Comprehensive client whose diet consult is done but no chart.
+//   • workout   — Comprehensive OR PT client whose fitness assessment is done
+//     but no workout plan exists.
+export type DeliverableKey = "compblood" | "dietchart" | "workout";
+
+export function outstandingDeliverables(x: {
+  isComp: boolean;
+  isPt: boolean;
+  dietConsultDone: boolean;
+  trainerConsultDone: boolean;
+  hasChart: boolean;
+  hasWorkout: boolean;
+  compBloodSubmitted: boolean | null;
+}): DeliverableKey[] {
+  const out: DeliverableKey[] = [];
+  if (x.isComp && x.compBloodSubmitted === false) out.push("compblood");
+  if (x.isComp && x.dietConsultDone && !x.hasChart) out.push("dietchart");
+  if ((x.isComp || x.isPt) && x.trainerConsultDone && !x.hasWorkout) out.push("workout");
+  return out;
+}

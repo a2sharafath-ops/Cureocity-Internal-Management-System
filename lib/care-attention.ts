@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
 import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
-import { buildOwnerResolver, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -74,8 +74,14 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
 
     if (cats.has("comprehensive")) {
       const comp = rows.find((r) => r.category === "comprehensive");
-      const sub = bloodBy.get(clientId)?.get("comprehensive");
-      if (sub === false) {
+      // Shared detection — same rules as the client-card package-status engine.
+      const deliv = new Set(outstandingDeliverables({
+        isComp: true, isPt: cats.has("training"),
+        dietConsultDone: done.has("Diet"), trainerConsultDone: done.has("Trainer"),
+        hasChart: hasChart.has(clientId), hasWorkout: hasWorkout.has(clientId),
+        compBloodSubmitted: bloodBy.get(clientId)?.get("comprehensive") ?? null,
+      }));
+      if (deliv.has("compblood")) {
         // Chasing the client for the report is the Health Coach's job (they own
         // the client relationship for PT / Comprehensive). Nudge the assigned
         // coach; if none is assigned yet, chase the Health Coach role.
@@ -85,13 +91,13 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
           nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
           chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: clientHref } });
       }
-      if (done.has("Diet") && !hasChart.has(clientId)) {
+      if (deliv.has("dietchart")) {
         const o = ownerFor(clientId, "dietitian");
         flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: "View",
           nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
           chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: clientHref } });
       }
-      if (done.has("Trainer") && !hasWorkout.has(clientId)) {
+      if (deliv.has("workout")) {
         const o = ownerFor(clientId, "trainer");
         flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: "View",
           nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
