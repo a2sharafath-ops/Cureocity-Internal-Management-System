@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { loadClientStatuses, clientStatus, disciplineForRole, type ClientStatus } from "@/lib/client-status";
-import { canSee } from "@/lib/roles";
+import { canSee, canEditAppointments } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import AppointmentsView, { type ViewAppt, type Provider, type Unsched } from "@/components/AppointmentsView";
@@ -193,6 +193,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         providerKind={providerKind} bookedKinds={bookedKinds}
         serviceTypes={serviceTypes}
         careTeamByClient={careTeamByClient}
+        canEdit={canEditAppointments(me.role)}
       />
 
       <div style={{ marginTop: 14, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>

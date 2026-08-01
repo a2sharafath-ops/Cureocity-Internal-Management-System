@@ -32,7 +32,7 @@ function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDate
 
 export default function AppointmentsView({
   today, days, hours, appts, providers, clients, unscheduled = [], weekLabel, prevHref, nextHref, isThisWeek, statusByClient = {},
-  providerKind = {}, bookedKinds = {}, serviceTypes = [], careTeamByClient = {},
+  providerKind = {}, bookedKinds = {}, serviceTypes = [], careTeamByClient = {}, canEdit = true,
 }: {
   today: string; days: string[]; hours: number[]; appts: ViewAppt[];
   providers: Provider[]; clients: { id: string; name: string }[]; unscheduled?: Unsched[];
@@ -47,6 +47,9 @@ export default function AppointmentsView({
   /** client id → { discipline display name → assigned staff id }. Used to
    *  auto-fill the provider once a client + discipline are chosen. */
   careTeamByClient?: Record<string, Record<string, string>>;
+  /** Whether the viewer may book / reschedule / cancel. Read-only clinicians see
+   *  the calendar but no write controls. */
+  canEdit?: boolean;
 }) {
   const navBtn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 13, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 };
   const [tab, setTab] = useState<"calendar" | "tracker" | "list" | "records" | "unscheduled">("calendar");
@@ -156,11 +159,12 @@ export default function AppointmentsView({
     return <span style={{ background: bg, color: fg, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{s.replace("_", " ")}</span>;
   };
 
-  const openBooking = (date: string, hour: number) => setBooking({ open: true, date, hour, provider: "", client: "" });
+  const openBooking = (date: string, hour: number) => { if (!canEdit) return; setBooking({ open: true, date, hour, provider: "", client: "" }); };
   const visibleUnsched = unscheduled.filter((u) => disc === "All" || u.disc === disc);
   // Book one of the "to book" items: pre-fill the form with its client and
   // filter clinicians to its discipline, then open it.
   const bookUnsched = (u: Unsched) => {
+    if (!canEdit) return;
     setDisc(DISCIPLINES.includes(u.disc) ? u.disc : "All");
     setBooking({ open: true, date: today, hour: 10, provider: "", client: u.clientId, taskId: u.id });
   };
@@ -189,7 +193,9 @@ export default function AppointmentsView({
           <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Calendar · tracker · list · records — consultations, assessments &amp; follow-ups</p>
         </div>
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "", client: "" })} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
+        {canEdit
+          ? <button type="button" onClick={() => setBooking({ open: true, date: today, hour: 10, provider: "", client: "" })} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ New Booking</button>
+          : <span style={{ fontSize: 12.5, color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 999, padding: "5px 12px" }}>View only</span>}
       </div>
 
       {/* week nav */}
@@ -286,7 +292,7 @@ export default function AppointmentsView({
                               </div>
                               <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{a.title ?? a.type}{a.providerName ? ` · ${a.providerName}` : ""}</div>
                               <div style={{ marginTop: 2 }}>{statusMark(a.status)}</div>
-                              <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} />
+                              <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} canEdit={canEdit} />
                             </div>
                           );
                         })}
@@ -317,7 +323,7 @@ export default function AppointmentsView({
                 <span style={{ width: 10, height: 10, borderRadius: "50%", background: provColor(a.provider_id) }} />
                 <b style={{ minWidth: 120 }}>{fmtDate(a.date)} · {hourLabel(a.hour)}</b>
                 <span style={{ flex: 1 }}>{a.clientName ?? "—"} <span style={{ color: "var(--muted)" }}>· {a.title ?? a.type} · {a.providerName ?? "any"}</span>{a.client_id && statusByClient[a.client_id] ? <span style={{ marginLeft: 6 }}><ClientStatusBadge status={statusByClient[a.client_id]} size="sm" /></span> : null}</span>
-                <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} />
+                <AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} canEdit={canEdit} />
               </div>
             ))}
           </div>
@@ -366,7 +372,7 @@ export default function AppointmentsView({
                     <td style={{ ...cell, color: "var(--muted)" }}>{u.category ?? u.disc}</td>
                     <td style={cell}>{u.due ? fmtDate(u.due) : "Set on booking"}</td>
                     <td style={cell}>{dueBadge(u.due)}</td>
-                    <td style={cell}><button type="button" onClick={() => bookUnsched(u)} style={bookBtn}>Book</button></td>
+                    <td style={cell}>{canEdit ? <button type="button" onClick={() => bookUnsched(u)} style={bookBtn}>Book</button> : <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -406,7 +412,7 @@ export default function AppointmentsView({
                   <td style={{ padding: "10px 14px" }}>{a.title ?? a.type ?? "—"}</td>
                   <td style={{ padding: "10px 14px" }}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: "50%", background: provColor(a.provider_id) }} />{a.providerName ?? "—"}</span></td>
                   <td style={{ padding: "10px 14px" }}>{statusChip(a.status)}</td>
-                  <td style={{ padding: "10px 14px", textAlign: "right" }}><AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} /></td>
+                  <td style={{ padding: "10px 14px", textAlign: "right" }}><AppointmentActions id={a.id} status={a.status} date={a.date} hour={a.hour} canEdit={canEdit} /></td>
                 </tr>
               ))}
               {(tab === "list" ? sorted : records).length === 0 && (
