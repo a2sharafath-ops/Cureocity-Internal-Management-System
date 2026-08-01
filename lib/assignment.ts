@@ -83,27 +83,11 @@ export function pickByRotation(candidates: Candidate[]): Candidate | null {
   )[0];
 }
 
-/** Does an appointment belong to this discipline? */
-export function bookingMatches(type: string | null, d: Discipline): boolean {
-  const t = (type ?? "").toLowerCase();
-  if (d === "doctor") return t.includes("doctor") || t.includes("consult") || t.includes("physician") || t.includes("medical");
-  if (d === "dietitian") return t.includes("diet") || t.includes("nutrition");
-  if (d === "psychologist") return t.includes("psych") || t.includes("counsel") || t.includes("mental");
-  if (d === "coach") return t.includes("coach");
-  if (d === "trainer") return t.includes("train") || t.includes("fitness") || t.includes("assessment") || t.includes("pt");
-  return false;
-}
-
-/**
- * The provider on the client's *initial* booking in this discipline —
- * earliest by date, then hour. Cancelled bookings don't count.
- */
-export function providerFromInitialBooking(bookings: Booking[], d: Discipline): string | null {
-  const mine = bookings
-    .filter((b) => b.provider_id && b.status !== "cancelled" && bookingMatches(b.type, d))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.hour - b.hour);
-  return mine[0]?.provider_id ?? null;
-}
+// NOTE: assignment maps a booking to a discipline by the PROVIDER'S ROLE (their
+// membership in that discipline's candidate pool), not by the appointment's
+// free-text type — see planCareTeam step 1. Earlier helpers that matched on the
+// type string (bookingMatches / providerFromInitialBooking) were removed: they
+// were unused and encoded a rule the engine deliberately does not follow.
 
 /** Trainers with nothing already booked at that exact date and hour. */
 export function freeAt(candidates: Candidate[], busy: Busy[], date: string, hour: number): Candidate[] {
