@@ -27,7 +27,7 @@ export type ClientInput = {
 };
 
 export type Action = { cta: string; href: string };
-export type Step = { label: string; done: boolean; action?: Action; cancelApptId?: string; repairClientId?: string };
+export type Step = { label: string; done: boolean; action?: Action; cancelApptId?: string; repairClientId?: string; booked?: boolean };
 
 export type OnboardRow = {
   clientId: string;
@@ -57,6 +57,7 @@ function consultStep(label: string, c: ConsultState, disc: string, clientId: str
   if (c.scheduled) return {
     label: `${label} — booked${c.assignedName ? ` · ${c.assignedName}` : ""}`,
     done: false,
+    booked: true, // scheduled & waiting on the clinician — not an open ops action
     cancelApptId: c.apptId ?? undefined,
   };
   return { label: `Book ${label.toLowerCase()}`, done: false, action: { cta: "Book", href: `/appointments?client=${clientId}&disc=${enc(disc)}` } };
