@@ -72,37 +72,41 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     const done = doneKinds.get(clientId) ?? new Set<string>();
     const clientHref = `/clients/${clientId}`;
 
+    // Comprehensive / PT clinician deliverables — same detection as the client
+    // card. compblood + dietchart are Comprehensive-only (the predicate enforces
+    // it); the workout plan is owed for PT clients too, so this runs for every
+    // client, not just Comprehensive ones.
+    const deliv = new Set(outstandingDeliverables({
+      isComp: cats.has("comprehensive"), isPt: cats.has("training"),
+      dietConsultDone: done.has("Diet"), trainerConsultDone: done.has("Trainer"),
+      hasChart: hasChart.has(clientId), hasWorkout: hasWorkout.has(clientId),
+      compBloodSubmitted: bloodBy.get(clientId)?.get("comprehensive") ?? null,
+    }));
+    if (deliv.has("compblood")) {
+      // Chasing the client for the report is the Health Coach's job (they own
+      // the client relationship for PT / Comprehensive). Nudge the assigned
+      // coach; if none is assigned yet, chase the Health Coach role.
+      const o = ownerFor(clientId, "coach");
+      flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: "View",
+        dedupeKey: `blood:${clientId}`,
+        nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
+        chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: clientHref } });
+    }
+    if (deliv.has("dietchart")) {
+      const o = ownerFor(clientId, "dietitian");
+      flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: "View",
+        nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
+        chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: clientHref } });
+    }
+    if (deliv.has("workout")) {
+      const o = ownerFor(clientId, "trainer");
+      flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: "View",
+        nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
+        chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: clientHref } });
+    }
+
     if (cats.has("comprehensive")) {
       const comp = rows.find((r) => r.category === "comprehensive");
-      // Shared detection — same rules as the client-card package-status engine.
-      const deliv = new Set(outstandingDeliverables({
-        isComp: true, isPt: cats.has("training"),
-        dietConsultDone: done.has("Diet"), trainerConsultDone: done.has("Trainer"),
-        hasChart: hasChart.has(clientId), hasWorkout: hasWorkout.has(clientId),
-        compBloodSubmitted: bloodBy.get(clientId)?.get("comprehensive") ?? null,
-      }));
-      if (deliv.has("compblood")) {
-        // Chasing the client for the report is the Health Coach's job (they own
-        // the client relationship for PT / Comprehensive). Nudge the assigned
-        // coach; if none is assigned yet, chase the Health Coach role.
-        const o = ownerFor(clientId, "coach");
-        flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: "View",
-          dedupeKey: `blood:${clientId}`,
-          nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
-          chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: clientHref } });
-      }
-      if (deliv.has("dietchart")) {
-        const o = ownerFor(clientId, "dietitian");
-        flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: "View",
-          nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
-          chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: clientHref } });
-      }
-      if (deliv.has("workout")) {
-        const o = ownerFor(clientId, "trainer");
-        flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: "View",
-          nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
-          chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: clientHref } });
-      }
       // Overdue calendar milestones (bookings that never got made).
       const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
       if (start) {

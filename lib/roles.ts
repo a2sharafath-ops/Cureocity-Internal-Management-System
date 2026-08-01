@@ -74,6 +74,10 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   // Managers see a read-only roster with the sign-in controls only; role,
   // branch, rename, delete and add-staff remain Administrator / Super Admin
   // and are enforced in the server actions, not just hidden in the page.
+  // Managers get the /users nav for one reason — fixing a colleague's login
+  // (email / password reset). Roles, add-staff, branches, renames and deletes
+  // stay with Administrator + Super Admin, enforced independently in the page
+  // (canAdmin) and in each server action.
   "/users": ["Administrator", "Manager"],
   "/compliance": ["Administrator", "Manager"],
   "/tasks": "all",

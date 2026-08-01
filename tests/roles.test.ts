@@ -8,9 +8,12 @@ describe("canSee", () => {
     }
   });
 
-  it("users & audit are admin-only", () => {
+  it("users nav: admins + managers (managers only to fix logins); audit admin-only", () => {
     expect(canSee("Administrator", "/users")).toBe(true);
-    expect(canSee("Manager", "/users")).toBe(false);
+    // Managers reach /users to fix a colleague's login; role/staff management
+    // is gated separately (page canAdmin + per-action checks).
+    expect(canSee("Manager", "/users")).toBe(true);
+    expect(canSee("Front Desk", "/users")).toBe(false);
     expect(canSee("Administrator", "/audit")).toBe(true);
     expect(canSee("Front Desk", "/audit")).toBe(false);
   });
