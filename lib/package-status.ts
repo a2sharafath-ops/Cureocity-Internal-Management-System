@@ -12,7 +12,7 @@ import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/compreh
 import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
-import { buildOwnerResolver, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 
 export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
 
@@ -111,18 +111,24 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // Comprehensive blood is a separate panel — the onboarding step only checks it
   // was *requested*; the client still owes the actual report.
   const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
-  // Blood card + consolidated approval live on this same page, so no cross-link.
-  if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
+  const hasChart = ((charts ?? []) as unknown[]).length > 0;
+  const hasWorkout = ((workouts ?? []) as unknown[]).length > 0;
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
   // nudge them, rather than linking to a workspace they can't act in.
   const diet = ownerFor(clientId, "dietitian"), trainer = ownerFor(clientId, "trainer"), coach = ownerFor(clientId, "coach");
-  if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
-  if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
+  // Shared detection — which Comprehensive/PT deliverables are still outstanding.
+  const deliv = new Set(outstandingDeliverables({
+    isComp, isPt, dietConsultDone: doneKinds.has("Diet"), trainerConsultDone: doneKinds.has("Trainer"),
+    hasChart, hasWorkout, compBloodSubmitted: compBlood ? compBlood.submitted : null,
+  }));
+  // Blood card + consolidated approval live on this same page, so no cross-link.
+  if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
+  if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
+  if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
   // Day-2 diet chart explanation — the Health Coach owns scheduling it, but only
   // once the dietitian's chart draft exists (you can't explain a chart that
   // hasn't been written). Until then the "Diet chart — not drafted" item above
   // is what's outstanding. Chased against the assigned coach, not front desk.
-  const hasChart = ((charts ?? []) as unknown[]).length > 0;
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && hasChart) {
     const coachOwned: Pick<StatusItem, "ownerStaffId" | "ownerName" | "chaseRoles" | "chaseWho"> =
       coach ? { ownerStaffId: coach.id, ownerName: coach.name, chaseRoles: ["Health Coach"], chaseWho: "Health Coach" }
