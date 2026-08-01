@@ -370,7 +370,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* ---- What's pending (the single journey tracker + the actionable items) ---- */}
       {/* Package status — the one place the client's journey & to-dos live */}
       {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
-        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} canChase={!ro && isBillingOverseer(me?.role ?? "")} />
+        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} canChase={!ro && isBillingOverseer(me?.role ?? "")} viewerStaffId={me?.staffId ?? null} />
       )}
       {/* Schedule the strength-session block right here on Overview — front desk
           doesn't have to hop to the Client Card tab. Shows only for PT /

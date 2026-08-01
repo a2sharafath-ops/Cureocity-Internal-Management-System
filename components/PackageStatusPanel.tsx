@@ -19,7 +19,7 @@ const chaseBtn: React.CSSProperties = { border: "none", background: "var(--brand
 // `canChase` = the viewer is an overseer (Super Admin / Admin / Manager). For
 // them, ops items (bookings, blood chase, invoices) that no single clinician
 // owns turn into a "Chase <role>" nudge instead of a dead-end link.
-function List({ items, empty, clientId, canChase }: { items: StatusItem[]; empty: string; clientId: string; canChase: boolean }) {
+function List({ items, empty, clientId, canChase, viewerStaffId }: { items: StatusItem[]; empty: string; clientId: string; canChase: boolean; viewerStaffId?: string | null }) {
   if (!items.length) return <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{empty}</div>;
   const rowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, padding: "7px 0", fontSize: 12.5, textDecoration: "none" };
   return (
@@ -38,7 +38,9 @@ function List({ items, empty, clientId, canChase }: { items: StatusItem[]; empty
         );
         const border = i ? { borderTop: "1px solid var(--border)" } : {};
         // Clinician-owed item → nudge the responsible clinician (all staff).
-        if (it.ownerStaffId) {
+        // But never "Remind" the owner about their own work — when the viewer IS
+        // the owner they fall through to the plain deep-link and act on it.
+        if (it.ownerStaffId && it.ownerStaffId !== viewerStaffId) {
           return (
             <div key={i} style={{ ...rowStyle, ...border }}>
               {body}
@@ -81,7 +83,7 @@ function List({ items, empty, clientId, canChase }: { items: StatusItem[]; empty
   );
 }
 
-export default function PackageStatusPanel({ openNow, upcoming, clientId, canChase = false }: { openNow: StatusItem[]; upcoming: StatusItem[]; clientId: string; canChase?: boolean }) {
+export default function PackageStatusPanel({ openNow, upcoming, clientId, canChase = false, viewerStaffId }: { openNow: StatusItem[]; upcoming: StatusItem[]; clientId: string; canChase?: boolean; viewerStaffId?: string | null }) {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" };
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
@@ -90,14 +92,14 @@ export default function PackageStatusPanel({ openNow, upcoming, clientId, canCha
           <div style={{ fontWeight: 700 }}>Open now</div>
           {openNow.length > 0 && <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11.5, fontWeight: 700 }}>{openNow.length}</span>}
         </div>
-        <List items={openNow} empty="Nothing open — all caught up." clientId={clientId} canChase={canChase} />
+        <List items={openNow} empty="Nothing open — all caught up." clientId={clientId} canChase={canChase} viewerStaffId={viewerStaffId} />
       </div>
       <div style={box}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <div style={{ fontWeight: 700 }}>Upcoming</div>
           {upcoming.length > 0 && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 11.5, fontWeight: 700 }}>{upcoming.length}</span>}
         </div>
-        <List items={upcoming} empty="Nothing scheduled ahead." clientId={clientId} canChase={canChase} />
+        <List items={upcoming} empty="Nothing scheduled ahead." clientId={clientId} canChase={canChase} viewerStaffId={viewerStaffId} />
       </div>
     </div>
   );
