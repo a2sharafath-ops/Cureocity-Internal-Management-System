@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
 import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
+import { buildOwnerResolver, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -29,23 +30,13 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
 
   // Who owns each clinician deliverable, so ops can nudge them from the dashboard.
   // Prefer the formal care-team assignment; fall back to the clinician who
-  // actually ran the completed consult (the appointment provider) — so a client
-  // whose care team was never explicitly assigned can still be reminded.
+  // actually ran the completed consult (the appointment provider). Shared with
+  // the other obligation engines via buildOwnerResolver.
   const { data: asg } = await sb.from("client_assignments").select("client_id, discipline, staff_id, staff:staff_id(name)");
-  const ownerBy = new Map<string, { id: string; name: string }>();
-  for (const a of (asg ?? []) as unknown as { client_id: string; discipline: string; staff_id: string | null; staff: { name: string } | null }[]) {
-    if (a.staff_id) ownerBy.set(`${a.client_id}|${a.discipline}`, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
-  }
-  const ROLE_TO_DISC: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer", "Health Coach": "coach", Psychologist: "psychologist" };
-  const fallbackOwner = new Map<string, { id: string; name: string }>();
-  for (const a of (appts ?? []) as unknown as { client_id: string; status: string; provider_id: string | null; staff: { name: string; role: string } | null }[]) {
-    if (a.status !== "completed" || !a.provider_id || !a.staff) continue;
-    const disc = ROLE_TO_DISC[a.staff.role];
-    if (!disc) continue;
-    const key = `${a.client_id}|${disc}`;
-    if (!fallbackOwner.has(key)) fallbackOwner.set(key, { id: a.provider_id, name: a.staff.name });
-  }
-  const ownerFor = (clientId: string, disc: string) => ownerBy.get(`${clientId}|${disc}`) ?? fallbackOwner.get(`${clientId}|${disc}`);
+  const ownerFor = buildOwnerResolver(
+    (asg ?? []) as unknown as AssignRow[],
+    (appts ?? []) as unknown as ApptOwnerRow[],
+  );
   // Service catalogue → category resolver + pre-filled Book links.
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
   const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];

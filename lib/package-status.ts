@@ -12,6 +12,7 @@ import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/compreh
 import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
+import { buildOwnerResolver, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 
 export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
 
@@ -35,7 +36,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("invoices").select("num, description, amount, status").eq("client_id", clientId),
     sb.from("blood_requests").select("panel, submitted").eq("client_id", clientId),
     sb.from("consultations").select("kind, status").eq("client_id", clientId),
-    sb.from("appointments").select("type, date, status, provider_id, staff:provider_id(name, role)").eq("client_id", clientId).neq("status", "cancelled"),
+    sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("sessions").select("status, date").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("diet_charts").select("id").eq("client_id", clientId).limit(1),
     sb.from("client_workouts").select("id").eq("client_id", clientId).limit(1),
@@ -50,22 +51,14 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     .find((f) => f.day === 2 && /explanation/i.test(f.label));
   const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
 
-  // Who owns each clinician deliverable — so ops roles can nudge the right
-  // person rather than being sent to a workspace they can't act in.
-  const { data: asg } = await sb.from("client_assignments").select("discipline, staff_id, staff:staff_id(name)").eq("client_id", clientId);
-  const ownerBy = new Map<string, { id: string; name: string }>();
-  for (const a of (asg ?? []) as unknown as { discipline: string; staff_id: string | null; staff: { name: string } | null }[]) {
-    if (a.staff_id) ownerBy.set(a.discipline, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
-  }
-  // Fall back to the clinician who ran the completed consult (appointment
-  // provider) when the care team was never explicitly assigned — so "Remind"
-  // still targets the right person instead of degrading to a plain link.
-  const ROLE_TO_DISC: Record<string, string> = { Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer", "Health Coach": "coach", Psychologist: "psychologist" };
-  for (const a of (appts ?? []) as unknown as { status: string; provider_id: string | null; staff: { name: string; role: string } | null }[]) {
-    if (a.status !== "completed" || !a.provider_id || !a.staff) continue;
-    const disc = ROLE_TO_DISC[a.staff.role];
-    if (disc && !ownerBy.has(disc)) ownerBy.set(disc, { id: a.provider_id, name: a.staff.name });
-  }
+  // Who owns each clinician deliverable — the shared resolver (care-team
+  // assignment, then the completed-consult provider as fallback), so ops roles
+  // nudge the right person instead of being sent to a workspace they can't act in.
+  const { data: asg } = await sb.from("client_assignments").select("client_id, discipline, staff_id, staff:staff_id(name)").eq("client_id", clientId);
+  const ownerFor = buildOwnerResolver(
+    (asg ?? []) as unknown as AssignRow[],
+    (appts ?? []) as unknown as ApptOwnerRow[],
+  );
 
   const active = ((cps ?? []) as { package_id: string | null; package_name: string | null; category: string; status: string; start_date: string | null; end_date: string | null }[]).filter((c) => c.status === "active");
   if (!active.length && !(bp && !bp.generated)) return { openNow: [], upcoming: [] };
@@ -122,7 +115,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if (isComp && compBlood && !compBlood.submitted) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
   // nudge them, rather than linking to a workspace they can't act in.
-  const diet = ownerBy.get("dietitian"), trainer = ownerBy.get("trainer"), coach = ownerBy.get("coach");
+  const diet = ownerFor(clientId, "dietitian"), trainer = ownerFor(clientId, "trainer"), coach = ownerFor(clientId, "coach");
   if (isComp && doneKinds.has("Diet") && !((charts ?? []).length)) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
   if ((isComp || isPt) && doneKinds.has("Trainer") && !((workouts ?? []).length)) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
   // Day-2 diet chart explanation — the Health Coach owns scheduling it, but only
