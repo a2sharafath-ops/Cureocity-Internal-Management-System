@@ -4428,6 +4428,18 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
     if (toClose.length) await supabase.from("tasks").update({ status: "done" }).in("id", toClose);
   }
 
+  // The Day-2 diet chart explanation is a follow-up, not a milestone, so booking
+  // it as an appointment (directly on the calendar, or via the coach's Schedule
+  // button) must close its follow-up row — otherwise it keeps showing as "due"
+  // on the client card / coach dashboard even after it's been done. (The
+  // follow-ups queue does this via fuBookInPerson; this covers the direct path.)
+  if (/diet chart explanation/i.test(newType)) {
+    await supabase.from("followups")
+      .update({ stage: "BOOKED", status: "done", done_by: p.name, done_at: new Date().toISOString() })
+      .eq("client_id", client_id).eq("day", 2).neq("status", "done").ilike("label", "%explanation%");
+    revalidatePath("/followups");
+  }
+
   await logAudit(p, "Appointment booked", await clientName(supabase, client_id), date);
   revalidatePath("/appointments");
   revalidatePath("/clients");
