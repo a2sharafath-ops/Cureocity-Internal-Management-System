@@ -2700,9 +2700,32 @@ export async function refundInvoice(formData: FormData) {
   if (!p || !canManageInvoices(p.role)) return;
   const id = String(formData.get("id"));
   const supabase = createClient();
+  const { data: inv } = await supabase.from("invoices")
+    .select("num, amount, status, method, client_id").eq("id", id).maybeSingle();
+  const row = inv as { num: number | null; amount: number; status: string; method: string | null; client_id: string | null } | null;
+  // Only a genuinely Paid invoice can be refunded — refunding an Unpaid one
+  // would flip the status for money that was never collected (and, below, post a
+  // phantom outflow into the cash book).
+  if (!row || row.status !== "Paid") return;
+
   await supabase.from("invoices").update({ status: "Refunded" }).eq("id", id);
-  await logAudit(p, "Invoice refunded", null, null);
+
+  // Reverse the original receipt in the cash book, mirroring the "in" entry
+  // markInvoicePaid posted, so balances aren't left overstated after a refund.
+  if (Number(row.amount) > 0) {
+    const method = row.method ?? "Cash";
+    const account = method.trim().toLowerCase() === "cash" ? "cash" : "bank";
+    await supabase.from("ledger").insert({
+      account, date: todayISO(),
+      ref: `INV-${String(row.num ?? 0).padStart(3, "0")} refund`,
+      party: row.client_id ? await clientName(supabase, row.client_id) : null,
+      kind: method, direction: "out",
+      amount: Number(row.amount) || 0, created_by: p.name,
+    });
+  }
+  await logAudit(p, "Invoice refunded", null, `₹${row.amount}`);
   revalidatePath("/billing");
+  revalidatePath("/finsheets");
   revalidatePath("/", "layout");
 }
 
