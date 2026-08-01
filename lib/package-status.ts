@@ -13,7 +13,7 @@ import { makeCatOf, milestoneBookHref, serviceForMilestone, milestoneSatisfied }
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
-export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string };
+export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
 
 // Ops work with no single clinician owner (bookings, blood chase, invoices) is
 // owned by the front desk — overseers chase them rather than doing it themselves.
@@ -133,7 +133,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       coach ? { ownerStaffId: coach.id, ownerName: coach.name, chaseRoles: ["Health Coach"], chaseWho: "Health Coach" }
             : { chaseRoles: ["Health Coach"], chaseWho: "Health Coach" };
     if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn", ...coachOwned });
-    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info", ...coachOwned });
+    else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info", sortKey: dietExplain.due_date, ...coachOwned });
   }
 
   // ---- strength sessions remaining (scheduling itself is an onboarding step) --
@@ -142,7 +142,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     const remaining = total - allSess.filter((s) => s.status === "completed").length;
     if (total > 0 && remaining > 0) {
       const next = allSess.filter((s) => s.status !== "completed" && s.date >= today).map((s) => s.date).sort()[0];
-      upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info", ...FRONT_DESK });
+      upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info", sortKey: next, ...FRONT_DESK });
     }
   }
 
@@ -164,7 +164,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
         if (satisfied) continue;
         const bookHref = milestoneBookHref(clientId, m.apptType, m.from, services);
         if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: bookHref, tone: "warn", ...FRONT_DESK });
-        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: bookHref, tone: "info", ...FRONT_DESK });
+        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: bookHref, tone: "info", sortKey: m.dueDate, ...FRONT_DESK });
       }
     }
   }
@@ -172,9 +172,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // ---- package end dates --------------------------------------------------
   for (const c of active) {
     if (!c.end_date) continue;
-    upcoming.push({ label: `${c.package_name ?? c.category} ends`, detail: fmt(c.end_date), tone: "neutral" });
+    upcoming.push({ label: `${c.package_name ?? c.category} ends`, detail: fmt(c.end_date), tone: "neutral", sortKey: c.end_date });
   }
 
-  upcoming.sort((a, b) => (a.detail ?? "").localeCompare(b.detail ?? ""));
+  // Sort by the real ISO due-date (chronological). Items without a date sort
+  // last. Previously this sorted the formatted detail string, which mixed
+  // "by 08 Aug" / "next 01 Aug" / "26 Aug" and came out non-chronological.
+  upcoming.sort((a, b) => (a.sortKey ?? "9999-12-31").localeCompare(b.sortKey ?? "9999-12-31"));
   return { openNow, upcoming };
 }
