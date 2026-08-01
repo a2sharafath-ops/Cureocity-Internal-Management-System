@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOwnerResolver, outstandingDeliverables, ROLE_TO_DISC, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, ROLE_TO_DISC, type AssignRow, type ApptOwnerRow, type MilestoneLike } from "@/lib/obligations";
 
 // ---- buildOwnerResolver -----------------------------------------------------
 // Locks the parity of the owner-resolution logic that used to be copy-pasted in
@@ -102,5 +102,36 @@ describe("outstandingDeliverables", () => {
       ...base, isComp: true, compBloodSubmitted: false,
       dietConsultDone: true, trainerConsultDone: true,
     })).toEqual(["compblood", "dietchart", "workout"]);
+  });
+});
+
+// ---- unsatisfiedMilestones --------------------------------------------------
+const SVC = [
+  { name: "10th Day Diet Followup", category: "Diet Consultation", day_offset: 10 },
+  { name: "Day 28 doctor review", category: "Doctor Consultation", day_offset: 28 },
+];
+const ms = (over: Partial<MilestoneLike>): MilestoneLike =>
+  ({ apptType: "Diet Consultation", from: 10, fromDate: "2026-08-10", dueDate: "2026-08-10", label: "Day 10 diet follow-up", gate: "diet_10", ...over });
+
+describe("unsatisfiedMilestones", () => {
+  it("keeps a milestone with no matching booking, and attaches a Book link", () => {
+    const out = unsatisfiedMilestones("c1", [ms({})], [], SVC);
+    expect(out).toHaveLength(1);
+    expect(out[0].bookHref).toContain("c1");
+  });
+  it("drops a milestone already satisfied by a booking on/after fromDate", () => {
+    const appts = [{ type: "Diet Consultation", date: "2026-08-12", status: "scheduled" }];
+    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC)).toHaveLength(0);
+  });
+  it("does not count a cancelled booking as satisfying the milestone", () => {
+    const appts = [{ type: "Diet Consultation", date: "2026-08-12", status: "cancelled" }];
+    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC)).toHaveLength(1);
+  });
+  it("preserves the input order of unsatisfied milestones", () => {
+    const out = unsatisfiedMilestones("c1", [
+      ms({ gate: "diet_10", dueDate: "2026-08-10" }),
+      ms({ gate: "doctor_28", apptType: "Doctor Consultation", from: 28, fromDate: "2026-08-28", dueDate: "2026-08-28", label: "Day 28 doctor review" }),
+    ], [], SVC);
+    expect(out.map((m) => m.gate)).toEqual(["diet_10", "doctor_28"]);
   });
 });
