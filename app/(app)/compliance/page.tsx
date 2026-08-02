@@ -61,7 +61,7 @@ export default async function CompliancePage() {
       <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>{identified.length} of {clients.length} patients linked to a national health ID.</p>
       <div style={{ ...box, overflow: "hidden", marginBottom: 28 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr><th style={th}>Patient</th><th style={th}>ABHA ID</th><th style={th}>UHID</th></tr></thead>
+          <thead><tr><th style={th}>Client</th><th style={th}>ABHA ID</th><th style={th}>UHID</th></tr></thead>
           <tbody>
             {identified.map((c) => (
               <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
@@ -81,7 +81,7 @@ export default async function CompliancePage() {
       </div>
       <div style={{ ...box, overflow: "hidden", marginBottom: 28 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr><th style={th}>Patient</th><th style={th}>Type</th><th style={th}>Method</th><th style={th}>Granted</th><th style={th}>Expires</th><th style={th}>Status</th><th style={th} /></tr></thead>
+          <thead><tr><th style={th}>Client</th><th style={th}>Type</th><th style={th}>Method</th><th style={th}>Granted</th><th style={th}>Expires</th><th style={th}>Status</th><th style={th} /></tr></thead>
           <tbody>
             {consents.map((c) => (
               <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
@@ -148,7 +148,7 @@ export default async function CompliancePage() {
 
       {/* PHI-masked access log */}
       <h2 style={{ fontSize: 15, margin: "0 0 4px" }}>Recent access — PHI masked</h2>
-      <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>Patient identifiers are masked by default. Click to reveal (authorized viewers only).</p>
+      <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>Client identifiers are masked by default. Click to reveal (authorized viewers only).</p>
       <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={th}>When</th><th style={th}>Actor</th><th style={th}>Action</th><th style={th}>Subject (PHI)</th></tr></thead>

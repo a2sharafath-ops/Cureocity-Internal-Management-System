@@ -41,7 +41,7 @@ export default async function EmrIndexPage({ searchParams }: { searchParams: { q
     <div style={{ maxWidth: 980 }}>
       <RealtimeRefresh tables={["problems", "allergies", "medications"]} />
       <BackLink />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>EMR / Patient charts</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>EMR / Client charts</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Clinical records — problems, allergies, medications, vitals and SOAP notes. Access limited to clinicians.</p>
 
       <form style={{ marginBottom: 14 }}>
@@ -50,7 +50,7 @@ export default async function EmrIndexPage({ searchParams }: { searchParams: { q
 
       <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-          <thead><tr><th style={th}>Patient</th><th style={th}>Code</th><th style={th}>Problems</th><th style={th}>Allergies</th><th style={th}>Meds</th><th style={th} /></tr></thead>
+          <thead><tr><th style={th}>Client</th><th style={th}>Code</th><th style={th}>Problems</th><th style={th}>Allergies</th><th style={th}>Meds</th><th style={th} /></tr></thead>
           <tbody>
             {clients.map((c) => (
               <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>

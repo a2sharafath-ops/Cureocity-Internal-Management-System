@@ -42,7 +42,7 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
 
       <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr><th style={th}>Patient</th><th style={th}>Test</th><th style={th}>Type</th><th style={th}>Priority</th><th style={th}>Status</th><th style={th}>Result</th><th style={th} /></tr></thead>
+          <thead><tr><th style={th}>Client</th><th style={th}>Test</th><th style={th}>Type</th><th style={th}>Priority</th><th style={th}>Status</th><th style={th}>Result</th><th style={th} /></tr></thead>
           <tbody>
             {orders.map((o) => {
               const s = stat(o.priority);

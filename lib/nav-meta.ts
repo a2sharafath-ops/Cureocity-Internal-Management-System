@@ -16,7 +16,7 @@ export const PAGE_META: Record<string, PageMeta> = {
   "/campaigns":     { title: "Campaigns" },
   "/retention":     { title: "Retention" },
   "/pro":           { title: "Professional Workspace" },
-  "/emr":           { title: "Patient Records" },
+  "/emr":           { title: "Client Records" },
   "/orders":        { title: "Orders & Labs" },
   "/meals":         { title: "Meal Monitoring" },
   "/blueprint":     { title: "BluePrint" },

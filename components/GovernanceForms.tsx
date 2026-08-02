@@ -19,7 +19,7 @@ export function ConsentForm({ clients }: { clients: { id: string; name: string }
   if (!open) return <button type="button" onClick={() => setOpen(true)} style={ghost}>+ Record consent</button>;
   return (
     <form action={addConsent} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ ...panel, display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr auto", gap: 10, alignItems: "end" }}>
-      <Field label="Patient"><select style={input} name="client_id" required defaultValue=""><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+      <Field label="Client"><select style={input} name="client_id" required defaultValue=""><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
       <Field label="Consent type"><select style={input} name="type" defaultValue="treatment"><option value="treatment">Treatment</option><option value="data-sharing">Data sharing</option><option value="telehealth">Telehealth</option><option value="marketing">Marketing</option><option value="research">Research</option></select></Field>
       <Field label="Method"><select style={input} name="method" defaultValue="signed"><option value="signed">Signed</option><option value="digital">Digital</option><option value="verbal">Verbal</option></select></Field>
       <Field label="Expires"><input style={input} name="expires_date" type="date" /></Field>
