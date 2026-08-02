@@ -67,7 +67,7 @@ export default async function PortalHome() {
   // Daily meal summaries the dietitian has sent to this client.
   const { data: daySummaryRows } = await supabase.from("meal_day_summaries").select("date, summary, sent_at").eq("client_id", client.id).not("sent_at", "is", null).order("date", { ascending: false }).limit(7);
   const daySummaries = ((daySummaryRows ?? []) as { date: string; summary: string | null; sent_at: string | null }[]).filter((d) => d.summary);
-  // A client can hold several packages (e.g. a Facility Membership AND
+  // A client can hold several packages (e.g. a Membership AND
   // Comprehensive). Decide portal features from what they actually hold, not the
   // single legacy primary package — otherwise a facility-primary client with a
   // care package wrongly loses meal monitoring / strength sessions.

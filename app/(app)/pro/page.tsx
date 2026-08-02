@@ -41,7 +41,7 @@ export default async function ProPage() {
     // booked slots ready to be started
     supabase.from("appointments").select("id, client_id, provider_id, date, hour, status, clients(name), staff(name, role)").eq("status", "scheduled").order("date").order("hour"),
     // who actually holds a care package (Comprehensive / PT / BluePrint) — a
-    // client may also hold a Facility Membership, so judge by client_packages,
+    // client may also hold a Membership, so judge by client_packages,
     // not the single legacy primary package.
     supabase.from("client_packages").select("client_id, category, status"),
   ]);
