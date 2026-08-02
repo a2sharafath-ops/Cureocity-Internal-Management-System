@@ -216,6 +216,24 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     overdueAppts = ((odRaw ?? []) as unknown as { id: string; hour: number | null; date: string; type?: string; title?: string | null; status?: string; provider_id?: string | null; client_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[])
       .filter((a) => scopeToStaff ? a.provider_id === me.staffId : WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind)
       .map((a) => ({ id: a.id, hour: a.hour, client_id: a.client_id ?? null, client_name: a.clients?.name ?? null, type: a.type ?? null, title: a.title ?? null, status: a.status ?? "scheduled", provider_id: a.provider_id ?? null, isSession: false, date: a.date }));
+
+    // An overdue appointment is a genuine "needs attention" item — otherwise the
+    // health score reads 100 / "nothing needs attention" while a consult is
+    // sitting unconducted. Feed each into the clinician's attention flags (high
+    // severity) so the score is honest. The dedicated Overdue card below still
+    // carries the one-click Start; this only makes the summary count truthful.
+    if (me.staffId && isClinician(me.role)) {
+      const fmtOd = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+      for (const a of overdueAppts) {
+        myAttention.unshift({
+          sev: "high",
+          title: `${a.client_name ?? "Client"} — ${(a.type || "consultation").toLowerCase()} overdue`,
+          detail: `Was due ${fmtOd(a.date)} · conduct or reschedule`,
+          href: a.client_id ? `/clients/${a.client_id}${roQuery}` : "/appointments",
+          cta: "Open",
+        });
+      }
+    }
   }
 
   // Experience (pre-sale trial) bookings assigned to *me*, matched by provider —
