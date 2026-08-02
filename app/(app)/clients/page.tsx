@@ -2,7 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
 import { getProfile } from "@/lib/auth";
-import { canWrite } from "@/lib/roles";
+import { canWrite, canSee } from "@/lib/roles";
+import ClientsTabs from "@/components/ClientsTabs";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { ageFromDob } from "@/lib/dob";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
@@ -163,7 +164,9 @@ export default async function ClientsPage() {
           <Link href="/clients/new" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>+ Onboard Client</Link>
         )}
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>CRM Hub — searchable contacts list</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>CRM Hub — searchable contacts list</p>
+
+      <ClientsTabs active="clients" showOnboarding={canSee(profile?.role ?? "", "/onboarding")} />
 
       {writer && submissions.map((s) => (
         <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid #99f6e4", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 12, fontSize: 14 }}>

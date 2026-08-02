@@ -9,6 +9,7 @@ import { onboardingRow, CATEGORY_LABEL, type ClientInput, type ConsultState } fr
 import { cancelBooking, repairClientJourney, nudgeRole } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SubmitButton from "@/components/SubmitButton";
+import ClientsTabs from "@/components/ClientsTabs";
 
 const DISC_LABEL: Record<string, string> = {
   doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist",
@@ -158,10 +159,12 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["clients", "consultations", "blood_requests", "blueprints", "invoices", "sessions", "appointments", "client_packages", "client_assignments"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Onboarding</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Clients</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 14px" }}>
         Every client mid-onboarding, by package — where each one is and the next action. {inProgress} in progress.
       </p>
+
+      <ClientsTabs active="onboarding" />
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
         <Link href={catHref(null)} style={chip(!catFilter)}>All</Link>
