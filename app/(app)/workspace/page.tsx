@@ -203,6 +203,21 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   }
   const todayList: TodayItem[] = [...sessToday, ...apptToday].sort((x, y) => (x.hour ?? 0) - (y.hour ?? 0));
 
+  // Overdue: scheduled appointments whose date has passed but were never marked
+  // completed / cancelled. They fall off "Today" (which is strictly date = today),
+  // so a missed consult would otherwise vanish from the clinician's view. Same
+  // scoping as Today — own bookings for a real login, the discipline in preview.
+  let overdueAppts: (TodayItem & { date: string })[] = [];
+  if (tab === "dash") {
+    const { data: odRaw } = await supabase
+      .from("appointments")
+      .select("id, hour, date, type, title, status, provider_id, client_id, clients(name), staff(role)")
+      .eq("status", "scheduled").lt("date", today).order("date", { ascending: true }).limit(50);
+    overdueAppts = ((odRaw ?? []) as unknown as { id: string; hour: number | null; date: string; type?: string; title?: string | null; status?: string; provider_id?: string | null; client_id?: string | null; clients: { name: string } | null; staff?: { role: string } | null }[])
+      .filter((a) => scopeToStaff ? a.provider_id === me.staffId : WS_ROLE_TO_KIND[a.staff?.role ?? ""] === role.kind)
+      .map((a) => ({ id: a.id, hour: a.hour, client_id: a.client_id ?? null, client_name: a.clients?.name ?? null, type: a.type ?? null, title: a.title ?? null, status: a.status ?? "scheduled", provider_id: a.provider_id ?? null, isSession: false, date: a.date }));
+  }
+
   // Experience (pre-sale trial) bookings assigned to *me*, matched by provider —
   // NOT by client roster. A free assessment/training for a lead has client_id
   // null, so every roster-scoped query above filters it out. Matching on the
@@ -469,6 +484,31 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
           {me.staffId && isClinician(me.role) && (
             <div style={{ marginBottom: 16 }}>
               <AttentionPanel flags={myAttention} />
+            </div>
+          )}
+
+          {overdueAppts.length > 0 && (
+            <div style={{ ...box, overflow: "hidden", marginBottom: 16, border: "1px solid var(--red-bg)" }}>
+              <div style={{ padding: "12px 16px", fontWeight: 700, color: "var(--red-text)", display: "flex", alignItems: "center", gap: 8 }}>
+                Overdue — not yet conducted
+                <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{overdueAppts.length}</span>
+              </div>
+              {overdueAppts.map((a) => (
+                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {a.client_id
+                      ? <Link href={`/clients/${a.client_id}${roQuery}`} style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)", textDecoration: "none" }}>{a.client_name ?? "—"}</Link>
+                      : <b style={{ fontSize: 13 }}>{a.client_name ?? "—"}</b>}
+                    <div style={{ color: "var(--muted)", fontSize: 12 }}>{role.short} · {a.type || "Consultation"} — was {new Date(`${a.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })}</div>
+                  </div>
+                  {!readOnly && a.status === "scheduled" && a.client_id && (
+                    <form action={startConsultFromAppointment} style={{ margin: 0 }}>
+                      <input type="hidden" name="appointment_id" value={a.id} />
+                      <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
+                    </form>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
