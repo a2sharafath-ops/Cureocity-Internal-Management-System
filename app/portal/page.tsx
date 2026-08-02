@@ -74,6 +74,8 @@ export default async function PortalHome() {
   const { data: cpRows } = await supabase.from("client_packages").select("category, status").eq("client_id", client.id);
   const careCats = new Set(((cpRows ?? []) as { category: string; status: string }[]).filter((c) => c.status === "active").map((c) => c.category));
   const holdsCare = careCats.has("comprehensive") || careCats.has("training") || careCats.has("blueprint");
+  // BluePrint is a standalone package — Comprehensive does NOT include one.
+  const holdsBlueprint = careCats.has("blueprint");
   const showMeals = !pkg?.is_facility || holdsCare;
 
   const mCols = "date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr";
@@ -238,10 +240,13 @@ export default async function PortalHome() {
         </>
       )}
 
-      {/* Blood + Blueprint */}
+      {/* Blood report — plus the BluePrint report for BluePrint holders only.
+          Comprehensive has its own blood panel but never produces a BluePrint,
+          so a Comprehensive client sees a "Blood report" card and is never
+          promised a report that isn't coming. */}
       {(blood || bp) && card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>BluePrint</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{holdsBlueprint || bp?.generated ? "BluePrint" : "Blood report"}</div>
           {blood && (
             <div style={{ fontSize: 13, marginBottom: 10 }}>
               Blood report:{" "}
@@ -278,9 +283,9 @@ export default async function PortalHome() {
                 );
               })()}
             </div>
-          ) : (
+          ) : holdsBlueprint ? (
             <div style={{ fontSize: 13, color: "var(--muted)" }}>Your blueprint is being prepared.</div>
-          )}
+          ) : null}
         </>
       )}
 

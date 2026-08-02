@@ -216,6 +216,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // Does this client hold a package whose care journey should have been kicked
   // off (booking tasks, blood request, care team)? Used to offer the repair.
   const hasJourneyPkg = heldPackages.some((r) => ["blueprint", "training", "comprehensive"].includes(r.category));
+  // BluePrint is a STANDALONE package — it is not part of Comprehensive.
+  // Comprehensive has its own blood panel and consults, but never produces a
+  // BluePrint report, so the BluePrint card must not appear on a Comprehensive
+  // client (it used to render for everyone, showing a misleading
+  // "Pending · required sign-offs 0/3" against a report nobody owes).
+  // A delivered report still shows for a client who once bought BluePrint, so
+  // history is never hidden.
+  const holdsBlueprint = heldPackages.some((r) => r.category === "blueprint");
+  const showBlueprint = holdsBlueprint || Boolean(bp?.generated);
   // Membership controls (front-desk supervised): shown for any client who holds
   // a membership — active or lapsed — so it can be renewed. Default the renew
   // dropdown to the current membership's package.
@@ -656,7 +665,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
       </div>
 
-      {/* BluePrint status */}
+      {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
+      {showBlueprint && (
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontWeight: 700 }}>BluePrint</div>
@@ -693,6 +703,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           );
         })()}
       </div>
+      )}
 
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
