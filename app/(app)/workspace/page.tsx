@@ -173,6 +173,31 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     }
   }
 
+  // The coach also owns the ongoing follow-up calls (Day-10 diet follow-up,
+  // Day-21 review, Day-28 doctor follow-up, renewals, etc.). A due or overdue one
+  // is genuine attention — surface it so it dents the score instead of sitting
+  // silently in the Follow-ups tab. Same scope as the Follow-ups board (pending,
+  // this coach's clients). The Day-2 diet chart explanation is handled above (it
+  // has its own chart-drafted gate), so skip it here to avoid double-counting.
+  if (roleKey === "coach" && scoped.length) {
+    const scopedIds = scoped.map((c) => c.id);
+    const fmtFu = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+    const { data: dueFu } = await supabase.from("followups")
+      .select("client_id, label, day, due_date, status, clients(name)")
+      .in("client_id", scopedIds).eq("status", "pending").lte("due_date", today).order("due_date");
+    for (const f of (dueFu ?? []) as unknown as { client_id: string; label: string; day: number | null; due_date: string; status: string; clients: { name: string } | null }[]) {
+      if (f.day === 2 && /explanation/i.test(f.label)) continue; // handled above
+      const overdue = f.due_date < today;
+      myAttention.push({
+        sev: overdue ? "high" : "med",
+        title: `${f.clients?.name ?? "Client"} — ${f.label.toLowerCase()}`,
+        detail: overdue ? `was due ${fmtFu(f.due_date)}` : "due today",
+        href: `/workspace?role=coach&tab=followups`,
+        cta: "Follow-ups",
+      });
+    }
+  }
+
   const rosterRows: WsClientRow[] = scoped.map((c) => ({
     id: c.id, name: c.name, code: c.code,
     pkg: (c as ClientRow).packages?.name ?? c.package_id,
