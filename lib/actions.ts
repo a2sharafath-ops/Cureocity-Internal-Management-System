@@ -1306,6 +1306,59 @@ export async function startConsultFromAppointment(formData: FormData) {
   redirect("/pro");
 }
 
+/**
+ * One-click "Mark done" for a booked appointment — closes the consult out without
+ * opening the console. For the assigned clinician (or an admin/manager). Idempotent:
+ * completes the consult already linked to the appointment, or creates a completed
+ * one if none exists, then syncs the appointment to "completed" so it stops
+ * showing as due / overdue. This is a quick close-out: it does NOT capture a
+ * summary or start the Doctor prescription clock — use Start (the console) when a
+ * clinical write-up is needed.
+ */
+export async function markConsultDone(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const appointment_id = String(formData.get("appointment_id") || "");
+  if (!appointment_id) return;
+  const supabase = createClient();
+
+  const { data: appt } = await supabase.from("appointments")
+    .select("id, client_id, lead_id, provider_id, status").eq("id", appointment_id).maybeSingle();
+  if (!appt) return;
+
+  const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
+  // A real clinician may only close their own booking; admins/managers may close any.
+  if (!adminish && p.staffId && appt.provider_id && p.staffId !== appt.provider_id) return;
+
+  let kind = "Doctor";
+  if (appt.provider_id) {
+    const { data: st } = await supabase.from("staff").select("role").eq("id", appt.provider_id).maybeSingle();
+    kind = ROLE_TO_KIND[(st as { role?: string } | null)?.role ?? ""] ?? "Doctor";
+  }
+
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase.from("consultations")
+    .select("id").eq("appointment_id", appointment_id).maybeSingle();
+  const existingId = (existing as { id: string } | null)?.id ?? null;
+  if (existingId) {
+    await supabase.from("consultations").update({ status: "completed", completed_at: now }).eq("id", existingId);
+  } else {
+    await supabase.from("consultations").insert({
+      client_id: appt.client_id, lead_id: appt.lead_id, kind, status: "completed",
+      by_name: p.name, by_role: p.role, started_at: now, completed_at: now, appointment_id,
+    });
+  }
+  await supabase.from("appointments").update({ status: "completed" }).eq("id", appointment_id);
+
+  const subjName = appt.client_id
+    ? (await supabase.from("clients").select("name").eq("id", appt.client_id).maybeSingle()).data?.name
+    : (await supabase.from("leads").select("name").eq("id", appt.lead_id).maybeSingle()).data?.name;
+  await logAudit(p, "Consultation completed", subjName, kind);
+  revalidatePath("/workspace");
+  revalidatePath("/appointments");
+  revalidatePath("/", "layout");
+}
+
 // Save the console session — intake answers + scribe summary, optionally complete.
 export async function saveConsultSession(formData: FormData) {
   const p = await getProfile();

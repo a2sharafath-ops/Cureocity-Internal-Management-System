@@ -29,6 +29,7 @@ import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard"
 import TrialOutcomeActions from "@/components/TrialOutcomeActions";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import SubmitButton from "@/components/SubmitButton";
+import MarkConsultDone from "@/components/MarkConsultDone";
 import { startConsultFromAppointment, markSessionComplete } from "@/lib/actions";
 import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import CoachMarkersSection from "@/components/CoachMarkersSection";
@@ -520,10 +521,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                     <div style={{ color: "var(--muted)", fontSize: 12 }}>{role.short} · {a.type || "Consultation"} — was {new Date(`${a.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" })}</div>
                   </div>
                   {!readOnly && a.status === "scheduled" && a.client_id && (
-                    <form action={startConsultFromAppointment} style={{ margin: 0 }}>
-                      <input type="hidden" name="appointment_id" value={a.id} />
-                      <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
-                    </form>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                      <form action={startConsultFromAppointment} style={{ margin: 0 }}>
+                        <input type="hidden" name="appointment_id" value={a.id} />
+                        <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
+                      </form>
+                      <MarkConsultDone appointmentId={a.id} who={a.client_name} />
+                    </div>
                   )}
                 </div>
               ))}
@@ -561,10 +565,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                       </form>
                     )}
                     {!readOnly && !a.isSession && a.status === "scheduled" && a.client_id && (
-                      <form action={startConsultFromAppointment} style={{ margin: 0 }}>
-                        <input type="hidden" name="appointment_id" value={a.id} />
-                        <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
-                      </form>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                        <form action={startConsultFromAppointment} style={{ margin: 0 }}>
+                          <input type="hidden" name="appointment_id" value={a.id} />
+                          <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>▶ Start</SubmitButton>
+                        </form>
+                        <MarkConsultDone appointmentId={a.id} who={a.client_name} />
+                      </div>
                     )}
                   </div>
                 );
