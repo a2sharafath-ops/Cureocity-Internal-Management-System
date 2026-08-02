@@ -13,7 +13,7 @@ import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
 
-export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
+export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; ownerCta?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
 
 // Ops work with no single clinician owner (bookings, blood chase, invoices) is
 // owned by the front desk — overseers chase them rather than doing it themselves.
@@ -126,8 +126,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   }));
   // Blood card + consolidated approval live on this same page, so no cross-link.
   if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
-  if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, tone: "warn" });
-  if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, tone: "warn" });
+  if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, ownerCta: "Draft chart", href: "/workspace?role=diet&tab=charts", tone: "warn" });
+  if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, ownerCta: "Create plan", href: "/workspace?role=trainer&tab=planner", tone: "warn" });
   // Day-2 diet chart explanation — the Health Coach owns scheduling it, but only
   // once the dietitian's chart draft exists (you can't explain a chart that
   // hasn't been written). Until then the "Diet chart — not drafted" item above

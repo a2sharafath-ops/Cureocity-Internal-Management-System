@@ -15,6 +15,9 @@ const TONE: Record<string, { dot: string }> = {
 const firstName = (n: string) => n.split(" ")[0];
 
 const chaseBtn: React.CSSProperties = { border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
+// Owner action: the viewer owns this deliverable, so give them a button to go do
+// it (not a "Remind" — you don't remind yourself).
+const ownerBtn: React.CSSProperties = { ...chaseBtn, textDecoration: "none", display: "inline-block" };
 
 // `canChase` = the viewer is an overseer (Super Admin / Admin / Manager). For
 // them, ops items (bookings, blood chase, invoices) that no single clinician
@@ -52,6 +55,15 @@ function List({ items, empty, clientId, canChase, viewerStaffId }: { items: Stat
                   Remind{it.ownerName ? ` ${firstName(it.ownerName)}` : ""}
                 </SubmitButton>
               </form>
+            </div>
+          );
+        }
+        // Viewer owns this deliverable → a filled action button to go do it.
+        if (it.ownerStaffId && it.ownerStaffId === viewerStaffId && it.href) {
+          return (
+            <div key={i} style={{ ...rowStyle, ...border }}>
+              {body}
+              <Link href={it.href} style={ownerBtn}>{it.ownerCta ?? "Open"} →</Link>
             </div>
           );
         }
