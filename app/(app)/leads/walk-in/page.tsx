@@ -25,7 +25,6 @@ export default async function WalkInPage() {
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 28 }}>
         <div style={{ textAlign: "center", marginBottom: 22 }}>
           <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Welcome to Cureocity</h1>
-          <div style={{ color: "var(--muted)", fontSize: 13 }}>Add a walk-in visitor</div>
         </div>
 
         <form action={createWalkInLead} style={{ display: "grid", gap: 16 }}>
