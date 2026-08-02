@@ -1,0 +1,44 @@
+name: Deploy to Vercel
+
+# Why this exists:
+# The native GitHub -> Vercel webhook occasionally fails to reach Vercel, so a
+# pushed commit never gets built and the live site sits on the old bundle (the
+# reason we kept having to push an "empty commit" to force it). This workflow
+# runs on GitHub's own infrastructure and pings a Vercel Deploy Hook on every
+# push to main, giving a trigger that can't be silently dropped.
+#
+# One-time setup (see also docs/deploy.md):
+#   1. Vercel -> production project -> Settings -> Git -> Deploy Hooks:
+#      create a hook on branch "main", copy its URL.
+#   2. GitHub -> repo -> Settings -> Secrets and variables -> Actions:
+#      add a repository secret named VERCEL_DEPLOY_HOOK with that URL.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # lets you trigger a deploy manually from the Actions tab
+
+# Never run two deploys at once; if you push twice quickly, the newer one waits.
+concurrency:
+  group: vercel-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel deploy
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::VERCEL_DEPLOY_HOOK secret is not set. Add it in repo Settings -> Secrets -> Actions."
+            exit 1
+          fi
+          echo "Pinging Vercel deploy hook for commit ${GITHUB_SHA}..."
+          code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$HOOK")
+          echo "Vercel responded with HTTP $code"
+          case "$code" in
+            2*) echo "Deploy triggered successfully." ;;
+            *)  echo "::error::Deploy hook returned HTTP $code"; exit 1 ;;
+          esac
