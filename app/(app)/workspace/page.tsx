@@ -541,7 +541,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                   {roleKey === "diet" && <Link href="/meals" style={qa}>Meal Monitoring</Link>}
                   {roleKey === "trainer" && <Link href="/trainer" style={qa}>Session Board</Link>}
                   {roleKey === "coach" && <Link href="/followups" style={qa}>Follow-ups</Link>}
-                  {roleKey === "doctor" && <Link href="/emr" style={qa}>Patient Records</Link>}
+                  {roleKey === "doctor" && <Link href="/emr" style={qa}>Client Records</Link>}
                 </div>
               </div>
               )}

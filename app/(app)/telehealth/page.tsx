@@ -55,7 +55,7 @@ export default async function TelehealthPage() {
 
       <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead><tr><th style={th2}>Patient</th><th style={th2}>Scheduled</th><th style={th2}>Room</th><th style={th2}>Status</th><th style={th2} /></tr></thead>
+          <thead><tr><th style={th2}>Client</th><th style={th2}>Scheduled</th><th style={th2}>Room</th><th style={th2}>Status</th><th style={th2} /></tr></thead>
           <tbody>
             {sessions.map((s) => (
               <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>

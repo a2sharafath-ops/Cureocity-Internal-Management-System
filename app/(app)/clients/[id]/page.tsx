@@ -628,7 +628,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{ fontWeight: 700 }}>Care records</div>
           <span style={{ flex: 1 }} />
-          {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Patient Records →</Link>}
+          {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Client Records →</Link>}
         </div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>

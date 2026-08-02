@@ -236,7 +236,7 @@ export default function AppointmentsView({
       {booking.open && (
         <form key={`${booking.client}|${booking.taskId ?? ""}`} onSubmit={submitBooking} style={{ ...box, padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, alignItems: "end" }}>
           {booking.taskId && <input type="hidden" name="task_id" value={booking.taskId} />}
-          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Patient</label><select style={input} name="client_id" required value={booking.client} onChange={(e) => setBooking((b) => ({ ...b, client: e.target.value }))}><option value="" disabled>Patient…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Client</label><select style={input} name="client_id" required value={booking.client} onChange={(e) => setBooking((b) => ({ ...b, client: e.target.value }))}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Provider ({disc === "All" ? "any discipline" : disc})</label><select style={input} name="provider_id" value={booking.provider} onChange={(e) => setBooking((b) => ({ ...b, provider: e.target.value }))}><option value="">— any available —</option>{providers.filter((s) => disc === "All" || s.discipline === disc).map((s) => <option key={s.id} value={s.id}>{s.name} · {s.discipline}</option>)}</select></div>
           <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Type</label><select style={input} name="type" value={apptType} onChange={(e) => setApptType(e.target.value)}>
             {hasServices
@@ -399,7 +399,7 @@ export default function AppointmentsView({
             <thead>
               <tr style={{ color: "var(--muted)", fontSize: 12, textAlign: "left" }}>
                 <th style={{ padding: "10px 14px" }}>Date</th><th style={{ padding: "10px 14px" }}>Time</th>
-                <th style={{ padding: "10px 14px" }}>Patient</th><th style={{ padding: "10px 14px" }}>Type</th>
+                <th style={{ padding: "10px 14px" }}>Client</th><th style={{ padding: "10px 14px" }}>Type</th>
                 <th style={{ padding: "10px 14px" }}>Provider</th><th style={{ padding: "10px 14px" }}>Status</th><th style={{ padding: "10px 14px" }} />
               </tr>
             </thead>
