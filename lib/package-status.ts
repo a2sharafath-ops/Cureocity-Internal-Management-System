@@ -8,12 +8,13 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
-import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS } from "@/lib/comprehensive";
+import { clock, formatLeft } from "@/lib/sla-clock";
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
 
-export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; ownerCta?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string };
+export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; ownerCta?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string; dueLabel?: string; overdue?: boolean };
 
 // Ops work with no single clinician owner (bookings, blood chase, invoices) is
 // owned by the front desk — overseers chase them rather than doing it themselves.
@@ -23,6 +24,8 @@ export type PackageStatus = { openNow: StatusItem[]; upcoming: StatusItem[] };
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+// A full date+time in clinic-local (IST), for the turnaround SLA deadlines.
+const fmtDT = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).replace(",", "");
 
 export async function getPackageStatus(clientId: string): Promise<PackageStatus | null> {
   const p = await getProfile();
@@ -34,7 +37,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("client_packages").select("package_id, package_name, category, status, start_date, end_date").eq("client_id", clientId),
     sb.from("invoices").select("num, description, amount, status").eq("client_id", clientId),
     sb.from("blood_requests").select("panel, submitted").eq("client_id", clientId),
-    sb.from("consultations").select("kind, status").eq("client_id", clientId),
+    sb.from("consultations").select("kind, status, completed_at").eq("client_id", clientId),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("sessions").select("status, date").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("diet_charts").select("id").eq("client_id", clientId).limit(1),
@@ -111,6 +114,24 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
 
   // ---- clinician deliverables the onboarding ladder doesn't track ----------
   const doneKinds = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
+  // Earliest completion per consult kind — the trigger the turnaround SLA counts
+  // from (diet chart owed 24h after the diet consult; workout plan 24h after the
+  // fitness assessment). Lets the client card show the real deadline, not just
+  // "open". Note: this is a display hint and doesn't discount freeze/pause time —
+  // the Comprehensive / PT board stays the authoritative breach record.
+  const completedAtOf = new Map<string, string>();
+  for (const c of (cons ?? []) as { kind: string; status: string; completed_at: string | null }[]) {
+    if (c.status === "completed" && c.completed_at) {
+      const prev = completedAtOf.get(c.kind);
+      if (!prev || c.completed_at < prev) completedAtOf.set(c.kind, c.completed_at);
+    }
+  }
+  const nowMs = Date.now();
+  const slaHint = (startAt: string | null | undefined, windowMs: number): Pick<StatusItem, "dueLabel" | "overdue"> => {
+    const c = clock(startAt, null, windowMs, nowMs);
+    if (!c.dueAt) return {};
+    return { dueLabel: `due by ${fmtDT(c.dueAt)} · ${formatLeft(c.msLeft)}`, overdue: c.status === "breached" };
+  };
   // Comprehensive blood is a separate panel — the onboarding step only checks it
   // was *requested*; the client still owes the actual report.
   const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
@@ -126,8 +147,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   }));
   // Blood card + consolidated approval live on this same page, so no cross-link.
   if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
-  if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, ownerCta: "Draft chart", href: "/workspace?role=diet&tab=charts", tone: "warn" });
-  if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, ownerCta: "Create plan", href: "/workspace?role=trainer&tab=planner", tone: "warn" });
+  if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, ownerCta: "Draft chart", href: "/workspace?role=diet&tab=charts", tone: "warn", ...slaHint(completedAtOf.get("Diet"), DIET_DRAFT_MS) });
+  if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, ownerCta: "Create plan", href: "/workspace?role=trainer&tab=planner", tone: "warn", ...slaHint(completedAtOf.get("Trainer"), WORKOUT_PLAN_MS) });
   // Day-2 diet chart explanation — the Health Coach owns scheduling it, but only
   // once the dietitian's chart draft exists (you can't explain a chart that
   // hasn't been written). Until then the "Diet chart — not drafted" item above

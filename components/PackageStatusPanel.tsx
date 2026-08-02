@@ -36,6 +36,7 @@ function List({ items, empty, clientId, canChase, viewerStaffId }: { items: Stat
               <span style={{ color: "var(--ink)" }}>{main}</span>
               {badge && <span style={{ marginLeft: 6, background: badge.bg, color: badge.color, borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700, textTransform: "capitalize", whiteSpace: "nowrap" }}>{badge.text}</span>}
               {it.detail ? <span style={{ color: "var(--muted)" }}> · {it.detail}</span> : null}
+              {it.dueLabel ? <span style={{ color: it.overdue ? "var(--red-text)" : "var(--amber-text)", fontWeight: it.overdue ? 700 : 600 }}> · {it.dueLabel}</span> : null}
             </span>
           </>
         );
