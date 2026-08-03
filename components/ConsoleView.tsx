@@ -5,6 +5,7 @@ import Link from "next/link";
 import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbodySummary, extractInbodySummary, saveMeasurementSummary, aiConsultSummary, autosaveConsult } from "@/lib/actions";
 import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
+import { deriveFlags, labsFromAnswers } from "@/lib/auto-flags";
 
 type Flag = { text: string; severity: string };
 
@@ -73,6 +74,20 @@ export default function ConsoleView({
   });
   const setV = (k: string, v: string) => setVit((p) => ({ ...p, [k]: v }));
   const anyVitals = Object.values(vit).some((v) => v.trim());
+
+  // Suggested flags from the data already on screen — vitals being typed, the
+  // InBody figures, and lab values answered in the questionnaire. Suggestions
+  // only: nothing reaches the record until the clinician accepts it.
+  const suggestions = (() => {
+    const answered = questions.map((q, idx) => [q, (ans[idx] ?? "").trim()] as [string, string]).filter(([, a]) => a);
+    const num = (s: string) => { const v = Number(String(s).trim()); return Number.isFinite(v) ? v : null; };
+    return deriveFlags({
+      vitals: { systolic: num(vit.systolic), diastolic: num(vit.diastolic), pulse: num(vit.pulse), spo2: num(vit.spo2), temp_c: num(vit.temp_c) },
+      inbody: { bmi: health?.bmi ?? null, bodyFat: health?.bodyFat ?? null, visceral: health?.visceral ?? null },
+      labs: labsFromAnswers(answered),
+      gender: health?.gender ?? null,
+    }).filter((s) => !fl.some((f) => f.text === s.text));   // hide once accepted
+  })();
 
   // Quick prescription (single drug) — Doctor tool.
   const [rx, setRx] = useState({ drug: "", dose: "", frequency: "", duration: "" });
@@ -344,6 +359,28 @@ export default function ConsoleView({
           <div style={{ ...box, padding: "16px 18px" }}>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Flags raised {fl.length > 0 && <span style={{ color: "var(--red-text)" }}>· {fl.length}</span>}</div>
             {fl.length === 0 && <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>No flags. Add anything clinically notable.</div>}
+            {suggestions.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".4px", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>
+                  Suggested from this client&apos;s data · {suggestions.length}
+                </div>
+                <div style={{ display: "grid", gap: 5 }}>
+                  {suggestions.map((s, i) => {
+                    const sv = SEVERITY[s.severity] ?? SEVERITY.info;
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px dashed var(--border)", borderRadius: 8, padding: "6px 10px" }}>
+                        <span style={{ color: sv.fg, fontSize: 10, fontWeight: 700, textTransform: "uppercase", flexShrink: 0 }}>{sv.label}</span>
+                        <span style={{ flex: 1, fontSize: 12.5 }}>{s.text}</span>
+                        <span style={{ fontSize: 10.5, color: "var(--muted)", flexShrink: 0 }}>{s.source}</span>
+                        <button type="button" onClick={() => setFl((x) => [...x, { text: s.text, severity: s.severity }])}
+                          style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 7, padding: "3px 9px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Add</button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>Suggestions only — nothing is recorded until you add it.</div>
+              </div>
+            )}
             <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
               {fl.map((f, i) => {
                 const s = SEVERITY[f.severity] ?? SEVERITY.info;
