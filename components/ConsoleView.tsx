@@ -23,7 +23,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health,
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals,
 }: {
   id: string;
   kind: string;
@@ -37,6 +37,8 @@ export default function ConsoleView({
   status: string;
   canTools: boolean;
   health?: ConsoleHealth;
+  /** Vitals typed but not yet saved, restored from consultations.draft. */
+  draftVitals?: Record<string, string> | null;
 }) {
   // Ambient scribe / AI co-pilot is opt-in: the clock only runs while recording,
   // so the duration reflects real session time, not the tab being left open.
@@ -61,6 +63,17 @@ export default function ConsoleView({
   const [fSev, setFSev] = useState("warning");
   const addFlag = () => { const t = fText.trim(); if (!t) return; setFl((x) => [...x, { text: t, severity: fSev }]); setFText(""); };
 
+  // Vitals live in React state so they survive a questionnaire save (which
+  // re-renders the page and used to blank these boxes) and can be autosaved.
+  const VITAL_KEYS = ["systolic", "diastolic", "pulse", "spo2", "temp_c", "weight"] as const;
+  const [vit, setVit] = useState<Record<string, string>>(() => {
+    const seed: Record<string, string> = {};
+    for (const k of VITAL_KEYS) seed[k] = String(draftVitals?.[k] ?? "");
+    return seed;
+  });
+  const setV = (k: string, v: string) => setVit((p) => ({ ...p, [k]: v }));
+  const anyVitals = Object.values(vit).some((v) => v.trim());
+
   // Quick prescription (single drug) — Doctor tool.
   const [rx, setRx] = useState({ drug: "", dose: "", frequency: "", duration: "" });
 
@@ -79,15 +92,15 @@ export default function ConsoleView({
   const [saving, setSaving] = useState(false);
   const dirty = useRef(false);
   const first = useRef(true);
-  const latest = useRef({ ans, fl, summaryText });
-  latest.current = { ans, fl, summaryText };
+  const latest = useRef({ ans, fl, summaryText, vit });
+  latest.current = { ans, fl, summaryText, vit };
 
   const flush = useCallback(async () => {
     if (!dirty.current || status === "completed") return;
     dirty.current = false;
     setSaving(true);
-    const { ans: a, fl: f, summaryText: s } = latest.current;
-    const r = await autosaveConsult(id, kind, a, f, s);
+    const { ans: a, fl: f, summaryText: s, vit: v } = latest.current;
+    const r = await autosaveConsult(id, kind, a, f, s, v);
     setSaving(false);
     if (r?.error) { setAutoErr(r.error); dirty.current = true; }   // keep it dirty so the next tick retries
     else { setAutoErr(null); setSavedAt(new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })); }
@@ -99,7 +112,7 @@ export default function ConsoleView({
     dirty.current = true;
     const t = setTimeout(flush, 4000);          // settle after typing stops
     return () => clearTimeout(t);
-  }, [ans, fl, summaryText, flush, status]);
+  }, [ans, fl, summaryText, vit, flush, status]);
 
   // Save when the tab is hidden (covers switching tabs, closing, and mobile
   // backgrounding — which never fire a reliable unload).
@@ -369,6 +382,10 @@ export default function ConsoleView({
                   {autoErr ? `Autosave failed — ${autoErr}` : saving ? "Saving…" : savedAt ? `Autosaved ${savedAt}` : "Autosave on"}
                 </span>
               )}
+              {/* Vitals are typed in Session tools but belong to the same
+                  consultation, so mirror them here: one Save records both, and
+                  a clinician can't lose vitals by saving the questionnaire. */}
+              {VITAL_KEYS.map((k) => <input key={k} type="hidden" name={`v_${k}`} value={vit[k] ?? ""} />)}
               <button type="submit" name="complete" value="false" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save draft</button>
               <button type="submit" name="complete" value="true" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Complete &amp; summarize</button>
             </div>
@@ -395,14 +412,15 @@ export default function ConsoleView({
               <input type="hidden" name="client_id" value={client.id} />
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Record vitals</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
-                <input name="systolic" placeholder="Systolic" inputMode="numeric" style={sm} />
-                <input name="diastolic" placeholder="Diastolic" inputMode="numeric" style={sm} />
-                <input name="pulse" placeholder="Pulse" inputMode="numeric" style={sm} />
-                <input name="spo2" placeholder="SpO₂ %" inputMode="numeric" style={sm} />
-                <input name="temp_c" placeholder="Temp °C" inputMode="decimal" style={sm} />
-                <input name="weight" placeholder="Weight kg" inputMode="decimal" style={sm} />
+                <input name="systolic" placeholder="Systolic" inputMode="numeric" value={vit.systolic} onChange={(e) => setV("systolic", e.target.value)} style={sm} />
+                <input name="diastolic" placeholder="Diastolic" inputMode="numeric" value={vit.diastolic} onChange={(e) => setV("diastolic", e.target.value)} style={sm} />
+                <input name="pulse" placeholder="Pulse" inputMode="numeric" value={vit.pulse} onChange={(e) => setV("pulse", e.target.value)} style={sm} />
+                <input name="spo2" placeholder="SpO₂ %" inputMode="numeric" value={vit.spo2} onChange={(e) => setV("spo2", e.target.value)} style={sm} />
+                <input name="temp_c" placeholder="Temp °C" inputMode="decimal" value={vit.temp_c} onChange={(e) => setV("temp_c", e.target.value)} style={sm} />
+                <input name="weight" placeholder="Weight kg" inputMode="decimal" value={vit.weight} onChange={(e) => setV("weight", e.target.value)} style={sm} />
               </div>
               <button type="submit" style={toolBtn}>Save vitals</button>
+              {anyVitals && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>Also saved by <b>Save draft</b> / <b>Complete</b> below — and autosaved as you type.</div>}
             </form>
 
             {/* Lab order */}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseInbodyText, inbodySummaryFromText, metricCount } from "@/lib/inbody-parse";
+import { parseInbodyText, inbodySummaryFromText, metricCount, parseInbodyDate } from "@/lib/inbody-parse";
 
 // Text as extracted from a real InBody 770 result sheet PDF.
 const REPORT = `InBody 770 · Body Composition Result Sheet
@@ -53,6 +53,24 @@ describe("parseInbodyText", () => {
 
   it("returns nothing rather than guessing on unrelated text", () => {
     expect(metricCount(parseInbodyText("Dear client, your appointment is confirmed."))).toBe(0);
+  });
+});
+
+describe("parseInbodyDate", () => {
+  it("reads the report's own test date, not today", () => {
+    expect(parseInbodyDate(REPORT)).toBe("2026-08-03");
+  });
+
+  it("handles the date formats InBody devices print", () => {
+    expect(parseInbodyDate("Test date: 2026-08-03")).toBe("2026-08-03");
+    expect(parseInbodyDate("Test date: 3 August 2026")).toBe("2026-08-03");
+    expect(parseInbodyDate("Test date: 03 Aug 2026, 6:40 pm")).toBe("2026-08-03");
+    expect(parseInbodyDate("Test date: 03/08/2026")).toBe("2026-08-03"); // day-first
+  });
+
+  it("returns null rather than guessing a date", () => {
+    expect(parseInbodyDate("no test date here")).toBeNull();
+    expect(parseInbodyDate("Test date: sometime last week")).toBeNull();
   });
 });
 

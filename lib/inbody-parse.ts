@@ -61,6 +61,35 @@ export function parseInbodyText(text: string): InbodyMetrics {
   return m;
 }
 
+const MONTHS: Record<string, string> = {
+  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+};
+
+/**
+ * The report's own test date as YYYY-MM-DD, or null if it can't be read
+ * confidently. A measurement must be dated when it was *taken*, not when
+ * someone got round to uploading it — otherwise the progress chart lies.
+ * Handles "03 Aug 2026", "3 August 2026", "2026-08-03" and "03/08/2026"
+ * (day-first, matching Indian convention).
+ */
+export function parseInbodyDate(text: string): string | null {
+  const raw = text.match(/Test\s*date\s*:?\s*([^\n]+)/i)?.[1]?.trim();
+  if (!raw) return null;
+
+  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  const dMonY = raw.match(/(\d{1,2})\s+([A-Za-z]{3,})\.?\s+(\d{4})/);
+  if (dMonY) {
+    const mm = MONTHS[dMonY[2].slice(0, 3).toLowerCase()];
+    if (mm) return `${dMonY[3]}-${mm}-${dMonY[1].padStart(2, "0")}`;
+  }
+  const dmy = raw.match(/(\d{1,2})[/.](\d{1,2})[/.](\d{4})/);   // day-first
+  if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
+  return null;
+}
+
 /** How many fields were recognised — used to decide whether parsing was worthwhile. */
 export function metricCount(m: InbodyMetrics): number {
   return Object.values(m).filter((v) => v !== undefined && v !== null).length;

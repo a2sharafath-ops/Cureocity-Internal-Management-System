@@ -1409,6 +1409,35 @@ export async function saveConsultSession(formData: FormData) {
   await supabase.from("consultations").update({
     answers, summary, flags, ...(complete ? { status: "completed", completed_at: new Date().toISOString() } : {}), ...(duration ? { duration_min: duration } : {}),
   }).eq("id", id);
+
+  // Vitals travel with the consultation (mirrored into this form as v_*), so one
+  // Save records the questionnaire AND the vitals. Previously they were a
+  // separate form: saving the questionnaire re-rendered the page and silently
+  // discarded whatever was typed into the vitals boxes.
+  const V_KEYS = ["systolic", "diastolic", "pulse", "spo2", "temp_c", "weight"] as const;
+  const vNum = (k: string) => {
+    const raw = String(formData.get(`v_${k}`) ?? "").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+  const vitalVals = Object.fromEntries(V_KEYS.map((k) => [k, vNum(k)]));
+  if (Object.values(vitalVals).some((v) => v !== null)) {
+    const { data: vrow } = await supabase.from("consultations").select("client_id").eq("id", id).maybeSingle();
+    const vClient = (vrow as { client_id: string | null } | null)?.client_id ?? null;
+    if (vClient) {
+      const today = todayISO();
+      // One vitals reading per client per day from the console: re-saving a
+      // consult updates today's reading instead of stacking near-identical rows.
+      const { data: existing } = await supabase.from("vitals")
+        .select("id").eq("client_id", vClient).eq("date", today).limit(1).maybeSingle();
+      const eid = (existing as { id: string } | null)?.id;
+      if (eid) await supabase.from("vitals").update({ ...vitalVals, recorded_by: p.name }).eq("id", eid);
+      else await supabase.from("vitals").insert({ client_id: vClient, date: today, ...vitalVals, recorded_by: p.name });
+      // The draft has become a real record — clear the scratch copy.
+      await supabase.from("consultations").update({ draft: null }).eq("id", id);
+    }
+  }
   if (complete) {
     const { data: link } = await supabase.from("consultations").select("appointment_id").eq("id", id).maybeSingle();
     const apptId = (link as { appointment_id?: string | null } | null)?.appointment_id ?? null;
@@ -1441,6 +1470,7 @@ export async function autosaveConsult(
   answersByIndex: string[],
   flags: { text: string; severity: string }[],
   summary: string,
+  vitals?: Record<string, string>,
 ): Promise<{ ok?: boolean; at?: string; error?: string }> {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return { error: "Not authorized." };
@@ -1467,10 +1497,17 @@ export async function autosaveConsult(
     .map((q, i) => [q, String(answersByIndex[i] ?? "").trim()] as [string, string])
     .filter(([, a]) => a);
 
+  // Vitals are a scratch draft until the clinician saves — parked on `draft`
+  // rather than written to the vitals table, so autosave can't spray a row every
+  // few seconds. saveConsultSession is what turns them into a real record.
+  const vDraft = Object.fromEntries(
+    Object.entries(vitals ?? {}).filter(([, v]) => String(v ?? "").trim()),
+  );
   const { error } = await supabase.from("consultations").update({
     answers: pairs,
     flags: (flags ?? []).filter((f) => f?.text?.trim()),
     summary: summary.trim() || null,
+    draft: Object.keys(vDraft).length ? { vitals: vDraft } : null,
   }).eq("id", id);
   if (error) return { error: error.message };
   return { ok: true, at: new Date().toISOString() };
@@ -5874,15 +5911,38 @@ export async function extractInbodySummary(_prev: AiState, formData: FormData): 
   const summary = inbodySummaryFromText(text, (cg as { gender: string | null } | null)?.gender ?? null);
   if (!summary) return { error: "That PDF didn't contain recognisable InBody fields — check it's the result sheet, or paste the values in." };
 
-  // Save onto the latest measurement record, if there is one to attach to.
-  const { data: mrow } = await supabase.from("measurements")
-    .select("id").eq("client_id", client_id).order("date", { ascending: false }).limit(1).maybeSingle();
-  const mid = (mrow as { id: string } | null)?.id;
+  // Record the measurement itself, not just the prose. The InBody's numbers are
+  // sitting in the PDF — re-typing them by hand was busywork, and with no
+  // measurement row there was nowhere to attach the summary either, so it
+  // silently failed to save. Dated from the report's own test date so the
+  // progress chart reflects when the scan happened, not when it was uploaded.
+  const { parseInbodyText, parseInbodyDate } = await import("@/lib/inbody-parse");
+  const m = parseInbodyText(text);
+  const measuredOn = parseInbodyDate(text) ?? todayISO();
+
+  // Match on the test date: re-extracting the same report updates that reading
+  // rather than stacking duplicates, and a genuinely new scan adds a new row.
+  const { data: sameDay } = await supabase.from("measurements")
+    .select("id").eq("client_id", client_id).eq("date", measuredOn).limit(1).maybeSingle();
+
+  const vals = {
+    weight: m.weight ?? null, bmi: m.bmi ?? null, body_fat: m.bodyFat ?? null,
+    muscle_mass: m.smm ?? null, visceral_fat: m.visceral ?? null,
+    ai_summary: summary, ai_summary_at: new Date().toISOString(),
+  };
+
+  let mid = (sameDay as { id: string } | null)?.id ?? null;
   if (mid) {
-    await supabase.from("measurements").update({ ai_summary: summary, ai_summary_at: new Date().toISOString() }).eq("id", mid);
-    await logAudit(me, "InBody summary extracted from PDF", client_id, file.name ?? null);
-    revalidatePath(`/clients/${client_id}`);
+    await supabase.from("measurements").update(vals).eq("id", mid);
+  } else {
+    const { data: created } = await supabase.from("measurements")
+      .insert({ client_id, date: measuredOn, ...vals, notes: `From InBody report${file.name ? ` (${file.name})` : ""}`, recorded_by: me.name })
+      .select("id").maybeSingle();
+    mid = (created as { id: string } | null)?.id ?? null;
   }
+
+  await logAudit(me, mid && sameDay ? "InBody measurement updated from PDF" : "InBody measurement recorded from PDF", client_id, `${measuredOn} · ${file.name ?? "report"}`);
+  revalidatePath(`/clients/${client_id}`);
   return { text: summary };
 }
 

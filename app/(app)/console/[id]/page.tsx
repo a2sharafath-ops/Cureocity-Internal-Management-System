@@ -15,7 +15,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   const supabase = createClient();
   const { data } = await supabase
     .from("consultations")
-    .select("id, kind, status, summary, answers, flags, client_id, lead_id, clients(name, code), leads(name)")
+    .select("id, kind, status, summary, answers, flags, draft, client_id, lead_id, clients(name, code), leads(name)")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) notFound();
@@ -23,6 +23,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   const row = data as unknown as {
     id: string; kind: string; status: string; summary: string | null;
     answers: [string, string][] | null; flags: { text: string; severity: string }[] | null;
+    draft: { vitals?: Record<string, string> } | null;
     client_id: string | null; lead_id: string | null;
     clients: { name: string; code: string | null } | null; leads: { name: string } | null;
   };
@@ -125,6 +126,8 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       client={subject}
       questions={q.questions}
       answers={(row.answers ?? []) as [string, string][]}
+      // Vitals typed but never saved — restored so a reload doesn't lose them.
+      draftVitals={((row.draft ?? null) as { vitals?: Record<string, string> } | null)?.vitals ?? null}
       flags={(row.flags ?? []) as { text: string; severity: string }[]}
       summary={row.summary}
       status={row.status}
