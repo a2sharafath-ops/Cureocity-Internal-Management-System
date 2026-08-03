@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { openNotification, markAllNotificationsRead } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ function ago(iso: string) {
   if (s < 60) return "just now";
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: IST });
 }
 
 export default async function AlertsPage() {

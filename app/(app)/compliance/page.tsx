@@ -9,6 +9,7 @@ import MetricCard from "@/components/MetricCard";
 import PhiReveal from "@/components/PhiReveal";
 import IdentityForm from "@/components/IdentityForm";
 import { ConsentForm, BreachForm, RetentionForm, ConsentRevoke, BreachActions } from "@/components/GovernanceForms";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +156,7 @@ export default async function CompliancePage() {
           <tbody>
             {access.map((a) => (
               <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{new Date(a.created_at).toLocaleString()}</td>
+                <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{new Date(a.created_at).toLocaleString("en-IN", { timeZone: IST })}</td>
                 <td style={td}>{a.actor_name ?? "—"} <span style={{ color: "var(--muted)", fontSize: 12 }}>{a.actor_role ?? ""}</span></td>
                 <td style={td}>{a.action}</td>
                 <td style={td}>{a.target ? <PhiReveal raw={a.target} masked={maskName(a.target)} /> : <span style={{ color: "var(--muted)" }}>—</span>}</td>

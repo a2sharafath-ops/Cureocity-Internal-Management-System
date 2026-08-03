@@ -673,6 +673,19 @@ export async function createLead(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const supabase = createClient();
+
+  // Double-submit guard. A walk-in form submitted twice (impatient double-click,
+  // or a retried request) produced two identical leads ~1s apart — the front
+  // desk then had to spot and clean up the copy. If the same phone was captured
+  // in the last 2 minutes, treat this as the same submission and stop.
+  const dupPhone = String(formData.get("phone") ?? "").trim();
+  if (dupPhone) {
+    const since = new Date(Date.now() - 2 * 60_000).toISOString();
+    const { data: recent } = await supabase.from("leads")
+      .select("id").eq("phone", dupPhone).gte("created_at", since).limit(1);
+    if ((recent ?? []).length) return;
+  }
+
   const { data: last } = await supabase.from("leads").select("num").order("num", { ascending: false }).limit(1).maybeSingle();
   const num = ((last?.num as number | null) ?? 0) + 1;
   const row: Record<string, unknown> = { num };
@@ -5366,6 +5379,17 @@ export async function createClientRecord(formData: FormData) {
   const supabase = createClient();
   const c = parseClientForm(formData);
   if (!c.name) return;
+
+  // No package, not a client. A package-less client is an empty shell — no
+  // invoice, no journey, no care team — and is invisible to everything that
+  // reads client_packages (membership checks, obligations, renewals, the
+  // whiteboard). Someone who hasn't chosen yet belongs in CRM & Leads. The
+  // lead→client conversion already enforced this; the Onboard form was the
+  // remaining way in.
+  const subIdEarly = String(formData.get("sub_id") || "");
+  if (!c.package_id) {
+    redirect(`/clients/new?err=package${subIdEarly ? `&sub=${subIdEarly}` : ""}`);
+  }
 
   // Membership prerequisite — enforced HERE, before the client row is created,
   // so a blocked attempt leaves nothing behind. A brand-new client has no

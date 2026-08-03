@@ -15,6 +15,7 @@ import ActivityTimeline from "@/components/ActivityTimeline";
 import { buildTimeline, atDay, type TimelineEvent } from "@/lib/timeline";
 import { canWrite } from "@/lib/roles";
 import { ivrStatus } from "@/lib/ivr/config";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
           <div style={{ color: "var(--muted)", fontSize: 13 }}>{lead.phone ?? "—"}{lead.source ? ` · ${lead.source}` : ""}{lead.campaign ? ` · ${lead.campaign}` : ""} · {lead.stage ?? "1-New Lead"}</div>
           {lead.created_at && (
             <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 3 }}>
-              Added {new Date(lead.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}
+              Added {new Date(lead.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })}
             </div>
           )}
         </div>

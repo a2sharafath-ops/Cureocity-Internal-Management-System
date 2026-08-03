@@ -8,6 +8,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MetricCard from "@/components/MetricCard";
 import CheckinForm from "@/components/CheckinForm";
 import OpsTabs from "@/components/OpsTabs";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function AccessPage() {
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const th: React.CSSProperties = { padding: "10px 16px", textAlign: "left", color: "var(--muted)", fontSize: 12 };
   const td: React.CSSProperties = { padding: "10px 16px", fontSize: 14 };
-  const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: IST });
   const stat = (label: string, value: string, color = "var(--brand-text)") => <MetricCard label={label} value={value} color={color} />;
 
   return (

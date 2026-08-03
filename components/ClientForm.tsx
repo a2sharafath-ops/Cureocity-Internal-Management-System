@@ -21,13 +21,16 @@ const input: React.CSSProperties = {
 };
 
 export default function ClientForm({
-  action, packages, client, submitLabel, subId,
+  action, packages, client, submitLabel, subId, requirePackage = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   packages: Pkg[];
   client?: ClientData;
   submitLabel: string;
   subId?: string;
+  /** Creating a client — a package is mandatory ("no package, not a client").
+   *  Left off when editing, so a legacy record without one can still be saved. */
+  requirePackage?: boolean;
 }) {
   const c = client ?? {};
   return (
@@ -63,9 +66,9 @@ export default function ClientForm({
           <input style={input} type="date" name="dob" defaultValue={dobToISO(c.dob) ?? ""} />
         </div>
         <div>
-          <label style={label}>Package</label>
-          <select style={input} name="package_id" defaultValue={c.package_id ?? ""}>
-            <option value="">— none —</option>
+          <label style={label}>Package{requirePackage ? " *" : ""}</label>
+          <select style={input} name="package_id" defaultValue={c.package_id ?? ""} required={requirePackage}>
+            <option value="">{requirePackage ? "— select a package —" : "— none —"}</option>
             {packages.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}

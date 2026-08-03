@@ -1,3 +1,4 @@
+import { IST } from "@/lib/datetime";
 export type Msg = {
   id: string;
   sender: string;      // 'staff' | 'client'
@@ -7,7 +8,7 @@ export type Msg = {
 };
 
 function when(iso: string) {
-  return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", timeZone: IST });
 }
 
 // viewer: whose perspective — staff sees staff messages on the right; client (portal) sees their own on the right.

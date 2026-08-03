@@ -33,6 +33,13 @@ export default async function NewClientPage({ searchParams }: { searchParams: { 
       </Link>
       <h1 style={{ fontSize: 20, margin: "10px 0 4px" }}>New Client</h1>
       {subId && <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>Pre-filled from tablet intake — review, add package &amp; referral, then create.</p>}
+      {searchParams.err === "package" && (
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "12px 15px", fontSize: 13, margin: "0 0 14px" }}>
+          <b>A package is required.</b> Every client must hold a package. If they
+          haven&apos;t decided yet, keep them in CRM &amp; Leads and convert once
+          they buy.
+        </div>
+      )}
       {searchParams.err === "membership" && (
         <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "12px 15px", fontSize: 13, margin: "0 0 14px" }}>
           <b>Membership required first.</b> A PT or Comprehensive package needs an active
@@ -40,7 +47,7 @@ export default async function NewClientPage({ searchParams }: { searchParams: { 
           package from their client card.
         </div>
       )}
-      <ClientForm action={createClientRecord} packages={packages} submitLabel="Create client" client={prefill} subId={subId} />
+      <ClientForm action={createClientRecord} packages={packages} submitLabel="Create client" client={prefill} subId={subId} requirePackage />
     </div>
   );
 }

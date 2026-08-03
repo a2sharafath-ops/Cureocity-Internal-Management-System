@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import ExportAuditButton, { type AuditExportRow } from "@/components/ExportAuditButton";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ type Row = {
 };
 
 function when(iso: string) {
-  return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: IST });
 }
 
 export default async function AuditPage() {

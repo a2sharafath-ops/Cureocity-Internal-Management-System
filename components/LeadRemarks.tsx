@@ -1,4 +1,5 @@
 "use client";
+import { IST } from "@/lib/datetime";
 
 // Remark log + next callback for one lead.
 //
@@ -36,7 +37,7 @@ const btn: React.CSSProperties = {
 };
 
 const when = (iso: string) =>
-  new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: IST });
 
 const OUTCOME_LABEL: Record<string, string> = Object.fromEntries(
   REMARK_OUTCOMES.map((o) => [o.key, o.label]),

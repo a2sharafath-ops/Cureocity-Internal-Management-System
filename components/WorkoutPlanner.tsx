@@ -1,4 +1,5 @@
 "use client";
+import { IST } from "@/lib/datetime";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -90,7 +91,7 @@ export default function WorkoutPlanner({ plans, clients }: { plans: WorkoutPlanR
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b style={{ fontSize: 13 }}>{w.client_name ?? "—"} <span style={{ color: "var(--muted)", fontWeight: 500 }}>· {w.name}{w.version ? ` · v${w.version}` : ""}</span></b>
-                <div style={{ color: "var(--muted)", fontSize: 12 }}>{w.type ?? "Strength"}{w.mode ? ` · ${w.mode}` : ""} · {w.items.length} exercise{w.items.length === 1 ? "" : "s"} · {new Date(w.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</div>
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>{w.type ?? "Strength"}{w.mode ? ` · ${w.mode}` : ""} · {w.items.length} exercise{w.items.length === 1 ? "" : "s"} · {new Date(w.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: IST })}</div>
               </div>
               <span style={{ background: w.status === "Published" ? "var(--green-bg)" : "var(--amber-bg)", color: w.status === "Published" ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{w.status}</span>
               <button type="button" onClick={() => setExpanded((e) => (e === w.id ? null : w.id))} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{expanded === w.id ? "Hide" : "View"}</button>

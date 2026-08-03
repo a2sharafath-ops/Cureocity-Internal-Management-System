@@ -9,6 +9,7 @@ import { OnboardingForm, OnboardingCard } from "@/components/OnboardingControls"
 import SegTabs from "@/components/SegTabs";
 import Chip from "@/components/Chip";
 import {
+import { IST } from "@/lib/datetime";
   addHrUpdate, toggleMonthTask, generatePayslip, addCommission, fileStatutory,
   advanceCandidate, setPurchaseStatus, addOffboarding,
   saveLeaveType, decideLeaveType, addHoliday, deleteHoliday, saveSalaryStructure, deleteEmployeeDoc, updateStaffEmployment,
@@ -134,7 +135,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     const [bg, c] = m[d ?? ""] ?? ["var(--neutral-bg)", "#64748b"];
     return chip(bg, c, d ?? "—");
   };
-  const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: IST });
   const fmtDate = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
 
   return (
@@ -391,7 +392,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                         <tr key={d.id} style={{ borderTop: "1px solid var(--border)" }}>
                           <td style={td}>{chip("var(--blue-bg)", "var(--blue-text)", d.kind)}</td>
                           <td style={{ ...td, fontWeight: 600 }}>{d.title}<div style={{ color: "var(--muted)", fontSize: 11 }}>{d.name}</div></td>
-                          <td style={{ ...td, color: "var(--muted)" }}>{new Date(d.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</td>
+                          <td style={{ ...td, color: "var(--muted)" }}>{new Date(d.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: IST })}</td>
                           <td style={{ ...td, textAlign: "right" }}><form action={deleteEmployeeDoc}><input type="hidden" name="id" value={d.id} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form></td>
                         </tr>
                       ))}

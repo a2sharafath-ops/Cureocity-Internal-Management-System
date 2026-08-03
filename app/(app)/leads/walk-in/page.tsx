@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getProfile } from "@/lib/auth";
 import { canWrite } from "@/lib/roles";
 import { createWalkInLead } from "@/lib/actions";
+import SubmitButton from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,10 @@ export default async function WalkInPage() {
             <input name="location" placeholder="Area / locality" style={inp} />
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-            <button type="submit" style={{ flex: 1, background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Add walk-in</button>
+            {/* SubmitButton disables itself while the action runs — a plain
+                button let an impatient double-click create two identical leads.
+                createLead also guards server-side (same phone within 2 min). */}
+            <SubmitButton pendingLabel="Adding…" doneLabel="Adding…" style={{ flex: 1, background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Add walk-in</SubmitButton>
             <Link href="/leads" style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "11px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink)", textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>Cancel</Link>
           </div>
         </form>

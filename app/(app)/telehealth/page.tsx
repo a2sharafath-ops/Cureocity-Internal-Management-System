@@ -8,6 +8,7 @@ import { telehealthStatus } from "@/lib/telehealth/config";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import TelehealthForm from "@/components/TelehealthForm";
 import TelehealthActions from "@/components/TelehealthActions";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function TelehealthPage() {
             {sessions.map((s) => (
               <tr key={s.id} style={{ borderTop: "1px solid var(--border)" }}>
                 <td style={td}>{s.clients ? <Link href={`/clients/${s.clients.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{s.clients.name}</Link> : "Ad-hoc"}</td>
-                <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{s.scheduled_for ? new Date(s.scheduled_for).toLocaleString() : "—"}</td>
+                <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{s.scheduled_for ? new Date(s.scheduled_for).toLocaleString("en-IN", { timeZone: IST }) : "—"}</td>
                 <td style={{ ...td, color: "var(--muted)", fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.room_url ?? "—"}</td>
                 <td style={td}>{chip(s.status)}</td>
                 <td style={{ ...td, textAlign: "right" }}><TelehealthActions id={s.id} status={s.status} roomUrl={s.room_url} /></td>

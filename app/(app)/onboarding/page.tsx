@@ -263,6 +263,22 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
                       })}
                     </div>
                   ) : <span style={{ color: "var(--muted)" }}>—</span>}
+                  {/* Coach and trainer are assigned by rotation the moment the
+                      package is sold — they never wait on a booking. So one of
+                      them showing "unassigned" means the assignment step didn't
+                      complete (e.g. it was rejected before the care-team write
+                      was fixed). Offer Repair here to re-run the journey; it's
+                      idempotent and won't duplicate tasks, blood or protocol.
+                      Previously Repair only appeared when the blood panel was
+                      missing, so a client in exactly this state had no way back. */}
+                  {r.assignments.some((a) => !a.name && !["doctor", "dietitian", "psychologist"].includes(a.discipline)) && (
+                    <form action={repairClientJourney} style={{ margin: "8px 0 0" }}>
+                      <input type="hidden" name="client_id" value={r.clientId} />
+                      <SubmitButton pendingLabel="Repairing…" doneLabel="✓ Repaired" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                        Repair care team
+                      </SubmitButton>
+                    </form>
+                  )}
                 </td>
               </tr>
             ))}

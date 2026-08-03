@@ -1,4 +1,8 @@
 import { redirect } from "next/navigation";
+// Clinic-local timezone. Every timestamp is stored UTC and these pages render
+// server-side (TZ=UTC on Vercel), so date/time formatting must say IST
+// explicitly or staff see UTC mislabelled as their own clock.
+const IST = "Asia/Kolkata";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee, homeFor } from "@/lib/roles";
@@ -437,8 +441,12 @@ export default async function LeadsPage({
                   <td style={{ ...td, whiteSpace: "nowrap" }}>
                     {l.created_at ? (
                       <>
-                        <div style={{ fontSize: 12.5 }}>{new Date(l.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
-                        <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>{new Date(l.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })}</div>
+                        {/* Timestamps are stored UTC. These render on the SERVER,
+                            where the timezone is UTC — so without an explicit
+                            timeZone the clinic saw UTC labelled as local (a 09:21
+                            UTC walk-in read "9:21 am" instead of 2:51 pm IST). */}
+                        <div style={{ fontSize: 12.5 }}>{new Date(l.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: IST })}</div>
+                        <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>{new Date(l.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: IST })}</div>
                       </>
                     ) : <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
@@ -452,7 +460,7 @@ export default async function LeadsPage({
                             {r.body}
                           </div>
                           <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
-                            {new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                            {new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: IST })}
                             {r.by_name ? ` · ${r.by_name}` : ""}
                           </div>
                         </>

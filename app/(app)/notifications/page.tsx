@@ -5,6 +5,7 @@ import { canSee } from "@/lib/roles";
 import { emailStatus } from "@/lib/email/config";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import TestEmailForm from "@/components/TestEmailForm";
+import { IST } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export default async function NotificationsPage() {
               const [bg, color] = chip(l.status);
               return (
                 <tr key={l.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{new Date(l.created_at).toLocaleString()}</td>
+                  <td style={{ ...td, color: "var(--muted)", fontSize: 13 }}>{new Date(l.created_at).toLocaleString("en-IN", { timeZone: IST })}</td>
                   <td style={td}>{l.to_email}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{l.template ?? "—"}</td>
                   <td style={{ ...td, color: "var(--muted)" }}>{l.subject ?? "—"}</td>
