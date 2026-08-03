@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, useRef, useCallback } from "react";
 import Link from "next/link";
-import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbodySummary, saveMeasurementSummary, aiConsultSummary } from "@/lib/actions";
+import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbodySummary, extractInbodySummary, saveMeasurementSummary, aiConsultSummary, autosaveConsult } from "@/lib/actions";
 import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
 
@@ -68,6 +68,56 @@ export default function ConsoleView({
   // what "Save draft" / "Complete & summarize" submit (name="summary"), so there
   // is a single source of truth for the shareable summary.
   const [summaryText, setSummaryText] = useState(summary ?? "");
+
+  // ---- autosave -----------------------------------------------------------
+  // A long intake used to live only in the browser until someone pressed Save
+  // draft, so a closed tab lost the lot. Answers, flags and the summary are now
+  // written back a few seconds after typing stops, plus on tab-hide. The first
+  // render is skipped so simply opening a consult doesn't write.
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [autoErr, setAutoErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const dirty = useRef(false);
+  const first = useRef(true);
+  const latest = useRef({ ans, fl, summaryText });
+  latest.current = { ans, fl, summaryText };
+
+  const flush = useCallback(async () => {
+    if (!dirty.current || status === "completed") return;
+    dirty.current = false;
+    setSaving(true);
+    const { ans: a, fl: f, summaryText: s } = latest.current;
+    const r = await autosaveConsult(id, kind, a, f, s);
+    setSaving(false);
+    if (r?.error) { setAutoErr(r.error); dirty.current = true; }   // keep it dirty so the next tick retries
+    else { setAutoErr(null); setSavedAt(new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })); }
+  }, [id, kind, status]);
+
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    if (status === "completed") return;
+    dirty.current = true;
+    const t = setTimeout(flush, 4000);          // settle after typing stops
+    return () => clearTimeout(t);
+  }, [ans, fl, summaryText, flush, status]);
+
+  // Save when the tab is hidden (covers switching tabs, closing, and mobile
+  // backgrounding — which never fire a reliable unload).
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") void flush(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [flush]);
+
+  // Last resort: if work is still unsaved, make the browser ask before leaving.
+  useEffect(() => {
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (!dirty.current || status === "completed") return;
+      e.preventDefault(); e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [status]);
   const [aiBusy, startAi] = useTransition();
   const [aiMsg, setAiMsg] = useState<string | null>(null);
   const generateSummary = () => {
@@ -94,6 +144,11 @@ export default function ConsoleView({
     try { await navigator.clipboard.writeText(qSummaryText); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* clipboard blocked */ }
   };
 
+  // Word export of the answered questionnaire. Currently not surfaced — the
+  // panel offers Copy and Save draft instead. Kept because it's the one path
+  // that produces a formatted document for a client file; wire it to a button
+  // if that's wanted again.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const downloadWord = () => {
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const body = answeredQA
@@ -195,7 +250,7 @@ export default function ConsoleView({
               {/* Right: InBody summary + the uploaded machine report */}
               <div>
                 {!client.isLead && (
-                  <SummaryEditor label="InBody summary" clientId={client.id} initial={health.inbodySummary ?? ""} aiAction={aiInbodySummary} saveAction={saveMeasurementSummary} />
+                  <SummaryEditor label="InBody summary" clientId={client.id} initial={health.inbodySummary ?? ""} aiAction={aiInbodySummary} extractAction={extractInbodySummary} saveAction={saveMeasurementSummary} />
                 )}
                 <div style={{ marginTop: 12, borderTop: "1px dashed var(--border)", paddingTop: 10 }}>
                   <div style={{ fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 6 }}>InBody report (PDF)</div>
@@ -258,8 +313,13 @@ export default function ConsoleView({
               <div style={{ fontWeight: 700 }}>Questionnaire summary</div>
               <span style={{ flex: 1 }} />
               <button type="button" onClick={copyQSummary} disabled={!answeredQA.length} style={{ border: "1px solid var(--border)", background: copied ? "var(--green-bg)" : "#fff", color: copied ? "var(--green-text)" : "var(--ink)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: answeredQA.length ? "pointer" : "default" }}>{copied ? "✓ Copied" : "Copy"}</button>
+              {/* Saves the questionnaire right here, without scrolling to the
+                  bottom of the console. Same submit as the footer "Save draft"
+                  (this whole view is one form), so it stores the answers behind
+                  this summary and leaves the consult open. */}
+              <button type="submit" name="complete" value="false" disabled={!answeredQA.length} title="Save these answers as a draft — the consultation stays open" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: answeredQA.length ? "pointer" : "default" }}>Save draft</button>
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>The answered questionnaire, ready to copy &amp; paste.</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>The answered questionnaire, ready to copy &amp; paste. <b>Save draft</b> stores the answers and keeps the consultation open.</div>
             <textarea readOnly value={qSummaryText} rows={12} style={inp} />
           </div>
         )}
@@ -302,6 +362,13 @@ export default function ConsoleView({
             <textarea name="summary" rows={10} value={summaryText} onChange={(e) => setSummaryText(e.target.value)} placeholder="Session notes, findings, plan…" style={inp} />
             {aiMsg && <div style={{ marginTop: 6, fontSize: 12, color: "var(--brand-text)" }}>{aiMsg}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {/* Autosave status — a long intake is only trustworthy if the
+                  clinician can see it's being kept. */}
+              {status !== "completed" && (
+                <span style={{ fontSize: 12, color: autoErr ? "var(--red-text)" : "var(--muted)", marginRight: 4 }}>
+                  {autoErr ? `Autosave failed — ${autoErr}` : saving ? "Saving…" : savedAt ? `Autosaved ${savedAt}` : "Autosave on"}
+                </span>
+              )}
               <button type="submit" name="complete" value="false" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Save draft</button>
               <button type="submit" name="complete" value="true" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✓ Complete &amp; summarize</button>
             </div>

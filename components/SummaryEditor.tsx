@@ -7,13 +7,17 @@ import type { AiState } from "@/lib/ai";
 // anywhere a saved summary lives (InBody, consultation). The AI action already
 // persists; the manual Save writes the (possibly edited) text to the same field.
 export default function SummaryEditor({
-  label, clientId, initial = "", date, aiAction, saveAction, sendAction,
+  label, clientId, initial = "", date, aiAction, extractAction, extractLabel = "Extract from PDF", saveAction, sendAction,
 }: {
   label: string;
   clientId: string;
   initial?: string;
   date?: string;
   aiAction?: (prev: AiState, formData: FormData) => Promise<AiState>;
+  /** Non-AI alternative — e.g. build the InBody summary straight from the
+   *  uploaded PDF. Shown as its own button so the clinician picks explicitly. */
+  extractAction?: (prev: AiState, formData: FormData) => Promise<AiState>;
+  extractLabel?: string;
   saveAction: (clientId: string, text: string, date?: string) => Promise<{ ok?: boolean; error?: string }>;
   sendAction?: (clientId: string, date?: string) => Promise<{ ok?: boolean; error?: string }>;
 }) {
@@ -35,6 +39,18 @@ export default function SummaryEditor({
       const r = await aiAction!({}, fd);
       if (r.error) setErr(r.error);
       else { setText(r.text ?? ""); setMsg("Generated & saved — edit if needed."); }
+    });
+  };
+  const extract = () => {
+    if (!clientId) { setErr("Pick a client first."); return; }
+    setErr(null); setMsg(null);
+    start(async () => {
+      const fd = new FormData();
+      fd.set("client_id", clientId);
+      if (date !== undefined) fd.set("date", date);
+      const r = await extractAction!({}, fd);
+      if (r.error) setErr(r.error);
+      else { setText(r.text ?? ""); setMsg("Read from the uploaded PDF — review, edit if needed, then Save."); }
     });
   };
   const save = () => {
@@ -66,6 +82,7 @@ export default function SummaryEditor({
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <b style={{ fontSize: 12.5 }}>{label}</b>
         <span style={{ flex: 1 }} />
+        {extractAction && <button type="button" onClick={extract} disabled={busy} title="Read the uploaded InBody PDF and build the summary from it — no AI, works offline" style={btn}>{busy ? "Working…" : `📄 ${extractLabel}`}</button>}
         {aiAction && <button type="button" onClick={generate} disabled={busy} style={{ ...btn, color: "var(--brand-text)", background: "var(--brand-tint)" }}>{busy ? "Working…" : "✨ Generate"}</button>}
       </div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} placeholder="Generate with AI, or write the summary here…" style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff", resize: "vertical", boxSizing: "border-box" }} />

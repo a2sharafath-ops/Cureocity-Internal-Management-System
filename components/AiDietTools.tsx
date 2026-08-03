@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import SummaryEditor from "@/components/SummaryEditor";
-import { aiInbodySummary, aiConsultSummary, aiDailyMealSummary, saveMeasurementSummary, saveConsultationSummary, saveMealDaySummary, sendMealDaySummary } from "@/lib/actions";
+import { aiInbodySummary, extractInbodySummary, aiConsultSummary, aiDailyMealSummary, saveMeasurementSummary, saveConsultationSummary, saveMealDaySummary, sendMealDaySummary } from "@/lib/actions";
 
 // Dietitian AI toolkit: pick a client, then generate summaries / a first-draft
 // plan from the data already in Cureocity. Each result is a draft to copy into
@@ -28,7 +28,7 @@ export default function AiDietTools({ clients }: { clients: { id: string; name: 
         <div style={{ color: "var(--muted)", fontSize: 13 }}>Pick a client to enable the AI tools.</div>
       ) : (
         <div style={{ display: "grid", gap: 14 }}>
-          <SummaryEditor label="InBody summary" clientId={client} aiAction={aiInbodySummary} saveAction={saveMeasurementSummary} />
+          <SummaryEditor label="InBody summary" clientId={client} aiAction={aiInbodySummary} extractAction={extractInbodySummary} saveAction={saveMeasurementSummary} />
           <SummaryEditor label="Consultation summary" clientId={client} aiAction={aiConsultSummary} saveAction={saveConsultationSummary} />
           <div style={{ fontSize: 11.5, color: "var(--muted)" }}>Generate with AI or type your own — either way it saves onto the record. Diet-plan draft lives in the chart builder (“✨ Draft with AI”).</div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>

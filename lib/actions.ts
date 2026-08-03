@@ -1421,6 +1421,61 @@ export async function saveConsultSession(formData: FormData) {
   revalidatePath(`/console/${id}`);
 }
 
+/**
+ * Background autosave for the consultation console.
+ *
+ * A doctor's intake is 85+ answers typed over a long session — a closed tab or a
+ * stray back-button used to lose all of it, because nothing persisted until
+ * someone pressed Save draft. The console now calls this a few seconds after
+ * typing stops.
+ *
+ * Deliberately minimal: it writes only the working fields and does NOT
+ * revalidate any path. Revalidating on every keystroke-pause would re-render the
+ * console mid-typing and fight the clinician's cursor. It also never touches
+ * `status` — autosave keeps a consult a draft; only an explicit Complete closes
+ * it.
+ */
+export async function autosaveConsult(
+  id: string,
+  kind: string,
+  answersByIndex: string[],
+  flags: { text: string; severity: string }[],
+  summary: string,
+): Promise<{ ok?: boolean; at?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  if (!id) return { error: "Missing consultation." };
+  if (!ownsConsultKind(p.role, kind)) return { error: "Not your discipline." };
+  const supabase = createClient();
+
+  // Don't reopen or overwrite a finished consultation.
+  const { data: row } = await supabase.from("consultations").select("status, client_id").eq("id", id).maybeSingle();
+  const cur = row as { status: string | null; client_id: string | null } | null;
+  if (!cur) return { error: "Consultation not found." };
+  if (cur.status === "completed") return { error: "Already completed." };
+
+  // Zip answers against the same question list the form rendered (sex-filtered),
+  // so a saved pair is always question → its own answer.
+  const { consultQFor } = await import("@/lib/consult-questions");
+  let gender: string | null = null;
+  if (cur.client_id) {
+    const { data: cg } = await supabase.from("clients").select("gender").eq("id", cur.client_id).maybeSingle();
+    gender = (cg as { gender: string | null } | null)?.gender ?? null;
+  }
+  const questions = consultQFor(kind, gender).questions;
+  const pairs = questions
+    .map((q, i) => [q, String(answersByIndex[i] ?? "").trim()] as [string, string])
+    .filter(([, a]) => a);
+
+  const { error } = await supabase.from("consultations").update({
+    answers: pairs,
+    flags: (flags ?? []).filter((f) => f?.text?.trim()),
+    summary: summary.trim() || null,
+  }).eq("id", id);
+  if (error) return { error: error.message };
+  return { ok: true, at: new Date().toISOString() };
+}
+
 export async function completeConsultation(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;
@@ -5789,6 +5844,46 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
     revalidatePath(`/clients/${client_id}`);
   }
   return r;
+}
+
+/**
+ * Read the client's uploaded InBody PDF and build the summary from it directly —
+ * no AI involved. Separate from Generate so the clinician can choose: this one
+ * is deterministic, instant, free, and available before OPENAI_API_KEY is set.
+ * Same shape as the AI action so the editor can call either.
+ */
+export async function extractInbodySummary(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Pick a client first." };
+  const supabase = createClient();
+
+  const { data: f } = await supabase.from("files")
+    .select("bucket, path, name").eq("client_id", client_id).eq("kind", "inbody")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const file = f as { bucket: string | null; path: string; name: string | null } | null;
+  if (!file?.path) return { error: "No InBody PDF uploaded for this client yet — add the PDF first." };
+
+  const { pdfTextFromStorage } = await import("@/lib/pdf-text");
+  const text = await pdfTextFromStorage(supabase, file.bucket || "client-files", file.path);
+  if (!text) return { error: "Couldn't read any text from that PDF — it may be a scan or an image. Paste the report text into the box instead." };
+
+  const { inbodySummaryFromText } = await import("@/lib/inbody-parse");
+  const { data: cg } = await supabase.from("clients").select("gender").eq("id", client_id).maybeSingle();
+  const summary = inbodySummaryFromText(text, (cg as { gender: string | null } | null)?.gender ?? null);
+  if (!summary) return { error: "That PDF didn't contain recognisable InBody fields — check it's the result sheet, or paste the values in." };
+
+  // Save onto the latest measurement record, if there is one to attach to.
+  const { data: mrow } = await supabase.from("measurements")
+    .select("id").eq("client_id", client_id).order("date", { ascending: false }).limit(1).maybeSingle();
+  const mid = (mrow as { id: string } | null)?.id;
+  if (mid) {
+    await supabase.from("measurements").update({ ai_summary: summary, ai_summary_at: new Date().toISOString() }).eq("id", mid);
+    await logAudit(me, "InBody summary extracted from PDF", client_id, file.name ?? null);
+    revalidatePath(`/clients/${client_id}`);
+  }
+  return { text: summary };
 }
 
 // Manually write / edit the saved summaries (same field the AI writes to), so a
