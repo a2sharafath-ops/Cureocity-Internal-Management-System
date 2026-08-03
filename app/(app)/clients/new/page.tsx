@@ -5,7 +5,7 @@ import { createClientRecord } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewClientPage({ searchParams }: { searchParams: { sub?: string } }) {
+export default async function NewClientPage({ searchParams }: { searchParams: { sub?: string; err?: string } }) {
   const supabase = createClient();
   const { data } = await supabase.from("packages").select("id, name").eq("active", true).order("id");
   const packages = (data ?? []) as { id: string; name: string }[];
@@ -33,6 +33,13 @@ export default async function NewClientPage({ searchParams }: { searchParams: { 
       </Link>
       <h1 style={{ fontSize: 20, margin: "10px 0 4px" }}>New Client</h1>
       {subId && <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>Pre-filled from tablet intake — review, add package &amp; referral, then create.</p>}
+      {searchParams.err === "membership" && (
+        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "12px 15px", fontSize: 13, margin: "0 0 14px" }}>
+          <b>Membership required first.</b> A PT or Comprehensive package needs an active
+          membership. Onboard this client on a membership now, then add the care
+          package from their client card.
+        </div>
+      )}
       <ClientForm action={createClientRecord} packages={packages} submitLabel="Create client" client={prefill} subId={subId} />
     </div>
   );

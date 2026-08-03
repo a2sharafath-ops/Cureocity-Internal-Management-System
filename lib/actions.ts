@@ -5360,6 +5360,22 @@ export async function createClientRecord(formData: FormData) {
   const c = parseClientForm(formData);
   if (!c.name) return;
 
+  // Membership prerequisite — enforced HERE, before the client row is created,
+  // so a blocked attempt leaves nothing behind. A brand-new client has no
+  // membership yet, so PT / Comprehensive can never be the package they're
+  // onboarded with: sell the membership first, then add the care package from
+  // the client card (which runs the same check in purchasePackage). Without
+  // this, "Onboard Client" was a silent way around the rule.
+  if (c.package_id) {
+    const { data: pk } = await supabase
+      .from("packages").select("is_facility").eq("id", c.package_id).maybeSingle();
+    const cat0 = packageCategory(c.package_id, Boolean((pk as { is_facility: boolean } | null)?.is_facility));
+    if (requiresMembership(cat0)) {
+      const sub = String(formData.get("sub_id") || "");
+      redirect(`/clients/new?err=membership${sub ? `&sub=${sub}` : ""}`);
+    }
+  }
+
   // next client code
   const code = await nextClientCode(supabase);
 
@@ -5372,17 +5388,39 @@ export async function createClientRecord(formData: FormData) {
   // auto-schedule sessions for PT / Comprehensive + create the package invoice
   if (inserted && c.package_id) {
     const { data: pkg } = await supabase
-      .from("packages").select("name, price, sessions, is_facility").eq("id", c.package_id).maybeSingle();
-    if (pkg && c.joined && !pkg.is_facility && pkg.sessions > 0) {
-      await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
-      await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, c.joined, pkg.sessions));
-    }
+      .from("packages").select("name, price, sessions, is_facility, validity").eq("id", c.package_id).maybeSingle();
     if (pkg) {
+      // Record the package in client_packages — NOT just the legacy
+      // clients.package_id. Everything that reasons about what a client holds
+      // (active-membership checks, the PT/Comprehensive prerequisite, package
+      // status & obligations, renewals/freeze, the whiteboard's alive/dead) reads
+      // client_packages. Without this row a client onboarded here looked like
+      // they held nothing at all. Mirrors purchasePackage.
+      const cat = packageCategory(c.package_id, pkg.is_facility);
+      const start = c.joined || todayISO();
+      await supabase.from("client_packages").insert({
+        client_id: inserted.id, package_id: c.package_id, package_name: pkg.name, category: cat,
+        start_date: start, end_date: pkg.validity ? addDaysISO(start, pkg.validity) : null,
+        price: pkg.price ?? 0, status: "active", created_by: p.name,
+      });
+      // PT / Comprehensive sessions are booked by front desk (their journeys
+      // queue the prompt); everything else with credits still auto-builds.
+      if (!pkg.is_facility && pkg.sessions > 0 && cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY) {
+        await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
+        await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, start, pkg.sessions));
+      }
       const num = await nextInvoiceNum(supabase);
       await supabase.from("invoices").insert({
         num, client_id: inserted.id, description: `${pkg.name} package`, amount: pkg.price ?? 0,
         status: "Unpaid", issued_date: todayISO(), created_by: p.name,
       });
+      // Kick off the care journey (blood request, care team, booking prompts) —
+      // same as buying the package from the client card.
+      if (cat === "blueprint" || cat === COMPREHENSIVE_CATEGORY || cat === PT_CATEGORY) {
+        if (cat === "blueprint") await startBlueprintJourney(supabase, inserted.id, c.name, p.name);
+        else if (cat === COMPREHENSIVE_CATEGORY) await startComprehensiveJourney(supabase, inserted.id, c.name, start, p.name);
+        else await startPTJourney(supabase, inserted.id, c.name, start, p.name);
+      }
     }
   }
   // mark the tablet submission as added (clears the front-desk banner)
