@@ -5,6 +5,8 @@ import { canConsult } from "@/lib/roles";
 import { consultQ, consultQFor } from "@/lib/consult-questions";
 import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
 import ConsoleView, { type ConsoleHealth } from "@/components/ConsoleView";
+import { todayISO } from "@/lib/today";
+import { fmtTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +119,26 @@ export default async function ConsolePage({ params }: { params: { id: string } }
     q = consultQFor(row.kind, cc?.gender ?? null, dietFollowup);
   }
 
+  // Today's vitals, if already recorded. Saving clears the scratch draft, so
+  // without this the boxes come back empty after a save and it looks as though
+  // the reading was lost — it wasn't, it had become a real record.
+  let savedVitals: Record<string, string> | null = null;
+  let savedVitalsAt: string | null = null;
+  if (row.client_id) {
+    const { data: vt } = await supabase.from("vitals")
+      .select("systolic, diastolic, pulse, spo2, temp_c, weight, created_at")
+      .eq("client_id", row.client_id).eq("date", todayISO())
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const v = vt as (Record<string, number | null> & { created_at: string }) | null;
+    if (v) {
+      savedVitals = Object.fromEntries(
+        (["systolic", "diastolic", "pulse", "spo2", "temp_c", "weight"] as const)
+          .map((k) => [k, v[k] === null || v[k] === undefined ? "" : String(v[k])]),
+      );
+      savedVitalsAt = fmtTime(v.created_at);
+    }
+  }
+
   // Medical reports + what was ordered/prescribed for this client — shown in the
   // console and used by "Compile from record" to draft the summary.
   let reports: { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; url?: string | null }[] = [];
@@ -149,6 +171,8 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       answers={(row.answers ?? []) as [string, string][]}
       // Vitals typed but never saved — restored so a reload doesn't lose them.
       draftVitals={((row.draft ?? null) as { vitals?: Record<string, string> } | null)?.vitals ?? null}
+      savedVitals={savedVitals}
+      savedVitalsAt={savedVitalsAt}
       flags={(row.flags ?? []) as { text: string; severity: string }[]}
       summary={row.summary}
       status={row.status}

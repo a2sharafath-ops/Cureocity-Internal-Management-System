@@ -25,7 +25,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -41,6 +41,9 @@ export default function ConsoleView({
   health?: ConsoleHealth;
   /** Vitals typed but not yet saved, restored from consultations.draft. */
   draftVitals?: Record<string, string> | null;
+  /** Today's vitals row, if one has already been recorded. */
+  savedVitals?: Record<string, string> | null;
+  savedVitalsAt?: string | null;
   reports?: ReportRow[];
   orders?: { test: string; priority: string | null; created_at: string }[];
   prescriptions?: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -71,9 +74,12 @@ export default function ConsoleView({
   // Vitals live in React state so they survive a questionnaire save (which
   // re-renders the page and used to blank these boxes) and can be autosaved.
   const VITAL_KEYS = ["systolic", "diastolic", "pulse", "spo2", "temp_c", "weight"] as const;
+  // Seed order: unsaved draft first, then today's saved reading. Without the
+  // second, saving cleared the draft and the boxes came back empty — the record
+  // was fine, but it read as though the vitals had been lost.
   const [vit, setVit] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
-    for (const k of VITAL_KEYS) seed[k] = String(draftVitals?.[k] ?? "");
+    for (const k of VITAL_KEYS) seed[k] = String(draftVitals?.[k] ?? savedVitals?.[k] ?? "");
     return seed;
   });
   const setV = (k: string, v: string) => setVit((p) => ({ ...p, [k]: v }));
@@ -570,7 +576,13 @@ export default function ConsoleView({
                 <input name="temp_c" placeholder="Temp °C" inputMode="decimal" value={vit.temp_c} onChange={(e) => setV("temp_c", e.target.value)} style={sm} />
                 <input name="weight" placeholder="Weight kg" inputMode="decimal" value={vit.weight} onChange={(e) => setV("weight", e.target.value)} style={sm} />
               </div>
+              <input type="hidden" name="once_per_day" value="true" />
               <button type="submit" style={toolBtn}>Save vitals</button>
+              {savedVitalsAt && (
+                <div style={{ fontSize: 11, color: "var(--green-text)", marginTop: 6 }}>
+                  On file for today — recorded {savedVitalsAt}. Saving again updates that reading.
+                </div>
+              )}
               {anyVitals && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>Also saved by <b>Save draft</b> / <b>Complete</b> below — and autosaved as you type.</div>}
             </form>
 

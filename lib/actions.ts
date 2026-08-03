@@ -3164,14 +3164,24 @@ export async function addVitals(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   if (!client_id) return;
   const supabase = createClient();
-  await supabase.from("vitals").insert({
-    client_id, date: String(formData.get("date") || todayISO()),
+  const date = String(formData.get("date") || todayISO());
+  const vals = {
     systolic: emrNum(formData, "systolic"), diastolic: emrNum(formData, "diastolic"),
     pulse: emrNum(formData, "pulse"), temp_c: emrNum(formData, "temp_c"),
     resp_rate: emrNum(formData, "resp_rate"), spo2: emrNum(formData, "spo2"),
     weight: emrNum(formData, "weight"), height: emrNum(formData, "height"),
     notes: emrText(formData, "notes"), recorded_by: p.name,
-  });
+  };
+  // The console is one encounter, so pressing Save vitals twice should correct
+  // today's reading, not stack a third near-identical row. In the EMR the same
+  // action stays an append — a pre/post reading on the same day is legitimate
+  // there, and the form lets you pick the date.
+  const oncePerDay = String(formData.get("once_per_day") || "") === "true";
+  const existingId = oncePerDay
+    ? ((await supabase.from("vitals").select("id").eq("client_id", client_id).eq("date", date).limit(1).maybeSingle()).data as { id: string } | null)?.id ?? null
+    : null;
+  if (existingId) await supabase.from("vitals").update(vals).eq("id", existingId);
+  else await supabase.from("vitals").insert({ client_id, date, ...vals });
   await logAudit(p, "Vitals recorded", await clientName(supabase, client_id), null);
   revalidatePath(`/emr/${client_id}`);
 }
