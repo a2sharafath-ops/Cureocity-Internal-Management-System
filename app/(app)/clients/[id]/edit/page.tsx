@@ -1,12 +1,21 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ClientForm from "@/components/ClientForm";
 import { updateClientRecord } from "@/lib/actions";
+import { getProfile } from "@/lib/auth";
+import { canWrite } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditClientPage({ params }: { params: { id: string } }) {
+  // Same gate as updateClientRecord. Without it a clinician could reach this
+  // URL directly and fill in a form the server action would then silently
+  // refuse — a dead end, not a leak, but a confusing one. Bounce them back to
+  // the client card they're allowed to read.
+  const me = await getProfile();
+  if (!me || !canWrite(me.role)) redirect(`/clients/${params.id}`);
+
   const supabase = createClient();
   const [{ data: client }, { data: pkgs }] = await Promise.all([
     supabase.from("clients").select("*").eq("id", params.id).maybeSingle(),

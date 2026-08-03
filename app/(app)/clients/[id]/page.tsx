@@ -356,14 +356,21 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           </div>
         </div>
         <span style={{ flex: 1 }} />
+        {/* Editing client details is front-desk work (canWrite = Super Admin /
+            Administrator / Manager / Front Desk). Clinicians read the card but
+            don't own the record, so they get no Edit button — previously this
+            was gated only on the read-only preview flag, so every clinician saw
+            an Edit button that led to a form the server action would refuse. */}
         {ro
           ? <span style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "7px 14px", fontSize: 12.5, fontWeight: 700 }}>Read-only</span>
-          : <Link
-              href={`/clients/${params.id}/edit`}
-              style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
-            >
-              Edit
-            </Link>}
+          : canWrite(me?.role ?? "")
+            ? <Link
+                href={`/clients/${params.id}/edit`}
+                style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--ink)", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}
+              >
+                Edit
+              </Link>
+            : null}
       </div>
 
       {/* Tabs */}
