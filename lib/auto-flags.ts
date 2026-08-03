@@ -32,21 +32,34 @@ const n = (v: number | null | undefined) => (typeof v === "number" && Number.isF
  * "~5.5", and the unit is already implied by the question.
  */
 export function labsFromAnswers(answers: [string, string][]): FlagInput["labs"] {
-  const find = (re: RegExp): number | null => {
+  // Plausible human ranges. A value outside these is a data-entry or
+  // question-alignment error, not a finding — "HbA1c 78%" is not a very sick
+  // patient, it is the wrong number in the wrong box. Dropping it is safer than
+  // flagging it, because a flag reads as a clinical assertion.
+  const PLAUSIBLE: Record<string, [number, number]> = {
+    glucose: [20, 900], hba1c: [3, 20], cholesterol: [50, 700],
+    hdl: [10, 150], triglycerides: [20, 5000], hscrp: [0, 100],
+  };
+  const find = (key: string, re: RegExp): number | null => {
     for (const [q, a] of answers) {
       if (!re.test(q)) continue;
       const m = String(a).match(/-?\d+(?:\.\d+)?/);
-      if (m) { const v = Number(m[0]); if (Number.isFinite(v)) return v; }
+      if (!m) continue;
+      const v = Number(m[0]);
+      if (!Number.isFinite(v)) continue;
+      const [lo, hi] = PLAUSIBLE[key];
+      if (v < lo || v > hi) continue;                 // implausible → ignore
+      return v;
     }
     return null;
   };
   return {
-    glucose: find(/fasting\s*glucose/i),
-    hba1c: find(/hba1c/i),
-    cholesterol: find(/total\s*cholesterol/i),
-    hdl: find(/\bHDL/i),
-    triglycerides: find(/triglyceride/i),
-    hscrp: find(/hsCRP|\bCRP\b/i),
+    glucose: find("glucose", /fasting\s*glucose/i),
+    hba1c: find("hba1c", /hba1c/i),
+    cholesterol: find("cholesterol", /total\s*cholesterol/i),
+    hdl: find("hdl", /\bHDL/i),
+    triglycerides: find("triglycerides", /triglyceride/i),
+    hscrp: find("hscrp", /hsCRP|\bCRP\b/i),
   };
 }
 

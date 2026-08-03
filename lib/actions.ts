@@ -1400,8 +1400,24 @@ export async function saveConsultSession(formData: FormData) {
     const { data: cg } = await supabaseQ.from("clients").select("gender").eq("id", qClientId).maybeSingle();
     qGender = (cg as { gender: string | null } | null)?.gender ?? null;
   }
-  const questions = consultQFor(kind, qGender).questions;
-  const answers = questions.map((q, i) => [q, String(formData.get("a_" + i) ?? "").trim()]).filter(([, a]) => a);
+  const derived = consultQFor(kind, qGender).questions;
+  // Prefer the question text the form posted alongside each answer. Re-deriving
+  // the list here and zipping by index only works while both lists agree, and
+  // when they didn't — a male client's three female-specific questions dropped
+  // on the server but not in the browser — every answer was filed under a
+  // question three places away. Falls back to the derived list for a page that
+  // was rendered before this change.
+  // Count what the form actually posted — the browser's list can be longer than
+  // the derived one, and truncating to `derived.length` would silently drop the
+  // trailing answers.
+  let posted = 0;
+  while (formData.has("a_" + posted) || formData.has("q_" + posted)) posted++;
+  const answers: [string, string][] = [];
+  for (let i = 0; i < Math.max(posted, derived.length); i++) {
+    const q = String(formData.get("q_" + i) ?? derived[i] ?? "").trim();
+    const a = String(formData.get("a_" + i) ?? "").trim();
+    if (q && a) answers.push([q, a]);
+  }
   const summary = String(formData.get("summary") ?? "").trim() || null;
   const duration = Number(formData.get("duration_min")) || null;
   // Medical flags raised in-session (clinician-added; AI copilot may add later).
@@ -1520,6 +1536,7 @@ export async function autosaveConsult(
   flags: { text: string; severity: string }[],
   summary: string,
   vitals?: Record<string, string>,
+  questionsFromClient?: string[],
 ): Promise<{ ok?: boolean; at?: string; error?: string }> {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return { error: "Not authorized." };
@@ -1533,18 +1550,27 @@ export async function autosaveConsult(
   if (!cur) return { error: "Consultation not found." };
   if (cur.status === "completed") return { error: "Already completed." };
 
-  // Zip answers against the same question list the form rendered (sex-filtered),
-  // so a saved pair is always question → its own answer.
-  const { consultQFor } = await import("@/lib/consult-questions");
-  let gender: string | null = null;
-  if (cur.client_id) {
-    const { data: cg } = await supabase.from("clients").select("gender").eq("id", cur.client_id).maybeSingle();
-    gender = (cg as { gender: string | null } | null)?.gender ?? null;
+  // The console sends the question text with each answer, so a pair is always
+  // question → its own answer. Re-deriving the list here and zipping by index
+  // is what let a male client's answers land three questions away when the
+  // server dropped the female-specific items and the browser had not.
+  let pairs: [string, string][];
+  if (questionsFromClient?.length) {
+    pairs = questionsFromClient
+      .map((q, i) => [String(q ?? "").trim(), String(answersByIndex[i] ?? "").trim()] as [string, string])
+      .filter(([q, a]) => q && a);
+  } else {
+    // A page rendered before this change posts answers only.
+    const { consultQFor } = await import("@/lib/consult-questions");
+    let gender: string | null = null;
+    if (cur.client_id) {
+      const { data: cg } = await supabase.from("clients").select("gender").eq("id", cur.client_id).maybeSingle();
+      gender = (cg as { gender: string | null } | null)?.gender ?? null;
+    }
+    pairs = consultQFor(kind, gender).questions
+      .map((q, i) => [q, String(answersByIndex[i] ?? "").trim()] as [string, string])
+      .filter(([, a]) => a);
   }
-  const questions = consultQFor(kind, gender).questions;
-  const pairs = questions
-    .map((q, i) => [q, String(answersByIndex[i] ?? "").trim()] as [string, string])
-    .filter(([, a]) => a);
 
   // Vitals are a scratch draft until the clinician saves — parked on `draft`
   // rather than written to the vitals table, so autosave can't spray a row every

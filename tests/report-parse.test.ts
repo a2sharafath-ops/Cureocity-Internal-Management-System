@@ -91,3 +91,20 @@ describe("reportSummaryFromText", () => {
     expect(reportSummaryFromText("Haemoglobin 14.2 g/dL", "Male")).toBeNull(); // one marker only
   });
 });
+
+describe("parseReportDate — real-world headers", () => {
+  it("prefers the draw date over the print date", () => {
+    expect(parseReportDate("Sample drawn   : 28 Jul 2026\nReport date    : 30 Jul 2026")).toBe("2026-07-28");
+  });
+  it("is not fooled by the word SAMPLE in prose", () => {
+    // A header that says "SAMPLE REPORT FOR SYSTEM TESTING" used to swallow the
+    // anchor and return null even though a date was printed two lines down.
+    expect(parseReportDate("MEDLAB\nSAMPLE REPORT FOR SYSTEM TESTING\nReport date: 30 Jul 2026")).toBe("2026-07-30");
+  });
+  it("reads day-first numeric dates", () => {
+    expect(parseReportDate("Collected on: 03/08/2026")).toBe("2026-08-03");
+  });
+  it("returns null when there is no date at all", () => {
+    expect(parseReportDate("Haemoglobin 14.6 g/dL")).toBeNull();
+  });
+});

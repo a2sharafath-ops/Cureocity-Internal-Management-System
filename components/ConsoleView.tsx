@@ -106,44 +106,89 @@ export default function ConsoleView({
   // contributes its clinically salient answers, not all 85. Writes into the same
   // box, so the existing autosave persists it like anything else typed there.
   const compileSummary = () => {
-    const L: string[] = [];
+    const S: string[] = [];
+    const sec = (title: string, lines: (string | null)[]) => {
+      const body = lines.filter((x): x is string => !!x && !!x.trim());
+      if (!body.length) return;
+      if (S.length) S.push("");
+      S.push(title.toUpperCase());
+      S.push(...body);
+    };
+    // "2026-07-28" reads as a database field; "28 Jul 2026" reads as a date.
+    const dt = (iso?: string | null) => {
+      if (!iso) return null;
+      const d = new Date(iso.length <= 10 ? `${iso}T00:00:00Z` : iso);
+      return Number.isNaN(+d) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: iso.length <= 10 ? "UTC" : "Asia/Kolkata" });
+    };
+    const field = (k: string, v: string | null) => (v ? `${k}: ${v}` : null);
+    const answerTo = (re: RegExp) => {
+      const i = questions.findIndex((q) => re.test(q));
+      return i >= 0 ? (ans[i] ?? "").trim() || null : null;
+    };
+
+    // ---- header --------------------------------------------------------
     const who = [health?.age ? `${health.age}y` : null, health?.gender].filter(Boolean).join(" ");
-    L.push(`${client.name}${client.code ? ` (${client.code})` : ""}${who ? ` · ${who}` : ""} — ${label || `${kind} consultation`}, ${qDate}.`);
+    S.push(`${(label || `${kind} consultation`).toUpperCase()} — ${qDate}`);
+    S.push(`${client.name}${client.code ? ` · ${client.code}` : ""}${who ? ` · ${who}` : ""}`);
 
-    const body = [health?.height ? `${health.height} cm` : null, health?.weight ? `${health.weight} kg` : null, health?.bmi ? `BMI ${health.bmi}` : null].filter(Boolean).join(" · ");
-    if (body) L.push(`Anthropometry: ${body}.`);
-    if (health?.goals?.length) L.push(`Goals: ${health.goals.join(", ")}.`);
-    if (health?.conditions) L.push(`Conditions: ${health.conditions}.`);
-    if (health?.allergies?.length) L.push(`Allergies: ${health.allergies.join(", ")}.`);
+    // ---- why they're here ----------------------------------------------
+    sec("Presenting", [answerTo(/primary goal|reason for visit/i), health?.goals?.length ? `Goals: ${health.goals.join(", ")}.` : null]);
 
-    const v = [vit.systolic && vit.diastolic ? `BP ${vit.systolic}/${vit.diastolic}` : null, vit.pulse ? `pulse ${vit.pulse}` : null,
-               vit.spo2 ? `SpO₂ ${vit.spo2}%` : null, vit.temp_c ? `temp ${vit.temp_c} °C` : null, vit.weight ? `weight ${vit.weight} kg` : null].filter(Boolean).join(" · ");
-    if (v) L.push(`Vitals today: ${v}.`);
-    if (health?.inbodySummary) L.push(`InBody: ${health.inbodySummary.split("\n")[0]}`);
-    if (health?.bloodStatus) L.push(`Blood report: ${health.bloodStatus}.`);
+    // ---- background ----------------------------------------------------
+    sec("History", [
+      field("Conditions", health?.conditions || answerTo(/medical conditions/i)),
+      field("Medications", answerTo(/ongoing medications|supplements/i)),
+      field("Allergies", health?.allergies?.length ? health.allergies.join(", ") : answerTo(/allergies \(food/i)),
+      field("Sleep", answerTo(/sleep/i)),
+      field("Recent workup", answerTo(/recent illness|checkups/i)),
+      field("Family history", answerTo(/family history/i)),
+    ]);
 
-    const withSummary = reports.filter((r) => r.summary);
-    if (withSummary.length) {
-      L.push("Reports:");
-      for (const r of withSummary.slice(0, 4)) L.push(`  · ${r.report_label || r.name || "Report"} — ${String(r.summary).split("\n").slice(0, 2).join(" ")}`);
+    // ---- measured today -------------------------------------------------
+    const vitals = [vit.systolic && vit.diastolic ? `BP ${vit.systolic}/${vit.diastolic}` : null, vit.pulse ? `pulse ${vit.pulse}` : null,
+                    vit.spo2 ? `SpO₂ ${vit.spo2}%` : null, vit.temp_c ? `temp ${vit.temp_c} °C` : null].filter(Boolean).join(" · ");
+    const anthro = [health?.height ? `${health.height} cm` : null, (vit.weight || health?.weight) ? `${vit.weight || health?.weight} kg` : null, health?.bmi ? `BMI ${health.bmi}` : null].filter(Boolean).join(" · ");
+    const comp = [health?.bodyFat ? `body fat ${health.bodyFat}%` : null, health?.muscle ? `skeletal muscle ${health.muscle} kg` : null,
+                  health?.visceral ? `visceral ${health.visceral}` : null].filter(Boolean).join(" · ");
+    sec("Examination", [
+      field("Anthropometry", anthro || null),
+      field("Vitals", vitals || null),
+      comp ? `Body composition: ${comp}${health?.measuredOn ? ` (InBody ${dt(health.measuredOn)})` : ""}.` : null,
+    ]);
+
+    // ---- what the labs say ----------------------------------------------
+    const labLines: (string | null)[] = [];
+    for (const r of reports.filter((r) => r.summary).slice(0, 4)) {
+      const name = r.report_label || r.name || "Report";
+      const when = dt(r.report_date) ?? dt(r.created_at);
+      labLines.push(`${name}${when ? ` — ${when}` : ""}`);
+      // The stored summary repeats the file name and date in its first line;
+      // drop that so the heading isn't printed twice.
+      for (const ln of String(r.summary).split("\n").map((x) => x.trim()).filter(Boolean)) {
+        if (ln.startsWith(name) || /^Auto-extracted/i.test(ln)) continue;
+        labLines.push(`  ${ln}`);
+      }
     }
+    if (!labLines.length && health?.bloodStatus) labLines.push(`Blood report: ${health.bloodStatus}.`);
+    sec("Investigations", labLines);
 
-    // Intake highlights: the answers a summary reader actually needs.
-    const KEY = /primary goal|current — medical conditions|ongoing medications|allergies \(food|recent illness|family history — chronic|current stressors|sleep|current workout routine|current diet/i;
-    const picks = questions.map((qq, idx) => [qq, (ans[idx] ?? "").trim()] as [string, string]).filter(([qq, a]) => a && KEY.test(qq)).slice(0, 8);
-    if (picks.length) {
-      L.push(`Intake highlights (${filled} of ${questions.length} answered):`);
-      for (const [qq, a] of picks) L.push(`  · ${qq.replace(/^[^—]*—\s*/, "")}: ${a}`);
-    }
+    // ---- what worried the clinician -------------------------------------
+    sec("Flags raised", fl.map((f) => `[${(SEVERITY[f.severity]?.label ?? f.severity).toUpperCase()}] ${f.text}`));
 
-    if (fl.length) L.push(`Flags: ${fl.map((f) => `${f.text} [${f.severity}]`).join(" · ")}.`);
-    if (orders.length) L.push(`Tests ordered: ${orders.map((o) => o.test).join(", ")}.`);
-    if (prescriptions.length) L.push(`Prescribed: ${prescriptions.map((r) => [r.drug, r.dose, r.frequency, r.duration].filter(Boolean).join(" ")).join("; ")}.`);
+    // ---- what was done ---------------------------------------------------
+    sec("Orders & prescription", [
+      orders.length ? `Tests ordered: ${orders.map((o) => o.test).join(", ")}.` : null,
+      prescriptions.length ? `Prescribed: ${prescriptions.map((r) => [r.drug, r.dose, r.frequency, r.duration].filter(Boolean).join(" ")).join("; ")}.` : null,
+    ]);
 
-    L.push("");
-    L.push("Assessment & plan: ");
-    setSummaryText(L.join("\n"));
-    setAiMsg("Drafted from the record — edit, then Complete & summarize.");
+    // ---- for the clinician to write --------------------------------------
+    // Placeholders, not empty headings: the previous draft ended on a bare
+    // "Assessment & plan:" and read as though it had been cut off.
+    S.push("", "ASSESSMENT", "— ", "", "PLAN", "— ");
+    S.push("", `Compiled from the record on ${qDate} · ${filled} of ${questions.length} intake questions answered. Review and edit before sharing.`);
+
+    setSummaryText(S.join("\n"));
+    setAiMsg("Drafted from the record — fill in Assessment and Plan, then Complete & summarize.");
   };
 
   // ---- autosave -----------------------------------------------------------
@@ -164,11 +209,11 @@ export default function ConsoleView({
     dirty.current = false;
     setSaving(true);
     const { ans: a, fl: f, summaryText: s, vit: v } = latest.current;
-    const r = await autosaveConsult(id, kind, a, f, s, v);
+    const r = await autosaveConsult(id, kind, a, f, s, v, questions);
     setSaving(false);
     if (r?.error) { setAutoErr(r.error); dirty.current = true; }   // keep it dirty so the next tick retries
     else { setAutoErr(null); setSavedAt(new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })); }
-  }, [id, kind, status]);
+  }, [id, kind, status, questions]);
 
   useEffect(() => {
     if (first.current) { first.current = false; return; }
@@ -372,6 +417,12 @@ export default function ConsoleView({
             return (
               <div key={i} style={{ marginBottom: 12 }}>
                 <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>{i + 1}. {q}{empty && <span style={{ color: "var(--amber-text)" }}> ·  unfilled</span>}</label>
+                {/* The question travels with its own answer. Index alone is not
+                    safe: the server used to re-derive the question list, so if
+                    the two lists ever differed — a client's gender edited
+                    mid-session, a deploy between opening and saving — every
+                    answer silently attached to the wrong question. */}
+                <input type="hidden" name={`q_${i}`} value={q} />
                 <textarea name={`a_${i}`} rows={2} value={ans[i]} onChange={(e) => setAns((p) => { const n = [...p]; n[i] = e.target.value; return n; })}
                   style={{ ...inp, borderColor: empty ? "var(--amber-text)" : "var(--border)" }} />
               </div>

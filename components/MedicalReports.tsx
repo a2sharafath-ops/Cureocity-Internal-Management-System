@@ -50,8 +50,16 @@ export default function MedicalReports({ clientId, reports }: { clientId: string
         Blood panels, thyroid, ECG, scans — upload the PDF, then read it or summarise it.
       </div>
 
+      {/* The summary tools work on a specific file, so with nothing uploaded
+          there's nothing to extract from. Say that, rather than showing an
+          empty box that looks like the buttons have gone missing. */}
       {reports.length === 0 && (
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>No reports uploaded yet.</div>
+        <div style={{ background: "var(--neutral-bg)", border: "1px dashed var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>No reports uploaded yet</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+            Upload a PDF below — <strong>Extract from PDF</strong>, <strong>Generate</strong> and <strong>Save</strong> appear here once there&rsquo;s a report to read.
+          </div>
+        </div>
       )}
 
       {reports.length > 0 && (

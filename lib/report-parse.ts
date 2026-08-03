@@ -85,8 +85,33 @@ export function parseReportMarkers(text: string, gender?: string | null): Marker
 
 /** The report's own date, if it prints one. */
 export function parseReportDate(text: string): string | null {
-  const m = text.match(/(?:report(?:ed)?|collect(?:ed|ion)|sample|test(?:ed)?)\s*(?:date|on)?\s*:?\s*([^\n]{4,30})/i);
-  const raw = m?.[1] ?? text.slice(0, 200);
+  // Labelled lines, most clinically meaningful first: when the blood was drawn
+  // beats when the lab printed the page. Each is tried across every line and the
+  // first that actually yields a date wins — anchoring on the first keyword
+  // match alone picked up prose like "SAMPLE REPORT FOR SYSTEM TESTING".
+  const lines = text.split(/\r?\n/);
+  const labels: RegExp[] = [
+    /(?:sample|specimen)\s*(?:drawn|collected|collection|date)/i,
+    /collect(?:ed|ion)\s*(?:date|on)?/i,
+    /report(?:ed)?\s*(?:date|on)/i,
+    /test(?:ed)?\s*(?:date|on)/i,
+    /\bdate\b/i,
+  ];
+  for (const label of labels) {
+    for (const line of lines) {
+      const m = line.match(label);
+      if (!m) continue;
+      const d = dateIn(line.slice((m.index ?? 0) + m[0].length));
+      if (d) return d;
+    }
+  }
+  // No labelled date — fall back to the first date anywhere near the top, which
+  // on a lab report is the header block.
+  return dateIn(text.slice(0, 600));
+}
+
+/** First date in a fragment, in any of the formats Indian labs print. */
+function dateIn(raw: string): string | null {
   const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   const MON: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };

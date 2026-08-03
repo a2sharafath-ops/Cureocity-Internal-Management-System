@@ -123,3 +123,24 @@ describe("ordering", () => {
     expect(s[s.length - 1].severity).toBe("info");
   });
 });
+
+describe("labsFromAnswers — implausible values", () => {
+  // A misaligned questionnaire once filed a heart rate under "Labs — HbA1c",
+  // producing the flag "HbA1c 78% — in the diabetic range". No human has an
+  // HbA1c of 78; the value must be dropped, not flagged.
+  it("ignores an HbA1c that no human could have", () => {
+    expect(labsFromAnswers([["Labs — HbA1c (% gly Hgb)", "78"]]).hba1c).toBeNull();
+  });
+  it("ignores an absurd hsCRP", () => {
+    expect(labsFromAnswers([["Labs — hsCRP (mg/L)", "192"]]).hscrp).toBeNull();
+  });
+  it("still reads real values", () => {
+    const l = labsFromAnswers([["Labs — HbA1c (% gly Hgb)", "6.4"], ["Labs — hsCRP (mg/L)", "4.2"]]);
+    expect(l.hba1c).toBe(6.4);
+    expect(l.hscrp).toBe(4.2);
+  });
+  it("raises no flag from an implausible value", () => {
+    const out = deriveFlags({ labs: labsFromAnswers([["Labs — HbA1c (% gly Hgb)", "78"]]) });
+    expect(out.some((f) => /HbA1c/i.test(f.text))).toBe(false);
+  });
+});
