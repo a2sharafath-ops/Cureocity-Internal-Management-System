@@ -207,3 +207,32 @@ export function consultQ(kind: string, dietFollowup = false): ConsultQ {
   if (kind === "Diet" && dietFollowup) return DIET_FOLLOWUP_10;
   return CONSULT_QUESTIONS[kind] ?? CONSULT_QUESTIONS.Doctor;
 }
+
+/**
+ * Drop the sex-specific questions that don't apply to this client, so a male
+ * client isn't asked about menstrual cycles (and vice versa). Questions opt in
+ * by prefixing their label "Female — " / "Male — ".
+ *
+ * IMPORTANT: answers are posted as `a_<index>` against this exact array, so the
+ * SAME filter must run when rendering the form and when saving it — otherwise
+ * the indices shift and answers land against the wrong questions. Both callers
+ * go through `consultQFor`.
+ *
+ * When gender is unknown or anything other than a clear male/female value,
+ * nothing is hidden — better to ask a redundant question than to silently skip
+ * a clinically relevant one.
+ */
+export function applicableQuestions(questions: string[], gender?: string | null): string[] {
+  const g = (gender ?? "").trim().toLowerCase();
+  const isMale = g === "male" || g === "m";
+  const isFemale = g === "female" || g === "f";
+  if (!isMale && !isFemale) return questions;
+  return questions.filter((q) =>
+    isMale ? !/^female\s*[—-]/i.test(q) : !/^male\s*[—-]/i.test(q));
+}
+
+/** consultQ + sex filtering — use this everywhere the questionnaire is rendered or saved. */
+export function consultQFor(kind: string, gender?: string | null, dietFollowup = false): ConsultQ {
+  const base = consultQ(kind, dietFollowup);
+  return { ...base, questions: applicableQuestions(base.questions, gender) };
+}

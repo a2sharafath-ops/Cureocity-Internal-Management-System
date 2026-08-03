@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canConsult } from "@/lib/roles";
-import { consultQ } from "@/lib/consult-questions";
+import { consultQ, consultQFor } from "@/lib/consult-questions";
 import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
 import ConsoleView, { type ConsoleHealth } from "@/components/ConsoleView";
 
@@ -66,7 +66,10 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       dietFollowup = idx >= 0 && idx % 2 === 1;
     }
   }
-  const q = consultQ(row.kind, dietFollowup);
+  // Questions are resolved AFTER the client's health snapshot loads, because the
+  // sex-specific items are filtered by gender (see consultQFor). Placeholder here
+  // keeps the label/icon available if there's no client (a pre-sale lead).
+  let q = consultQ(row.kind, dietFollowup);
 
   // A consultation is on a client or (for a pre-sale trial) a lead. Render the
   // right subject and point the "open card" link at the right record.
@@ -107,6 +110,10 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       allergies: ((alg ?? []) as { substance: string; severity: string }[]).map((a) => `${a.substance}${a.severity ? ` (${a.severity})` : ""}`),
       bloodStatus: bloodRows.length ? (bloodRows.every((b) => b.submitted) ? "Report received" : "Awaiting report") : null,
     };
+    // Now that the client's gender is known, drop the sex-specific questions that
+    // don't apply. saveConsultSession runs the identical filter, so the `a_<i>`
+    // indices posted by the form line up with the questions on save.
+    q = consultQFor(row.kind, cc?.gender ?? null, dietFollowup);
   }
 
   return (

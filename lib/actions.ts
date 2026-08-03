@@ -1381,8 +1381,20 @@ export async function saveConsultSession(formData: FormData) {
   const complete = String(formData.get("complete") || "") === "true";
   if (!id) return;
   if (!ownsConsultKind(p.role, kind)) return; // only the owning discipline
-  const { consultQ } = await import("@/lib/consult-questions");
-  const questions = consultQ(kind).questions;
+  // Resolve the SAME question list the console rendered — including the
+  // sex-specific filtering — so `a_<index>` lines up. Reading the client's
+  // gender here is what keeps the two in step; consultQ alone would shift the
+  // indices for any client whose questions were filtered.
+  const { consultQFor } = await import("@/lib/consult-questions");
+  const supabaseQ = createClient();
+  const { data: qc } = await supabaseQ.from("consultations").select("client_id").eq("id", id).maybeSingle();
+  const qClientId = (qc as { client_id: string | null } | null)?.client_id ?? null;
+  let qGender: string | null = null;
+  if (qClientId) {
+    const { data: cg } = await supabaseQ.from("clients").select("gender").eq("id", qClientId).maybeSingle();
+    qGender = (cg as { gender: string | null } | null)?.gender ?? null;
+  }
+  const questions = consultQFor(kind, qGender).questions;
   const answers = questions.map((q, i) => [q, String(formData.get("a_" + i) ?? "").trim()]).filter(([, a]) => a);
   const summary = String(formData.get("summary") ?? "").trim() || null;
   const duration = Number(formData.get("duration_min")) || null;
