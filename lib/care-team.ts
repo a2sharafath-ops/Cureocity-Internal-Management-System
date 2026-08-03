@@ -7,6 +7,7 @@ import {
   type Assignment, type Candidate, type Discipline, type Booking, type Busy,
 } from "@/lib/assignment";
 import { packageCategory } from "@/lib/packages";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type DB = SupabaseClient<any, any, any>;
 
@@ -68,6 +69,18 @@ export async function loadPool(supabase: DB, branch?: string | null): Promise<Re
  * Assign a client's care team and persist it. Existing assignments are left
  * alone unless `reassign` is set, so re-running is safe and a manual override
  * is never silently undone.
+ *
+ * PERMISSIONS — read with the caller's client, WRITE with the service role.
+ * `client_assignments` is locked by RLS to admins/managers (see 0071), but the
+ * *automatic* engine legitimately runs as whoever triggered it — most often
+ * Front Desk selling a package. Writing as the caller meant those inserts were
+ * silently rejected and the client ended up with no care team at all. The reads
+ * below stay on the caller's client (RLS-safe); only the two writes are
+ * elevated.
+ *
+ * Because the service role bypasses every check, this function must only ever
+ * be called from an already permission-gated server action (package purchase,
+ * lead conversion, appointment creation). Never call it from an ungated path.
  */
 export async function assignCareTeam(
   supabase: DB,
@@ -121,22 +134,31 @@ export async function assignCareTeam(
   const toWrite = opts.reassign ? planned : planned.filter((a) => !existing.has(a.discipline));
   if (!toWrite.length) return [];
 
-  await supabase.from("client_assignments").upsert(
+  // Elevated: RLS on client_assignments allows admins/managers only, but the
+  // engine runs as whoever triggered it (usually Front Desk). See the note above.
+  const db = createAdminClient();
+  const { error: writeErr } = await db.from("client_assignments").upsert(
     toWrite.map((a) => ({
       client_id: clientId, discipline: a.discipline, staff_id: a.staff_id,
       method: a.method, assigned_by: opts.actor ?? null, assigned_at: new Date().toISOString(),
     })),
     { onConflict: "client_id,discipline" },
   );
+  // Never fail silently again: a rejected write used to look exactly like a
+  // successful one, so a client quietly ended up with no care team.
+  if (writeErr) {
+    console.error("[care-team] assignment write failed", { clientId, error: writeErr.message });
+    return [];
+  }
 
   // keep the denormalised single pro on the clients list in step
-  const { data: allRows } = await supabase
+  const { data: allRows } = await db
     .from("client_assignments").select("discipline, staff_id").eq("client_id", clientId);
   const all = ((allRows ?? []) as { discipline: string; staff_id: string | null }[])
     .filter((r) => r.staff_id)
     .map((r) => ({ discipline: r.discipline as Discipline, staff_id: r.staff_id as string, method: "rotation" as const }));
   const pro = primaryPro(all);
-  if (pro) await supabase.from("clients").update({ pro_id: pro }).eq("id", clientId);
+  if (pro) await db.from("clients").update({ pro_id: pro }).eq("id", clientId);
 
   return toWrite;
 }

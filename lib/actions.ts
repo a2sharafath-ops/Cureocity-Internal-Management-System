@@ -1485,6 +1485,13 @@ async function startBlueprintJourney(
     { onConflict: "client_id", ignoreDuplicates: true },
   );
 
+  // Assign the care team, exactly as the Comprehensive and PT journeys do —
+  // BluePrint pulls the full clinical team. Coach and trainer land immediately
+  // by rotation; doctor / dietitian firm up when their consults are booked.
+  // Without this a freshly-sold BluePrint client sat with no care team at all,
+  // so every owner-resolved nudge fell back to chasing a whole role.
+  await assignCareTeam(supabase, clientId, { actor });
+
   const titles = BP_BOOKING_TASKS.map((t) => `${t.label} — ${clientName}`);
   // Dedupe against tasks in ANY status (not just open) so a re-run never clones
   // a prompt whose original was completed…
