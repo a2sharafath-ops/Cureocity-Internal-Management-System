@@ -14,7 +14,7 @@ export type ClientRow = {
   age: number | null; branch: string | null; used: number;
   package_name: string | null; is_facility: boolean; package_sessions: number;
   packages?: { label: string; category: string }[]; careTeam?: { disc: string; name: string }[];
-  is_blueprint: boolean; status: string; coach: string | null; owner: string | null;
+  is_blueprint: boolean; status: string; owner: string | null;
   journey: { steps: { label: string; done: boolean }[]; done: number; total: number; stage: string };
   careStatus?: ClientStatus | null;
 };
@@ -119,7 +119,13 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
                           </span>
                         ))}
                       </div>
-                    ) : (c.coach ?? "—")}
+                    ) : "—"}
+                    {/* No fallback to the legacy `clients.pro_id` name: this
+                        column means the discipline care team (client_assignments)
+                        and nothing else. A membership-only client has no care
+                        team by design (disciplinesForCategory → []), so showing
+                        the old single-professional field here implied clinical
+                        ownership that doesn't exist. */}
                   </td>
                   <td style={td}>
                     {writer ? (

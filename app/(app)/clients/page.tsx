@@ -148,7 +148,7 @@ export default async function ClientsPage() {
       package_name: c.packages?.name ?? null, is_facility: facility, package_sessions: sessions,
       packages, careTeam,
       is_blueprint: c.package_id === "bp1" || cpkgs.some((p) => p.category === "blueprint") || (c.packages?.name ?? "").toLowerCase().includes("blueprint"),
-      status, coach: c.staff?.name ?? null, owner: c.owner ?? null,
+      status, owner: c.owner ?? null,
       journey: { steps, done: doneCount, total: steps.length, stage: doneCount === steps.length ? "Journey complete" : `Next: ${steps.find((s) => !s.done)?.label ?? "—"}` },
       careStatus: clientStatus(st, viewerDisc),
     };
