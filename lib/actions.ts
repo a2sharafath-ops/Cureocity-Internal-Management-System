@@ -5946,6 +5946,93 @@ export async function extractInbodySummary(_prev: AiState, formData: FormData): 
   return { text: summary };
 }
 
+// ---- medical reports (blood panels, thyroid, ECG, anything) -----------------
+// Same shape as the InBody flow: upload the PDF, then either read it here or ask
+// the AI. The summary lives on the file row (see migration 0116), because one
+// document has exactly one summary.
+
+async function reportFile(supabase: ReturnType<typeof createClient>, fileId: string) {
+  const { data } = await supabase.from("files")
+    .select("id, client_id, bucket, path, name, kind, report_label").eq("id", fileId).maybeSingle();
+  return data as { id: string; client_id: string; bucket: string | null; path: string; name: string | null; kind: string | null; report_label: string | null } | null;
+}
+
+/** Read the report PDF and summarise the markers it contains — no AI needed. */
+export async function extractReportSummary(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const fileId = String(formData.get("file_id") || "");
+  if (!fileId) return { error: "Pick a report first." };
+  const supabase = createClient();
+  const f = await reportFile(supabase, fileId);
+  if (!f) return { error: "Report not found." };
+
+  const { pdfTextFromStorage } = await import("@/lib/pdf-text");
+  const text = await pdfTextFromStorage(supabase, f.bucket || "client-files", f.path);
+  if (!text) return { error: "Couldn't read any text from that PDF — it may be a scan or photo. Type the key values in instead." };
+
+  const { data: cg } = await supabase.from("clients").select("gender").eq("id", f.client_id).maybeSingle();
+  const gender = (cg as { gender: string | null } | null)?.gender ?? null;
+  const { reportSummaryFromText, parseReportDate } = await import("@/lib/report-parse");
+  const summary = reportSummaryFromText(text, gender, f.report_label || f.name || "Report");
+  if (!summary) return { error: "No recognisable lab markers in that PDF — check it's the results page, or write the summary yourself." };
+
+  await supabase.from("files").update({
+    summary, summary_at: new Date().toISOString(),
+    report_date: parseReportDate(text) ?? null,
+  }).eq("id", fileId);
+  await logAudit(me, "Report summary extracted from PDF", f.client_id, f.name ?? null);
+  revalidatePath(`/clients/${f.client_id}`);
+  return { text: summary };
+}
+
+/** AI narrative summary of a report — falls back to the parser if AI is off. */
+export async function aiReportSummary(_prev: AiState, formData: FormData): Promise<AiState> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  const fileId = String(formData.get("file_id") || "");
+  if (!fileId) return { error: "Pick a report first." };
+  const supabase = createClient();
+  const f = await reportFile(supabase, fileId);
+  if (!f) return { error: "Report not found." };
+
+  const pasted = String(formData.get("text") || "").trim();
+  const { pdfTextFromStorage } = await import("@/lib/pdf-text");
+  const text = pasted || await pdfTextFromStorage(supabase, f.bucket || "client-files", f.path);
+  if (!text) return { error: "Nothing to summarise — the PDF has no readable text. Paste the values into the box." };
+
+  let r = await openaiComplete(
+    "You are a clinical assistant. Summarise this medical report for the care team in 4–6 short lines: name the test, lead with anything outside the reference range (value and direction), then note what was normal, and add 1–2 practical observations. Report observations, never a diagnosis. Plain text, no markdown headings.",
+    `${f.report_label || f.name || "Medical report"}\n\n${text.slice(0, 6000)}`,
+  );
+  if (!r.text) {
+    const { data: cg } = await supabase.from("clients").select("gender").eq("id", f.client_id).maybeSingle();
+    const { reportSummaryFromText } = await import("@/lib/report-parse");
+    const fb = reportSummaryFromText(text, (cg as { gender: string | null } | null)?.gender ?? null, f.report_label || f.name);
+    if (fb) r = { text: fb };
+  }
+  if (r.text) {
+    await supabase.from("files").update({ summary: r.text, summary_at: new Date().toISOString() }).eq("id", fileId);
+    await logAudit(me, "Report summary generated", f.client_id, f.name ?? null);
+    revalidatePath(`/clients/${f.client_id}`);
+  }
+  return r;
+}
+
+/** Clinician's own wording — same field the extract / AI write to. */
+export async function saveReportSummary(fileId: string, text: string): Promise<{ ok?: boolean; error?: string }> {
+  const me = await getProfile();
+  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
+  if (!fileId) return { error: "Missing report." };
+  const supabase = createClient();
+  const f = await reportFile(supabase, fileId);
+  if (!f) return { error: "Report not found." };
+  await supabase.from("files").update({ summary: text.trim() || null, summary_at: new Date().toISOString() }).eq("id", fileId);
+  await logAudit(me, "Report summary edited", f.client_id, f.name ?? null);
+  revalidatePath(`/clients/${f.client_id}`);
+  return { ok: true };
+}
+
 // Manually write / edit the saved summaries (same field the AI writes to), so a
 // clinician can type their own or tweak the AI one. Empty text clears it.
 export async function saveMeasurementSummary(client_id: string, text: string): Promise<{ ok?: boolean; error?: string }> {

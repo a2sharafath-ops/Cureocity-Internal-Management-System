@@ -117,6 +117,27 @@ export default async function ConsolePage({ params }: { params: { id: string } }
     q = consultQFor(row.kind, cc?.gender ?? null, dietFollowup);
   }
 
+  // Medical reports + what was ordered/prescribed for this client — shown in the
+  // console and used by "Compile from record" to draft the summary.
+  let reports: { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; url?: string | null }[] = [];
+  let orders: { test: string; priority: string | null; created_at: string }[] = [];
+  let rxList: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[] = [];
+  if (row.client_id) {
+    const [{ data: rep }, { data: ord }, { data: rx }] = await Promise.all([
+      supabase.from("files").select("id, name, kind, report_label, report_date, summary, created_at, bucket, path")
+        .eq("client_id", row.client_id).eq("kind", "medical_report").order("created_at", { ascending: false }).limit(15),
+      supabase.from("orders").select("test, priority, created_at").eq("client_id", row.client_id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("prescription_items").select("drug, dose, frequency, duration, prescriptions!inner(client_id, created_at)")
+        .eq("prescriptions.client_id", row.client_id).limit(15),
+    ]);
+    reports = await Promise.all(((rep ?? []) as { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; bucket: string | null; path: string }[]).map(async (r) => {
+      const { data: signed } = await supabase.storage.from(r.bucket || "client-files").createSignedUrl(r.path, 3600);
+      return { id: r.id, name: r.name, kind: r.kind, report_label: r.report_label, report_date: r.report_date, summary: r.summary, created_at: r.created_at, url: signed?.signedUrl ?? null };
+    }));
+    orders = (ord ?? []) as typeof orders;
+    rxList = ((rx ?? []) as unknown as { drug: string; dose: string | null; frequency: string | null; duration: string | null }[]);
+  }
+
   return (
     <ConsoleView
       id={row.id}
@@ -132,6 +153,9 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       summary={row.summary}
       status={row.status}
       canTools={row.kind === "Doctor"}
+      reports={reports}
+      orders={orders}
+      prescriptions={rxList}
       health={health}
     />
   );

@@ -6,6 +6,7 @@ import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbod
 import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
 import { deriveFlags, labsFromAnswers } from "@/lib/auto-flags";
+import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
 
 type Flag = { text: string; severity: string };
 
@@ -24,7 +25,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals,
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -40,6 +41,9 @@ export default function ConsoleView({
   health?: ConsoleHealth;
   /** Vitals typed but not yet saved, restored from consultations.draft. */
   draftVitals?: Record<string, string> | null;
+  reports?: ReportRow[];
+  orders?: { test: string; priority: string | null; created_at: string }[];
+  prescriptions?: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
 }) {
   // Ambient scribe / AI co-pilot is opt-in: the clock only runs while recording,
   // so the duration reflects real session time, not the tab being left open.
@@ -96,6 +100,51 @@ export default function ConsoleView({
   // what "Save draft" / "Complete & summarize" submit (name="summary"), so there
   // is a single source of truth for the shareable summary.
   const [summaryText, setSummaryText] = useState(summary ?? "");
+
+  // Draft the consultation summary from everything already captured, so the
+  // clinician edits rather than retypes. It's a digest, not a dump: the intake
+  // contributes its clinically salient answers, not all 85. Writes into the same
+  // box, so the existing autosave persists it like anything else typed there.
+  const compileSummary = () => {
+    const L: string[] = [];
+    const who = [health?.age ? `${health.age}y` : null, health?.gender].filter(Boolean).join(" ");
+    L.push(`${client.name}${client.code ? ` (${client.code})` : ""}${who ? ` · ${who}` : ""} — ${label || `${kind} consultation`}, ${qDate}.`);
+
+    const body = [health?.height ? `${health.height} cm` : null, health?.weight ? `${health.weight} kg` : null, health?.bmi ? `BMI ${health.bmi}` : null].filter(Boolean).join(" · ");
+    if (body) L.push(`Anthropometry: ${body}.`);
+    if (health?.goals?.length) L.push(`Goals: ${health.goals.join(", ")}.`);
+    if (health?.conditions) L.push(`Conditions: ${health.conditions}.`);
+    if (health?.allergies?.length) L.push(`Allergies: ${health.allergies.join(", ")}.`);
+
+    const v = [vit.systolic && vit.diastolic ? `BP ${vit.systolic}/${vit.diastolic}` : null, vit.pulse ? `pulse ${vit.pulse}` : null,
+               vit.spo2 ? `SpO₂ ${vit.spo2}%` : null, vit.temp_c ? `temp ${vit.temp_c} °C` : null, vit.weight ? `weight ${vit.weight} kg` : null].filter(Boolean).join(" · ");
+    if (v) L.push(`Vitals today: ${v}.`);
+    if (health?.inbodySummary) L.push(`InBody: ${health.inbodySummary.split("\n")[0]}`);
+    if (health?.bloodStatus) L.push(`Blood report: ${health.bloodStatus}.`);
+
+    const withSummary = reports.filter((r) => r.summary);
+    if (withSummary.length) {
+      L.push("Reports:");
+      for (const r of withSummary.slice(0, 4)) L.push(`  · ${r.report_label || r.name || "Report"} — ${String(r.summary).split("\n").slice(0, 2).join(" ")}`);
+    }
+
+    // Intake highlights: the answers a summary reader actually needs.
+    const KEY = /primary goal|current — medical conditions|ongoing medications|allergies \(food|recent illness|family history — chronic|current stressors|sleep|current workout routine|current diet/i;
+    const picks = questions.map((qq, idx) => [qq, (ans[idx] ?? "").trim()] as [string, string]).filter(([qq, a]) => a && KEY.test(qq)).slice(0, 8);
+    if (picks.length) {
+      L.push(`Intake highlights (${filled} of ${questions.length} answered):`);
+      for (const [qq, a] of picks) L.push(`  · ${qq.replace(/^[^—]*—\s*/, "")}: ${a}`);
+    }
+
+    if (fl.length) L.push(`Flags: ${fl.map((f) => `${f.text} [${f.severity}]`).join(" · ")}.`);
+    if (orders.length) L.push(`Tests ordered: ${orders.map((o) => o.test).join(", ")}.`);
+    if (prescriptions.length) L.push(`Prescribed: ${prescriptions.map((r) => [r.drug, r.dose, r.frequency, r.duration].filter(Boolean).join(" ")).join("; ")}.`);
+
+    L.push("");
+    L.push("Assessment & plan: ");
+    setSummaryText(L.join("\n"));
+    setAiMsg("Drafted from the record — edit, then Complete & summarize.");
+  };
 
   // ---- autosave -----------------------------------------------------------
   // A long intake used to live only in the browser until someone pressed Save
@@ -301,6 +350,14 @@ export default function ConsoleView({
 
         {/* Left column stacks the questionnaire and its exportable summary. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Medical reports — upload a blood panel or scan and summarise it
+            without leaving the consultation. */}
+        {!client.isLead && (
+          <div style={{ marginBottom: 16 }}>
+            <MedicalReports clientId={client.id} reports={reports} />
+          </div>
+        )}
+
         {/* Intake questionnaire + unfilled tracker */}
         <div style={{ ...box, padding: "16px 18px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -405,7 +462,13 @@ export default function ConsoleView({
               <div style={{ fontWeight: 700 }}>Consultation summary</div>
               <span style={{ flex: 1 }} />
               {!client.isLead && (
-                <button type="button" onClick={generateSummary} disabled={aiBusy} style={{ border: "1px solid var(--border)", background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: aiBusy ? "default" : "pointer" }}>{aiBusy ? "Working…" : "✨ Generate with AI"}</button>
+                <>
+                  {/* Compile = assemble from what's already recorded (no AI).
+                      Generate = ask the model. Both write into the same box, so
+                      autosave keeps whichever the clinician ends up with. */}
+                  <button type="button" onClick={compileSummary} title="Draft the summary from the health card, vitals, InBody, reports, flags, orders and prescription" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", marginRight: 6 }}>🧾 Compile from record</button>
+                  <button type="button" onClick={generateSummary} disabled={aiBusy} style={{ border: "1px solid var(--border)", background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, cursor: aiBusy ? "default" : "pointer" }}>{aiBusy ? "Working…" : "✨ Generate with AI"}</button>
+                </>
               )}
             </div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>This becomes the shareable summary that feeds the Blueprint sign-off. Generate a draft from the client&apos;s data, or write your own.</div>

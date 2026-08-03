@@ -24,6 +24,7 @@ import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBil
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PackageStatusPanel from "@/components/PackageStatusPanel";
+import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
 import { getPackageStatus } from "@/lib/package-status";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
@@ -330,6 +331,20 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // interleave into the chronological feed above, and what's still pending
   // lives on the Overview "Open now / Upcoming" tracker.)
 
+
+  // Medical reports (blood panels, thyroid, ECG…) with a short-lived signed link
+  // each, so a clinician can open the original next to its summary.
+  const { data: repRows } = await supabase.from("files")
+    .select("id, name, kind, report_label, report_date, summary, created_at, bucket, path")
+    .eq("client_id", params.id).eq("kind", "medical_report")
+    .order("created_at", { ascending: false }).limit(25);
+  const medicalReports: ReportRow[] = await Promise.all(
+    ((repRows ?? []) as { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; bucket: string | null; path: string }[])
+      .map(async (r) => {
+        const { data: signed } = await supabase.storage.from(r.bucket || "client-files").createSignedUrl(r.path, 3600);
+        return { id: r.id, name: r.name, kind: r.kind, report_label: r.report_label, report_date: r.report_date, summary: r.summary, created_at: r.created_at, url: signed?.signedUrl ?? null };
+      }),
+  );
   return (
     <div style={{ maxWidth: 900 }}>
       <Link href="/clients" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>
@@ -672,6 +687,13 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
       </div>
 
+      {/* Medical reports — upload, read the PDF, or AI-summarise. */}
+      {!ro && (
+        <div style={{ marginBottom: 16 }}>
+          <MedicalReports clientId={params.id} reports={medicalReports} />
+        </div>
+      )}
+
       {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
       {showBlueprint && (
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
@@ -812,7 +834,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 const streak = currentStreak(dates, habToday);
                 const week = last7Count(dates, habToday);
                 const hit = week >= h.target_per_week;
-                return (
+
+  return (
                   <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
                     <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
                     <div style={{ flex: 1 }}>
