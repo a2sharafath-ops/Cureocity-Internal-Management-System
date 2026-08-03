@@ -1387,8 +1387,14 @@ export async function saveConsultSession(formData: FormData) {
   // indices for any client whose questions were filtered.
   const { consultQFor } = await import("@/lib/consult-questions");
   const supabaseQ = createClient();
-  const { data: qc } = await supabaseQ.from("consultations").select("client_id").eq("id", id).maybeSingle();
+  const { data: qc } = await supabaseQ.from("consultations").select("client_id, flags").eq("id", id).maybeSingle();
   const qClientId = (qc as { client_id: string | null } | null)?.client_id ?? null;
+  // What the team has already been alerted about. Captured BEFORE the update so
+  // re-saving a consult can't re-fire an alert on a flag they've already seen.
+  const priorFlags = new Set(
+    (((qc as { flags: { text: string; severity: string }[] | null } | null)?.flags ?? [])
+      .filter((f) => f.severity === "critical").map((f) => f.text)),
+  );
   let qGender: string | null = null;
   if (qClientId) {
     const { data: cg } = await supabaseQ.from("clients").select("gender").eq("id", qClientId).maybeSingle();
@@ -1409,6 +1415,49 @@ export async function saveConsultSession(formData: FormData) {
   await supabase.from("consultations").update({
     answers, summary, flags, ...(complete ? { status: "completed", completed_at: new Date().toISOString() } : {}), ...(duration ? { duration_min: duration } : {}),
   }).eq("id", id);
+
+  // A critical flag used to be inert: it sat on the consultation and printed on
+  // the summary, and nobody was told. Someone recording "BP 184/112 — needs
+  // same-day review" reasonably expects that to reach the team. So a NEW
+  // critical flag now notifies the client's care team and management, and raises
+  // a High task — a notification can be scrolled past, a task can't.
+  //
+  // Only newly-added criticals fire (see priorFlags), and autosave never reaches
+  // this action, so typing a flag can't spam anyone.
+  const fresh = flags.filter((f) => f.severity === "critical" && !priorFlags.has(f.text));
+  if (fresh.length && qClientId) {
+    const { notifyRoles, notifyStaff } = await import("@/lib/notify");
+    const { data: cr } = await supabase.from("clients").select("name, code").eq("id", qClientId).maybeSingle();
+    const who = cr as { name: string; code: string | null } | null;
+    const label = `${who?.name ?? "Client"}${who?.code ? ` (${who.code})` : ""}`;
+    const title = `Critical finding — ${label}`;
+    const body = `${fresh.map((f) => f.text).join(" · ")} — raised by ${p.name}`;
+    const href = `/clients/${qClientId}`;
+
+    // The people actually responsible for this client come first; then the
+    // people who can act if the care team is off that day.
+    const { data: team } = await supabase.from("client_assignments").select("staff_id, discipline").eq("client_id", qClientId);
+    const rows = ((team ?? []) as { staff_id: string | null; discipline: string }[]);
+    const seen = new Set<string>();
+    for (const a of rows) {
+      if (!a.staff_id || seen.has(a.staff_id) || a.staff_id === p.staffId) continue;
+      seen.add(a.staff_id);
+      await notifyStaff(supabase, a.staff_id, { title, body, href, icon: "\u{1F534}", link: { kind: "client", ref: qClientId } });
+    }
+    await notifyRoles(supabase, ["Super Admin", "Administrator", "Manager"], { title, body, href, icon: "\u{1F534}", link: { kind: "client", ref: qClientId } });
+
+    // Owned by the client's doctor where there is one — a critical finding is a
+    // medical call. Otherwise it stays unassigned and shows on the open board.
+    const doctor = rows.find((a) => a.discipline === "doctor" && a.staff_id)?.staff_id ?? null;
+    await supabase.from("tasks").insert({
+      title: `${title}: ${fresh.map((f) => f.text).join("; ")}`.slice(0, 300),
+      assignee_id: doctor, client_id: qClientId,
+      type: "Ops", priority: "High", status: "todo",
+      due_date: todayISO(), created_by: p.name,
+    });
+    await logAudit(p, "Critical finding flagged", who?.name ?? null, fresh.map((f) => f.text).join("; ").slice(0, 160));
+    revalidatePath("/tasks");
+  }
 
   // Vitals travel with the consultation (mirrored into this form as v_*), so one
   // Save records the questionnaire AND the vitals. Previously they were a

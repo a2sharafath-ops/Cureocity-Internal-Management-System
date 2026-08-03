@@ -25,9 +25,10 @@ const d = (iso: string | null) =>
     : null;
 
 export default function MedicalReports({ clientId, reports }: { clientId: string; reports: ReportRow[] }) {
-  // Which report's summary is open. Defaults to the newest, since that's the one
-  // a clinician is almost always looking at during a consultation.
+  // Which report is being worked on — newest by default, since that's almost
+  // always the one a clinician has just uploaded or is discussing.
   const [openId, setOpenId] = useState<string | null>(reports[0]?.id ?? null);
+  const selected = reports.find((r) => r.id === openId) ?? reports[0] ?? null;
 
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" };
 
@@ -53,44 +54,47 @@ export default function MedicalReports({ clientId, reports }: { clientId: string
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>No reports uploaded yet.</div>
       )}
 
-      <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
-        {reports.map((r) => {
-          const open = openId === r.id;
-          return (
-            <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: open ? "var(--bg)" : "#fff" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      {reports.length > 0 && (
+        <>
+          {/* Pick which report you're working on. One click, no hunting. */}
+          {reports.length > 1 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              {reports.map((r) => {
+                const on = r.id === selected?.id;
+                return (
+                  <button key={r.id} type="button" onClick={() => setOpenId(r.id)}
+                    style={{ border: "1px solid var(--border)", background: on ? "var(--brand-fill)" : "#fff", color: on ? "#fff" : "var(--ink)",
+                             borderRadius: 999, padding: "4px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                     {r.report_label || r.name || "Report"}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
-                    {d(r.report_date) ?? d(r.created_at)}
-                    {r.summary ? " · summarised" : " · no summary yet"}
-                  </div>
-                </div>
-                {r.url && <a href={r.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--brand-text)", textDecoration: "none", flexShrink: 0 }}>Open PDF →</a>}
-                <button type="button" onClick={() => setOpenId(open ? null : r.id)}
-                  style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-                  {open ? "Hide" : "Summary"}
-                </button>
-              </div>
-              {open && (
-                <div style={{ padding: "10px 12px", borderTop: "1px solid var(--border)" }}>
-                  <SummaryEditor
-                    label={r.report_label || r.name || "Report summary"}
-                    clientId={clientId}
-                    initial={r.summary ?? ""}
-                    extractAction={withFile(extractReportSummary, r.id)}
-                    extractLabel="Extract from PDF"
-                    aiAction={withFile(aiReportSummary, r.id)}
-                    saveAction={async (_c, text) => saveReportSummary(r.id, text)}
-                  />
-                </div>
-              )}
+                    <span style={{ opacity: 0.75, marginLeft: 6, fontWeight: 500 }}>{d(r.report_date) ?? d(r.created_at)}</span>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          )}
+
+          {selected && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{selected.report_label || selected.name || "Report"}</div>
+                <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{d(selected.report_date) ?? d(selected.created_at)}{selected.summary ? "" : " · no summary yet"}</span>
+                <span style={{ flex: 1 }} />
+                {selected.url && <a href={selected.url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--brand-text)", textDecoration: "none" }}>Open PDF →</a>}
+              </div>
+              <SummaryEditor
+                key={selected.id}
+                label="Report summary"
+                clientId={clientId}
+                initial={selected.summary ?? ""}
+                extractAction={withFile(extractReportSummary, selected.id)}
+                extractLabel="Extract from PDF"
+                aiAction={withFile(aiReportSummary, selected.id)}
+                saveAction={async (_c, text) => saveReportSummary(selected.id, text)}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 6 }}>Add a report</div>
