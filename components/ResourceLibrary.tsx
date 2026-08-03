@@ -1,4 +1,5 @@
 "use client";
+import { IST } from "@/lib/datetime";
 
 import { useRef, useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
@@ -74,7 +75,7 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
                   <span style={{ fontSize: 17 }}>{icon(f.name)}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{f.uploaded_by ?? "—"} · {new Date(f.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{f.uploaded_by ?? "—"} · {new Date(f.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: IST })}</div>
                   </div>
                   {f.role === "all" && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
                   {f.url ? (

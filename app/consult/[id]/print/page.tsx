@@ -1,3 +1,4 @@
+import { IST } from "@/lib/datetime";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { consultQ } from "@/lib/consult-questions";
@@ -27,8 +28,8 @@ export default async function ConsultPrintPage({
   };
   const q = consultQ(c.kind);
   const flags = (c.flags ?? []) as { text: string; severity: string }[];
-  const created = c.created_at ? new Date(c.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
-  const createdTime = c.created_at ? new Date(c.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+  const created = c.created_at ? new Date(c.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: IST }) : "";
+  const createdTime = c.created_at ? new Date(c.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: IST }) : "";
   const sevColor: Record<string, string> = { critical: "#b91c1c", warning: "#b45309", info: "#0369a1" };
   const clientName = c.clients?.name ?? "Client";
 

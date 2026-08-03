@@ -1,3 +1,4 @@
+import { IST } from "@/lib/datetime";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAppSettings, brandLogo } from "@/lib/settings";
@@ -32,7 +33,7 @@ export default async function DietChartPrintPage({
   }
 
   const meals = Array.isArray(dc.meals) ? dc.meals : [];
-  const created = new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+  const created = new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric", timeZone: IST });
   const settings = await getAppSettings();
   const logo = brandLogo(settings);
 

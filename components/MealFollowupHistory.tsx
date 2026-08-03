@@ -1,4 +1,5 @@
 "use client";
+import { IST } from "@/lib/datetime";
 
 import { useState } from "react";
 import type { Contact } from "@/components/MealContactLadder";
@@ -20,7 +21,7 @@ export default function MealFollowupHistory({ entries }: { entries: Contact[] })
   for (const e of entries) {
     // created_at carries the day; the row's `date` field would be ideal but the
     // list is already filtered to past days, so group by the calendar date.
-    const d = new Date(e.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    const d = new Date(e.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: IST });
     (byDate.get(d) ?? byDate.set(d, []).get(d)!).push(e);
   }
 
@@ -36,7 +37,7 @@ export default function MealFollowupHistory({ entries }: { entries: Contact[] })
               <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px", marginBottom: 3 }}>{d}</div>
               {list.map((e, i) => (
                 <div key={i} style={{ fontSize: 12, color: "var(--ink)", padding: "2px 0" }}>
-                  <span style={{ color: "var(--muted)" }}>{new Date(e.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span style={{ color: "var(--muted)" }}>{new Date(e.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: IST })}</span>
                   {" · "}{CH[e.channel] ?? e.channel} · {OUT[e.outcome] ?? e.outcome}
                   {e.note ? ` — ${e.note}` : ""}{e.staff ? ` (${e.staff})` : ""}
                 </div>

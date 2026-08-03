@@ -1,4 +1,5 @@
 "use client";
+import { IST } from "@/lib/datetime";
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
@@ -134,7 +135,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 160 }}>
                 <b style={{ fontSize: 13 }}>{dc.client_name ?? "—"} <span style={{ color: "var(--muted)", fontWeight: 500 }}>· v{dc.version}</span></b>
-                <div style={{ color: "var(--muted)", fontSize: 12 }}>{dc.calories ? `${dc.calories} kcal` : "—"}{dc.protein ? ` · ${dc.protein} protein` : ""} · {new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</div>
+                <div style={{ color: "var(--muted)", fontSize: 12 }}>{dc.calories ? `${dc.calories} kcal` : "—"}{dc.protein ? ` · ${dc.protein} protein` : ""} · {new Date(dc.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: IST })}</div>
               </div>
               {(() => {
                 const st = dc.status;

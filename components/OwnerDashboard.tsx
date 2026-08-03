@@ -1,3 +1,4 @@
+import { IST } from "@/lib/datetime";
 // Super Admin ("owner") home — answers "what needs my attention?" rather than
 // "what happened". Money first, then an exception queue, then a light ops pulse,
 // growth and governance. Day-to-day operations live on the Admin/Manager view.
@@ -308,7 +309,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
           </div>
           {audit.length ? audit.map((a, i) => (
             <div key={i} style={{ display: "flex", gap: 8, padding: "7px 0", borderTop: i ? "1px solid var(--border)" : "none", fontSize: 12.5 }}>
-              <span style={{ color: "var(--muted)", minWidth: 92 }}>{new Date(a.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
+              <span style={{ color: "var(--muted)", minWidth: 92 }}>{new Date(a.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: IST })}</span>
               <span style={{ flex: 1 }}><b>{a.action}</b>{a.target ? ` · ${a.target}` : ""}</span>
               <span style={{ color: "var(--muted)" }}>{a.actor_name ?? a.actor_role ?? "—"}</span>
             </div>
