@@ -5738,13 +5738,50 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
     .select("id, date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr")
     .eq("client_id", client_id).order("date", { ascending: false }).limit(2);
   const rows = (data ?? []) as (MeasRow & { id: string })[];
-  if (!rows.length && !pasted) return { error: "No InBody data yet — enter the measurements, or paste the InBody report text into the box, then Generate." };
+
+  // Read the uploaded InBody PDF itself. Uploading the report is the natural
+  // action for a clinician, so the PDF must be a real source for the summary —
+  // not just a document filed away. Only read when nothing was pasted: an
+  // explicit paste is the clinician overriding what's on file.
+  let pdfText: string | null = null;
+  if (!pasted) {
+    const { data: f } = await supabase.from("files")
+      .select("bucket, path, name").eq("client_id", client_id).eq("kind", "inbody")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const file = f as { bucket: string | null; path: string; name: string | null } | null;
+    if (file?.path) {
+      const { pdfTextFromStorage } = await import("@/lib/pdf-text");
+      pdfText = await pdfTextFromStorage(supabase, file.bucket || "client-files", file.path);
+    }
+  }
+
+  if (!rows.length && !pasted && !pdfText) {
+    return { error: "No InBody data yet — upload the InBody PDF, enter the measurements, or paste the report text into the box, then Generate." };
+  }
   const metricLines = rows.length ? `Recorded metrics — Latest: ${fmtMeas(rows[0])}` + (rows[1] ? `\nPrevious: ${fmtMeas(rows[1])}` : "") : "";
-  const user = [metricLines, pasted ? `InBody report text provided by the dietitian:\n${pasted.slice(0, 4000)}` : ""].filter(Boolean).join("\n\n");
-  const r = await openaiComplete(
+  const reportText = pasted
+    ? `InBody report text provided by the dietitian:\n${pasted.slice(0, 4000)}`
+    : pdfText ? `Text extracted from the client's uploaded InBody PDF:\n${pdfText}` : "";
+  const user = [metricLines, reportText].filter(Boolean).join("\n\n");
+  let r = await openaiComplete(
     "You are a clinical dietitian assistant. Summarise the client's InBody / body-composition report for the care team in 4–6 short lines: highlight the key metrics, note the change vs the previous reading if one is given (direction and magnitude), and add 2–3 concise practical observations. If the dietitian pasted report text, base the summary on it; if structured metrics are also given, reconcile and use them. Plain text, no markdown headings.",
     user,
   );
+
+  // No API key yet (or the AI call failed) — fall back to reading the report
+  // ourselves. A deterministic parse of the InBody fields is far more useful
+  // than an error, and the wording says plainly that it's auto-extracted and
+  // unreviewed so nobody mistakes it for clinical interpretation. Once
+  // OPENAI_API_KEY is set the AI path takes over automatically.
+  if (!r.text) {
+    const source = pasted || pdfText;
+    if (source) {
+      const { inbodySummaryFromText } = await import("@/lib/inbody-parse");
+      const { data: cg } = await supabase.from("clients").select("gender").eq("id", client_id).maybeSingle();
+      const fallback = inbodySummaryFromText(source, (cg as { gender: string | null } | null)?.gender ?? null);
+      if (fallback) r = { text: fallback };
+    }
+  }
   // Save onto the latest measurements record (if one exists to attach to).
   if (r.text && rows.length) {
     await supabase.from("measurements").update({ ai_summary: r.text, ai_summary_at: new Date().toISOString() }).eq("id", rows[0].id);
