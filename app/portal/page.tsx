@@ -10,6 +10,7 @@ import MessageReply from "@/components/MessageReply";
 import ClassBookButton from "@/components/ClassBookButton";
 import HabitCheck from "@/components/HabitCheck";
 import { FormFill } from "@/components/FormComponents";
+import { fmtDate } from "@/lib/datetime";
 import { currentStreak, last7Count } from "@/lib/habits";
 import { MEALS, type MealLog } from "@/lib/meals";
 
@@ -94,7 +95,7 @@ export default async function PortalHome() {
   const messages = (msgRows ?? []) as Msg[];
 
   // read-only medical record (RLS scopes to own rows)
-  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }, { data: rxRows }, { data: chartRows }] = await Promise.all([
+  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }, { data: rxRows }, { data: labRows }, { data: chartRows }] = await Promise.all([
     supabase.from("problems").select("description, status").eq("client_id", client.id).eq("status", "active"),
     supabase.from("allergies").select("substance, severity").eq("client_id", client.id),
     supabase.from("medications").select("name, dose, frequency").eq("client_id", client.id).eq("status", "active"),
@@ -105,6 +106,12 @@ export default async function PortalHome() {
       .select("id, status, notes, provider, signed_date, shared_at, prescription_items(drug, dose, frequency, route, duration, instructions)")
       .eq("client_id", client.id).not("shared_at", "is", null)
       .order("shared_at", { ascending: false }),
+    // Tests the doctor advised. Same delivery gate as a prescription: an order
+    // placed but not shared is the clinic's working note, not the client's.
+    supabase.from("orders")
+      .select("id, test, category, priority, notes, provider, created_at, consultation_id, shared_at, status")
+      .eq("client_id", client.id).not("shared_at", "is", null).neq("status", "cancelled")
+      .order("created_at", { ascending: false }),
     // Only published charts. RLS already restricts this, but saying it here
     // means a draft can't leak through a future policy change either.
     supabase.from("diet_charts")
@@ -119,6 +126,11 @@ export default async function PortalHome() {
   const myRx = (rxRows ?? []) as unknown as {
     id: string; status: string; notes: string | null; provider: string | null;
     signed_date: string | null; shared_at: string | null; prescription_items: RxItem[];
+  }[];
+  const myLabs = (labRows ?? []) as unknown as {
+    id: string; test: string; category: string | null; priority: string | null;
+    notes: string | null; provider: string | null; created_at: string;
+    consultation_id: string | null; shared_at: string | null; status: string;
   }[];
   const myChart = ((chartRows ?? []) as unknown as {
     id: string; version: number; calories: number | null; protein: number | null;
@@ -444,10 +456,54 @@ export default async function PortalHome() {
                     </div>
                   ))}
                   {rx.notes && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{rx.notes}</div>}
+                  {/* The printable sheet on the clinic's letterhead — what a
+                      pharmacy expects to be handed. */}
+                  <a href={`/rx/${rx.id}/print`} target="_blank" rel="noopener"
+                     style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+                    Download prescription (PDF) →
+                  </a>
                 </div>
               ))}
               <div style={{ color: "var(--muted)", fontSize: 11 }}>
                 Always follow your doctor&apos;s instructions. Contact the centre if anything is unclear.
+              </div>
+            </div>
+          )}
+
+          {/* Tests advised, grouped by the consultation they came from so the
+              client downloads one requisition per visit rather than per test. */}
+          {myLabs.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>Tests advised</div>
+              {Array.from(new Map(myLabs.map((o) => [o.consultation_id ?? o.id, o])).entries()).map(([key, first]) => {
+                const group = myLabs.filter((o) => (o.consultation_id ?? o.id) === key);
+                const done = group.every((o) => o.status === "resulted");
+                return (
+                  <div key={key} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 8, background: "var(--surface)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                      <b style={{ fontSize: 13 }}>{first.provider ?? "Your doctor"}</b>
+                      <span style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(first.created_at)}</span>
+                      <span style={{ flex: 1 }} />
+                      <span style={{ background: done ? "var(--green-bg)" : "var(--amber-bg)", color: done ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
+                        {done ? "Results received" : "Awaiting sample"}
+                      </span>
+                    </div>
+                    {group.map((o) => (
+                      <div key={o.id} style={{ fontSize: 13, padding: "3px 0" }}>
+                        <b>{o.test}</b>
+                        {o.priority && o.priority !== "routine" && <span style={{ color: "var(--red-text)", fontWeight: 700 }}> · {o.priority}</span>}
+                        {o.notes && <div style={{ color: "var(--muted)", fontSize: 12 }}>{o.notes}</div>}
+                      </div>
+                    ))}
+                    <a href={`/lab/${key}/print`} target="_blank" rel="noopener"
+                       style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+                      Download lab request (PDF) →
+                    </a>
+                  </div>
+                );
+              })}
+              <div style={{ color: "var(--muted)", fontSize: 11 }}>
+                Carry this to the laboratory. Ask whether fasting is needed before your sample is taken.
               </div>
             </div>
           )}

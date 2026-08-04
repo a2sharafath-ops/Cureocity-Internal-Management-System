@@ -5152,6 +5152,68 @@ export async function createOrder(formData: FormData) {
   revalidatePath("/orders");
 }
 
+/**
+ * Deliver a prescription to the client's portal — the step that was missing.
+ *
+ * `shared_at` gates everything downstream: the portal list, the "In client
+ * portal" chip on the client card, and the Comprehensive "prescription" SLA
+ * gate. Nothing wrote it, so the portal section was permanently empty and that
+ * SLA clock could never be satisfied — it warned and then breached forever.
+ *
+ * Signing and sharing are deliberately separate: a doctor may sign a
+ * prescription and still want a word with the patient before it is published.
+ * Sharing a draft is refused for the same reason.
+ */
+export async function shareRxToPortal(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  const p = await emrGuard(); if (!p) return { error: "Not permitted" };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "No prescription" };
+  const undo = String(formData.get("undo") || "") === "true";
+  const supabase = createClient();
+
+  const { data: row } = await supabase.from("prescriptions").select("client_id, status").eq("id", id).maybeSingle();
+  const rx = row as { client_id: string | null; status: string } | null;
+  if (!rx) return { error: "Not found" };
+  if (!undo && rx.status === "draft") return { error: "Sign the prescription before sharing it." };
+
+  const { error } = await supabase.from("prescriptions")
+    .update({ shared_at: undo ? null : new Date().toISOString() }).eq("id", id);
+  if (error) return { error: error.message };
+
+  await logAudit(p, undo ? "Prescription withdrawn from portal" : "Prescription shared to portal", await clientName(supabase, rx.client_id ?? ""), null);
+  if (rx.client_id) revalidatePath(`/clients/${rx.client_id}`);
+  revalidatePath("/portal");
+  return { ok: true };
+}
+
+/**
+ * Deliver the lab requisition for one consultation — every test advised in that
+ * session, so the client gets the same single sheet the doctor printed.
+ */
+export async function shareLabToPortal(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  const p = await emrGuard(); if (!p) return { error: "Not permitted" };
+  const consultationId = String(formData.get("consultation_id") || "");
+  if (!consultationId) return { error: "No consultation" };
+  const undo = String(formData.get("undo") || "") === "true";
+  const supabase = createClient();
+
+  const { data: rows } = await supabase.from("orders")
+    .select("id, client_id").eq("consultation_id", consultationId).neq("status", "cancelled");
+  const orders = (rows ?? []) as { id: string; client_id: string | null }[];
+  if (!orders.length) return { error: "No tests to share." };
+
+  const { error } = await supabase.from("orders")
+    .update({ shared_at: undo ? null : new Date().toISOString() })
+    .in("id", orders.map((o) => o.id));
+  if (error) return { error: error.message };
+
+  const clientId = orders[0].client_id;
+  await logAudit(p, undo ? "Lab requisition withdrawn from portal" : "Lab requisition shared to portal", await clientName(supabase, clientId ?? ""), `${orders.length} test(s)`);
+  if (clientId) revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/portal");
+  return { ok: true };
+}
+
 export async function setOrderStatus(formData: FormData) {
   const p = await emrGuard(); if (!p) return;
   const id = String(formData.get("id"));

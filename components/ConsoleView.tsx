@@ -7,6 +7,7 @@ import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
 import { deriveFlags, labsFromAnswers } from "@/lib/auto-flags";
 import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
+import ShareToPortal from "@/components/ShareToPortal";
 
 type Flag = { text: string; severity: string };
 
@@ -25,7 +26,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, rxPrintId, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, rxPrintId, rxSharedAt, labSharedAt, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -46,6 +47,9 @@ export default function ConsoleView({
   savedVitalsAt?: string | null;
   /** Prescription to print — this session's, else the client's most recent. */
   rxPrintId?: string | null;
+  /** When each document reached the client's portal, if it has. */
+  rxSharedAt?: string | null;
+  labSharedAt?: string | null;
   reports?: ReportRow[];
   orders?: { test: string; priority: string | null; created_at: string }[];
   prescriptions?: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -605,6 +609,7 @@ export default function ConsoleView({
                   Print lab requisition ({orders.length}) →
                 </a>
               )}
+              {orders.length > 0 && <ShareToPortal kind="lab" id={id} sharedAt={labSharedAt ?? null} label="Share to portal" />}
             </form>
 
             {/* Quick prescription */}
@@ -627,6 +632,7 @@ export default function ConsoleView({
                   Print prescription →
                 </a>
               )}
+              {rxPrintId && <ShareToPortal kind="rx" id={rxPrintId} sharedAt={rxSharedAt ?? null} label="Share to portal" />}
               <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 6, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Full prescription in EMR →</Link>
             </form>
           </div>

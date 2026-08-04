@@ -147,6 +147,8 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   // points at. Falls back to the client's latest, so a prescription added from
   // the EMR is still printable from here.
   let rxPrintId: string | null = null;
+  let rxSharedAt: string | null = null;
+  let labSharedAt: string | null = null;
   let rxList: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[] = [];
   if (row.client_id) {
     const [{ data: rep }, { data: ord }, { data: rx }] = await Promise.all([
@@ -162,10 +164,16 @@ export default async function ConsolePage({ params }: { params: { id: string } }
     }));
     orders = (ord ?? []) as typeof orders;
     const { data: rxRow } = await supabase.from("prescriptions")
-      .select("id, consultation_id").eq("client_id", row.client_id)
+      .select("id, consultation_id, shared_at").eq("client_id", row.client_id)
       .order("created_at", { ascending: false }).limit(5);
-    const rxRows = (rxRow ?? []) as { id: string; consultation_id: string | null }[];
-    rxPrintId = (rxRows.find((r) => r.consultation_id === row.id) ?? rxRows[0])?.id ?? null;
+    const rxRows = (rxRow ?? []) as { id: string; consultation_id: string | null; shared_at: string | null }[];
+    const pick = rxRows.find((r) => r.consultation_id === row.id) ?? rxRows[0];
+    rxPrintId = pick?.id ?? null;
+    rxSharedAt = pick?.shared_at ?? null;
+    // The requisition is shared as a set, so one order's stamp speaks for all.
+    const { data: shared } = await supabase.from("orders")
+      .select("shared_at").eq("consultation_id", row.id).not("shared_at", "is", null).limit(1).maybeSingle();
+    labSharedAt = (shared as { shared_at: string | null } | null)?.shared_at ?? null;
     rxList = ((rx ?? []) as unknown as { drug: string; dose: string | null; frequency: string | null; duration: string | null }[]);
   }
 
@@ -183,6 +191,8 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       savedVitals={savedVitals}
       savedVitalsAt={savedVitalsAt}
       rxPrintId={rxPrintId}
+      rxSharedAt={rxSharedAt}
+      labSharedAt={labSharedAt}
       flags={(row.flags ?? []) as { text: string; severity: string }[]}
       summary={row.summary}
       status={row.status}
