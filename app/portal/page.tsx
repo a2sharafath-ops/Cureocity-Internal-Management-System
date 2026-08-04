@@ -615,15 +615,12 @@ export default async function PortalHome() {
         </>
       )}
 
-      {/* My files & progress photos */}
+      {/* My files. Progress is shown through measurements and health markers,
+          not photographs — this is documents only. */}
       {card(
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>My files &amp; progress photos</div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>My files</div>
           <FilesGrid files={files} />
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Add a progress photo</div>
-            <FileUploadForm variant="portal" kind="progress_photo" label="Upload photo" accept="image/*" />
-          </div>
         </>
       )}
 

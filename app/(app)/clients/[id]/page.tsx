@@ -1050,52 +1050,13 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
       )}
 
-      {/* Progress Photos */}
-      {(() => {
-        const photos = files.filter((f) => f.kind === "progress_photo" && f.url).sort((a, b) => a.created_at.localeCompare(b.created_at));
-        // With no photos the card used to disappear — and the upload control
-        // with it, which lived in a different card entirely.
-        if (photos.length === 0 && ro) return null;
-        const first = photos[0], latest = photos[photos.length - 1];
-        return (
-          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
-            {photos.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>No photos yet.</div>}
-            {photos.length >= 2 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
-                  const p2 = ph as typeof first;
-                  return (
-                    <div key={label as string}>
-                      <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 4 }}>{label as string} · {p2.created_at.slice(0, 10)}</div>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p2.url ?? ""} alt={label as string} style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)", aspectRatio: "3/4", objectFit: "cover" }} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {photos.map((ph) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={ph.id} src={ph.url ?? ""} alt={ph.created_at} title={ph.created_at.slice(0, 10)} style={{ width: 68, height: 90, borderRadius: 8, border: "1px solid var(--border)", objectFit: "cover" }} />
-              ))}
-            </div>
-            {!ro && (
-              <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
-                <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
-        {/* Reports have their own dated timeline, and photos their own card —
-            this is what is left: consents, scans, paperwork. */}
-        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind) && f.kind !== "progress_photo")} />
+        {/* Clinical reports have their own dated timeline above. What is left
+            is the paperwork around the client: consent forms, ID scans,
+            insurance letters, anything filed without a clinical kind. */}
+        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind))} />
         {!ro && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         </div>
