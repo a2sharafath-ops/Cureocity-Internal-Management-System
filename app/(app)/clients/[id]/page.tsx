@@ -789,6 +789,17 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 4 }}>Add a blood report</div>
               <FileUploadForm variant="staff" clientId={params.id} kind="blood_report" label="Upload blood report" accept=".pdf,image/*" />
             </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 4 }}>Add an InBody report</div>
+              <FileUploadForm variant="staff" clientId={params.id} kind="inbody" label="Upload InBody" accept="application/pdf,image/*" />
+            </div>
+          </div>
+        )}
+        {!ro && (
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
+            Filing an InBody here stores the sheet only. The figures reach the
+            measurement table either from <b>Extract from PDF</b> in the consultation
+            console, or by entering them below.
           </div>
         )}
       </div>
