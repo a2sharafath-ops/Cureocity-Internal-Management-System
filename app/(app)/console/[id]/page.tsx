@@ -143,6 +143,10 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   // console and used by "Compile from record" to draft the summary.
   let reports: { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; url?: string | null }[] = [];
   let orders: { test: string; priority: string | null; created_at: string }[] = [];
+  // The prescription written in THIS session, if any — what the print link
+  // points at. Falls back to the client's latest, so a prescription added from
+  // the EMR is still printable from here.
+  let rxPrintId: string | null = null;
   let rxList: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[] = [];
   if (row.client_id) {
     const [{ data: rep }, { data: ord }, { data: rx }] = await Promise.all([
@@ -157,6 +161,11 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       return { id: r.id, name: r.name, kind: r.kind, report_label: r.report_label, report_date: r.report_date, summary: r.summary, created_at: r.created_at, url: signed?.signedUrl ?? null };
     }));
     orders = (ord ?? []) as typeof orders;
+    const { data: rxRow } = await supabase.from("prescriptions")
+      .select("id, consultation_id").eq("client_id", row.client_id)
+      .order("created_at", { ascending: false }).limit(5);
+    const rxRows = (rxRow ?? []) as { id: string; consultation_id: string | null }[];
+    rxPrintId = (rxRows.find((r) => r.consultation_id === row.id) ?? rxRows[0])?.id ?? null;
     rxList = ((rx ?? []) as unknown as { drug: string; dose: string | null; frequency: string | null; duration: string | null }[]);
   }
 
@@ -173,6 +182,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       draftVitals={((row.draft ?? null) as { vitals?: Record<string, string> } | null)?.vitals ?? null}
       savedVitals={savedVitals}
       savedVitalsAt={savedVitalsAt}
+      rxPrintId={rxPrintId}
       flags={(row.flags ?? []) as { text: string; severity: string }[]}
       summary={row.summary}
       status={row.status}

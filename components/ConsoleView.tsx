@@ -25,7 +25,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, rxPrintId, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -44,6 +44,8 @@ export default function ConsoleView({
   /** Today's vitals row, if one has already been recorded. */
   savedVitals?: Record<string, string> | null;
   savedVitalsAt?: string | null;
+  /** Prescription to print — this session's, else the client's most recent. */
+  rxPrintId?: string | null;
   reports?: ReportRow[];
   orders?: { test: string; priority: string | null; created_at: string }[];
   prescriptions?: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -589,16 +591,26 @@ export default function ConsoleView({
             {/* Lab order */}
             <form action={createOrder} style={{ ...box, padding: "14px 16px" }}>
               <input type="hidden" name="client_id" value={client.id} />
+              <input type="hidden" name="consultation_id" value={id} />
               <input type="hidden" name="category" value="lab" />
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Order lab test</div>
               <input name="test" placeholder="e.g. Lipid profile, HbA1c" required style={{ ...sm, marginBottom: 6 }} />
               <select name="priority" defaultValue="routine" style={{ ...sm, marginBottom: 8 }}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></select>
               <button type="submit" style={toolBtn}>Place order</button>
+              {/* One requisition for every test advised in this session — the
+                  sheet the patient hands to the lab. */}
+              {orders.length > 0 && (
+                <a href={`/lab/${id}/print`} target="_blank" rel="noopener"
+                   style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+                  Print lab requisition ({orders.length}) →
+                </a>
+              )}
             </form>
 
             {/* Quick prescription */}
             <form action={createPrescription} style={{ ...box, padding: "14px 16px" }}>
               <input type="hidden" name="client_id" value={client.id} />
+              <input type="hidden" name="consultation_id" value={id} />
               <input type="hidden" name="status" value="signed" />
               <input type="hidden" name="items" value={JSON.stringify(rx.drug.trim() ? [rx] : [])} />
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Prescription</div>
@@ -609,7 +621,13 @@ export default function ConsoleView({
                 <input value={rx.duration} onChange={(e) => setRx({ ...rx, duration: e.target.value })} placeholder="Duration" style={{ ...sm, gridColumn: "1 / span 2" }} />
               </div>
               <button type="submit" disabled={!rx.drug.trim()} style={{ ...toolBtn, opacity: rx.drug.trim() ? 1 : 0.5, cursor: rx.drug.trim() ? "pointer" : "not-allowed" }}>Sign &amp; add</button>
-              <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 8, fontSize: 11.5, color: "var(--brand-text)", textDecoration: "none" }}>Full prescription in EMR →</Link>
+              {rxPrintId && (
+                <a href={`/rx/${rxPrintId}/print`} target="_blank" rel="noopener"
+                   style={{ display: "block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+                  Print prescription →
+                </a>
+              )}
+              <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 6, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Full prescription in EMR →</Link>
             </form>
           </div>
         </div>

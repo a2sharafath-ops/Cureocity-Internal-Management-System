@@ -3569,6 +3569,37 @@ export async function saveAppSettings(payload: string): Promise<{ ok?: boolean; 
   return { ok: true };
 }
 
+/**
+ * Upload a printable sheet design (prescription / lab requisition) to the
+ * public `branding` bucket and return its URL for app_settings.
+ *
+ * Stored as a file rather than inlined into the settings JSON: an A4 artwork
+ * base64-encoded into a row that every page reads would cost megabytes per
+ * request. Public read is deliberate — this is clinic stationery, not patient
+ * data, and it lets the print pages render without signing a URL.
+ */
+export async function uploadDocTemplate(formData: FormData): Promise<{ url?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !["Administrator", "Super Admin"].includes(p.role)) return { error: "Not authorized." };
+  const kind = String(formData.get("kind") || "");
+  if (!["rx", "lab"].includes(kind)) return { error: "Unknown document type." };
+  const file = formData.get("file");
+  if (!(file instanceof File) || !file.size) return { error: "Choose a file first." };
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return { error: "Use a PNG, JPG or WebP image of the full A4 sheet." };
+  if (file.size > 5_000_000) return { error: "Design too large — keep it under 5 MB." };
+
+  const supabase = createClient();
+  // Cache-busting name: replacing a design must not leave the old artwork in a
+  // CDN cache on a public bucket.
+  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const path = `sheets/${kind}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type, upsert: true });
+  if (error) return { error: error.message };
+  const { data } = supabase.storage.from("branding").getPublicUrl(path);
+  await logAudit(p, "Sheet design uploaded", null, `${kind} · ${file.name}`);
+  return { url: data.publicUrl };
+}
+
 // ---- health-coach marker assessments ---------------------------------------
 
 /** Record a coach marker score (stress/sleep/activity/nutrition/substance/anxiety).
@@ -5067,6 +5098,7 @@ export async function createPrescription(formData: FormData) {
   const status = String(formData.get("status") || "signed"); // draft | signed
   const { data: rx } = await supabase.from("prescriptions").insert({
     client_id, status,
+    consultation_id: String(formData.get("consultation_id") ?? "") || null,
     notes: String(formData.get("notes") ?? "").trim() || null,
     flags: String(formData.get("flags") ?? "").trim() || null,
     provider: p.name,
@@ -5107,6 +5139,9 @@ export async function createOrder(formData: FormData) {
   const supabase = createClient();
   await supabase.from("orders").insert({
     client_id, test,
+    // Which consultation advised this test, so the requisition can print every
+    // test from one session on a single sheet.
+    consultation_id: String(formData.get("consultation_id") ?? "") || null,
     category: String(formData.get("category") || "lab"),
     priority: String(formData.get("priority") || "routine"),
     notes: String(formData.get("notes") ?? "").trim() || null,

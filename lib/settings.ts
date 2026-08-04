@@ -32,6 +32,26 @@ export type AppSettings = {
     header: string;            // prescription header line
     footer: string;            // prescription footer line
   };
+  /**
+   * Printable sheet designs. Each document type gets a full-page artwork you
+   * upload (A4 portrait), plus the safe area to keep text out of it. Margins
+   * are in millimetres so they match what a designer works in.
+   *
+   * `bg` is a public URL in the `branding` bucket, not a data URL: an A4
+   * background base64-inlined into app_settings would be megabytes on a row
+   * that is read on nearly every page, including sign-in.
+   */
+  docs: {
+    rx: DocSheet;
+    lab: DocSheet;
+  };
+};
+
+export type DocSheet = {
+  bg: string;        // public URL of the uploaded design; "" → plain letterhead
+  top: number;       // mm of artwork to keep clear at the top (the letterhead)
+  bottom: number;    // mm to keep clear at the bottom (footer / signature band)
+  side: number;      // mm left/right
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -57,6 +77,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
     header: "Cureocity HealthTech LLP · Kochi",
     footer: "This prescription is issued as part of your Cureocity care plan.",
   },
+  // Defaults suit a typical printed letterhead: ~45 mm of masthead, ~30 mm of
+  // footer. With no artwork uploaded these are also sensible plain margins.
+  docs: {
+    rx: { bg: "", top: 45, bottom: 30, side: 18 },
+    lab: { bg: "", top: 45, bottom: 30, side: 18 },
+  },
 };
 
 // Deep-merge saved data over defaults (one level per section is enough here).
@@ -68,6 +94,10 @@ function merge(saved: Partial<AppSettings> | null | undefined): AppSettings {
     consult: { ...DEFAULT_SETTINGS.consult, ...(s.consult ?? {}) },
     diet: { ...DEFAULT_SETTINGS.diet, ...(s.diet ?? {}), defaultRows: (s.diet?.defaultRows?.length ? s.diet.defaultRows : DEFAULT_SETTINGS.diet.defaultRows) },
     rx: { ...DEFAULT_SETTINGS.rx, ...(s.rx ?? {}) },
+    docs: {
+      rx: { ...DEFAULT_SETTINGS.docs.rx, ...(s.docs?.rx ?? {}) },
+      lab: { ...DEFAULT_SETTINGS.docs.lab, ...(s.docs?.lab ?? {}) },
+    },
   };
 }
 

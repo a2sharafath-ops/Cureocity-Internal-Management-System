@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { saveAppSettings } from "@/lib/actions";
-import type { AppSettings } from "@/lib/settings";
+import { saveAppSettings, uploadDocTemplate } from "@/lib/actions";
+import type { AppSettings, DocSheet } from "@/lib/settings";
 
 const FONTS = [
   { label: "System default", value: "" },
@@ -35,6 +35,25 @@ export default function TemplatesEditor({ initial, canEdit }: { initial: AppSett
     const r = new FileReader();
     r.onload = () => set("brand", { logo: String(r.result || "") });
     r.readAsDataURL(file);
+  };
+
+  // Sheet designs go to storage, not into the settings JSON — see
+  // uploadDocTemplate for why. Uploading immediately persists the URL so the
+  // artwork can't be lost by navigating away before pressing Save.
+  const [upBusy, setUpBusy] = useState<string | null>(null);
+  const onSheet = async (kind: "rx" | "lab", file: File | null) => {
+    if (!file) return;
+    setErr(null); setMsg(null); setUpBusy(kind);
+    const fd = new FormData();
+    fd.set("kind", kind); fd.set("file", file);
+    const r = await uploadDocTemplate(fd);
+    setUpBusy(null);
+    if (r.error) { setErr(r.error); return; }
+    const next = { ...s, docs: { ...s.docs, [kind]: { ...s.docs[kind], bg: r.url ?? "" } } };
+    setS(next);
+    const w = await saveAppSettings(JSON.stringify(next));
+    setMsg(w.error ? null : "Design uploaded and saved.");
+    if (w.error) setErr(w.error);
   };
 
   const save = async () => {
@@ -109,6 +128,59 @@ export default function TemplatesEditor({ initial, canEdit }: { initial: AppSett
           <div><span style={label}>Diet chart — footer note (printed on the PDF)</span><textarea disabled={ro} rows={2} value={s.diet.footerNote} onChange={(e) => set("diet", { footerNote: e.target.value })} style={{ ...inp, resize: "vertical" }} /></div>
           <div><span style={label}>Prescription — header line</span><input disabled={ro} value={s.rx.header} onChange={(e) => set("rx", { header: e.target.value })} style={inp} /></div>
           <div><span style={label}>Prescription — footer line</span><input disabled={ro} value={s.rx.footer} onChange={(e) => set("rx", { footer: e.target.value })} style={inp} /></div>
+        </div>
+      </div>
+
+
+      {/* Printable sheet designs */}
+      <div style={card}>
+        <div style={h}>Prescription &amp; lab sheet designs</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 14, lineHeight: 1.55 }}>
+          Upload the full A4 sheet as you designed it — letterhead, watermark, footer and all.
+          It becomes the page background; the patient details, medicines and tests are printed
+          into the clear area you set below. Export at <b>A4 portrait, 150–300 DPI</b>
+          (about 1240 × 1754 px at 150 DPI). Leave a design out and the sheet falls back to
+          a plain letterhead built from the details above.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          {([["rx", "Prescription"], ["lab", "Lab requisition"]] as const).map(([k, title]) => {
+            const d: DocSheet = s.docs[k];
+            return (
+              <div key={k} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{title}</div>
+                {/* Preview at A4 proportions so the safe area is believable. */}
+                <div style={{ position: "relative", width: "100%", aspectRatio: "210 / 297", background: "#fff", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+                  {d.bg
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={d.bg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    : <div style={{ display: "grid", placeItems: "center", height: "100%", fontSize: 11.5, color: "var(--muted)", textAlign: "center", padding: 10 }}>No design uploaded<br />— plain letterhead is used</div>}
+                  <div style={{ position: "absolute", left: `${(d.side / 210) * 100}%`, right: `${(d.side / 210) * 100}%`, top: `${(d.top / 297) * 100}%`, bottom: `${(d.bottom / 297) * 100}%`, border: "1.5px dashed rgba(225,31,52,.75)", borderRadius: 3, pointerEvents: "none" }} />
+                </div>
+                {!ro && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                    <label style={{ fontSize: 12, color: "var(--brand-text)", cursor: "pointer", fontWeight: 600 }}>
+                      {upBusy === k ? "Uploading…" : d.bg ? "Replace design" : "Upload design"}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={(e) => onSheet(k, e.target.files?.[0] ?? null)} />
+                    </label>
+                    {d.bg && <button type="button" onClick={() => set("docs", { [k]: { ...d, bg: "" } } as Partial<AppSettings["docs"]>)} style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 11.5, cursor: "pointer" }}>Remove</button>}
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                  {(["top", "bottom", "side"] as const).map((m) => (
+                    <div key={m}>
+                      <span style={{ ...label, marginBottom: 2 }}>{m === "side" ? "Sides" : m === "top" ? "Top" : "Bottom"} (mm)</span>
+                      <input disabled={ro} type="number" min={0} max={120} value={d[m]}
+                        onChange={(e) => set("docs", { [k]: { ...d, [m]: Math.max(0, Math.min(120, Number(e.target.value) || 0)) } } as Partial<AppSettings["docs"]>)}
+                        style={{ ...inp, padding: "6px 8px" }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>
+          The dashed box shows where content will print. Widen the top margin if your letterhead is deep.
         </div>
       </div>
 
