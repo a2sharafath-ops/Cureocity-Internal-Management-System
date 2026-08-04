@@ -130,12 +130,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
     ? await supabase.from("profiles").select("email").eq("client_id", params.id).eq("role", "Client").maybeSingle()
     : { data: null };
 
-  // files + signed URLs
+  // Every file once, with one signed URL each. Reports used to be fetched a
+  // second time further down and signed twice, then discarded from this list —
+  // two round-trips per report on every page load.
   const { data: fileRows } = await supabase
-    .from("files").select("id, name, kind, path, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
-  const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
-    const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
-    return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
+    .from("files").select("id, name, kind, path, bucket, report_label, report_date, summary, created_at")
+    .eq("client_id", params.id).order("created_at", { ascending: false });
+  const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; bucket: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string }[]).map(async (f) => {
+    const { data: signed } = await supabase.storage.from(f.bucket || "client-files").createSignedUrl(f.path, 3600);
+    return { ...f, url: signed?.signedUrl ?? null };
   }));
 
   const canMeasure = !ro && (canWrite(me?.role ?? "") || canConsult(me?.role ?? ""));
@@ -315,11 +318,18 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       at: atDay(c.start_date) ?? "", kind: "package" as const,
       title: `${c.package_name ?? c.category} purchased`, detail: c.category,
     })),
-    sess.map((x) => ({
-      at: atDay(x.date) ?? "", kind: "session" as const,
-      title: `Strength session ${x.seq ?? ""}`.trim(),
-      detail: x.status, pending: x.status === "scheduled",
-    })),
+    // Sessions are deliberately NOT listed here: the full Strength Sessions
+    // table sits directly below on this same tab, so every session appeared
+    // twice, and a 24-session block drowned out everything else in the journey.
+    // A single summarising event keeps the block visible in the story.
+    sess.length
+      ? [{
+          at: atDay(sess[0].date) ?? "", kind: "session" as const,
+          title: `Strength block — ${sess.length} session${sess.length === 1 ? "" : "s"}`,
+          detail: `${sess.filter((x) => x.status === "done").length} done · see the table below`,
+          pending: sess.some((x) => x.status === "scheduled"),
+        }]
+      : [],
     consults.map((c) => ({
       at: atDay(c.created_at) ?? "", kind: "consultation" as const,
       title: `${c.kind} consultation`, detail: c.status,
@@ -363,24 +373,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // lives on the Overview "Open now / Upcoming" tracker.)
 
 
-  // Every clinical report this client has, as one dated series: blood panels,
-  // other medical reports and InBody sheets accumulate over months and only
-  // make sense read against each other. `report_date` is the date on the
-  // document; created_at is only when it was filed, so it is the fallback.
-  const REPORT_KINDS = ["blood_report", "medical_report", "inbody"] as const;
-  const { data: repRows } = await supabase.from("files")
-    .select("id, name, kind, report_label, report_date, summary, created_at, bucket, path")
-    .eq("client_id", params.id).in("kind", REPORT_KINDS as unknown as string[])
-    .order("created_at", { ascending: false }).limit(200);
-  const reportFiles = await Promise.all(
-    ((repRows ?? []) as { id: string; name: string | null; kind: string; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; bucket: string | null; path: string }[])
-      .map(async (r) => {
-        const { data: signed } = await supabase.storage.from(r.bucket || "client-files").createSignedUrl(r.path, 3600);
-        return { ...r, url: signed?.signedUrl ?? null, on: r.report_date ?? r.created_at };
-      }),
-  );
-  // Newest first, by the date on the document.
-  reportFiles.sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : 0));
+  // The clinical reports, taken from the files already loaded above.
+  // `report_date` is the date on the document; created_at is only when it was
+  // filed, so it is the fallback when reading a trend.
+  const reportFiles = files
+    .filter((f) => REPORT_KINDS_SET.has(f.kind))
+    .map((f) => ({ ...f, on: f.report_date ?? f.created_at }))
+    .sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : 0));
+
   // Consultations as one dated series across every discipline. A client
   // accumulates doctor visits, diet reviews and fitness assessments in parallel,
   // and grouping by discipline hid the thing that matters — what happened when.
@@ -464,13 +464,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Schedule the strength-session block right here on Overview — front desk
           doesn't have to hop to the Client Card tab. Shows only for PT /
           Comprehensive clients who don't yet have sessions booked. */}
-      {!ro && canWrite(me?.role ?? "") && isPtOrComp && !hasScheduledSessions && (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px", marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Strength sessions</div>
-          <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>Book this client&apos;s strength-session block — pick a trainer, start date and time.</div>
-          <ScheduleSessionsForm clientId={params.id} trainers={trainers} defaultTrainerId={assignedTrainerId} />
-        </div>
-      )}
 
       {/* Blood report — a pending journey step, kept near the top with the to-dos */}
       {needsBlood && (
@@ -895,11 +888,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Progress Photos */}
       {(() => {
         const photos = files.filter((f) => f.kind === "progress_photo" && f.url).sort((a, b) => a.created_at.localeCompare(b.created_at));
-        if (photos.length === 0) return null;
+        // With no photos the card used to disappear — and the upload control
+        // with it, which lived in a different card entirely.
+        if (photos.length === 0 && ro) return null;
         const first = photos[0], latest = photos[photos.length - 1];
         return (
           <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
             <div style={{ fontWeight: 700, marginBottom: 10 }}>Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
+            {photos.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>No photos yet.</div>}
             {photos.length >= 2 && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                 {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
@@ -920,6 +916,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 <img key={ph.id} src={ph.url ?? ""} alt={ph.created_at} title={ph.created_at.slice(0, 10)} style={{ width: 68, height: 90, borderRadius: 8, border: "1px solid var(--border)", objectFit: "cover" }} />
               ))}
             </div>
+            {!ro && (
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+                <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1093,15 +1094,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
-        {/* Reports have their own dated timeline above; this is everything
-            else — progress photos, consents, scans of paperwork. */}
-        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind))} />
+        {/* Reports have their own dated timeline, and photos their own card —
+            this is what is left: consents, scans, paperwork. */}
+        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind) && f.kind !== "progress_photo")} />
         {!ro && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Upload progress photo</div>
-            <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
-          </div>
         </div>
         )}
       </div>

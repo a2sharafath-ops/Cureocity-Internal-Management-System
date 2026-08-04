@@ -2609,6 +2609,13 @@ export async function uploadClientFile(_prev: UploadState, formData: FormData): 
   const r = await storeFile(clientId, kind, file, me.name);
   if (r.error) return { error: r.error };
   const supabase = createClient();
+  if (kind === "blood_report") {
+    // The same rule the portal already applied: a report received is a panel
+    // satisfied. Without this, front desk filing a report the client brought in
+    // left the Blood report card saying "awaiting" indefinitely, contradicting
+    // the report sitting in the timeline one tab away.
+    await markEarliestPanelReceived(supabase, clientId);
+  }
   const { data: c } = await supabase.from("clients").select("name").eq("id", clientId).maybeSingle();
   await logAudit(me, "File uploaded", c?.name, `${kind}: ${file.name}`);
   revalidatePath(`/clients/${clientId}`);
