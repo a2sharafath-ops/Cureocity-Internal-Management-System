@@ -20,7 +20,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
 import VoidPackageButton from "@/components/VoidPackageButton";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
@@ -183,7 +183,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // The clinical record in brief. The full chart lives at /emr/[id]; this is
   // the "is there anything I must know" view — allergies first, because that is
   // the one thing that changes what anyone does next.
-  const canEmrRead = canConsult(me?.role ?? "") || canWrite(me?.role ?? "");
+  // Match the gate to the RLS behind it. `canConsult || canWrite` included Front
+  // Desk and every discipline, but the policies on problems/medications/
+  // prescriptions/orders are `is_admin() or Doctor` — so those roles were shown
+  // a Medical record card that could only ever say "None recorded". A card that
+  // exists to display nothing is worse than no card: it reads as "this client
+  // has no problems", which is a clinical claim we have not earned.
+  const canEmrRead = canEmr(me?.role ?? "");
+
+
   const [emrAllergiesR, emrProblemsR, emrMedsR, emrOrdersR] = canEmrRead ? await Promise.all([
     supabase.from("allergies").select("substance, severity").eq("client_id", params.id),
     supabase.from("problems").select("description, status").eq("client_id", params.id).eq("status", "active").limit(12),
@@ -316,6 +324,28 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // from re-appearing after it's already been run.
   const journeyStarted = hasProtocol || Boolean(bp) || Boolean(bloodRow);
   const clientAge = ageOf(c0.dob);
+
+  // Health profile headline metrics. Latest measurement wins; the client's
+  // profile height/weight is the fallback, since a client with no InBody yet
+  // still has the figures front desk took at sign-up.
+  const latestMeasure = (measures[0] ?? null) as (typeof measures)[number] | null;
+  const num = (v: number | null | undefined, unit = "") => (v === null || v === undefined ? "—" : `${v}${unit}`);
+  const female = String(client.gender ?? "").trim().toLowerCase().startsWith("f");
+  // Only two tiles carry a judgement, and only where the reference is
+  // uncontroversial: visceral fat above 9, and body fat above the usual band.
+  const fatHigh = latestMeasure?.body_fat != null && latestMeasure.body_fat > (female ? 32 : 25);
+  const viscHigh = (latestMeasure?.visceral_fat ?? 0) > 9;
+  const healthMetrics: { label: string; value: string; note?: string; tone?: string }[] = [
+    { label: "Age / Sex", value: [clientAge != null ? `${clientAge}` : "—", client.gender ?? ""].filter(Boolean).join(" · ") },
+    { label: "Height", value: num(client.height as number | null, " cm") },
+    { label: "Weight", value: num((latestMeasure?.weight ?? (client.weight as number | null)), " kg") },
+    { label: "BMI", value: num(latestMeasure?.bmi) },
+    { label: "Body fat", value: num(latestMeasure?.body_fat, "%"), tone: fatHigh ? "var(--amber-text)" : undefined },
+    { label: "Muscle", value: num(latestMeasure?.muscle_mass, " kg") },
+    { label: "Visceral", value: num(latestMeasure?.visceral_fat), note: viscHigh ? "above 9" : undefined, tone: viscHigh ? "var(--amber-text)" : undefined },
+    { label: "Waist / Hip", value: latestMeasure?.waist || latestMeasure?.hip ? `${num(latestMeasure?.waist)} / ${num(latestMeasure?.hip)}` : "—" },
+  ];
+
 
   const pkg = (client as { packages: { name: string; sessions: number; is_facility: boolean; price: number } | null }).packages;
   const sess = (sessions ?? []) as {
@@ -480,27 +510,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           doesn't have to hop to the Client Card tab. Shows only for PT /
           Comprehensive clients who don't yet have sessions booked. */}
 
-      {/* Blood report — a pending journey step, kept near the top with the to-dos */}
-      {needsBlood && (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <div style={{ fontWeight: 700 }}>Blood report</div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: bloodPanels.length > 1 ? "1fr 1fr" : "1fr", gap: 16 }}>
-            {bloodPanels.map((panel) => {
-              const row = bloodByPanel.get(panel) ?? null;
-              const label = bloodPanels.length > 1 ? (BLOOD_PANEL_LABEL[panel] ?? panel) : undefined;
-              return (
-                <div key={panel}>
-                  {ro
-                    ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{label ? <span style={{ fontWeight: 600 }}>{label}: </span> : null}{row ? (row.submitted ? `Received ${row.submitted_date ?? ""}` : `Requested ${row.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
-                    : <BloodActions clientId={params.id} blood={row} panel={panel} label={label} />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* ---- Commercial ---- */}
       {/* Deals / Packages */}
@@ -595,15 +604,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             ))}
           </div>
         ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No clinicians assigned yet.</div>}
-      </div>
-
-      {/* Health Profile */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>Health Profile</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <Stat label="Primary Goal" value={(client.goals ?? []).join(", ") || "—"} />
-          <Stat label="Conditions" value={client.conditions} />
-        </div>
       </div>
 
       {/* Personal Info */}
@@ -724,12 +724,83 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           the layout cannot drift as cards are added, reordered, or hidden by a
           role check. */}
       <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
-      {/* Medical record — the clinical facts that change what anyone does next,
-          in one card. Everything here is read-only: the chart at /emr/[id] is
-          where it is edited, and that is the single link out. Previously the
-          same rows were split across a Prescriptions card here and the chart
-          there, with three separate "go to EMR" links pointing at the index. */}
-      {canEmrRead && (emrAllergies.length > 0 || emrProblems.length > 0 || emrMeds.length > 0 || prescriptions.length > 0 || emrOrders.length > 0) && (
+      {/* Health profile — what the client wants and how their body is tracking.
+          Goals and reported conditions are the client's own account, kept apart
+          from the structured problem list above so the two are never confused. */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Health profile</div>
+          {latestMeasure?.date && (
+            <span style={{ color: "var(--muted)", fontSize: 12 }}>measured {fmtDate(latestMeasure.date)}</span>
+          )}
+        </div>
+
+        {/* The numbers a clinician or coach wants before they say anything —
+            read across in one line rather than hunted out of the table below.
+            Each tile shows the latest recorded value; a dash means never
+            measured, which is itself worth seeing at a glance. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(92px, 1fr))", gap: 10, marginBottom: 14 }}>
+          {healthMetrics.map((m) => (
+            <div key={m.label} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "9px 11px" }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>{m.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2, color: m.tone ?? "var(--ink)" }}>{m.value}</div>
+              {m.note && <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{m.note}</div>}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px", marginBottom: 12 }}>
+          <Stat label="Primary goal" value={(client.goals ?? []).join(", ") || "—"} />
+          <Stat label="Reported conditions" value={client.conditions} />
+        </div>
+        <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Measurements &amp; InBody</div>
+        {/* The written InBody interpretation belongs to the consultation, not
+            to this card — the table below is the measurement record. */}
+        {baselineRow && measures[0] && (baselineRow as Measure).date !== measures[0].date && (
+          <InBodyComparison baseline={baselineRow as Measure} latest={measures[0] as Measure} />
+        )}
+        {measures.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>No measurements recorded yet.</div>
+        ) : (
+          <div style={{ overflowX: "auto", marginBottom: 12 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11 }}>
+                  <th style={{ padding: "6px 10px" }}>Date</th>
+                  <th style={{ padding: "6px 10px" }}>Weight</th>
+                  <th style={{ padding: "6px 10px" }}>BMI</th>
+                  <th style={{ padding: "6px 10px" }}>Body fat %</th>
+                  <th style={{ padding: "6px 10px" }}>Muscle</th>
+                  <th style={{ padding: "6px 10px" }}>Visceral</th>
+                  <th style={{ padding: "6px 10px" }}>Waist/Hip</th>
+                  <th style={{ padding: "6px 10px" }}>RHR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {measures.map((m) => (
+                  <tr key={m.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 10px" }}>{m.date}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.weight ?? "—"}{m.weight ? " kg" : ""}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.bmi ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.body_fat ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.muscle_mass ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.visceral_fat ?? "—"}</td>
+                    <td style={{ padding: "6px 10px" }}>{(m.waist ?? "—")}/{(m.hip ?? "—")}</td>
+                    <td style={{ padding: "6px 10px" }}>{m.resting_hr ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {canMeasure && <MeasurementForm clientId={params.id} />}
+      </div>
+
+      {/* Medical record — the clinical facts, read-only. They are edited on the
+          chart at /emr/[id], which is the single link out. Split from the health
+          profile below because the two answer different questions: this one is
+          "what must a clinician know", that one is "how is this client doing". */}
+      {canEmrRead && (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Medical record</div>
@@ -802,13 +873,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               ))}
             </div>
           )}
+
         </div>
       )}
 
-      {/* Care records — consultations by discipline */}
+      {/* Cureocity records — consultations by discipline */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>Care records</div>
+          <div style={{ fontWeight: 700 }}>Cureocity records</div>
           <span style={{ flex: 1 }} />
         </div>
         {consults.length === 0 ? (
@@ -842,7 +914,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           July when you are reading a trend. */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <div style={{ fontWeight: 700 }}>Reports</div>
+          <div style={{ fontWeight: 700 }}>Reports &amp; documents</div>
           {reportFiles.length > 0 && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{reportFiles.length}</span>}
         </div>
         <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
@@ -894,54 +966,52 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             console, or by entering them below.
           </div>
         )}
-      </div>
 
-      {/* Measurements / InBody */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>Measurements / InBody</div>
-        </div>
-        {/* The written InBody interpretation belongs to the consultation, not
-            to this card — the table below is the measurement record. */}
-        {baselineRow && measures[0] && (baselineRow as Measure).date !== measures[0].date && (
-          <InBodyComparison baseline={baselineRow as Measure} latest={measures[0] as Measure} />
-        )}
-        {measures.length === 0 ? (
-          <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>No measurements recorded yet.</div>
-        ) : (
-          <div style={{ overflowX: "auto", marginBottom: 12 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 640 }}>
-              <thead>
-                <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 11 }}>
-                  <th style={{ padding: "6px 10px" }}>Date</th>
-                  <th style={{ padding: "6px 10px" }}>Weight</th>
-                  <th style={{ padding: "6px 10px" }}>BMI</th>
-                  <th style={{ padding: "6px 10px" }}>Body fat %</th>
-                  <th style={{ padding: "6px 10px" }}>Muscle</th>
-                  <th style={{ padding: "6px 10px" }}>Visceral</th>
-                  <th style={{ padding: "6px 10px" }}>Waist/Hip</th>
-                  <th style={{ padding: "6px 10px" }}>RHR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {measures.map((m) => (
-                  <tr key={m.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "6px 10px" }}>{m.date}</td>
-                    <td style={{ padding: "6px 10px" }}>{m.weight ?? "—"}{m.weight ? " kg" : ""}</td>
-                    <td style={{ padding: "6px 10px" }}>{m.bmi ?? "—"}</td>
-                    <td style={{ padding: "6px 10px" }}>{m.body_fat ?? "—"}</td>
-                    <td style={{ padding: "6px 10px" }}>{m.muscle_mass ?? "—"}</td>
-                    <td style={{ padding: "6px 10px" }}>{m.visceral_fat ?? "—"}</td>
-                    <td style={{ padding: "6px 10px" }}>{(m.waist ?? "—")}/{(m.hip ?? "—")}</td>
-                    <td style={{ padding: "6px 10px" }}>{m.resting_hr ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+        {/* Panel status sits with the reports themselves. It used to live on
+            the Overview tab while the report it describes was filed here — the
+            split is what let the two disagree for so long. */}
+        {needsBlood && (
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 6 }}>Blood panel status</div>
+          <div style={{ display: "grid", gridTemplateColumns: bloodPanels.length > 1 ? "1fr 1fr" : "1fr", gap: 16 }}>
+            {bloodPanels.map((panel) => {
+              const row = bloodByPanel.get(panel) ?? null;
+              const label = bloodPanels.length > 1 ? (BLOOD_PANEL_LABEL[panel] ?? panel) : undefined;
+              return (
+                <div key={panel}>
+                  {ro
+                    ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{label ? <span style={{ fontWeight: 600 }}>{label}: </span> : null}{row ? (row.submitted ? `Received ${row.submitted_date ?? ""}` : `Requested ${row.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
+                    : <BloodActions clientId={params.id} blood={row} panel={panel} label={label} />}
+                </div>
+              );
+            })}
+          </div>
           </div>
         )}
-        {canMeasure && <MeasurementForm clientId={params.id} />}
+        {/* Other paperwork — consents, ID scans, letters. Filed against the
+            same client, so it belongs in the same card as the reports rather
+            than in a second documents card six sections away. */}
+        <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 6 }}>Other documents</div>
+        {/* Clinical reports have their own dated timeline above. What is left
+            is the paperwork around the client: consent forms, ID scans,
+            insurance letters, anything filed without a clinical kind. */}
+        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind))} />
+        {!ro && (
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+            {/* "document" is the catch-all kind, and the one this card lists.
+                Clinical reports are uploaded from Reports above so they land in
+                the timeline with a date and a type. */}
+            <FileUploadForm variant="staff" clientId={params.id} kind="document" label="Upload document" accept=".pdf,image/*,.doc,.docx" />
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+              Consent forms, ID scans, letters. Blood, medical and InBody reports go in <b>Reports</b> above.
+            </div>
+          </div>
+        )}
+        </div>
       </div>
+
 
       {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
       {showBlueprint && (
@@ -983,17 +1053,28 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </div>
       )}
 
-      {compView && (
-        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+      {/* Programme protocol — a client runs one journey, so this is one card.
+          Both boards rendered adjacently before, near-identical, which read as
+          two protocols rather than one client's programme. */}
+      {(compView || ptView) && (
+        <>
+          {compView && (
+            <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+          )}
+          {ptView && (
+            <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+          )}
+        </>
       )}
 
-      {ptView && (
-        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
-      )}
-
-      {/* Assigned workouts */}
-      {(canCoach || workouts.length > 0) && (
+      {/* Adherence & coaching — what the client has been given and how they are
+          keeping to it. Three separate cards asked one question between them,
+          each gated on the same role check; a coach reads them together or not
+          at all. */}
+      {(canCoach || workouts.length > 0 || habits.length > 0 || reads.length > 0) && (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Adherence &amp; coaching</div>
+          <div style={{ marginTop: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>Assigned workouts</div>
             <span style={{ flex: 1 }} />
@@ -1025,12 +1106,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Habits & streaks */}
-      {(canCoach || habits.length > 0) && (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          </div>
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontWeight: 700 }}>Habits &amp; streaks</div>
             <span style={{ flex: 1 }} />
@@ -1046,7 +1123,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                 const week = last7Count(dates, habToday);
                 const hit = week >= h.target_per_week;
 
-  return (
+                return (
                   <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
                     <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
                     <div style={{ flex: 1 }}>
@@ -1068,12 +1145,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               })}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Wearables */}
-      {(canCoach || reads.length > 0) && (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          </div>
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontWeight: 700 }}>⌚ Wearables</div>
             {latestRead && <span style={{ color: "var(--muted)", fontSize: 12 }}>· latest {latestRead.date}</span>}
@@ -1114,28 +1187,9 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <WearableConnect clientId={params.id} connected={connMap} />
             </>
           )}
+          </div>
         </div>
       )}
-
-      {/* Files */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
-        {/* Clinical reports have their own dated timeline above. What is left
-            is the paperwork around the client: consent forms, ID scans,
-            insurance letters, anything filed without a clinical kind. */}
-        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind))} />
-        {!ro && (
-          <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
-            {/* "document" is the catch-all kind, and the one this card lists.
-                Clinical reports are uploaded from Reports above so they land in
-                the timeline with a date and a type. */}
-            <FileUploadForm variant="staff" clientId={params.id} kind="document" label="Upload document" accept=".pdf,image/*,.doc,.docx" />
-            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
-              Consent forms, ID scans, letters. Blood, medical and InBody reports go in <b>Reports</b> above.
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Portal access (staff) */}
       {showPortal && (
