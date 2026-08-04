@@ -1499,8 +1499,15 @@ export async function saveConsultSession(formData: FormData) {
       const eid = (existing as { id: string } | null)?.id;
       if (eid) await supabase.from("vitals").update({ ...vitalVals, recorded_by: p.name }).eq("id", eid);
       else await supabase.from("vitals").insert({ client_id: vClient, date: today, ...vitalVals, recorded_by: p.name });
-      // The draft has become a real record — clear the scratch copy.
-      await supabase.from("consultations").update({ draft: null }).eq("id", id);
+      // The vitals have become a real record, so drop them from the scratch
+      // copy — but keep anything still unsent (a half-typed order or
+      // prescription), which saving the questionnaire has nothing to do with.
+      const { data: dRow } = await supabase.from("consultations").select("draft").eq("id", id).maybeSingle();
+      const d = ((dRow as { draft: Record<string, unknown> | null } | null)?.draft ?? {}) as Record<string, unknown>;
+      const rest = { order: d.order, rx: d.rx };
+      await supabase.from("consultations").update({
+        draft: rest.order || rest.rx ? rest : null,
+      }).eq("id", id);
     }
   }
   if (complete) {
@@ -1537,6 +1544,8 @@ export async function autosaveConsult(
   summary: string,
   vitals?: Record<string, string>,
   questionsFromClient?: string[],
+  /** Typed but not yet placed / signed — recoverable, never a record. */
+  pending?: { order?: Record<string, string>; rx?: Record<string, string> },
 ): Promise<{ ok?: boolean; at?: string; error?: string }> {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return { error: "Not authorized." };
@@ -1578,11 +1587,22 @@ export async function autosaveConsult(
   const vDraft = Object.fromEntries(
     Object.entries(vitals ?? {}).filter(([, v]) => String(v ?? "").trim()),
   );
+  // Half-typed lab orders and prescriptions ride along in the same scratch
+  // draft. They are explicitly NOT records: an order exists when it is placed
+  // and a prescription when it is signed. This only stops a stray reload from
+  // eating what someone was in the middle of typing.
+  const clean = (o?: Record<string, string>) => {
+    const e = Object.entries(o ?? {}).filter(([, v]) => String(v ?? "").trim());
+    return e.length ? Object.fromEntries(e) : undefined;
+  };
+  const pendingDraft = { order: clean(pending?.order), rx: clean(pending?.rx) };
   const { error } = await supabase.from("consultations").update({
     answers: pairs,
     flags: (flags ?? []).filter((f) => f?.text?.trim()),
     summary: summary.trim() || null,
-    draft: Object.keys(vDraft).length ? { vitals: vDraft } : null,
+    draft: (Object.keys(vDraft).length || pendingDraft.order || pendingDraft.rx)
+      ? { vitals: vDraft, ...pendingDraft }
+      : null,
   }).eq("id", id);
   if (error) return { error: error.message };
   return { ok: true, at: new Date().toISOString() };

@@ -26,7 +26,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, rxPrintId, rxSharedAt, labSharedAt, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -45,6 +45,8 @@ export default function ConsoleView({
   /** Today's vitals row, if one has already been recorded. */
   savedVitals?: Record<string, string> | null;
   savedVitalsAt?: string | null;
+  /** Lab order / prescription text typed but never submitted. */
+  draftPending?: { order?: Record<string, string>; rx?: Record<string, string> } | null;
   /** Prescription to print — this session's, else the client's most recent. */
   rxPrintId?: string | null;
   /** When each document reached the client's portal, if it has. */
@@ -105,8 +107,20 @@ export default function ConsoleView({
     }).filter((s) => !fl.some((f) => f.text === s.text));   // hide once accepted
   })();
 
-  // Quick prescription (single drug) — Doctor tool.
-  const [rx, setRx] = useState({ drug: "", dose: "", frequency: "", duration: "" });
+  // Quick prescription (single drug) — Doctor tool. Both this and the lab-order
+  // fields are autosaved as *unsent* text: an order exists only once placed and
+  // a prescription only once signed, so restoring them must never look like a
+  // record. It exists purely so a stray reload can't eat what someone is typing.
+  const [rx, setRx] = useState({
+    drug: String(draftPending?.rx?.drug ?? ""), dose: String(draftPending?.rx?.dose ?? ""),
+    frequency: String(draftPending?.rx?.frequency ?? ""), duration: String(draftPending?.rx?.duration ?? ""),
+  });
+  const [ord, setOrd] = useState({
+    test: String(draftPending?.order?.test ?? ""),
+    priority: String(draftPending?.order?.priority ?? "routine"),
+  });
+  const rxUnsent = Object.values(rx).some((v) => v.trim());
+  const ordUnsent = !!ord.test.trim();
 
   // Consultation summary — one field, optionally AI-drafted. This same text is
   // what "Save draft" / "Complete & summarize" submit (name="summary"), so there
@@ -213,15 +227,15 @@ export default function ConsoleView({
   const [saving, setSaving] = useState(false);
   const dirty = useRef(false);
   const first = useRef(true);
-  const latest = useRef({ ans, fl, summaryText, vit });
-  latest.current = { ans, fl, summaryText, vit };
+  const latest = useRef({ ans, fl, summaryText, vit, ord, rx });
+  latest.current = { ans, fl, summaryText, vit, ord, rx };
 
   const flush = useCallback(async () => {
     if (!dirty.current || status === "completed") return;
     dirty.current = false;
     setSaving(true);
-    const { ans: a, fl: f, summaryText: s, vit: v } = latest.current;
-    const r = await autosaveConsult(id, kind, a, f, s, v, questions);
+    const { ans: a, fl: f, summaryText: s, vit: v, ord: o, rx: x } = latest.current;
+    const r = await autosaveConsult(id, kind, a, f, s, v, questions, { order: o, rx: x });
     setSaving(false);
     if (r?.error) { setAutoErr(r.error); dirty.current = true; }   // keep it dirty so the next tick retries
     else { setAutoErr(null); setSavedAt(new Date().toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true })); }
@@ -233,7 +247,7 @@ export default function ConsoleView({
     dirty.current = true;
     const t = setTimeout(flush, 4000);          // settle after typing stops
     return () => clearTimeout(t);
-  }, [ans, fl, summaryText, vit, flush, status]);
+  }, [ans, fl, summaryText, vit, ord, rx, flush, status]);
 
   // Save when the tab is hidden (covers switching tabs, closing, and mobile
   // backgrounding — which never fire a reliable unload).
@@ -598,9 +612,17 @@ export default function ConsoleView({
               <input type="hidden" name="consultation_id" value={id} />
               <input type="hidden" name="category" value="lab" />
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Order lab test</div>
-              <input name="test" placeholder="e.g. Lipid profile, HbA1c" required style={{ ...sm, marginBottom: 6 }} />
-              <select name="priority" defaultValue="routine" style={{ ...sm, marginBottom: 8 }}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></select>
-              <button type="submit" style={toolBtn}>Place order</button>
+              <input name="test" placeholder="e.g. Lipid profile, HbA1c" required value={ord.test}
+                onChange={(e) => setOrd({ ...ord, test: e.target.value })} style={{ ...sm, marginBottom: 6 }} />
+              <select name="priority" value={ord.priority} onChange={(e) => setOrd({ ...ord, priority: e.target.value })} style={{ ...sm, marginBottom: 8 }}>
+                <option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option>
+              </select>
+              <button type="submit" onClick={() => setOrd({ test: "", priority: "routine" })} style={toolBtn}>Place order</button>
+              {ordUnsent && (
+                <div style={{ fontSize: 11, color: "var(--amber-text)", marginTop: 6 }}>
+                  Typed but <b>not yet placed</b> — kept if you reload, but no order exists until you press Place order.
+                </div>
+              )}
               {/* One requisition for every test advised in this session — the
                   sheet the patient hands to the lab. */}
               {orders.length > 0 && (
@@ -625,7 +647,13 @@ export default function ConsoleView({
                 <input value={rx.frequency} onChange={(e) => setRx({ ...rx, frequency: e.target.value })} placeholder="Frequency" style={sm} />
                 <input value={rx.duration} onChange={(e) => setRx({ ...rx, duration: e.target.value })} placeholder="Duration" style={{ ...sm, gridColumn: "1 / span 2" }} />
               </div>
-              <button type="submit" disabled={!rx.drug.trim()} style={{ ...toolBtn, opacity: rx.drug.trim() ? 1 : 0.5, cursor: rx.drug.trim() ? "pointer" : "not-allowed" }}>Sign &amp; add</button>
+              <button type="submit" disabled={!rx.drug.trim()} onClick={() => setRx({ drug: "", dose: "", frequency: "", duration: "" })}
+                style={{ ...toolBtn, opacity: rx.drug.trim() ? 1 : 0.5, cursor: rx.drug.trim() ? "pointer" : "not-allowed" }}>Sign &amp; add</button>
+              {rxUnsent && (
+                <div style={{ fontSize: 11, color: "var(--amber-text)", marginTop: 6 }}>
+                  Typed but <b>not yet signed</b> — kept if you reload, but nothing is prescribed until you press Sign &amp; add.
+                </div>
+              )}
               {rxPrintId && (
                 <a href={`/rx/${rxPrintId}/print`} target="_blank" rel="noopener"
                    style={{ display: "block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
