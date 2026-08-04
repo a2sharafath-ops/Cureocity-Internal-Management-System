@@ -737,6 +737,38 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         ))}
       </div>
 
+      {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
+          writing from one the client can actually see in their portal — the
+          distinction the 24h delivery clock measures. */}
+      {prescriptions.length > 0 && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>Prescriptions</div>
+            <span style={{ flex: 1 }} />
+            <Link href={`/emr/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>
+          </div>
+          {prescriptions.map((rx) => (
+            <div key={rx.id} style={{ borderTop: "1px solid var(--border)", padding: "9px 0", fontSize: 13 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                <b>{rx.provider ?? "Doctor"}</b>
+                <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ?? "unsigned"}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{
+                  background: rx.shared_at ? "var(--green-bg)" : "var(--amber-bg)",
+                  color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)",
+                  borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700,
+                }}>
+                  {rx.shared_at ? "In client portal" : "Not yet shared"}
+                </span>
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
+                {(rx.prescription_items ?? []).map((i) => i.drug + (i.dose ? ` ${i.dose}` : "")).join(" · ") || "No items"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Reports timeline. Summaries are written and read in the console; here
           a report is a filed document you open. Ordered by the date on the
           report, because a panel taken in July and filed in August belongs in
@@ -797,47 +829,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
       </div>
 
-
-      {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
-      {showBlueprint && (
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontWeight: 700 }}>BluePrint</div>
-          <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
-          <span style={{ flex: 1 }} />
-          {Boolean(bp) && <Link href={`/blueprint/${params.id}`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600, borderRadius: 8, padding: "4px 11px" }}>View report →</Link>}
-          {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
-        </div>
-        {!bp?.generated && bpRequired.length > 0 && (
-          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
-            <span style={{ color: "var(--muted)", fontWeight: 600 }}>Required sign-offs · {bpRequired.filter((d) => bpSigned.has(d)).length}/{bpRequired.length}</span>
-            {bpRequired.map((d) => {
-              const on = bpSigned.has(d);
-              return (
-                <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: on ? "var(--green-bg)" : "var(--amber-bg)", color: on ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
-                  {on ? "✓" : "○"} {BP_DISC_LABEL[d]}
-                </span>
-              );
-            })}
-          </div>
-        )}
-        {bp?.scores && Object.keys(bp.scores).length > 0 && (() => {
-          const vals = BP_SCORES.map((s) => bp!.scores![s.key]).filter((v): v is number => typeof v === "number");
-          const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
-          return (
-            <div style={{ display: "flex", gap: 20, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-              <Gauge value={avg} size={168} unit="/ 100" label="Overall wellness" caption={`${vals.length} of ${BP_SCORES.length} scores`} />
-              <div style={{ flex: 1, minWidth: 260, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 14, justifyItems: "center" }}>
-                {BP_SCORES.filter((s) => typeof bp!.scores![s.key] === "number").map((s) => (
-                  <RingMeter key={s.key} value={Number(bp!.scores![s.key])} size={80} stroke={9} label={s.label} />
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-      )}
-
       {/* Measurements / InBody */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
@@ -885,45 +876,90 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         {canMeasure && <MeasurementForm clientId={params.id} />}
       </div>
 
-      {/* Progress Photos */}
-      {(() => {
-        const photos = files.filter((f) => f.kind === "progress_photo" && f.url).sort((a, b) => a.created_at.localeCompare(b.created_at));
-        // With no photos the card used to disappear — and the upload control
-        // with it, which lived in a different card entirely.
-        if (photos.length === 0 && ro) return null;
-        const first = photos[0], latest = photos[photos.length - 1];
-        return (
-          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-            <div style={{ fontWeight: 700, marginBottom: 10 }}>Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
-            {photos.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>No photos yet.</div>}
-            {photos.length >= 2 && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
-                {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
-                  const p2 = ph as typeof first;
-                  return (
-                    <div key={label as string}>
-                      <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 4 }}>{label as string} · {p2.created_at.slice(0, 10)}</div>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p2.url ?? ""} alt={label as string} style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)", aspectRatio: "3/4", objectFit: "cover" }} />
-                    </div>
-                  );
-                })}
+      {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
+      {showBlueprint && (
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontWeight: 700 }}>BluePrint</div>
+          <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
+          <span style={{ flex: 1 }} />
+          {Boolean(bp) && <Link href={`/blueprint/${params.id}`} style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600, borderRadius: 8, padding: "4px 11px" }}>View report →</Link>}
+          {canConsult(me?.role ?? "") && <Link href="/blueprint" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>BluePrint workspace →</Link>}
+        </div>
+        {!bp?.generated && bpRequired.length > 0 && (
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12 }}>
+            <span style={{ color: "var(--muted)", fontWeight: 600 }}>Required sign-offs · {bpRequired.filter((d) => bpSigned.has(d)).length}/{bpRequired.length}</span>
+            {bpRequired.map((d) => {
+              const on = bpSigned.has(d);
+              return (
+                <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: on ? "var(--green-bg)" : "var(--amber-bg)", color: on ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
+                  {on ? "✓" : "○"} {BP_DISC_LABEL[d]}
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {bp?.scores && Object.keys(bp.scores).length > 0 && (() => {
+          const vals = BP_SCORES.map((s) => bp!.scores![s.key]).filter((v): v is number => typeof v === "number");
+          const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+          return (
+            <div style={{ display: "flex", gap: 20, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+              <Gauge value={avg} size={168} unit="/ 100" label="Overall wellness" caption={`${vals.length} of ${BP_SCORES.length} scores`} />
+              <div style={{ flex: 1, minWidth: 260, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 14, justifyItems: "center" }}>
+                {BP_SCORES.filter((s) => typeof bp!.scores![s.key] === "number").map((s) => (
+                  <RingMeter key={s.key} value={Number(bp!.scores![s.key])} size={80} stroke={9} label={s.label} />
+                ))}
               </div>
-            )}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {photos.map((ph) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={ph.id} src={ph.url ?? ""} alt={ph.created_at} title={ph.created_at.slice(0, 10)} style={{ width: 68, height: 90, borderRadius: 8, border: "1px solid var(--border)", objectFit: "cover" }} />
+            </div>
+          );
+        })()}
+      </div>
+      )}
+
+      {compView && (
+        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+      )}
+
+      {ptView && (
+        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+      )}
+
+      {/* Assigned workouts */}
+      {(canCoach || workouts.length > 0) && (
+        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>Assigned workouts</div>
+            <span style={{ flex: 1 }} />
+            {canCoach && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
+          </div>
+          {workouts.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>No workouts assigned. Assign a template from the Exercise Library.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {workouts.map((w) => (
+                <div key={w.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <b style={{ fontSize: 14 }}>{w.name}</b>
+                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{w.type} · {w.mode} · {w.items.length} exercises</span>
+                    <span style={{ flex: 1 }} />
+                    {canCoach && <form action={removeWorkout}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="client_id" value={params.id} /><button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form>}
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <tbody>
+                      {w.items.map((it, i) => (
+                        <tr key={i} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
+                          <td style={{ padding: "5px 0", fontWeight: 600 }}>{it.exercise}</td>
+                          <td style={{ padding: "5px 0", color: "var(--muted)" }}>{it.sets ?? ""} × {it.reps ?? ""}{it.rest ? ` · rest ${it.rest}` : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ))}
             </div>
-            {!ro && (
-              <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
-                <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
-              </div>
-            )}
-          </div>
-        );
-      })()}
+          )}
+        </div>
+      )}
 
       {/* Habits & streaks */}
       {(canCoach || habits.length > 0) && (
@@ -1014,82 +1050,45 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
       )}
 
-      {compView && (
-        <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
-      )}
-
-      {ptView && (
-        <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
-      )}
-
-      {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
-          writing from one the client can actually see in their portal — the
-          distinction the 24h delivery clock measures. */}
-      {prescriptions.length > 0 && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>Prescriptions</div>
-            <span style={{ flex: 1 }} />
-            <Link href={`/emr/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>
-          </div>
-          {prescriptions.map((rx) => (
-            <div key={rx.id} style={{ borderTop: "1px solid var(--border)", padding: "9px 0", fontSize: 13 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
-                <b>{rx.provider ?? "Doctor"}</b>
-                <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ?? "unsigned"}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{
-                  background: rx.shared_at ? "var(--green-bg)" : "var(--amber-bg)",
-                  color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)",
-                  borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700,
-                }}>
-                  {rx.shared_at ? "In client portal" : "Not yet shared"}
-                </span>
+      {/* Progress Photos */}
+      {(() => {
+        const photos = files.filter((f) => f.kind === "progress_photo" && f.url).sort((a, b) => a.created_at.localeCompare(b.created_at));
+        // With no photos the card used to disappear — and the upload control
+        // with it, which lived in a different card entirely.
+        if (photos.length === 0 && ro) return null;
+        const first = photos[0], latest = photos[photos.length - 1];
+        return (
+          <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Progress Photos <span style={{ color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>· {photos.length}</span></div>
+            {photos.length === 0 && <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>No photos yet.</div>}
+            {photos.length >= 2 && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+                {[["Baseline", first], ["Latest", latest]].map(([label, ph]) => {
+                  const p2 = ph as typeof first;
+                  return (
+                    <div key={label as string}>
+                      <div style={{ color: "var(--muted)", fontSize: 11, marginBottom: 4 }}>{label as string} · {p2.created_at.slice(0, 10)}</div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p2.url ?? ""} alt={label as string} style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border)", aspectRatio: "3/4", objectFit: "cover" }} />
+                    </div>
+                  );
+                })}
               </div>
-              <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                {(rx.prescription_items ?? []).map((i) => i.drug + (i.dose ? ` ${i.dose}` : "")).join(" · ") || "No items"}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Assigned workouts */}
-      {(canCoach || workouts.length > 0) && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>Assigned workouts</div>
-            <span style={{ flex: 1 }} />
-            {canCoach && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
-          </div>
-          {workouts.length === 0 ? (
-            <div style={{ color: "var(--muted)", fontSize: 13 }}>No workouts assigned. Assign a template from the Exercise Library.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {workouts.map((w) => (
-                <div key={w.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <b style={{ fontSize: 14 }}>{w.name}</b>
-                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{w.type} · {w.mode} · {w.items.length} exercises</span>
-                    <span style={{ flex: 1 }} />
-                    {canCoach && <form action={removeWorkout}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="client_id" value={params.id} /><button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form>}
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <tbody>
-                      {w.items.map((it, i) => (
-                        <tr key={i} style={{ borderTop: i ? "1px solid var(--border)" : "none" }}>
-                          <td style={{ padding: "5px 0", fontWeight: 600 }}>{it.exercise}</td>
-                          <td style={{ padding: "5px 0", color: "var(--muted)" }}>{it.sets ?? ""} × {it.reps ?? ""}{it.rest ? ` · rest ${it.rest}` : ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {photos.map((ph) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={ph.id} src={ph.url ?? ""} alt={ph.created_at} title={ph.created_at.slice(0, 10)} style={{ width: 68, height: 90, borderRadius: 8, border: "1px solid var(--border)", objectFit: "cover" }} />
               ))}
             </div>
-          )}
-        </div>
-      )}
+            {!ro && (
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+                <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
@@ -1110,6 +1109,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           <PortalLoginForm clientId={params.id} existingEmail={portalProfile?.email ?? null} />
         </div>
       )}
+
       </>)}
     </div>
   );
