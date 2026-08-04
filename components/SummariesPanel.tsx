@@ -34,38 +34,26 @@ const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dieti
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
 /**
- * One summary in the list — collapsed to a couple of lines.
- *
- * A consultation summary runs to several hundred words, and printing all of it
- * turned this list into a wall of prose you had to scroll past to reach the
- * next client. Approving is a scanning task: you want to see who it is, that
- * something was written, and open it if you need to read properly.
- *
- * Line breaks are preserved too — the summary is written in sections, and
- * without pre-wrap HTML collapsed the whole thing into one paragraph.
+ * A summary is a clinical document, so the list says whether one exists and
+ * links to the PDF rather than reprinting the prose. The console is the only
+ * place the text is shown, because that is the only place it can be edited —
+ * anywhere else it is a document to open, not a paragraph to skim.
  */
-function SummaryPreview({ text }: { text: string | null }) {
-  const [open, setOpen] = useState(false);
-  if (!text?.trim()) {
-    return <div style={{ fontSize: 13, marginTop: 3, color: "var(--muted)" }}>No summary written yet.</div>;
-  }
-  // "Long" by line count or by length: a single unbroken paragraph has one line
-  // but can still be a screenful.
-  const lines = text.trim().split("\n");
-  const long = lines.length > 3 || text.length > 220;
+function SummaryStatus({ id, text, status }: { id: string; text: string | null; status: string }) {
+  const has = !!text?.trim();
   return (
-    <div style={{ marginTop: 3 }}>
-      <div style={{
-        fontSize: 13, color: "var(--ink)", whiteSpace: "pre-wrap", lineHeight: 1.5,
-        ...(open ? {} : { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
-      }}>
-        {text.trim()}
-      </div>
-      {long && (
-        <button type="button" onClick={() => setOpen((v) => !v)}
-          style={{ border: "none", background: "transparent", padding: "3px 0 0", fontSize: 12, fontWeight: 600, color: "var(--brand-text)", cursor: "pointer" }}>
-          {open ? "Show less" : "Show more"}
-        </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 12.5, color: has ? "var(--ink)" : "var(--muted)" }}>
+        {has ? `Summary recorded · ${text!.trim().split(/\s+/).length} words` : "No summary written yet."}
+      </span>
+      {has && (
+        <a href={`/consult/${id}/print`} target="_blank" rel="noopener"
+           style={{ fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+          View PDF →
+        </a>
+      )}
+      {!has && status !== "completed" && (
+        <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Open the console to write it.</span>
       )}
     </div>
   );
@@ -131,7 +119,7 @@ export default function SummariesPanel({
                   {c.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
                   {c.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
                 </div>
-                <SummaryPreview text={c.summary} />
+                <SummaryStatus id={c.id} text={c.summary} status={c.status} />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
                 <Link href={`/console/${c.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--ink)", whiteSpace: "nowrap" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>

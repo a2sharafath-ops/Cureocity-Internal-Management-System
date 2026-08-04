@@ -16,12 +16,12 @@ export default async function ConsultPrintPage({
   const supabase = createClient();
   const { data } = await supabase
     .from("consultations")
-    .select("id, kind, status, summary, flags, by_name, created_at, client_id, clients(name, code)")
+    .select("id, kind, status, summary, ai_summary, flags, by_name, created_at, client_id, clients(name, code)")
     .eq("id", params.id)
     .maybeSingle();
   if (!data) notFound();
   const c = data as unknown as {
-    kind: string; status: string; summary: string | null;
+    kind: string; status: string; summary: string | null; ai_summary: string | null;
     flags: { text: string; severity: string }[] | null;
     by_name: string | null; created_at: string | null;
     clients: { name: string; code: string | null } | null;
@@ -125,6 +125,16 @@ export default async function ConsultPrintPage({
         {/* Summary */}
         <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#888", marginBottom: 6 }}>Consultation summary</div>
         <div style={{ fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap", minHeight: 60 }}>{c.summary?.trim() || "No summary recorded."}</div>
+
+        {/* The AI-drafted overview, when one was generated. It used to live only
+            in a small box on the client card; moving it here keeps it in the
+            record now that the card links to this document instead. */}
+        {c.ai_summary?.trim() && (
+          <div style={{ marginTop: 22 }}>
+            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".5px", color: "#888", marginBottom: 6 }}>Overview</div>
+            <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", color: "#333" }}>{c.ai_summary.trim()}</div>
+          </div>
+        )}
 
         {/* Flags */}
         {flags.length > 0 && (

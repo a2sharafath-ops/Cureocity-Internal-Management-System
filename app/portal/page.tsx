@@ -55,7 +55,7 @@ export default async function PortalHome() {
 
   const [{ data: sessions }, { data: consults }, { data: bpData }, { data: bloodData }, { data: fileRows }] = await Promise.all([
     supabase.from("sessions").select("seq, date, hour, status").eq("client_id", client.id).order("seq"),
-    supabase.from("consultations").select("kind, summary, created_at").eq("client_id", client.id).eq("shared", true).order("created_at", { ascending: false }),
+    supabase.from("consultations").select("id, kind, summary, created_at").eq("client_id", client.id).eq("shared", true).order("created_at", { ascending: false }),
     supabase.from("blueprints").select("generated, generated_date, consolidated, scores").eq("client_id", client.id).eq("generated", true).maybeSingle(),
     // multi-panel since 0078 — maybeSingle() would throw once a client holds
     // both a BluePrint and a Comprehensive panel
@@ -181,7 +181,7 @@ export default async function PortalHome() {
   }));
 
   const sess = (sessions ?? []) as { seq: number; date: string; hour: number; status: string }[];
-  const shared = (consults ?? []) as { kind: string; summary: string | null; created_at: string }[];
+  const shared = (consults ?? []) as { id: string; kind: string; summary: string | null; created_at: string }[];
   const bp = bpData as { generated: boolean; generated_date: string | null; consolidated: string | null; scores: BpScores | null } | null;
   // The panel the client still owes us, if any — earliest requested first.
   // Falls back to the most recent row so a fully-submitted client still sees
@@ -244,9 +244,16 @@ export default async function PortalHome() {
           {shared.length === 0 ? (
             <div style={{ color: "var(--muted)", fontSize: 13 }}>Nothing shared with you yet.</div>
           ) : shared.map((c, i) => (
-            <div key={i} style={{ padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+            <div key={c.id} style={{ padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
               <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{c.kind}</span>
-              {c.summary && <div style={{ marginTop: 6, fontSize: 13 }}>{c.summary}</div>}
+              {/* Delivered as the branded PDF, like the prescription and diet
+                  chart below — not as loose text in a card. */}
+              {c.summary && (
+                <a href={`/consult/${c.id}/print`} target="_blank" rel="noopener"
+                   style={{ display: "inline-block", marginTop: 8, fontSize: 12.5, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+                  Download summary (PDF) →
+                </a>
+              )}
             </div>
           ))}
         </>

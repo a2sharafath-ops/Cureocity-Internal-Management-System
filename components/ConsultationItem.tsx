@@ -61,9 +61,16 @@ export default function ConsultationItem({ c }: { c: Consult }) {
         )}
       </div>
 
+      {/* The summary opens as a PDF. Reprinting several hundred words on
+          every row made this list unreadable, and a clinical document is
+          better read in the form it will be shared in. */}
       {c.summary && (
-        <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink)", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
-          {c.summary}
+        <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>
+          Summary recorded ·{" "}
+          <a href={`/consult/${c.id}/print`} target="_blank" rel="noopener"
+             style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>
+            View PDF →
+          </a>
         </div>
       )}
 

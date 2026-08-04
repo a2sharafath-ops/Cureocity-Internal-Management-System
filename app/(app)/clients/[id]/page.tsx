@@ -677,8 +677,14 @@ export default async function ClientDetailPage({ params, searchParams }: { param
                       {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
                       {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
                     </div>
-                    {cs.summary && <div style={{ marginTop: 5, fontSize: 13, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{cs.summary}</div>}
-                    {cs.ai_summary && <div style={{ marginTop: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, whiteSpace: "pre-wrap" }}><span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>Summary</span><div style={{ marginTop: 4, color: "var(--ink)" }}>{cs.ai_summary}</div></div>}
+                    {/* The written summary is a document: shown in the console
+                        where it is authored, and read as a PDF everywhere else. */}
+                    {(cs.summary || cs.ai_summary) && (
+                      <div style={{ marginTop: 5, fontSize: 12.5, color: "var(--muted)" }}>
+                        Summary recorded ·{" "}
+                        <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>View PDF →</a>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
