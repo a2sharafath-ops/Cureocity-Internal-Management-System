@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
-import { fmtDate } from "@/lib/datetime";
+import { fmtDate, IST } from "@/lib/datetime";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
 import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
@@ -54,6 +54,23 @@ const REPORT_CHIP: Record<string, React.CSSProperties> = {
 };
 
 const REPORT_KINDS_SET = new Set(["blood_report", "medical_report", "inbody"]);
+
+// Consultation disciplines. "Trainer" reads as a fitness assessment on the
+// record, which is what the session actually is.
+const CONSULT_LABEL: Record<string, string> = {
+  Doctor: "Doctor",
+  Diet: "Diet",
+  Trainer: "Fitness",
+  Coach: "Coach",
+  Psychologist: "Psychology",
+};
+const CONSULT_CHIP: Record<string, React.CSSProperties> = {
+  Doctor: { background: "var(--red-bg)", color: "var(--red-text)" },
+  Diet: { background: "var(--green-bg)", color: "var(--green-text)" },
+  Trainer: { background: "var(--amber-bg)", color: "var(--amber-text)" },
+  Coach: { background: "var(--blue-bg, #e0f2fe)", color: "var(--blue-text, #0369a1)" },
+  Psychologist: { background: "var(--neutral-bg)", color: "var(--muted)" },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -364,6 +381,18 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   );
   // Newest first, by the date on the document.
   reportFiles.sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : 0));
+  // Consultations as one dated series across every discipline. A client
+  // accumulates doctor visits, diet reviews and fitness assessments in parallel,
+  // and grouping by discipline hid the thing that matters — what happened when.
+  const consultsByMonth: { key: string; label: string; rows: typeof consults }[] = [];
+  for (const c of [...consults].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))) {
+    const d = new Date(c.created_at ?? Date.now());
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: IST });
+    const last = consultsByMonth[consultsByMonth.length - 1];
+    if (last?.key === key) last.rows.push(c); else consultsByMonth.push({ key, label, rows: [c] });
+  }
+
   // Grouped by month so a long history reads as a timeline instead of 40 rows.
   const reportMonths: { key: string; label: string; rows: typeof reportFiles }[] = [];
   for (const r of reportFiles) {
@@ -692,34 +721,27 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
-        ) : (
-          ["Doctor", "Diet", "Trainer", "Coach", "Psychologist"].map((kind) => {
-            const list = consults.filter((c) => c.kind === kind);
-            if (list.length === 0) return null;
-            return (
-              <div key={kind} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px", margin: "6px 0 4px" }}>{kind} consultations ({list.length})</div>
-                {list.map((cs) => (
-                  <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "8px 0" }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{ background: cs.status === "completed" ? "var(--green-bg)" : "var(--neutral-bg)", color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{cs.status}</span>
-                      {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>✔ approved</span>}
-                      {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11 }}>shared</span>}
-                    </div>
-                    {/* The written summary is a document: shown in the console
-                        where it is authored, and read as a PDF everywhere else. */}
-                    {(cs.summary || cs.ai_summary) && (
-                      <div style={{ marginTop: 5, fontSize: 12.5, color: "var(--muted)" }}>
-                        Summary recorded ·{" "}
-                        <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>View PDF →</a>
-                      </div>
-                    )}
-                  </div>
-                ))}
+        ) : consultsByMonth.map((m) => (
+          <div key={m.key} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>{m.label}</div>
+            {m.rows.map((cs) => (
+              <div key={cs.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", padding: "7px 0", fontSize: 13 }}>
+                <span style={{ ...(CONSULT_CHIP[cs.kind] ?? CONSULT_CHIP.Psychologist), borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  {CONSULT_LABEL[cs.kind] ?? cs.kind}
+                </span>
+                <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{cs.created_at ? fmtDate(cs.created_at) : "—"}</span>
+                <span style={{ color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{cs.status}</span>
+                {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✔ approved</span>}
+                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>shared</span>}
+                <span style={{ flex: 1 }} />
+                {/* The summary is authored in the console and read as a PDF. */}
+                {(cs.summary || cs.ai_summary)
+                  ? <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>View PDF →</a>
+                  : <span style={{ color: "var(--muted)", fontSize: 11.5 }}>No summary yet</span>}
               </div>
-            );
-          })
-        )}
+            ))}
+          </div>
+        ))}
       </div>
 
       {/* Reports timeline. Summaries are written and read in the console; here
