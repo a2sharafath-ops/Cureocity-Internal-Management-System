@@ -33,6 +33,44 @@ const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dieti
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
+/**
+ * One summary in the list — collapsed to a couple of lines.
+ *
+ * A consultation summary runs to several hundred words, and printing all of it
+ * turned this list into a wall of prose you had to scroll past to reach the
+ * next client. Approving is a scanning task: you want to see who it is, that
+ * something was written, and open it if you need to read properly.
+ *
+ * Line breaks are preserved too — the summary is written in sections, and
+ * without pre-wrap HTML collapsed the whole thing into one paragraph.
+ */
+function SummaryPreview({ text }: { text: string | null }) {
+  const [open, setOpen] = useState(false);
+  if (!text?.trim()) {
+    return <div style={{ fontSize: 13, marginTop: 3, color: "var(--muted)" }}>No summary written yet.</div>;
+  }
+  // "Long" by line count or by length: a single unbroken paragraph has one line
+  // but can still be a screenful.
+  const lines = text.trim().split("\n");
+  const long = lines.length > 3 || text.length > 220;
+  return (
+    <div style={{ marginTop: 3 }}>
+      <div style={{
+        fontSize: 13, color: "var(--ink)", whiteSpace: "pre-wrap", lineHeight: 1.5,
+        ...(open ? {} : { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+      }}>
+        {text.trim()}
+      </div>
+      {long && (
+        <button type="button" onClick={() => setOpen((v) => !v)}
+          style={{ border: "none", background: "transparent", padding: "3px 0 0", fontSize: 12, fontWeight: 600, color: "var(--brand-text)", cursor: "pointer" }}>
+          {open ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function SummariesPanel({
   roleLabel, roleKind, consults, consolidated, clients, viewerDisc = null, canSignAny = false,
 }: {
@@ -85,7 +123,7 @@ export default function SummariesPanel({
         <div style={{ ...box, overflow: "hidden" }}>
           <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)" }}>Approve your {roleLabel} consultation summaries. Approved summaries feed the client&apos;s Blueprint sign-off.</div>
           {consults.length ? consults.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+            <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <b style={{ fontSize: 13 }}>{c.client_name ?? "—"}</b>
@@ -93,21 +131,23 @@ export default function SummariesPanel({
                   {c.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
                   {c.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
                 </div>
-                <div style={{ fontSize: 13, marginTop: 3, color: c.summary ? "var(--ink)" : "var(--muted)" }}>{c.summary || "No summary written yet."}</div>
+                <SummaryPreview text={c.summary} />
               </div>
-              <Link href={`/console/${c.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--ink)", whiteSpace: "nowrap" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
-              <form action={toggleConsultFlag}>
-                <input type="hidden" name="id" value={c.id} />
-                <input type="hidden" name="field" value="approved" />
-                <input type="hidden" name="value" value={String(c.approved)} />
-                <button style={{ background: c.approved ? "#fff" : "var(--ink)", color: c.approved ? "var(--muted)" : "#fff", border: c.approved ? "1px solid var(--border)" : "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{c.approved ? "Unapprove" : "Approve"}</button>
-              </form>
-              <form action={toggleConsultFlag}>
-                <input type="hidden" name="id" value={c.id} />
-                <input type="hidden" name="field" value="shared" />
-                <input type="hidden" name="value" value={String(c.shared)} />
-                <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>{c.shared ? "Unshare" : "Share"}</button>
-              </form>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+                <Link href={`/console/${c.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--ink)", whiteSpace: "nowrap" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
+                <form action={toggleConsultFlag}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <input type="hidden" name="field" value="approved" />
+                  <input type="hidden" name="value" value={String(c.approved)} />
+                  <button style={{ background: c.approved ? "#fff" : "var(--ink)", color: c.approved ? "var(--muted)" : "#fff", border: c.approved ? "1px solid var(--border)" : "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{c.approved ? "Unapprove" : "Approve"}</button>
+                </form>
+                <form action={toggleConsultFlag}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <input type="hidden" name="field" value="shared" />
+                  <input type="hidden" name="value" value={String(c.shared)} />
+                  <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>{c.shared ? "Unshare" : "Share"}</button>
+                </form>
+              </div>
             </div>
           )) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {roleLabel} summaries yet.</div>}
         </div>
