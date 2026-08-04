@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
+import { fmtDate } from "@/lib/datetime";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
 import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
@@ -24,7 +25,7 @@ import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBil
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PackageStatusPanel from "@/components/PackageStatusPanel";
-import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
+import { type ReportRow } from "@/components/MedicalReports";
 import { getPackageStatus } from "@/lib/package-status";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
@@ -693,12 +694,37 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
       </div>
 
-      {/* Medical reports — upload, read the PDF, or AI-summarise. */}
-      {!ro && (
-        <div style={{ marginBottom: 16 }}>
-          <MedicalReports clientId={params.id} reports={medicalReports} />
+      {/* Medical reports. The summary is written and read in the console;
+          here the report is a filed document — open the PDF or add another.
+          Reprinting the marker list made the card a wall of numbers, and it is
+          the same text a clinician is already reading in the consultation. */}
+      <div style={{ marginBottom: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>Medical reports</div>
+          {medicalReports.length > 0 && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{medicalReports.length}</span>}
         </div>
-      )}
+        {medicalReports.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>No reports uploaded yet.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 6 }}>
+            {medicalReports.map((r) => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
+                <b style={{ fontWeight: 600 }}>{r.report_label || r.name || "Report"}</b>
+                <span style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(r.report_date ?? r.created_at)}</span>
+                {r.summary && <span style={{ color: "var(--muted)", fontSize: 11.5 }}>· summarised</span>}
+                <span style={{ flex: 1 }} />
+                {r.url && <a href={r.url} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12 }}>Open PDF →</a>}
+              </div>
+            ))}
+          </div>
+        )}
+        {!ro && (
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10 }}>
+            <FileUploadForm variant="staff" clientId={params.id} kind="medical_report" label="Upload report" accept="application/pdf,image/*" />
+          </div>
+        )}
+      </div>
+
 
       {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
       {showBlueprint && (
@@ -745,12 +771,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontWeight: 700 }}>Measurements / InBody</div>
         </div>
-        {(() => { const s = (measures[0] as { ai_summary?: string | null } | undefined)?.ai_summary; return s ? (
-          <div style={{ marginBottom: 12, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, whiteSpace: "pre-wrap" }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".4px" }}>Summary · latest InBody</span>
-            <div style={{ marginTop: 4, color: "var(--ink)" }}>{s}</div>
-          </div>
-        ) : null; })()}
+        {/* The written InBody interpretation belongs to the consultation, not
+            to this card — the table below is the measurement record. */}
         {baselineRow && measures[0] && (baselineRow as Measure).date !== measures[0].date && (
           <InBodyComparison baseline={baselineRow as Measure} latest={measures[0] as Measure} />
         )}
