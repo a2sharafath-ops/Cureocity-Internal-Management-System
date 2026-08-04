@@ -25,7 +25,6 @@ import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBil
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
 import PackageStatusPanel from "@/components/PackageStatusPanel";
-import { type ReportRow } from "@/components/MedicalReports";
 import { getPackageStatus } from "@/lib/package-status";
 import PTProtocol from "@/components/PTProtocol";
 import RepairJourneyButton from "@/components/RepairJourneyButton";
@@ -41,6 +40,20 @@ import { getComprehensiveView, getPTView } from "@/lib/actions";
 import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
+
+// Report types, told apart at a glance in the timeline.
+const REPORT_LABEL: Record<string, string> = {
+  blood_report: "Blood",
+  medical_report: "Medical",
+  inbody: "InBody",
+};
+const REPORT_CHIP: Record<string, React.CSSProperties> = {
+  blood_report: { background: "var(--red-bg)", color: "var(--red-text)" },
+  medical_report: { background: "var(--blue-bg, #e0f2fe)", color: "var(--blue-text, #0369a1)" },
+  inbody: { background: "var(--green-bg)", color: "var(--green-text)" },
+};
+
+const REPORT_KINDS_SET = new Set(["blood_report", "medical_report", "inbody"]);
 
 export const dynamic = "force-dynamic";
 
@@ -333,19 +346,34 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // lives on the Overview "Open now / Upcoming" tracker.)
 
 
-  // Medical reports (blood panels, thyroid, ECG…) with a short-lived signed link
-  // each, so a clinician can open the original next to its summary.
+  // Every clinical report this client has, as one dated series: blood panels,
+  // other medical reports and InBody sheets accumulate over months and only
+  // make sense read against each other. `report_date` is the date on the
+  // document; created_at is only when it was filed, so it is the fallback.
+  const REPORT_KINDS = ["blood_report", "medical_report", "inbody"] as const;
   const { data: repRows } = await supabase.from("files")
     .select("id, name, kind, report_label, report_date, summary, created_at, bucket, path")
-    .eq("client_id", params.id).eq("kind", "medical_report")
-    .order("created_at", { ascending: false }).limit(25);
-  const medicalReports: ReportRow[] = await Promise.all(
-    ((repRows ?? []) as { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; bucket: string | null; path: string }[])
+    .eq("client_id", params.id).in("kind", REPORT_KINDS as unknown as string[])
+    .order("created_at", { ascending: false }).limit(200);
+  const reportFiles = await Promise.all(
+    ((repRows ?? []) as { id: string; name: string | null; kind: string; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; bucket: string | null; path: string }[])
       .map(async (r) => {
         const { data: signed } = await supabase.storage.from(r.bucket || "client-files").createSignedUrl(r.path, 3600);
-        return { id: r.id, name: r.name, kind: r.kind, report_label: r.report_label, report_date: r.report_date, summary: r.summary, created_at: r.created_at, url: signed?.signedUrl ?? null };
+        return { ...r, url: signed?.signedUrl ?? null, on: r.report_date ?? r.created_at };
       }),
   );
+  // Newest first, by the date on the document.
+  reportFiles.sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : 0));
+  // Grouped by month so a long history reads as a timeline instead of 40 rows.
+  const reportMonths: { key: string; label: string; rows: typeof reportFiles }[] = [];
+  for (const r of reportFiles) {
+    const d = new Date(r.on.length <= 10 ? `${r.on}T00:00:00Z` : r.on);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+    const last = reportMonths[reportMonths.length - 1];
+    if (last?.key === key) last.rows.push(r); else reportMonths.push({ key, label, rows: [r] });
+  }
+
   return (
     <div style={{ maxWidth: 900 }}>
       <Link href="/clients" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>
@@ -694,33 +722,51 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
       </div>
 
-      {/* Medical reports. The summary is written and read in the console;
-          here the report is a filed document — open the PDF or add another.
-          Reprinting the marker list made the card a wall of numbers, and it is
-          the same text a clinician is already reading in the consultation. */}
+      {/* Reports timeline. Summaries are written and read in the console; here
+          a report is a filed document you open. Ordered by the date on the
+          report, because a panel taken in July and filed in August belongs in
+          July when you are reading a trend. */}
       <div style={{ marginBottom: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>Medical reports</div>
-          {medicalReports.length > 0 && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{medicalReports.length}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div style={{ fontWeight: 700 }}>Reports</div>
+          {reportFiles.length > 0 && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{reportFiles.length}</span>}
         </div>
-        {medicalReports.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>
+          Blood panels, other medical reports and InBody sheets — newest first.
+        </div>
+
+        {reportFiles.length === 0 ? (
           <div style={{ fontSize: 13, color: "var(--muted)" }}>No reports uploaded yet.</div>
-        ) : (
-          <div style={{ display: "grid", gap: 6 }}>
-            {medicalReports.map((r) => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-                <b style={{ fontWeight: 600 }}>{r.report_label || r.name || "Report"}</b>
-                <span style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(r.report_date ?? r.created_at)}</span>
-                {r.summary && <span style={{ color: "var(--muted)", fontSize: 11.5 }}>· summarised</span>}
-                <span style={{ flex: 1 }} />
-                {r.url && <a href={r.url} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12 }}>Open PDF →</a>}
-              </div>
-            ))}
+        ) : reportMonths.map((m) => (
+          <div key={m.key} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>{m.label}</div>
+            <div style={{ display: "grid", gap: 2 }}>
+              {m.rows.map((r) => (
+                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, padding: "7px 0", borderTop: "1px solid var(--border)" }}>
+                  <span style={{ ...REPORT_CHIP[r.kind] ?? REPORT_CHIP.medical_report, borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {REPORT_LABEL[r.kind] ?? "Report"}
+                  </span>
+                  <span style={{ fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>{r.report_label || r.name || "Report"}</span>
+                  <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{fmtDate(r.on)}</span>
+                  {r.summary && <span style={{ color: "var(--muted)", fontSize: 11.5 }}>· summarised</span>}
+                  <span style={{ flex: 1 }} />
+                  {r.url && <a href={r.url} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>Open PDF →</a>}
+                </div>
+              ))}
+            </div>
           </div>
-        )}
+        ))}
+
         {!ro && (
-          <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10 }}>
-            <FileUploadForm variant="staff" clientId={params.id} kind="medical_report" label="Upload report" accept="application/pdf,image/*" />
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 4 }}>Add a medical report</div>
+              <FileUploadForm variant="staff" clientId={params.id} kind="medical_report" label="Upload report" accept="application/pdf,image/*" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 4 }}>Add a blood report</div>
+              <FileUploadForm variant="staff" clientId={params.id} kind="blood_report" label="Upload blood report" accept=".pdf,image/*" />
+            </div>
           </div>
         )}
       </div>
@@ -1014,13 +1060,11 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {/* Files */}
       <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
-        <FilesGrid files={files} />
+        {/* Reports have their own dated timeline above; this is everything
+            else — progress photos, consents, scans of paperwork. */}
+        <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind))} />
         {!ro && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Upload blood report (PDF/image)</div>
-            <FileUploadForm variant="staff" clientId={params.id} kind="blood_report" label="Upload blood report" accept=".pdf,image/*" />
-          </div>
           <div>
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Upload progress photo</div>
             <FileUploadForm variant="staff" clientId={params.id} kind="progress_photo" label="Upload photo" accept="image/*" />
