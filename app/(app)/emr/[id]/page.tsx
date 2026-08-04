@@ -59,7 +59,10 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
   return (
     <div style={{ maxWidth: 1000 }}>
       <RealtimeRefresh tables={["problems", "allergies", "medications", "vitals", "encounters"]} />
-      <Link href="/emr" style={{ color: "var(--muted)", textDecoration: "none", fontSize: 13 }}>← All charts</Link>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <Link href={`/clients/${cid}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>← Back to {client.name}</Link>
+        <Link href="/emr" style={{ color: "var(--muted)", textDecoration: "none", fontSize: 12.5 }}>All charts</Link>
+      </div>
 
       {/* header */}
       <div style={{ ...card, marginTop: 8, display: "flex", alignItems: "center", gap: 16 }}>
@@ -76,7 +79,6 @@ export default async function EmrChartPage({ params }: { params: { id: string } 
         </div>
         <span style={{ flex: 1 }} />
         <a href={`/api/fhir/${cid}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600, border: "1px solid var(--brand-fill)", borderRadius: 8, padding: "6px 12px", marginRight: 10 }}>⤓ Export FHIR</a>
-        <Link href={`/clients/${cid}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>360° profile →</Link>
       </div>
 
       {/* allergy banner */}

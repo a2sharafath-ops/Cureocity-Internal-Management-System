@@ -180,6 +180,21 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
   // Prescriptions rendered only on the EMR chart before this — invisible on the
   // client's own card, which is where front desk and coaches actually look.
+  // The clinical record in brief. The full chart lives at /emr/[id]; this is
+  // the "is there anything I must know" view — allergies first, because that is
+  // the one thing that changes what anyone does next.
+  const canEmrRead = canConsult(me?.role ?? "") || canWrite(me?.role ?? "");
+  const [emrAllergiesR, emrProblemsR, emrMedsR, emrOrdersR] = canEmrRead ? await Promise.all([
+    supabase.from("allergies").select("substance, severity").eq("client_id", params.id),
+    supabase.from("problems").select("description, status").eq("client_id", params.id).eq("status", "active").limit(12),
+    supabase.from("medications").select("name, dose, frequency").eq("client_id", params.id).eq("status", "active").limit(12),
+    supabase.from("orders").select("test, status, priority, created_at").eq("client_id", params.id).order("created_at", { ascending: false }).limit(8),
+  ]) : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }];
+  const emrAllergies = (emrAllergiesR.data ?? []) as { substance: string; severity: string }[];
+  const emrProblems = (emrProblemsR.data ?? []) as { description: string; status: string }[];
+  const emrMeds = (emrMedsR.data ?? []) as { name: string; dose: string | null; frequency: string | null }[];
+  const emrOrders = (emrOrdersR.data ?? []) as { test: string; status: string; priority: string | null; created_at: string }[];
+
   const { data: rxData } = await supabase.from("prescriptions")
     .select("id, status, provider, signed_date, shared_at, prescription_items(drug, dose, frequency, duration)")
     .eq("client_id", params.id).order("created_at", { ascending: false }).limit(5);
@@ -710,7 +725,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{ fontWeight: 700 }}>Care records</div>
           <span style={{ flex: 1 }} />
-          {canConsult(me?.role ?? "") && <Link href="/emr" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Client Records →</Link>}
         </div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
@@ -737,35 +751,84 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         ))}
       </div>
 
-      {/* Prescriptions. `shared_at` distinguishes a draft the doctor is still
-          writing from one the client can actually see in their portal — the
-          distinction the 24h delivery clock measures. */}
-      {prescriptions.length > 0 && (
+      {/* Medical record — the clinical facts that change what anyone does next,
+          in one card. Everything here is read-only: the chart at /emr/[id] is
+          where it is edited, and that is the single link out. Previously the
+          same rows were split across a Prescriptions card here and the chart
+          there, with three separate "go to EMR" links pointing at the index. */}
+      {canEmrRead && (emrAllergies.length > 0 || emrProblems.length > 0 || emrMeds.length > 0 || prescriptions.length > 0 || emrOrders.length > 0) && (
         <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ fontWeight: 700 }}>Prescriptions</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>Medical record</div>
             <span style={{ flex: 1 }} />
-            <Link href={`/emr/${params.id}`} style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>
+            <Link href={`/emr/${params.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>
+              Open full record →
+            </Link>
           </div>
-          {prescriptions.map((rx) => (
-            <div key={rx.id} style={{ borderTop: "1px solid var(--border)", padding: "9px 0", fontSize: 13 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
-                <b>{rx.provider ?? "Doctor"}</b>
-                <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ?? "unsigned"}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{
-                  background: rx.shared_at ? "var(--green-bg)" : "var(--amber-bg)",
-                  color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)",
-                  borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700,
-                }}>
-                  {rx.shared_at ? "In client portal" : "Not yet shared"}
-                </span>
-              </div>
-              <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
-                {(rx.prescription_items ?? []).map((i) => i.drug + (i.dose ? ` ${i.dose}` : "")).join(" · ") || "No items"}
+
+          {/* Allergies lead, and stay loud. A severe allergy is the one thing
+              on this page that must not be scrolled past. */}
+          {emrAllergies.length > 0 && (
+            <div style={{ background: "var(--red-bg)", border: "1px solid var(--red-bg)", borderRadius: 8, padding: "8px 11px", marginBottom: 10, fontSize: 12.5, color: "var(--red-text)" }}>
+              <b>Allergies:</b> {emrAllergies.map((al) => `${al.substance}${al.severity === "severe" ? " (severe)" : ""}`).join(", ")}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px" }}>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Active problems</div>
+              <div style={{ fontSize: 12.5 }}>
+                {emrProblems.length ? emrProblems.map((pr) => pr.description).join(" · ") : <span style={{ color: "var(--muted)" }}>None recorded</span>}
               </div>
             </div>
-          ))}
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Current medication</div>
+              <div style={{ fontSize: 12.5 }}>
+                {emrMeds.length ? emrMeds.map((md) => `${md.name}${md.dose ? ` ${md.dose}` : ""}`).join(" · ") : <span style={{ color: "var(--muted)" }}>None recorded</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Prescriptions keep their delivery state and PDF here, because
+              sharing one is a front-desk action, not a charting one. */}
+          {prescriptions.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Prescriptions</div>
+              {prescriptions.map((rx) => (
+                <div key={rx.id} style={{ borderTop: "1px solid var(--border)", padding: "7px 0", fontSize: 12.5 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <b style={{ fontWeight: 600 }}>{rx.provider ?? "Doctor"}</b>
+                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ? fmtDate(rx.signed_date) : "unsigned"}</span>
+                    <span style={{
+                      background: rx.shared_at ? "var(--green-bg)" : "var(--amber-bg)",
+                      color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)",
+                      borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700,
+                    }}>{rx.shared_at ? "In client portal" : "Not yet shared"}</span>
+                    <span style={{ flex: 1 }} />
+                    <a href={`/rx/${rx.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>View PDF →</a>
+                  </div>
+                  <div style={{ color: "var(--muted)" }}>
+                    {(rx.prescription_items ?? []).map((i) => i.drug + (i.dose ? ` ${i.dose}` : "")).join(" · ") || "No items"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {emrOrders.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Tests ordered</div>
+              {emrOrders.map((o, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", padding: "6px 0", fontSize: 12.5 }}>
+                  <span style={{ fontWeight: 600 }}>{o.test}</span>
+                  {o.priority && o.priority !== "routine" && <span style={{ color: "var(--red-text)", fontWeight: 700, fontSize: 11 }}>{o.priority}</span>}
+                  <span style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(o.created_at)}</span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ color: o.status === "resulted" ? "var(--green-text)" : "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{o.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1058,8 +1121,15 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             insurance letters, anything filed without a clinical kind. */}
         <FilesGrid files={files.filter((f) => !REPORT_KINDS_SET.has(f.kind))} />
         {!ro && (
-        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-        </div>
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+            {/* "document" is the catch-all kind, and the one this card lists.
+                Clinical reports are uploaded from Reports above so they land in
+                the timeline with a date and a type. */}
+            <FileUploadForm variant="staff" clientId={params.id} kind="document" label="Upload document" accept=".pdf,image/*,.doc,.docx" />
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+              Consent forms, ID scans, letters. Blood, medical and InBody reports go in <b>Reports</b> above.
+            </div>
+          </div>
         )}
       </div>
 
