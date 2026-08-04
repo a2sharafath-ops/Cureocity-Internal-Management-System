@@ -720,13 +720,17 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </>)}
 
       {tab === "card" && (<>
+      {/* One column, one gap. Spacing lives here rather than on each card, so
+          the layout cannot drift as cards are added, reordered, or hidden by a
+          role check. */}
+      <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
       {/* Medical record — the clinical facts that change what anyone does next,
           in one card. Everything here is read-only: the chart at /emr/[id] is
           where it is edited, and that is the single link out. Previously the
           same rows were split across a Prescriptions card here and the chart
           there, with three separate "go to EMR" links pointing at the index. */}
       {canEmrRead && (emrAllergies.length > 0 || emrProblems.length > 0 || emrMeds.length > 0 || prescriptions.length > 0 || emrOrders.length > 0) && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Medical record</div>
             <span style={{ flex: 1 }} />
@@ -802,7 +806,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       )}
 
       {/* Care records — consultations by discipline */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{ fontWeight: 700 }}>Care records</div>
           <span style={{ flex: 1 }} />
@@ -836,7 +840,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           a report is a filed document you open. Ordered by the date on the
           report, because a panel taken in July and filed in August belongs in
           July when you are reading a trend. */}
-      <div style={{ marginBottom: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <div style={{ fontWeight: 700 }}>Reports</div>
           {reportFiles.length > 0 && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{reportFiles.length}</span>}
@@ -893,7 +897,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </div>
 
       {/* Measurements / InBody */}
-      <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
           <div style={{ fontWeight: 700 }}>Measurements / InBody</div>
         </div>
@@ -941,7 +945,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* BluePrint status — BluePrint holders only (never Comprehensive) */}
       {showBlueprint && (
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ fontWeight: 700 }}>BluePrint</div>
           <span style={{ background: bp?.generated ? "var(--green-bg)" : "var(--amber-bg)", color: bp?.generated ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>{bp?.generated ? "Generated" : "Pending"}</span>
@@ -989,7 +993,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Assigned workouts */}
       {(canCoach || workouts.length > 0) && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>Assigned workouts</div>
             <span style={{ flex: 1 }} />
@@ -1026,7 +1030,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Habits & streaks */}
       {(canCoach || habits.length > 0) && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontWeight: 700 }}>Habits &amp; streaks</div>
             <span style={{ flex: 1 }} />
@@ -1069,7 +1073,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Wearables */}
       {(canCoach || reads.length > 0) && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontWeight: 700 }}>⌚ Wearables</div>
             {latestRead && <span style={{ color: "var(--muted)", fontSize: 12 }}>· latest {latestRead.date}</span>}
@@ -1114,7 +1118,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       )}
 
       {/* Files */}
-      <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ fontWeight: 700, marginBottom: 10 }}>Files &amp; documents</div>
         {/* Clinical reports have their own dated timeline above. What is left
             is the paperwork around the client: consent forms, ID scans,
@@ -1135,12 +1139,13 @@ export default async function ClientDetailPage({ params, searchParams }: { param
 
       {/* Portal access (staff) */}
       {showPortal && (
-        <div style={{ marginTop: 16, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>Client Portal access</div>
           <PortalLoginForm clientId={params.id} existingEmail={portalProfile?.email ?? null} />
         </div>
       )}
 
+      </div>
       </>)}
     </div>
   );
