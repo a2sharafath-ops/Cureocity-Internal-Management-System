@@ -720,37 +720,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       </>)}
 
       {tab === "card" && (<>
-      {/* Care records — consultations by discipline */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          <div style={{ fontWeight: 700 }}>Care records</div>
-          <span style={{ flex: 1 }} />
-        </div>
-        {consults.length === 0 ? (
-          <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
-        ) : consultsByMonth.map((m) => (
-          <div key={m.key} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>{m.label}</div>
-            {m.rows.map((cs) => (
-              <div key={cs.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", padding: "7px 0", fontSize: 13 }}>
-                <span style={{ ...(CONSULT_CHIP[cs.kind] ?? CONSULT_CHIP.Psychologist), borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-                  {CONSULT_LABEL[cs.kind] ?? cs.kind}
-                </span>
-                <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{cs.created_at ? fmtDate(cs.created_at) : "—"}</span>
-                <span style={{ color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{cs.status}</span>
-                {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✔ approved</span>}
-                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>shared</span>}
-                <span style={{ flex: 1 }} />
-                {/* The summary is authored in the console and read as a PDF. */}
-                {(cs.summary || cs.ai_summary)
-                  ? <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>View PDF →</a>
-                  : <span style={{ color: "var(--muted)", fontSize: 11.5 }}>No summary yet</span>}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
       {/* Medical record — the clinical facts that change what anyone does next,
           in one card. Everything here is read-only: the chart at /emr/[id] is
           where it is edited, and that is the single link out. Previously the
@@ -831,6 +800,37 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           )}
         </div>
       )}
+
+      {/* Care records — consultations by discipline */}
+      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <div style={{ fontWeight: 700 }}>Care records</div>
+          <span style={{ flex: 1 }} />
+        </div>
+        {consults.length === 0 ? (
+          <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
+        ) : consultsByMonth.map((m) => (
+          <div key={m.key} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>{m.label}</div>
+            {m.rows.map((cs) => (
+              <div key={cs.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", padding: "7px 0", fontSize: 13 }}>
+                <span style={{ ...(CONSULT_CHIP[cs.kind] ?? CONSULT_CHIP.Psychologist), borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  {CONSULT_LABEL[cs.kind] ?? cs.kind}
+                </span>
+                <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{cs.created_at ? fmtDate(cs.created_at) : "—"}</span>
+                <span style={{ color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{cs.status}</span>
+                {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✔ approved</span>}
+                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>shared</span>}
+                <span style={{ flex: 1 }} />
+                {/* The summary is authored in the console and read as a PDF. */}
+                {(cs.summary || cs.ai_summary)
+                  ? <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>View PDF →</a>
+                  : <span style={{ color: "var(--muted)", fontSize: 11.5 }}>No summary yet</span>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
 
       {/* Reports timeline. Summaries are written and read in the console; here
           a report is a filed document you open. Ordered by the date on the
