@@ -1,10 +1,11 @@
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
-import { fmtDate, IST } from "@/lib/datetime";
+import { fmtDate, fmtTime, IST } from "@/lib/datetime";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
 import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
@@ -52,6 +53,29 @@ const REPORT_CHIP: Record<string, React.CSSProperties> = {
   medical_report: { background: "var(--blue-bg, #e0f2fe)", color: "var(--blue-text, #0369a1)" },
   inbody: { background: "var(--green-bg)", color: "var(--green-text)" },
 };
+
+// The service as it is sold and understood, not the internal kind string.
+const SERVICE_NAME: Record<string, string> = {
+  Doctor: "Doctor consultations",
+  Diet: "Diet consultations",
+  Trainer: "Fitness assessments",
+  Coach: "Health coaching sessions",
+  Psychologist: "Psychology sessions",
+};
+// Singular, as it reads inside a sentence: "Initial diet consultation".
+const SESSION_NOUN: Record<string, string> = {
+  Doctor: "doctor consultation",
+  Diet: "diet consultation",
+  Trainer: "fitness assessment",
+  Coach: "health coaching session",
+  Psychologist: "psychology session",
+};
+
+const SERVICE_DISCIPLINE: Record<string, string> = {
+  Doctor: "doctor", Diet: "dietitian", Trainer: "trainer",
+  Coach: "coach", Psychologist: "psychologist",
+};
+
 
 const REPORT_KINDS_SET = new Set(["blood_report", "medical_report", "inbody"]);
 
@@ -112,7 +136,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
-    supabase.from("consultations").select("id, kind, status, summary, ai_summary, approved, shared, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+    supabase.from("consultations").select("id, kind, status, summary, ai_summary, approved, shared, created_at, by_name, flags, duration_min").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("care_protocols").select("id").eq("client_id", params.id).limit(1),
   ]);
   // Has this client's care journey already been kicked off? If so, the primary
@@ -122,7 +146,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // `bloodRow` so the button doesn't keep offering "Start journey".
   const hasProtocol = ((protoData ?? []) as unknown[]).length > 0;
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
-  const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; ai_summary: string | null; approved: boolean; shared: boolean; created_at: string | null }[];
+  const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; ai_summary: string | null; approved: boolean; shared: boolean; created_at: string | null; by_name: string | null; flags: { text: string; severity: string }[] | null; duration_min: number | null }[];
 
   const me = await getProfile();
   const showPortal = !ro && canWrite(me?.role ?? "");
@@ -192,6 +216,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const canEmrRead = canEmr(me?.role ?? "");
 
 
+
+
   const [emrAllergiesR, emrProblemsR, emrMedsR, emrOrdersR] = canEmrRead ? await Promise.all([
     supabase.from("allergies").select("substance, severity").eq("client_id", params.id),
     supabase.from("problems").select("description, status").eq("client_id", params.id).eq("status", "active").limit(12),
@@ -204,7 +230,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const emrOrders = (emrOrdersR.data ?? []) as { test: string; status: string; priority: string | null; created_at: string }[];
 
   const { data: rxData } = await supabase.from("prescriptions")
-    .select("id, status, provider, signed_date, shared_at, prescription_items(drug, dose, frequency, duration)")
+    .select("id, status, provider, signed_date, shared_at, consultation_id, prescription_items(drug, dose, frequency, duration)")
     .eq("client_id", params.id).order("created_at", { ascending: false }).limit(5);
   // null for any client not on an active Comprehensive package — the panel
   // simply doesn't render for them.
@@ -216,9 +242,28 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   const { data: svcRows } = await supabase.from("services").select("name, category, day_offset");
   const bookServices = (svcRows ?? []) as { name: string; category: string; day_offset: number | null }[];
   const prescriptions = (rxData ?? []) as unknown as {
-    id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null;
+    id: string; status: string; provider: string | null; signed_date: string | null; shared_at: string | null; consultation_id: string | null;
     prescription_items: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
   }[];
+
+  // What each consultation produced. Since 0120 a prescription and a lab order
+  // record the consultation they came out of, so a session can show its own
+  // documents instead of the reader guessing which Rx belongs to which visit.
+  const rxByConsult = new Map<string, { id: string; shared_at: string | null }>();
+  for (const rx of prescriptions as unknown as { id: string; consultation_id?: string | null; shared_at: string | null }[]) {
+    if (rx.consultation_id && !rxByConsult.has(rx.consultation_id)) rxByConsult.set(rx.consultation_id, { id: rx.id, shared_at: rx.shared_at });
+  }
+  const looseRx = (prescriptions as unknown as { id: string; consultation_id?: string | null; shared_at: string | null; signed_date: string | null; provider: string | null }[])
+    .filter((rx) => !rx.consultation_id);
+  const { data: ordRows } = await supabase.from("orders")
+    .select("consultation_id, status").eq("client_id", params.id).neq("status", "cancelled");
+  const ordersByConsult = new Map<string, { total: number; resulted: number }>();
+  for (const o of ((ordRows ?? []) as { consultation_id: string | null; status: string }[])) {
+    if (!o.consultation_id) continue;
+    const cur = ordersByConsult.get(o.consultation_id) ?? { total: 0, resulted: 0 };
+    cur.total += 1; if (o.status === "resulted") cur.resulted += 1;
+    ordersByConsult.set(o.consultation_id, cur);
+  }
   const workouts = (cwData ?? []) as unknown as { id: string; name: string; mode: string; type: string; items: { exercise: string; sets?: string; reps?: string; rest?: string }[]; assigned_by: string | null; created_at: string }[];
 
   // owner / coach names, blueprint status, onboarding journey follow-ups, packages held
@@ -418,6 +463,48 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // lives on the Overview "Open now / Upcoming" tracker.)
 
 
+  // Consultations grouped by the service they are, newest first inside each.
+  // "What has the doctor done for this client" is the question people actually
+  // arrive with; a strict date order interleaved five disciplines and answered
+  // it only by scanning.
+  // What a session IS, not just which discipline ran it. The first of a
+  // discipline is the intake; the rest are follow-ups, numbered as a clinician
+  // would count them. Derived from order rather than from the booked milestone:
+  // the milestone match (day-10 vs day-21) needs the appointment and the package
+  // start date, which is the console's job — this stays true even for a session
+  // booked ad hoc or backdated.
+  const sessionSeq = new Map<string, number>();
+  for (const kind of ["Doctor", "Diet", "Trainer", "Coach", "Psychologist"]) {
+    consults
+      .filter((c) => c.kind === kind)
+      .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")))
+      .forEach((c, i) => sessionSeq.set(c.id, i + 1));
+  }
+  const ordinal = (n: number) => `${n}${["th", "st", "nd", "rd"][(n % 100 - 20) % 10] ?? ["th", "st", "nd", "rd"][n % 100] ?? "th"}`;
+  const sessionName = (kind: string, id: string) => {
+    const n = sessionSeq.get(id) ?? 1;
+    const noun = SESSION_NOUN[kind] ?? "consultation";
+    return n === 1 ? `Initial ${noun}` : `${noun[0].toUpperCase()}${noun.slice(1)} follow-up · ${ordinal(n)} visit`;
+  };
+
+  const SERVICE_ORDER = ["Doctor", "Diet", "Trainer", "Coach", "Psychologist"] as const;
+  const consultsByService = SERVICE_ORDER
+    .map((kind) => ({
+      kind,
+      label: SERVICE_NAME[kind] ?? kind,
+      // Whoever the care team assigned to this discipline — the clinician
+      // responsible, as opposed to consultations.by_name which only records
+      // who opened the session.
+      clinician: (() => {
+        const staffId = assignByDisc.get(SERVICE_DISCIPLINE[kind]);
+        return staffId ? (staffMap.get(String(staffId)) ?? null) : null;
+      })(),
+      rows: consults
+        .filter((c) => c.kind === kind)
+        .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))),
+    }))
+    .filter((g) => g.rows.length > 0);
+
   // The clinical reports, taken from the files already loaded above.
   // `report_date` is the date on the document; created_at is only when it was
   // filed, so it is the fallback when reading a trend.
@@ -425,18 +512,6 @@ export default async function ClientDetailPage({ params, searchParams }: { param
     .filter((f) => REPORT_KINDS_SET.has(f.kind))
     .map((f) => ({ ...f, on: f.report_date ?? f.created_at }))
     .sort((a, b) => (a.on < b.on ? 1 : a.on > b.on ? -1 : 0));
-
-  // Consultations as one dated series across every discipline. A client
-  // accumulates doctor visits, diet reviews and fitness assessments in parallel,
-  // and grouping by discipline hid the thing that matters — what happened when.
-  const consultsByMonth: { key: string; label: string; rows: typeof consults }[] = [];
-  for (const c of [...consults].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))) {
-    const d = new Date(c.created_at ?? Date.now());
-    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: IST });
-    const last = consultsByMonth[consultsByMonth.length - 1];
-    if (last?.key === key) last.rows.push(c); else consultsByMonth.push({ key, label, rows: [c] });
-  }
 
   // Grouped by month so a long history reads as a timeline instead of 40 rows.
   const reportMonths: { key: string; label: string; rows: typeof reportFiles }[] = [];
@@ -506,16 +581,12 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
         <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} canChase={!ro && isBillingOverseer(me?.role ?? "")} viewerStaffId={me?.staffId ?? null} />
       )}
-      {/* Schedule the strength-session block right here on Overview — front desk
-          doesn't have to hop to the Client Card tab. Shows only for PT /
-          Comprehensive clients who don't yet have sessions booked. */}
 
-
-      {/* ---- Commercial ---- */}
-      {/* Deals / Packages */}
+      {/* ---- What they hold, and what they owe ---- */}
+      {/* Packages */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700 }}>Deals / Packages</div>
+          <div style={{ fontWeight: 700 }}>Packages</div>
           <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
             {activeMembership ? "✔ Active membership" : "No active membership"}
           </span>
@@ -568,26 +639,43 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           {!ro && canWrite(me?.role ?? "") && isPtOrComp && !hasScheduledSessions && <ScheduleSessionsForm clientId={params.id} trainers={trainers} defaultTrainerId={assignedTrainerId} />}
           {!ro && canWrite(me?.role ?? "") && hasJourneyPkg && <RepairJourneyButton clientId={params.id} started={journeyStarted} />}
         </div>
-
-        {showBilling && invoices.length > 0 && (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>
-            <tbody>
-              {invoices.map((i) => (
-                <tr key={i.id} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px 6px", color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
-                  <td style={{ padding: "8px 6px" }}>{i.description}</td>
-                  <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
-                  <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "var(--neutral-bg)", color: i.status === "Paid" ? "var(--green-text)" : i.status === "Unpaid" ? "var(--amber-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
-                  <td style={{ padding: "8px 6px", textAlign: "right" }}>{canInvoice && <InvoiceActions id={i.id} status={i.status} role={me?.role ?? ""} clientId={params.id} label={`INV-${String(i.num ?? 0).padStart(3, "0")} · ₹${Number(i.amount).toLocaleString("en-IN")}`} />}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {canInvoice && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
       </div>
 
-      {/* ---- Reference — care team, profile & identity ---- */}
+
+      {/* Billing — what they owe and what they have paid. Split out of the
+          packages card: what a client bought and what they have been invoiced
+          are answered by different people on different days. */}
+      {showBilling && (invoices.length > 0 || canInvoice) && (
+        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontWeight: 700 }}>Billing</div>
+            {invoices.length > 0 && (
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                · {invoices.filter((i) => i.status !== "Paid").length} unpaid of {invoices.length}
+              </span>
+            )}
+          </div>
+          {invoices.length === 0 && <div style={{ color: "var(--muted)", fontSize: 13 }}>No invoices raised yet.</div>}
+          {invoices.length > 0 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, borderTop: "1px solid var(--border)" }}>
+              <tbody>
+                {invoices.map((i) => (
+                  <tr key={i.id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 6px", color: "var(--muted)" }}>INV-{String(i.num ?? 0).padStart(3, "0")}</td>
+                    <td style={{ padding: "8px 6px" }}>{i.description}</td>
+                    <td style={{ padding: "8px 6px", fontWeight: 600 }}>₹{Number(i.amount).toLocaleString("en-IN")}</td>
+                    <td style={{ padding: "8px 6px" }}><span style={{ background: i.status === "Paid" ? "var(--green-bg)" : i.status === "Unpaid" ? "var(--amber-bg)" : "var(--neutral-bg)", color: i.status === "Paid" ? "var(--green-text)" : i.status === "Unpaid" ? "var(--amber-text)" : "var(--muted)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{i.status}</span></td>
+                    <td style={{ padding: "8px 6px", textAlign: "right" }}>{canInvoice && <InvoiceActions id={i.id} status={i.status} role={me?.role ?? ""} clientId={params.id} label={`INV-${String(i.num ?? 0).padStart(3, "0")} · ₹${Number(i.amount).toLocaleString("en-IN")}`} />}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {canInvoice && <div style={{ marginTop: 10 }}><InvoiceForm clientId={params.id} /></div>}
+        </div>
+      )}
+
+      {/* ---- Who looks after them, and who they are ---- */}
       {/* Care Team */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -604,18 +692,29 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             ))}
           </div>
         ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No clinicians assigned yet.</div>}
+
+        {/* Who owns this client commercially and pastorally. These sat in
+            Personal Info, which is contact detail — being someone's coach is
+            an assignment, and belongs with the rest of the team. */}
+        {(coachName || ownerName) && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px", borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 }}>
+              </div>
+        )}
       </div>
 
-      {/* Personal Info */}
+      {/* Client details — contact and identity. Height/weight used to sit here
+          as well, but the profile figures are whatever was typed at sign-up;
+          the measured ones live in Health profile and would contradict these
+          the moment anyone stepped on a scale. Coach and owner moved to Care
+          Team, where assignments belong. */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>Personal Info</div>
+        <div style={{ fontWeight: 700, marginBottom: 12 }}>Client details</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           <Stat label="Phone" value={client.phone} />
           <Stat label="Email" value={client.email} />
           <Stat label="Age" value={clientAge != null ? `${clientAge} yrs` : "—"} />
           <Stat label="Gender" value={client.gender} />
           <Stat label="Occupation" value={client.occupation} />
-          <Stat label="Height / Weight" value={`${client.height ?? "—"} cm · ${client.weight ?? "—"} kg`} />
           <Stat label="Location" value={(c0.address as string) ?? null} />
           <Stat label="Branch" value={client.branch} />
           <Stat label="Emergency" value={client.emergency} />
@@ -833,47 +932,12 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             </div>
           </div>
 
-          {/* Prescriptions keep their delivery state and PDF here, because
-              sharing one is a front-desk action, not a charting one. */}
-          {prescriptions.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Prescriptions</div>
-              {prescriptions.map((rx) => (
-                <div key={rx.id} style={{ borderTop: "1px solid var(--border)", padding: "7px 0", fontSize: 12.5 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <b style={{ fontWeight: 600 }}>{rx.provider ?? "Doctor"}</b>
-                    <span style={{ color: "var(--muted)", fontSize: 12 }}>{rx.signed_date ? fmtDate(rx.signed_date) : "unsigned"}</span>
-                    <span style={{
-                      background: rx.shared_at ? "var(--green-bg)" : "var(--amber-bg)",
-                      color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)",
-                      borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700,
-                    }}>{rx.shared_at ? "In client portal" : "Not yet shared"}</span>
-                    <span style={{ flex: 1 }} />
-                    <a href={`/rx/${rx.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>View PDF →</a>
-                  </div>
-                  <div style={{ color: "var(--muted)" }}>
-                    {(rx.prescription_items ?? []).map((i) => i.drug + (i.dose ? ` ${i.dose}` : "")).join(" · ") || "No items"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {emrOrders.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Tests ordered</div>
-              {emrOrders.map((o, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", padding: "6px 0", fontSize: 12.5 }}>
-                  <span style={{ fontWeight: 600 }}>{o.test}</span>
-                  {o.priority && o.priority !== "routine" && <span style={{ color: "var(--red-text)", fontWeight: 700, fontSize: 11 }}>{o.priority}</span>}
-                  <span style={{ color: "var(--muted)", fontSize: 12 }}>{fmtDate(o.created_at)}</span>
-                  <span style={{ flex: 1 }} />
-                  <span style={{ color: o.status === "resulted" ? "var(--green-text)" : "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{o.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
+          {/* Prescriptions and lab orders are NOT listed here. They belong to
+              the session that produced them, and Cureocity records shows each
+              one under its consultation — listing them twice made it look like
+              a client had two of everything. Current medication above is a
+              different thing: it is what the client is taking now, whoever
+              prescribed it and whenever. */}
         </div>
       )}
 
@@ -885,27 +949,129 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         </div>
         {consults.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No consultation records yet.</div>
-        ) : consultsByMonth.map((m) => (
-          <div key={m.key} style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>{m.label}</div>
-            {m.rows.map((cs) => (
-              <div key={cs.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", padding: "7px 0", fontSize: 13 }}>
-                <span style={{ ...(CONSULT_CHIP[cs.kind] ?? CONSULT_CHIP.Psychologist), borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-                  {CONSULT_LABEL[cs.kind] ?? cs.kind}
-                </span>
-                <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>{cs.created_at ? fmtDate(cs.created_at) : "—"}</span>
-                <span style={{ color: cs.status === "completed" ? "var(--green-text)" : "var(--muted)", fontSize: 11.5, fontWeight: 600 }}>{cs.status}</span>
-                {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✔ approved</span>}
-                {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>shared</span>}
-                <span style={{ flex: 1 }} />
-                {/* The summary is authored in the console and read as a PDF. */}
-                {(cs.summary || cs.ai_summary)
-                  ? <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none", fontSize: 12, whiteSpace: "nowrap" }}>View PDF →</a>
-                  : <span style={{ color: "var(--muted)", fontSize: 11.5 }}>No summary yet</span>}
-              </div>
-            ))}
+        ) : consultsByService.map((svc) => (
+          <div key={svc.kind} style={{ marginBottom: 14 }}>
+            {/* One heading per service, with the clinician the care team has
+                assigned to it — the person answerable for this column of the
+                client's care, whoever happened to open a given session. */}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+              <span style={{ ...(CONSULT_CHIP[svc.kind] ?? CONSULT_CHIP.Psychologist), borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700 }}>
+                {CONSULT_LABEL[svc.kind] ?? svc.kind}
+              </span>
+              <span style={{ fontWeight: 700, fontSize: 13 }}>{svc.label}</span>
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>· {svc.rows.length}</span>
+              <span style={{ flex: 1 }} />
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                {svc.clinician ? `Clinician: ${svc.clinician}` : "No clinician assigned"}
+              </span>
+            </div>
+            {svc.rows.map((cs) => {
+              const flags = (cs.flags ?? []) as { text: string; severity: string }[];
+              const crit = flags.filter((f) => f.severity === "critical").length;
+              const warn = flags.filter((f) => f.severity === "warning").length;
+              const rx = rxByConsult.get(cs.id);
+              const ord = ordersByConsult.get(cs.id);
+              const hasSummary = !!(cs.summary || cs.ai_summary);
+              return (
+                <div key={cs.id} style={{ borderTop: "1px solid var(--border)", padding: "9px 0" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+                    <span style={{ fontWeight: 700 }}>{sessionName(cs.kind, cs.id)}</span>
+                    <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {cs.created_at ? `${fmtDate(cs.created_at)} · ${fmtTime(cs.created_at)}` : "—"}
+                    </span>
+                    {/* by_name is whoever opened the consultation, which is not
+                        always the clinician who saw the client — an admin
+                        starting a session on someone's behalf was being shown
+                        as "with <admin>". Say what the field actually means. */}
+                    {cs.by_name && <span style={{ color: "var(--muted)", fontSize: 12 }}>recorded by {cs.by_name}</span>}
+                    {cs.duration_min ? <span style={{ color: "var(--muted)", fontSize: 12 }}>· {cs.duration_min} min</span> : null}
+                    <span style={{ flex: 1 }} />
+                    <span style={{ color: cs.status === "completed" ? "var(--green-text)" : "var(--amber-text)", fontSize: 11.5, fontWeight: 600 }}>{cs.status}</span>
+                    {cs.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✔ approved</span>}
+                    {cs.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>shared</span>}
+                  </div>
+
+                  {/* Flags raised in the session. A critical one is stated in
+                      full — a count would bury the only line that matters. */}
+                  {crit > 0 && (
+                    <div style={{ marginTop: 5, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "5px 9px", fontSize: 12 }}>
+                      <b>Critical:</b> {flags.filter((f) => f.severity === "critical").map((f) => f.text).join(" · ")}
+                    </div>
+                  )}
+                  {warn > 0 && (
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--amber-text)" }}>
+                      {warn} warning{warn === 1 ? "" : "s"} raised
+                    </div>
+                  )}
+
+                  {/* Everything this session produced, named. "Summary PDF"
+                      told you the file format, not what the document is. */}
+                  <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                    {hasSummary ? (
+                      <a href={`/consult/${cs.id}/print`} target="_blank" rel="noopener" className="attach">
+                        <span className="attach-icon">PDF</span>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>{sessionName(cs.kind, cs.id)} summary</span>
+                          <span style={{ display: "block", color: "var(--muted)", fontSize: 11.5 }}>{cs.created_at ? fmtDate(cs.created_at) : ""}</span>
+                        </span>
+                        <span style={{ flex: 1 }} />
+                        <span className="attach-open">Open →</span>
+                      </a>
+                    ) : (
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>No summary written for this session yet.</div>
+                    )}
+
+                    {rx && (
+                      <a href={`/rx/${rx.id}/print`} target="_blank" rel="noopener" className="attach">
+                        <span className="attach-icon">PDF</span>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>Prescription</span>
+                          <span style={{ display: "block", color: "var(--muted)", fontSize: 11.5 }}><span style={{ color: rx.shared_at ? "var(--green-text)" : "var(--amber-text)" }}>{rx.shared_at ? "In client portal" : "Not shared with client"}</span></span>
+                        </span>
+                        <span style={{ flex: 1 }} />
+                        <span className="attach-open">Open →</span>
+                      </a>
+                    )}
+
+                    {ord && (
+                      <a href={`/lab/${cs.id}/print`} target="_blank" rel="noopener" className="attach">
+                        <span className="attach-icon">PDF</span>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>Lab request — {ord.total} test{ord.total === 1 ? "" : "s"}</span>
+                          <span style={{ display: "block", color: "var(--muted)", fontSize: 11.5 }}>{ord.resulted}/{ord.total} result{ord.total === 1 ? "" : "s"} received</span>
+                        </span>
+                        <span style={{ flex: 1 }} />
+                        <span className="attach-open">Open →</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ))}
+
+        {/* Prescriptions written outside a consultation — from the EMR chart, or
+            before sessions recorded which one they came from. Without this band
+            they would be listed nowhere on this page. */}
+        {looseRx.length > 0 && (
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 8, paddingTop: 10 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>Not linked to a session</div>
+            {looseRx.map((rx) => (
+              <a key={rx.id} href={`/rx/${rx.id}/print`} target="_blank" rel="noopener" className="attach" style={{ marginBottom: 6 }}>
+                <span className="attach-icon">PDF</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>Prescription</span>
+                  <span style={{ display: "block", color: "var(--muted)", fontSize: 11.5 }}>
+                    {rx.signed_date ? fmtDate(rx.signed_date) : "unsigned"}{rx.provider ? ` · ${rx.provider}` : ""}
+                  </span>
+                </span>
+                <span style={{ flex: 1 }} />
+                <span className="attach-open">Open →</span>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Reports timeline. Summaries are written and read in the console; here
