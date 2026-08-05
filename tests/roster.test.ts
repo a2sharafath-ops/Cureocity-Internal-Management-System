@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { weekDates, shortTime, shiftHours, isOverridden, compOffBalance, compOffExpiry } from "@/lib/roster";
+import { weekDates, shortTime, shiftHours, isOverridden, compOffBalance, compOffExpiry, visibleDays } from "@/lib/roster";
 import type { Shift, RosterRow } from "@/lib/roster";
 
 const shifts = new Map<string, Shift>([
@@ -78,5 +78,40 @@ describe("compOffBalance", () => {
 describe("compOffExpiry", () => {
   it("gives 90 days from the day worked", () => {
     expect(compOffExpiry("2026-08-15")).toBe("2026-11-13");
+  });
+});
+
+describe("split shifts — how the clinic actually rosters", () => {
+  const withSplit = new Map<string, Shift>([
+    ["SPLIT", { code: "SPLIT", name: "Split", start_time: "06:00:00", end_time: "10:00:00",
+                start_time2: "17:00:00", end_time2: "21:00:00", color: null, working: true }],
+    ["M",     { code: "M", name: "Morning", start_time: "06:00:00", end_time: "14:00:00", color: null, working: true }],
+  ]);
+  const r = (o: Partial<RosterRow> = {}): RosterRow =>
+    ({ staff_id: "s1", date: "2026-07-06", shift: "SPLIT", start_time: null, end_time: null, note: null, ...o });
+
+  it("writes both blocks, as the sheet does", () => {
+    expect(shiftHours(r(), withSplit)).toBe("6am–10am, 5pm–9pm");
+  });
+  it("lets one block be overridden without losing the other", () => {
+    expect(shiftHours(r({ start_time2: "16:00:00" }), withSplit)).toBe("6am–10am, 4pm–9pm");
+    expect(isOverridden(r({ start_time2: "16:00:00" }), withSplit)).toBe(true);
+  });
+  it("is not an override when the times match the template", () => {
+    expect(isOverridden(r({ start_time: "06:00:00", end_time2: "21:00:00" }), withSplit)).toBe(false);
+  });
+  it("leaves a single-block shift alone", () => {
+    expect(shiftHours(r({ shift: "M" }), withSplit)).toBe("6am–2pm");
+  });
+});
+
+describe("visibleDays", () => {
+  const week = weekDates("2026-07-06");   // Mon 6 Jul … Sun 12 Jul
+  const row = (date: string): RosterRow => ({ staff_id: "s", date, shift: "M", start_time: null, end_time: null, note: null });
+  it("shows Mon–Sat when nobody works Sunday", () => {
+    expect(visibleDays(week, [row("2026-07-08")])).toHaveLength(6);
+  });
+  it("adds Sunday the moment someone is rostered on it", () => {
+    expect(visibleDays(week, [row("2026-07-12")])).toHaveLength(7);
   });
 });

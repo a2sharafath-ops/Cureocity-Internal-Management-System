@@ -3922,6 +3922,8 @@ export async function setRosterShift(formData: FormData) {
       staff_id, date, shift,
       start_time: String(formData.get("start_time") ?? "") || null,
       end_time: String(formData.get("end_time") ?? "") || null,
+      start_time2: String(formData.get("start_time2") ?? "") || null,
+      end_time2: String(formData.get("end_time2") ?? "") || null,
       note: String(formData.get("note") ?? "").trim() || null,
       created_by: p.name, updated_at: new Date().toISOString(),
     }, { onConflict: "staff_id,date" });
@@ -3946,8 +3948,8 @@ export async function copyRosterWeek(formData: FormData) {
   const { weekDates, addDays } = await import("@/lib/roster");
   const src = weekDates(from), dst = weekDates(to);
   const { data: rows } = await supabase.from("roster")
-    .select("staff_id, date, shift, start_time, end_time, note").in("date", src);
-  const source = (rows ?? []) as { staff_id: string; date: string; shift: string; start_time: string | null; end_time: string | null; note: string | null }[];
+    .select("staff_id, date, shift, start_time, end_time, start_time2, end_time2, note").in("date", src);
+  const source = (rows ?? []) as { staff_id: string; date: string; shift: string; start_time: string | null; end_time: string | null; start_time2: string | null; end_time2: string | null; note: string | null }[];
   if (!source.length) return { error: "That week is empty — nothing to copy." };
 
   const { data: existing } = await supabase.from("roster").select("staff_id, date").in("date", dst);

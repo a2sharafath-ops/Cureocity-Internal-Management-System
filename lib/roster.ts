@@ -3,11 +3,15 @@
 
 export type Shift = {
   code: string; name: string; start_time: string | null; end_time: string | null;
+  /** Second block of a split shift — "6am–10am, 5pm–9pm" is one person's day. */
+  start_time2?: string | null; end_time2?: string | null;
   color: string | null; working: boolean;
 };
 export type RosterRow = {
   staff_id: string; date: string; shift: string;
-  start_time: string | null; end_time: string | null; note: string | null;
+  start_time: string | null; end_time: string | null;
+  start_time2?: string | null; end_time2?: string | null;
+  note: string | null;
 };
 export type CompOff = {
   id: string; staff_id: string; earned_on: string; reason: string;
@@ -26,6 +30,12 @@ export function weekDates(iso: string): string[] {
   });
 }
 
+/** The clinic runs Mon–Sat; Sunday is shown only when somebody is rostered. */
+export function visibleDays(week: string[], rows: RosterRow[]): string[] {
+  const sunday = week[6];
+  return rows.some((r) => r.date === sunday) ? week : week.slice(0, 6);
+}
+
 export function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
@@ -42,23 +52,32 @@ export function shortTime(t: string | null): string {
   return m && m !== "00" ? `${h12}:${m}${ampm}` : `${h12}${ampm}`;
 }
 
-/** The hours actually worked on a day — the override if set, else the shift's. */
+/**
+ * The hours actually worked on a day, as the roster sheet writes them:
+ * "6am–2pm", or "6am–10am, 5pm–9pm" for a split shift. The override wins over
+ * the template, block for block.
+ */
 export function shiftHours(row: RosterRow | undefined, shifts: Map<string, Shift>): string {
   if (!row) return "";
   const s = shifts.get(row.shift);
   if (!s?.working) return s?.name ?? "";
-  const from = row.start_time ?? s.start_time;
-  const to = row.end_time ?? s.end_time;
-  return from && to ? `${shortTime(from)}–${shortTime(to)}` : (s?.name ?? "");
+  const block = (from: string | null | undefined, to: string | null | undefined) =>
+    from && to ? `${shortTime(from)}–${shortTime(to)}` : "";
+  const first = block(row.start_time ?? s.start_time, row.end_time ?? s.end_time);
+  const second = block(row.start_time2 ?? s.start_time2, row.end_time2 ?? s.end_time2);
+  return [first, second].filter(Boolean).join(", ") || s.name;
 }
 
 /** Did someone deviate from the template on this day? Worth showing. */
 export function isOverridden(row: RosterRow | undefined, shifts: Map<string, Shift>): boolean {
-  if (!row || (!row.start_time && !row.end_time)) return false;
+  if (!row) return false;
+  if (!row.start_time && !row.end_time && !row.start_time2 && !row.end_time2) return false;
   const s = shifts.get(row.shift);
   if (!s) return false;
   return (row.start_time ?? s.start_time) !== s.start_time
-      || (row.end_time ?? s.end_time) !== s.end_time;
+      || (row.end_time ?? s.end_time) !== s.end_time
+      || (row.start_time2 ?? s.start_time2 ?? null) !== (s.start_time2 ?? null)
+      || (row.end_time2 ?? s.end_time2 ?? null) !== (s.end_time2 ?? null);
 }
 
 /**

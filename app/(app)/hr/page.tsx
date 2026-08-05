@@ -70,12 +70,12 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const week = weekDates(weekOf);
   const canEditRoster = canApproveLeaveType(me.role) || me.role === "Super Admin";
   const [{ data: shiftData }, { data: rosterData }, { data: compData }] = await Promise.all([
-    supabase.from("shift_types").select("code, name, start_time, end_time, color, working").eq("active", true).order("seq"),
-    supabase.from("roster").select("staff_id, date, shift, start_time, end_time, note").gte("date", week[0]).lte("date", week[6]),
+    supabase.from("shift_types").select("code, name, start_time, end_time, start_time2, end_time2, color, working").eq("active", true).order("seq"),
+    supabase.from("roster").select("staff_id, date, shift, start_time, end_time, start_time2, end_time2, note").gte("date", week[0]).lte("date", week[6]),
     supabase.from("comp_offs").select("id, staff_id, earned_on, reason, expires_on, status, used_on, granted_by").order("earned_on", { ascending: false }).limit(200),
   ]);
-  const shiftTypes = (shiftData ?? []) as { code: string; name: string; start_time: string | null; end_time: string | null; color: string | null; working: boolean }[];
-  const rosterRows = (rosterData ?? []) as { staff_id: string; date: string; shift: string; start_time: string | null; end_time: string | null; note: string | null }[];
+  const shiftTypes = (shiftData ?? []) as { code: string; name: string; start_time: string | null; end_time: string | null; start_time2: string | null; end_time2: string | null; color: string | null; working: boolean }[];
+  const rosterRows = (rosterData ?? []) as { staff_id: string; date: string; shift: string; start_time: string | null; end_time: string | null; start_time2: string | null; end_time2: string | null; note: string | null }[];
   const compOffs = (compData ?? []) as { id: string; staff_id: string; earned_on: string; reason: string; expires_on: string; status: string; used_on: string | null; granted_by: string | null }[];
 
   const staff = (staffData ?? []) as Staff[];
