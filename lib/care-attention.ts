@@ -68,7 +68,6 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     const who = name.get(clientId) ?? "Client";
     const cats = new Set(rows.map((r) => r.category));
     const done = doneKinds.get(clientId) ?? new Set<string>();
-    const clientHref = `/clients/${clientId}`;
 
     // Comprehensive / PT clinician deliverables — same detection as the client
     // card. compblood + dietchart are Comprehensive-only (the predicate enforces
@@ -80,27 +79,36 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       hasChart: hasChart.has(clientId), hasWorkout: hasWorkout.has(clientId),
       compBloodSubmitted: bloodBy.get(clientId)?.get("comprehensive") ?? null,
     }));
+    // Where the work gets DONE, not merely where the client is described.
+    // These three used to land on the client card, which meant the reader
+    // arrived at the top of a long page and still had to go and find the diet
+    // builder. The builders already accept ?client=<id> and open pre-filled.
+    const chartHref   = `/workspace?role=diet&tab=charts&client=${clientId}`;
+    const workoutHref = `/workspace?role=trainer&tab=planner&client=${clientId}`;
+    // Blood status lives with the reports it describes, on the Card tab.
+    const bloodHref   = `/clients/${clientId}?tab=card`;
+
     if (deliv.has("compblood")) {
       // Chasing the client for the report is the Health Coach's job (they own
       // the client relationship for PT / Comprehensive). Nudge the assigned
       // coach; if none is assigned yet, chase the Health Coach role.
       const o = ownerFor(clientId, "coach");
-      flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: clientHref, cta: "View",
+      flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: bloodHref, cta: "Open reports",
         dedupeKey: `blood:${clientId}`,
         nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: clientHref } });
+        chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: bloodHref } });
     }
     if (deliv.has("dietchart")) {
       const o = ownerFor(clientId, "dietitian");
-      flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: clientHref, cta: "View",
+      flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: chartHref, cta: "Draft chart",
         nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: clientHref } });
+        chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: chartHref } });
     }
     if (deliv.has("workout")) {
       const o = ownerFor(clientId, "trainer");
-      flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: clientHref, cta: "View",
+      flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: workoutHref, cta: "Build plan",
         nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: clientHref } });
+        chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
     }
 
     if (cats.has("comprehensive")) {

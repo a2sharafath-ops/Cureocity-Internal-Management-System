@@ -1134,27 +1134,53 @@ export default async function ClientDetailPage({ params, searchParams }: { param
         )}
 
 
-        {/* Panel status sits with the reports themselves. It used to live on
-            the Overview tab while the report it describes was filed here — the
-            split is what let the two disagree for so long. */}
-        {needsBlood && (
-          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 6 }}>Blood panel status</div>
-          <div style={{ display: "grid", gridTemplateColumns: bloodPanels.length > 1 ? "1fr 1fr" : "1fr", gap: 16 }}>
-            {bloodPanels.map((panel) => {
-              const row = bloodByPanel.get(panel) ?? null;
-              const label = bloodPanels.length > 1 ? (BLOOD_PANEL_LABEL[panel] ?? panel) : undefined;
-              return (
-                <div key={panel}>
-                  {ro
-                    ? <div style={{ fontSize: 13, color: "var(--muted)" }}>{label ? <span style={{ fontWeight: 600 }}>{label}: </span> : null}{row ? (row.submitted ? `Received ${row.submitted_date ?? ""}` : `Requested ${row.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
-                    : <BloodActions clientId={params.id} blood={row} panel={panel} label={label} />}
+        {/* Panel status sits with the reports themselves — it used to live on
+            the Overview tab while the report it describes was filed here, and
+            that split is what let the two disagree. Given a prominent band
+            because "awaiting" is a job somebody has to chase, not a footnote. */}
+        {needsBlood && (() => {
+          const awaiting = bloodPanels.filter((pn) => !bloodByPanel.get(pn)?.submitted).length;
+          const done = bloodPanels.length - awaiting;
+          // Amber while anything is outstanding, green once every panel is in.
+          const tone = awaiting > 0
+            ? { bg: "var(--amber-bg)", fg: "var(--amber-text)", edge: "var(--amber-text)" }
+            : { bg: "var(--green-bg)", fg: "var(--green-text)", edge: "var(--green-text)" };
+          return (
+            <div style={{
+              marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 14,
+            }}>
+              <div style={{
+                background: tone.bg, borderRadius: 10, padding: "12px 14px",
+                borderLeft: `4px solid ${tone.edge}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: ".4px", textTransform: "uppercase", color: tone.fg }}>
+                    Blood panel
+                  </span>
+                  <span style={{ background: "#fff", color: tone.fg, borderRadius: 999, padding: "1px 10px", fontSize: 11, fontWeight: 700 }}>
+                    {awaiting > 0
+                      ? `${awaiting} awaiting${done ? ` · ${done} received` : ""}`
+                      : `All ${bloodPanels.length} received`}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-          </div>
-        )}
+                <div style={{ display: "grid", gridTemplateColumns: bloodPanels.length > 1 ? "1fr 1fr" : "1fr", gap: 16 }}>
+                  {bloodPanels.map((panel) => {
+                    const row = bloodByPanel.get(panel) ?? null;
+                    const label = bloodPanels.length > 1 ? (BLOOD_PANEL_LABEL[panel] ?? panel) : undefined;
+                    return (
+                      <div key={panel}>
+                        {ro
+                          ? <div style={{ fontSize: 13, color: "var(--ink)" }}>{label ? <span style={{ fontWeight: 600 }}>{label}: </span> : null}{row ? (row.submitted ? `Received ${row.submitted_date ?? ""}` : `Requested ${row.requested_at ?? ""} · awaiting`) : "Not requested"}</div>
+                          : <BloodActions clientId={params.id} blood={row} panel={panel} label={label} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Other paperwork — consents, ID scans, letters. Filed against the
             same client, so it belongs in the same card as the reports rather
             than in a second documents card six sections away. */}
