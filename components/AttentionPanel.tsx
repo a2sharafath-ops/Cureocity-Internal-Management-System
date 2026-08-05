@@ -22,6 +22,11 @@ export type Flag = {
   /** when set, only the first flag with a given key is shown (dedupes the same
    *  underlying task raised by more than one queue). */
   dedupeKey?: string;
+  /** "was due 28 Jul · 8 days overdue" / "waiting 12 days · since 24 Jul".
+   *  Severity says how bad; this says how late — which is what decides who
+   *  gets rung first. */
+  dueLabel?: string;
+  overdue?: boolean;
 };
 
 const firstName = (n: string) => n.split(" ")[0];
@@ -136,7 +141,17 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
             }}>{SEV[f.sev].label}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <b style={{ fontSize: 13 }}>{f.title}</b>
-              <div style={{ color: "var(--muted)", fontSize: 12 }}>{f.detail}</div>
+              <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                {f.detail}
+                {f.dueLabel && (
+                  <>
+                    {f.detail ? " · " : null}
+                    <span style={{ color: f.overdue ? "var(--red-text)" : "var(--amber-text)", fontWeight: f.overdue ? 700 : 600 }}>
+                      {f.dueLabel}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               {/* Chase — nudge the person/team who owns the work */}

@@ -27,7 +27,14 @@ export type ClientInput = {
 };
 
 export type Action = { cta: string; href: string };
-export type Step = { label: string; done: boolean; action?: Action; cancelApptId?: string; repairClientId?: string; booked?: boolean };
+export type Step = {
+  label: string; done: boolean; action?: Action; cancelApptId?: string;
+  repairClientId?: string; booked?: boolean;
+  /** The appointment category this step books, when it books one. Lets the
+   *  caller look the service's `day_offset` up in the catalogue and date the
+   *  step, rather than this module hard-coding a deadline the clinic owns. */
+  bookCategory?: string;
+};
 
 export type OnboardRow = {
   clientId: string;
@@ -49,6 +56,16 @@ const enc = (s: string) => encodeURIComponent(s);
 
 /** A consultation step: bookable (deep link) until scheduled, then it's the
  *  clinician's to complete. */
+// Discipline (as used by the booking deep-link) → the services category the
+// milestone engine matches on.
+const DISC_CATEGORY: Record<string, string> = {
+  Doctor: "Doctor Consultation",
+  Dietitian: "Diet Consultation",
+  "Fitness Trainer": "Fitness Services",
+  Psychologist: "Counselling",
+  "Health Coach": "Coaching",
+};
+
 function consultStep(label: string, c: ConsultState, disc: string, clientId: string): Step {
   if (c.completed) return { label: `${label} done${c.assignedName ? ` · ${c.assignedName}` : ""}`, done: true };
   // Booked and waiting on the clinician to conduct it — there's no ops "next
@@ -60,7 +77,11 @@ function consultStep(label: string, c: ConsultState, disc: string, clientId: str
     booked: true, // scheduled & waiting on the clinician — not an open ops action
     cancelApptId: c.apptId ?? undefined,
   };
-  return { label: `Book ${label.toLowerCase()}`, done: false, action: { cta: "Book", href: `/appointments?client=${clientId}&disc=${enc(disc)}` } };
+  return {
+    label: `Book ${label.toLowerCase()}`, done: false,
+    bookCategory: DISC_CATEGORY[disc],
+    action: { cta: "Book", href: `/appointments?client=${clientId}&disc=${enc(disc)}` },
+  };
 }
 
 function stepsFor(i: ClientInput): Step[] {

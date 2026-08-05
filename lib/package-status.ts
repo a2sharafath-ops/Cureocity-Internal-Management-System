@@ -10,6 +10,7 @@ import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS } from "@/lib/comprehensive";
 import { clock, formatLeft } from "@/lib/sla-clock";
+import { dueOn, waitingSince } from "@/lib/due";
 import { loadClientStatuses } from "@/lib/client-status";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
@@ -28,6 +29,11 @@ const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 const fmtDT = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).replace(",", "");
 
 export async function getPackageStatus(clientId: string): Promise<PackageStatus | null> {
+  const addDaysISO = (iso: string, n: number) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
   const p = await getProfile();
   if (!p || !canSee(p.role, "/clients")) return null;
   const sb = createClient();
@@ -35,8 +41,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
 
   const [{ data: cps }, { data: inv }, { data: blood }, { data: cons }, { data: appts }, { data: sess }, { data: charts }, { data: workouts }, { data: bp }, { data: proto }] = await Promise.all([
     sb.from("client_packages").select("package_id, package_name, category, status, start_date, end_date").eq("client_id", clientId),
-    sb.from("invoices").select("num, description, amount, status").eq("client_id", clientId),
-    sb.from("blood_requests").select("panel, submitted").eq("client_id", clientId),
+    sb.from("invoices").select("num, description, amount, status, issued_date").eq("client_id", clientId),
+    sb.from("blood_requests").select("panel, submitted, requested_at").eq("client_id", clientId),
     sb.from("consultations").select("kind, status, completed_at").eq("client_id", clientId),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("sessions").select("status, date").eq("client_id", clientId).neq("status", "cancelled"),
@@ -75,18 +81,35 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // Void / Cancelled / Refunded ones are settled (e.g. an invoice for a removed
   // package) and must not sit in "open now" waiting to be actioned.
   const SETTLED_INVOICE = new Set(["Paid", "Void", "Cancelled", "Refunded"]);
-  for (const i of (inv ?? []) as { num: number | null; description: string | null; amount: number; status: string }[]) {
-    if (!SETTLED_INVOICE.has(i.status)) openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn", chaseRoles: ["Front Desk", "Finance"], chaseWho: "Front Desk" });
+  for (const i of (inv ?? []) as { num: number | null; description: string | null; amount: number; status: string; issued_date: string | null }[]) {
+    if (!SETTLED_INVOICE.has(i.status)) openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn", chaseRoles: ["Front Desk", "Finance"], chaseWho: "Front Desk",
+      // Payment terms are 7 days from issue — say so, rather than leaving the
+      // reader to work out whether this is late.
+      ...dueOn(i.issued_date ? addDaysISO(i.issued_date, 7) : null, today) });
   }
 
   // ---- onboarding checklist (canonical) ----------------------------------
   // Reuse the same engine the Onboarding page runs, so the client's pending
   // journey steps — blood, consults, blueprint generation, sessions scheduled —
   // appear here with their real action links, and the two never disagree.
+  // Initial-booking deadlines come from the services catalogue, so the clinic
+  // sets them in Services → Day offset rather than asking for a code change.
+  // Only the earliest offset per category counts: "Initial Doctor Consultation"
+  // is day 0, the day-28 review is a different service entirely.
+  const { data: initSvc } = await sb.from("services").select("category, day_offset, name").ilike("name", "Initial%");
+  const initialOffsets = new Map<string, number>();
+  for (const s of ((initSvc ?? []) as { category: string; day_offset: number | null }[])) {
+    if (s.day_offset == null) continue;
+    const prev = initialOffsets.get(s.category);
+    if (prev == null || s.day_offset < prev) initialOffsets.set(s.category, s.day_offset);
+  }
+
   const st = (await loadClientStatuses(sb, [clientId], today)).get(clientId);
   const allSess = (sess ?? []) as { status: string; date: string }[];
   if (st && ["blueprint", "comprehensive", "training", "membership"].includes(st.category)) {
     const activeCp = active.find((c) => c.category === st.category);
+    // The clock starts when the package starts, not when the row was created.
+    const pkgStart = proto?.start_date ?? activeCp?.start_date ?? null;
     const input: ClientInput = {
       clientId, clientName: "", category: st.category,
       packageName: activeCp?.package_name ?? st.category,
@@ -107,8 +130,16 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       // A booked-but-not-yet-held consult isn't an open ops action — it's
       // scheduled and waiting on the clinician. Show it under Upcoming, not
       // Open now, so Open now only lists work that still needs doing.
-      if (step.booked) upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info" });
-      else openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...FRONT_DESK });
+      // An initial booking is due on the day the clinic says it is — the
+      // `day_offset` on its service in the catalogue, which for the initial
+      // consultations is day 0 (book it the day they buy). Nothing is
+      // hard-coded here: change the offset in Services and this follows.
+      const offset = step.bookCategory
+        ? initialOffsets.get(step.bookCategory) ?? null
+        : null;
+      const due = offset != null && pkgStart ? addDaysISO(pkgStart, offset) : null;
+      if (step.booked) upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info", sortKey: due ?? undefined });
+      else openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...FRONT_DESK, ...dueOn(due, today) });
     }
   }
 
@@ -134,7 +165,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   };
   // Comprehensive blood is a separate panel — the onboarding step only checks it
   // was *requested*; the client still owes the actual report.
-  const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
+  const compBlood = ((blood ?? []) as { panel: string | null; submitted: boolean; requested_at: string | null }[]).find((b) => (b.panel ?? "blueprint") === "comprehensive");
   const hasChart = ((charts ?? []) as unknown[]).length > 0;
   const hasWorkout = ((workouts ?? []) as unknown[]).length > 0;
   // Clinician-owed deliverables: name the responsible clinician so ops roles can
@@ -146,7 +177,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     hasChart, hasWorkout, compBloodSubmitted: compBlood ? compBlood.submitted : null,
   }));
   // Blood card + consolidated approval live on this same page, so no cross-link.
-  if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach" });
+  if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach",
+    ...waitingSince(compBlood?.requested_at, today) });
   if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, ownerCta: "Draft chart", href: "/workspace?role=diet&tab=charts", tone: "warn", ...slaHint(completedAtOf.get("Diet"), DIET_DRAFT_MS) });
   if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, ownerCta: "Create plan", href: "/workspace?role=trainer&tab=planner", tone: "warn", ...slaHint(completedAtOf.get("Trainer"), WORKOUT_PLAN_MS) });
   // Day-2 diet chart explanation — the Health Coach owns scheduling it, but only

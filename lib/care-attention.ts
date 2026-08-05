@@ -5,8 +5,10 @@
 // events even after the work is done).
 
 import { createClient } from "@/lib/supabase/server";
+import { dueOn, waitingSince } from "@/lib/due";
+import { clock, formatLeft } from "@/lib/sla-clock";
 import type { Flag } from "@/components/AttentionPanel";
-import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS } from "@/lib/comprehensive";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 
 const daysBetween = (a: string, b: string) =>
@@ -18,10 +20,10 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
   const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: appts }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
-    sb.from("consultations").select("client_id, kind, status"),
+    sb.from("consultations").select("client_id, kind, status, completed_at"),
     sb.from("diet_charts").select("client_id"),
     sb.from("client_workouts").select("client_id"),
-    sb.from("blood_requests").select("client_id, panel, submitted"),
+    sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
     sb.from("blueprints").select("client_id, generated"),
     sb.from("care_protocols").select("client_id, start_date, approved_at").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
@@ -45,6 +47,25 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
   for (const c of (cps ?? []) as { client_id: string; category: string; start_date: string | null; end_date: string | null }[]) {
     (catsBy.get(c.client_id) ?? catsBy.set(c.client_id, []).get(c.client_id)!).push(c);
   }
+  // When the clock started for each clinician deliverable: the chart is owed
+  // 24h after the diet consult finished, the plan 24h after the assessment.
+  const completedAt = new Map<string, Map<string, string>>();
+  for (const c of (cons ?? []) as { client_id: string; kind: string; status: string; completed_at: string | null }[]) {
+    if (c.status !== "completed" || !c.completed_at) continue;
+    const per = completedAt.get(c.client_id) ?? new Map<string, string>();
+    // Earliest completion is what the SLA runs from — a later re-consult
+    // must not quietly reset a deadline that has already been missed.
+    const prev = per.get(c.kind);
+    if (!prev || c.completed_at < prev) per.set(c.kind, c.completed_at);
+    completedAt.set(c.client_id, per);
+  }
+  // When the comprehensive panel was asked for, so "awaiting" can say how long.
+  const bloodAsked = new Map<string, string>();
+  for (const b of (blood ?? []) as { client_id: string; panel: string | null; submitted: boolean; requested_at: string | null }[]) {
+    if ((b.panel ?? "blueprint") !== "comprehensive" || b.submitted || !b.requested_at) continue;
+    bloodAsked.set(b.client_id, b.requested_at);
+  }
+
   const doneKinds = new Map<string, Set<string>>();
   for (const c of (cons ?? []) as { client_id: string; kind: string; status: string }[]) {
     if (c.status !== "completed") continue;
@@ -83,6 +104,14 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     // These three used to land on the client card, which meant the reader
     // arrived at the top of a long page and still had to go and find the diet
     // builder. The builders already accept ?client=<id> and open pre-filled.
+    // The 24h turnaround clocks already exist for these two — package-status
+    // shows them, this queue did not, so the same flag read as urgent in one
+    // place and undated in the other.
+    const sla = (startAt: string | null | undefined, windowMs: number) => {
+      const c = clock(startAt, null, windowMs, Date.now());
+      if (!c.dueAt) return {};
+      return { dueLabel: `due ${fmt(c.dueAt.slice(0, 10))} · ${formatLeft(c.msLeft)}`, overdue: c.status === "breached" };
+    };
     const chartHref   = `/workspace?role=diet&tab=charts&client=${clientId}`;
     const workoutHref = `/workspace?role=trainer&tab=planner&client=${clientId}`;
     // Blood status lives with the reports it describes, on the Card tab.
@@ -94,19 +123,20 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       // coach; if none is assigned yet, chase the Health Coach role.
       const o = ownerFor(clientId, "coach");
       flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: bloodHref, cta: "Open reports",
+        ...waitingSince(bloodAsked.get(clientId), today),
         dedupeKey: `blood:${clientId}`,
         nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
         chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: bloodHref } });
     }
     if (deliv.has("dietchart")) {
       const o = ownerFor(clientId, "dietitian");
-      flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: chartHref, cta: "Draft chart",
+      flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: chartHref, cta: "Draft chart", ...sla(completedAt.get(clientId)?.get("Diet"), DIET_DRAFT_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
         chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: chartHref } });
     }
     if (deliv.has("workout")) {
       const o = ownerFor(clientId, "trainer");
-      flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: workoutHref, cta: "Build plan",
+      flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: workoutHref, cta: "Build plan", ...sla(completedAt.get(clientId)?.get("Trainer"), WORKOUT_PLAN_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
         chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
     }
@@ -119,7 +149,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
         for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(span)), apptsBy.get(clientId) ?? [], services)) {
           if (today <= m.dueDate) continue; // dashboard shows only overdue milestones
-          flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: `Was due ${fmt(m.dueDate)}`, href: m.bookHref, cta: "Book",
+          flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: "", href: m.bookHref, cta: "Book", ...dueOn(m.dueDate, today),
             chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: `Book ${m.label}`, clientId, href: m.bookHref } });
         }
       }
