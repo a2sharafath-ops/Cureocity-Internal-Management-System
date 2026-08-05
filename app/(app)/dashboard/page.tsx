@@ -126,7 +126,7 @@ export default async function DashboardPage() {
           <>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
               <Kpi icon="🗓" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Sessions today" value={trainToday.length} sub="Fitness Trainer board" href="/trainer" />
-              <Kpi icon="🩺" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Consultations to complete" value={pconsults.length} sub="Professional workspace" href="/pro" />
+              <Kpi icon="🩺" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Consultations to complete" value={pconsults.length} sub="Consultation summaries" href="/pro" />
               <Kpi icon="🧬" iconBg="var(--purple-bg)" iconColor="var(--purple-text)" label="Clients today" value={scheduledAppts.length} sub="Appointment calendar" href="/appointments" />
             </div>
             <div style={{ ...card, overflow: "hidden" }}>

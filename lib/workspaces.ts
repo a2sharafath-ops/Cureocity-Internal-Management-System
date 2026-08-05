@@ -92,7 +92,7 @@ export type WsTab = {
 // Tabs shared by every workspace (order matters).
 function commonTabs(): WsTab[] {
   return [
-    { key: "dash", label: "Dashboard", live: true },
+    { key: "dash", label: "Today", live: true },
     { key: "clients", label: "My clients", live: true },
     { key: "appts", label: "Appointments", live: true },
     { key: "summaries", label: "Summaries", live: true },
@@ -119,7 +119,7 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   // Diet uses an explicit order (role tabs are interleaved with the common set,
   // so the shared withRoleTabs insertion point can't express it).
   diet: [
-    { key: "dash", label: "Dashboard", live: true },
+    { key: "dash", label: "Today", live: true },
     { key: "clients", label: "My clients", live: true },
     { key: "appts", label: "Appointments", live: true },
     { key: "summaries", label: "Summaries", live: true },
