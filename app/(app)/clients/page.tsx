@@ -26,7 +26,7 @@ export default async function ClientsPage() {
 
   const [{ data, error }, { data: staffData }] = await Promise.all([
     supabase.from("clients").select("id, code, name, phone, email, used, branch, joined, dob, owner, package_id, packages(name, sessions, is_facility), staff:pro_id(name)").order("code", { ascending: true }),
-    supabase.from("staff").select("id, name").order("name"),
+    supabase.from("staff").select("id, name, role").order("name"),
   ]);
 
   const { data: subData } = await supabase.from("tablet_submissions").select("id, first_name, last_name, phone, created_at").eq("status", "pending").order("created_at", { ascending: false });
@@ -86,8 +86,17 @@ export default async function ClientsPage() {
     (cpDatesBy.get(r.client_id) ?? cpDatesBy.set(r.client_id, []).get(r.client_id)!).push({ category: r.category, start_date: r.start_date, end_date: r.end_date });
   }
 
-  const staff = (staffData ?? []) as { id: string; name: string }[];
-  const staffNameById = new Map(staff.map((s) => [s.id, s.name]));
+  const allStaff = (staffData ?? []) as { id: string; name: string; role: string }[];
+  // "Owner (Front Desk)" means exactly that — the desk, nobody else. The list
+  // was every staff member, so a doctor or a trainer could be set as a client's
+  // front-desk owner and the column said one thing while offering another.
+  const OWNER_ROLES = ["Front Desk"];
+  const staff = allStaff.filter(
+    // Keep whoever is already an owner even if their role has since changed,
+    // so an existing assignment is never silently dropped from the list.
+    (s) => OWNER_ROLES.includes(s.role) || rawRows.some((c) => c.owner === s.id),
+  );
+  const staffNameById = new Map(allStaff.map((s) => [s.id, s.name]));
 
   // Real active packages + full care team per client, so the list reflects
   // everything a client holds — not just the single legacy package / pro_id.
