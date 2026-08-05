@@ -40,16 +40,20 @@ export default function TemplatesEditor({ initial, canEdit }: { initial: AppSett
   // Sheet designs go to storage, not into the settings JSON — see
   // uploadDocTemplate for why. Uploading immediately persists the URL so the
   // artwork can't be lost by navigating away before pressing Save.
+  // `slot` distinguishes the repeating frame from a flowing document's fixed
+  // cover page; the busy key is keyed on both so uploading one doesn't grey
+  // out the other's button.
   const [upBusy, setUpBusy] = useState<string | null>(null);
-  const onSheet = async (kind: "rx" | "lab", file: File | null) => {
+  const onSheet = async (kind: keyof AppSettings["docs"], slot: "frame" | "cover", file: File | null) => {
     if (!file) return;
-    setErr(null); setMsg(null); setUpBusy(kind);
+    setErr(null); setMsg(null); setUpBusy(`${kind}-${slot}`);
     const fd = new FormData();
-    fd.set("kind", kind); fd.set("file", file);
+    fd.set("kind", kind); fd.set("slot", slot); fd.set("file", file);
     const r = await uploadDocTemplate(fd);
     setUpBusy(null);
     if (r.error) { setErr(r.error); return; }
-    const next = { ...s, docs: { ...s.docs, [kind]: { ...s.docs[kind], bg: r.url ?? "" } } };
+    const field = slot === "cover" ? "cover" : "bg";
+    const next = { ...s, docs: { ...s.docs, [kind]: { ...s.docs[kind], [field]: r.url ?? "" } } };
     setS(next);
     const w = await saveAppSettings(JSON.stringify(next));
     setMsg(w.error ? null : "Design uploaded and saved.");
@@ -132,19 +136,21 @@ export default function TemplatesEditor({ initial, canEdit }: { initial: AppSett
       </div>
 
 
-      {/* Printable sheet designs */}
+      {/* Printable sheet designs — Card A: single-page documents */}
       <div style={card}>
-        <div style={h}>Prescription &amp; lab sheet designs</div>
+        <div style={h}>Fixed sheets (one page)</div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 14, lineHeight: 1.55 }}>
           Upload the full A4 sheet as you designed it — letterhead, watermark, footer and all.
           It becomes the page background; the patient details, medicines and tests are printed
           into the clear area you set below. Export at <b>A4 portrait, 150–300 DPI</b>
           (about 1240 × 1754 px at 150 DPI). Leave a design out and the sheet falls back to
-          a plain letterhead built from the details above.
+          a plain letterhead built from the details above. These are single-page documents,
+          so one design covers the whole sheet.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {([["rx", "Prescription"], ["lab", "Lab requisition"]] as const).map(([k, title]) => {
             const d: DocSheet = s.docs[k];
+            const busyKey = `${k}-frame`;
             return (
               <div key={k} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
                 <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{title}</div>
@@ -159,8 +165,8 @@ export default function TemplatesEditor({ initial, canEdit }: { initial: AppSett
                 {!ro && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
                     <label style={{ fontSize: 12, color: "var(--brand-text)", cursor: "pointer", fontWeight: 600 }}>
-                      {upBusy === k ? "Uploading…" : d.bg ? "Replace design" : "Upload design"}
-                      <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={(e) => onSheet(k, e.target.files?.[0] ?? null)} />
+                      {upBusy === busyKey ? "Uploading…" : d.bg ? "Replace design" : "Upload design"}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={(e) => onSheet(k, "frame", e.target.files?.[0] ?? null)} />
                     </label>
                     {d.bg && <button type="button" onClick={() => set("docs", { [k]: { ...d, bg: "" } } as Partial<AppSettings["docs"]>)} style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 11.5, cursor: "pointer" }}>Remove</button>}
                   </div>
@@ -181,6 +187,85 @@ export default function TemplatesEditor({ initial, canEdit }: { initial: AppSett
         </div>
         <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>
           The dashed box shows where content will print. Widen the top margin if your letterhead is deep.
+        </div>
+      </div>
+
+      {/* Printable sheet designs — Card B: multi-page documents */}
+      <div style={card}>
+        <div style={h}>Flowing documents</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 14, lineHeight: 1.55 }}>
+          A diet plan, consultation summary or assessment runs to however many pages that
+          client&apos;s content takes — one page for a short plan, a dozen for a detailed one —
+          so a single fixed design can&apos;t carry the whole document the way it can for a
+          one-page sheet. Upload a <b>cover</b> for page one and a <b>page frame</b> for the
+          pages that follow; the app flows the tables and notes inside the frame&apos;s clear
+          area. Leave either out and that part falls back to the plain letterhead.
+        </div>
+        <div style={{ display: "grid", gap: 18 }}>
+          {([["plan", "Diet plan"], ["summary", "Consultation summary"], ["assess", "Assessment summary"]] as const).map(([k, title]) => {
+            const d: DocSheet = s.docs[k];
+            return (
+              <div key={k} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>{title}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  {/* Cover — fixed, prints as-is, no safe area. */}
+                  <div>
+                    <span style={{ ...label, marginBottom: 6 }}>Cover (page 1)</span>
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "210 / 297", background: "#fff", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+                      {d.cover
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={d.cover} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        : <div style={{ display: "grid", placeItems: "center", height: "100%", fontSize: 11.5, color: "var(--muted)", textAlign: "center", padding: 10 }}>No cover uploaded<br />— built-in cover is used</div>}
+                    </div>
+                    {!ro && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <label style={{ fontSize: 12, color: "var(--brand-text)", cursor: "pointer", fontWeight: 600 }}>
+                          {upBusy === `${k}-cover` ? "Uploading…" : d.cover ? "Replace cover" : "Upload cover"}
+                          <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={(e) => onSheet(k, "cover", e.target.files?.[0] ?? null)} />
+                        </label>
+                        {d.cover && <button type="button" onClick={() => set("docs", { [k]: { ...d, cover: "" } } as Partial<AppSettings["docs"]>)} style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 11.5, cursor: "pointer" }}>Remove</button>}
+                      </div>
+                    )}
+                  </div>
+                  {/* Page frame — repeats behind flowing content, has a safe area. */}
+                  <div>
+                    <span style={{ ...label, marginBottom: 6 }}>Page frame (pages 2+)</span>
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "210 / 297", background: "#fff", border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden", marginBottom: 8 }}>
+                      {d.bg
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={d.bg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        : <div style={{ display: "grid", placeItems: "center", height: "100%", fontSize: 11.5, color: "var(--muted)", textAlign: "center", padding: 10 }}>No design uploaded<br />— plain letterhead is used</div>}
+                      <div style={{ position: "absolute", left: `${(d.side / 210) * 100}%`, right: `${(d.side / 210) * 100}%`, top: `${(d.top / 297) * 100}%`, bottom: `${(d.bottom / 297) * 100}%`, border: "1.5px dashed rgba(225,31,52,.75)", borderRadius: 3, pointerEvents: "none" }} />
+                    </div>
+                    {!ro && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <label style={{ fontSize: 12, color: "var(--brand-text)", cursor: "pointer", fontWeight: 600 }}>
+                          {upBusy === `${k}-frame` ? "Uploading…" : d.bg ? "Replace frame" : "Upload frame"}
+                          <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} onChange={(e) => onSheet(k, "frame", e.target.files?.[0] ?? null)} />
+                        </label>
+                        {d.bg && <button type="button" onClick={() => set("docs", { [k]: { ...d, bg: "" } } as Partial<AppSettings["docs"]>)} style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 11.5, cursor: "pointer" }}>Remove</button>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ ...label, marginTop: 10, marginBottom: 4 }}>Frame safe area (mm) — applies to the page frame only</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                  {(["top", "bottom", "side"] as const).map((m) => (
+                    <div key={m}>
+                      <span style={{ ...label, marginBottom: 2 }}>{m === "side" ? "Sides" : m === "top" ? "Top" : "Bottom"} (mm)</span>
+                      <input disabled={ro} type="number" min={0} max={120} value={d[m]}
+                        onChange={(e) => set("docs", { [k]: { ...d, [m]: Math.max(0, Math.min(120, Number(e.target.value) || 0)) } } as Partial<AppSettings["docs"]>)}
+                        style={{ ...inp, padding: "6px 8px" }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>
+          The dashed box on the page frame shows where content will print. The cover has no
+          safe area — it prints exactly as uploaded.
         </div>
       </div>
 

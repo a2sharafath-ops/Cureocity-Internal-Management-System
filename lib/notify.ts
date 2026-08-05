@@ -48,3 +48,32 @@ export async function notifyStaff(
   });
   return true;
 }
+
+/**
+ * Notify a CLIENT in their portal, by client id.
+ *
+ * The two helpers above target staff — by role, or by staff id. Neither can
+ * reach a client, because a client's login is linked through profiles.client_id
+ * rather than staff_id. Without this, "your diet plan is ready" could only be
+ * written into a message thread and hoped for.
+ *
+ * Silently does nothing if the client has no portal login yet, which is the
+ * right behaviour: there is no inbox to deliver to, and the document is still
+ * waiting for them when they do log in.
+ */
+export async function notifyClient(
+  supabase: AnyClient,
+  clientId: string,
+  n: NotifInput,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("profiles").select("id").eq("client_id", clientId).limit(1);
+  const prof = ((data ?? []) as { id: string }[])[0];
+  if (!prof) return false;
+  await supabase.from("notifications").insert({
+    user_id: prof.id, title: n.title, body: n.body ?? null,
+    href: n.href ?? null, icon: n.icon ?? "🔔",
+    link_kind: n.link?.kind ?? null, link_ref: n.link?.ref ?? null,
+  });
+  return true;
+}

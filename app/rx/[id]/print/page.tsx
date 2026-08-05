@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { printClient } from "@/lib/print-access";
 import { getAppSettings } from "@/lib/settings";
 import { IST } from "@/lib/datetime";
 import PrintTrigger from "@/components/PrintTrigger";
@@ -20,8 +20,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function RxPrintPage({
   params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string } }) {
-  const supabase = createClient();
+}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+  // A renderer has no session, so a valid one-document token unlocks the
+  // read. See lib/print-access.ts.
+  const supabase = printClient("rx", params.id, searchParams.doc_token);
   const { data } = await supabase
     .from("prescriptions")
     .select("id, status, notes, provider, signed_date, created_at, client_id, clients(name, code, dob, gender), prescription_items(drug, dose, frequency, route, duration, quantity, instructions)")

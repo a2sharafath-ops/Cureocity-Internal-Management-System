@@ -19,6 +19,9 @@ import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
+import DietPlanSection, { type DietPlanRow } from "@/components/DietPlanSection";
+import { pdfReadiness } from "@/lib/pdf";
+import { type PlanMeal, type PlanOption } from "@/lib/diet-plan";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
 import { getAppSettings } from "@/lib/settings";
@@ -36,6 +39,7 @@ import CoachMarkersSection from "@/components/CoachMarkersSection";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { careWorkFlags } from "@/lib/care-attention";
 import { disciplineLabel } from "@/lib/disciplines";
+import { canWriteNutrition } from "@/lib/discipline";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
   visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
@@ -333,6 +337,38 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       review_note: r.review_note, reviewed_by: r.reviewed_by,
     }));
   }
+  // The structured, multi-page diet plan (meal slots + numbered options),
+  // alongside the flat diet chart above — same tab, a different document.
+  let dietPlans: DietPlanRow[] = [];
+  if (tab === "charts") {
+    const { data: dp } = await supabase
+      .from("diet_plans")
+      .select(
+        "id, client_id, version, status, issued_on, kcal, protein, carbohydrate, fats, fibre, water, allergies, notes, shared_at, created_at, clients(name), " +
+        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, protein_g, micronutrients))",
+      )
+      .order("created_at", { ascending: false });
+    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null };
+    type RawMeal = { id: string; seq: number; name: string; time_from: string | null; time_to: string | null; note: string | null; conditional: boolean; diet_plan_options: RawOption[] | null };
+    type RawPlan = {
+      id: string; client_id: string; version: number; status: string; issued_on: string | null;
+      kcal: number | null; protein: string | null; carbohydrate: string | null; fats: string | null; fibre: string | null; water: string | null;
+      allergies: string | null; notes: string | null; shared_at: string | null; created_at: string;
+      clients: { name: string } | null; diet_plan_meals: RawMeal[] | null;
+    };
+    dietPlans = ((dp ?? []) as unknown as RawPlan[]).map((r) => ({
+      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
+      created_at: r.created_at, sharedAt: r.shared_at,
+      targets: { kcal: r.kcal, protein: r.protein, carbohydrate: r.carbohydrate, fats: r.fats, fibre: r.fibre, water: r.water },
+      meta: { allergies: r.allergies, notes: r.notes, issued_on: r.issued_on },
+      meals: (r.diet_plan_meals ?? []).slice().sort((a, b) => a.seq - b.seq).map((m): PlanMeal => ({
+        id: m.id, seq: m.seq, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
+        options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq).map((o): PlanOption => ({
+          id: o.id, seq: o.seq, food_items: o.food_items, qty: o.qty, kcal: o.kcal, protein_g: o.protein_g, micronutrients: o.micronutrients,
+        })),
+      })),
+    }));
+  }
   // Trainer tool: per-client workout plans (draft → publish), mirrors diet charts.
   let workoutPlans: WorkoutPlanRow[] = [];
   if (tab === "planner") {
@@ -494,7 +530,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "client_workouts", "recipes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "diet_plans", "diet_plan_meals", "diet_plan_options", "client_workouts", "recipes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline only; switch via the header persona menu */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -695,6 +731,15 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
       {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} defaultRows={(await getAppSettings()).diet.defaultRows} />}
+
+      {/* ---- CUSTOMISED DIET PLAN BUILDER (dietitian) — the structured multi-page
+           document, separate from the flat diet chart above. Same role gate. ---- */}
+      {tab === "charts" && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Customised diet plan</div>
+          <DietPlanSection plans={dietPlans} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} />
+        </div>
+      )}
 
       {/* ---- WORKOUT PLANNER (trainer) ---- */}
       {tab === "planner" && <WorkoutPlanner plans={workoutPlans} clients={clientOpts} />}

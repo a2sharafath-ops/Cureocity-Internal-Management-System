@@ -18,6 +18,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
 
 import { todayISO } from "@/lib/today";
+import { mealHeading, type PlanMeal, type PlanOption } from "@/lib/diet-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,37 @@ export default async function PortalHome() {
   }[])[0] ?? null;
   const hasEmr = myProblems.length > 0 || myAllergies.length > 0 || myMeds.length > 0;
 
+  // The customised diet plan — a different, richer document than the diet
+  // chart above. Only the most recent plan that is both published AND shared
+  // is ever shown here; RLS enforces the same pair of conditions.
+  const { data: dietPlanRow } = await supabase
+    .from("diet_plans")
+    .select("id, kcal, protein, carbohydrate, fats, fibre, water")
+    .eq("client_id", client.id).eq("status", "published").not("shared_at", "is", null)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const myDietPlan = dietPlanRow as {
+    id: string; kcal: number | null; protein: string | null; carbohydrate: string | null;
+    fats: string | null; fibre: string | null; water: string | null;
+  } | null;
+  let myDietPlanMeals: PlanMeal[] = [];
+  if (myDietPlan) {
+    const { data: dpMealRows } = await supabase
+      .from("diet_plan_meals").select("id, seq, name, time_from, time_to, note, conditional")
+      .eq("plan_id", myDietPlan.id).order("seq");
+    const dpMeals = (dpMealRows ?? []) as Omit<PlanMeal, "options">[];
+    const dpMealIds = dpMeals.map((m) => m.id!).filter(Boolean);
+    const { data: dpOptRows } = dpMealIds.length
+      ? await supabase.from("diet_plan_options")
+          .select("id, meal_id, seq, food_items, qty, kcal, protein_g, micronutrients")
+          .in("meal_id", dpMealIds).order("seq")
+      : { data: [] as never[] };
+    const dpOptsByMeal = new Map<string, PlanOption[]>();
+    for (const o of ((dpOptRows ?? []) as (PlanOption & { meal_id: string })[])) {
+      (dpOptsByMeal.get(o.meal_id) ?? dpOptsByMeal.set(o.meal_id, []).get(o.meal_id)!).push(o);
+    }
+    myDietPlanMeals = dpMeals.map((m) => ({ ...m, options: dpOptsByMeal.get(m.id!) ?? [] }));
+  }
+
   const { data: apptRows } = await supabase
     .from("appointments").select("id, type, title, date, hour, status, staff(name)")
     .eq("client_id", client.id).gte("date", TODAY).eq("status", "scheduled").order("date").order("hour").limit(8);
@@ -196,7 +228,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts","meal_day_summaries"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts","meal_day_summaries","diet_plans"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -553,6 +585,63 @@ export default async function PortalHome() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {/* Customised diet plan — the richer document with meal-slot options,
+          shown only once the dietitian has both published AND shared it.
+          Rendered as stacked cards, not the print table, so it reads on a
+          phone. No plan → this card doesn't render at all. */}
+      {myDietPlan && card(
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 700 }}>Your diet plan</div>
+            <span style={{ flex: 1 }} />
+            <a href={`/diet-plan/${myDietPlan.id}/print`} target="_blank" rel="noopener"
+               style={{ fontSize: 12.5, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+              Download / print →
+            </a>
+          </div>
+
+          {/* Compact targets row */}
+          {(myDietPlan.kcal != null || myDietPlan.protein || myDietPlan.carbohydrate || myDietPlan.fats || myDietPlan.fibre || myDietPlan.water) && (
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: "var(--muted)", marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+              {myDietPlan.kcal != null && <span><b style={{ color: "var(--text)" }}>{myDietPlan.kcal}</b> kcal</span>}
+              {myDietPlan.protein && <span><b style={{ color: "var(--text)" }}>{myDietPlan.protein}</b> protein</span>}
+              {myDietPlan.carbohydrate && <span><b style={{ color: "var(--text)" }}>{myDietPlan.carbohydrate}</b> carbs</span>}
+              {myDietPlan.fats && <span><b style={{ color: "var(--text)" }}>{myDietPlan.fats}</b> fats</span>}
+              {myDietPlan.fibre && <span><b style={{ color: "var(--text)" }}>{myDietPlan.fibre}</b> fiber</span>}
+              {myDietPlan.water && <span><b style={{ color: "var(--text)" }}>{myDietPlan.water}</b> water</span>}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gap: 16 }}>
+            {myDietPlanMeals.map((m) => (
+              <div key={m.id}>
+                <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: m.note ? 2 : 8 }}>{mealHeading(m)}</div>
+                {m.note && <div style={{ fontSize: 11.5, color: "var(--muted)", fontStyle: "italic", marginBottom: 8 }}>{m.note}</div>}
+                {m.options.length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No options recorded.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {m.options.map((o, i) => (
+                      <div key={o.id ?? i} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: "var(--surface)" }}>
+                        <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 2 }}>Option {i + 1}</div>
+                        <div style={{ fontWeight: 700, fontSize: 13.5 }}>{o.food_items}</div>
+                        {o.qty && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{o.qty}</div>}
+                        {(o.kcal != null || o.protein_g != null) && (
+                          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>
+                            {[o.kcal != null ? `${o.kcal} kcal` : null, o.protein_g != null ? `${Number(o.protein_g)} g protein` : null].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                        {o.micronutrients && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>{o.micronutrients}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </>
       )}
 

@@ -44,11 +44,29 @@ export type AppSettings = {
   docs: {
     rx: DocSheet;
     lab: DocSheet;
+    /** Flowing documents — see DocSheet.cover for why these differ. */
+    plan: DocSheet;      // customised diet plan
+    summary: DocSheet;   // consultation summary
+    assess: DocSheet;    // dietary assessment summary
   };
 };
 
 export type DocSheet = {
-  bg: string;        // public URL of the uploaded design; "" → plain letterhead
+  /**
+   * The CONTINUATION frame — letterhead, border, footer — repeated on every
+   * page. "" falls back to a plain letterhead built from the details above.
+   */
+  bg: string;
+  /**
+   * Artwork for page one only, used by documents whose length depends on their
+   * content: a diet plan runs seven pages for one client and fifteen for
+   * another, so a single fixed design cannot carry the whole thing. The cover
+   * is fixed and prints as-is; the pages after it flow inside `bg`.
+   *
+   * Empty for the prescription and lab sheets, which are one page with known
+   * zones and need only `bg`.
+   */
+  cover?: string;
   top: number;       // mm of artwork to keep clear at the top (the letterhead)
   bottom: number;    // mm to keep clear at the bottom (footer / signature band)
   side: number;      // mm left/right
@@ -82,6 +100,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   docs: {
     rx: { bg: "", top: 45, bottom: 30, side: 18 },
     lab: { bg: "", top: 45, bottom: 30, side: 18 },
+    // The flowing documents carry their own cover page, so their continuation
+    // frame needs far less headroom — no masthead is repeated.
+    plan: { bg: "", cover: "", top: 22, bottom: 20, side: 14 },
+    summary: { bg: "", cover: "", top: 45, bottom: 30, side: 18 },
+    assess: { bg: "", cover: "", top: 22, bottom: 20, side: 14 },
   },
 };
 
@@ -97,6 +120,9 @@ function merge(saved: Partial<AppSettings> | null | undefined): AppSettings {
     docs: {
       rx: { ...DEFAULT_SETTINGS.docs.rx, ...(s.docs?.rx ?? {}) },
       lab: { ...DEFAULT_SETTINGS.docs.lab, ...(s.docs?.lab ?? {}) },
+      plan: { ...DEFAULT_SETTINGS.docs.plan, ...(s.docs?.plan ?? {}) },
+      summary: { ...DEFAULT_SETTINGS.docs.summary, ...(s.docs?.summary ?? {}) },
+      assess: { ...DEFAULT_SETTINGS.docs.assess, ...(s.docs?.assess ?? {}) },
     },
   };
 }

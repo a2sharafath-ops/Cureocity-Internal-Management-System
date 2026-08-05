@@ -1,6 +1,6 @@
 import { IST } from "@/lib/datetime";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { printClient } from "@/lib/print-access";
 import { consultQ } from "@/lib/consult-questions";
 import { getAppSettings, brandLogo } from "@/lib/settings";
 import PrintTrigger from "@/components/PrintTrigger";
@@ -12,8 +12,10 @@ export const dynamic = "force-dynamic";
 // client only their own once it's shared. Browser "Save as PDF" — no library.
 export default async function ConsultPrintPage({
   params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string } }) {
-  const supabase = createClient();
+}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+  // A renderer has no session, so a valid one-document token unlocks the
+  // read. See lib/print-access.ts.
+  const supabase = printClient("summary", params.id, searchParams.doc_token);
   const { data } = await supabase
     .from("consultations")
     .select("id, kind, status, summary, ai_summary, flags, by_name, created_at, client_id, clients(name, code)")

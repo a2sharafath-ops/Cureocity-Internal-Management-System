@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { printClient } from "@/lib/print-access";
 import { getAppSettings } from "@/lib/settings";
 import { IST } from "@/lib/datetime";
 import PrintTrigger from "@/components/PrintTrigger";
@@ -23,8 +23,10 @@ type OrderRow = {
  */
 export default async function LabPrintPage({
   params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string } }) {
-  const supabase = createClient();
+}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+  // A renderer has no session, so a valid one-document token unlocks the
+  // read. See lib/print-access.ts.
+  const supabase = printClient("lab", params.id, searchParams.doc_token);
 
   // Try the session first, then fall back to a single order.
   const { data: bySession } = await supabase

@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
+import { HOW_TO_USE, DEFAULT_MEALS, planProblems } from "@/lib/diet-plan";
+import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
@@ -19,7 +21,7 @@ import { assignCareTeam } from "@/lib/care-team";
 import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
 import { resolveNotificationTarget, nudgeLink } from "@/lib/notification-target";
 import { openaiComplete, type AiState } from "@/lib/ai";
-import { notifyRoles, notifyStaff } from "@/lib/notify";
+import { notifyRoles, notifyStaff, notifyClient } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
 import { leadScore } from "@/lib/leadscore";
@@ -3614,7 +3616,10 @@ export async function uploadDocTemplate(formData: FormData): Promise<{ url?: str
   const p = await getProfile();
   if (!p || !["Administrator", "Super Admin"].includes(p.role)) return { error: "Not authorized." };
   const kind = String(formData.get("kind") || "");
-  if (!["rx", "lab"].includes(kind)) return { error: "Unknown document type." };
+  if (!["rx", "lab", "plan", "summary", "assess"].includes(kind)) return { error: "Unknown document type." };
+  // "frame" repeats on every page; "cover" is page one of a flowing document.
+  const slot = String(formData.get("slot") || "frame");
+  if (!["frame", "cover"].includes(slot)) return { error: "Unknown template slot." };
   const file = formData.get("file");
   if (!(file instanceof File) || !file.size) return { error: "Choose a file first." };
   if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return { error: "Use a PNG, JPG or WebP image of the full A4 sheet." };
@@ -3624,11 +3629,11 @@ export async function uploadDocTemplate(formData: FormData): Promise<{ url?: str
   // Cache-busting name: replacing a design must not leave the old artwork in a
   // CDN cache on a public bucket.
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-  const path = `sheets/${kind}-${Date.now()}.${ext}`;
+  const path = `sheets/${kind}-${slot}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from("branding").upload(path, file, { contentType: file.type, upsert: true });
   if (error) return { error: error.message };
   const { data } = supabase.storage.from("branding").getPublicUrl(path);
-  await logAudit(p, "Sheet design uploaded", null, `${kind} · ${file.name}`);
+  await logAudit(p, "Sheet design uploaded", null, `${kind} ${slot} · ${file.name}`);
   return { url: data.publicUrl };
 }
 
@@ -7001,4 +7006,351 @@ export async function togglePackageFreeze(formData: FormData) {
 
   revalidatePath("/clients");
   revalidatePath(`/clients/${id}`);
+}
+
+// ============================================================================
+// Customised diet plan — the structured document the clinic issues.
+//
+// Distinct from `diet_charts`, which stores flat [label, detail] pairs and
+// drives the day-2 explanation workflow. This is the multi-page plan the client
+// eats from: meal slots with time windows, numbered options under each, and
+// per-option calories, protein and micronutrients.
+// ============================================================================
+
+/** Dietitians (and admin oversight) author plans; the review gate is separate. */
+async function planGuard() {
+  const p = await getProfile();
+  return p && canWriteNutrition(p.role) ? p : null;
+}
+
+type PlanMealIn = {
+  seq: number; name: string; time_from: string | null; time_to: string | null;
+  note: string | null; conditional: boolean;
+  options: { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null }[];
+};
+
+/** Start a plan for a client, seeded with the clinic's standard day. */
+export async function createDietPlan(formData: FormData) {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Missing client." };
+  const consultation_id = String(formData.get("consultation_id") || "") || null;
+
+  const supabase = createClient();
+  const { count } = await supabase.from("diet_plans").select("id", { count: "exact", head: true }).eq("client_id", client_id);
+  const { data: plan, error } = await supabase.from("diet_plans").insert({
+    client_id, consultation_id, version: (count ?? 0) + 1, status: "draft",
+    issued_on: todayISO(),
+    how_to_use: HOW_TO_USE,
+    created_by: p.name,
+  }).select("id").maybeSingle();
+  if (error) return { error: error.message };
+  const planId = (plan as { id: string } | null)?.id;
+  if (!planId) return { error: "Could not create the plan." };
+
+  // Seed the standard slots so the dietitian edits rather than starts blank.
+  await supabase.from("diet_plan_meals").insert(
+    DEFAULT_MEALS.map((m) => ({ ...m, plan_id: planId })),
+  );
+  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Diet plan started", (c as { name: string } | null)?.name, `v${(count ?? 0) + 1}`);
+  revalidatePath("/workspace");
+  return { ok: true, id: planId };
+}
+
+/**
+ * Save the whole plan in one go — targets, notes and every slot and option.
+ *
+ * Meals and options are replaced wholesale rather than diffed. The builder is a
+ * single form and rows get added, deleted and reordered freely; reconciling
+ * that row by row buys nothing and risks leaving orphans behind. A plan is a
+ * few dozen rows, so the rewrite is cheap.
+ */
+export async function saveDietPlan(
+  id: string,
+  targets: { kcal: number | null; protein: string | null; carbohydrate: string | null; fats: string | null; fibre: string | null; water: string | null },
+  meta: { allergies: string | null; notes: string | null; issued_on: string | null },
+  meals: PlanMealIn[],
+): Promise<{ ok?: boolean; error?: string }> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  if (!id) return { error: "Missing plan." };
+  const supabase = createClient();
+
+  // A published plan is what a client is eating from — edits go to a new
+  // version rather than silently changing the document under them.
+  const { data: cur } = await supabase.from("diet_plans").select("status").eq("id", id).maybeSingle();
+  const status = (cur as { status: string } | null)?.status;
+  if (!status) return { error: "Plan not found." };
+  if (status === "published" || status === "archived") return { error: "Published — start a new version to change it." };
+
+  const { error: upErr } = await supabase.from("diet_plans").update({
+    kcal: targets.kcal, protein: targets.protein, carbohydrate: targets.carbohydrate,
+    fats: targets.fats, fibre: targets.fibre, water: targets.water,
+    allergies: meta.allergies, notes: meta.notes, issued_on: meta.issued_on,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  if (upErr) return { error: upErr.message };
+
+  await supabase.from("diet_plan_meals").delete().eq("plan_id", id);   // options cascade
+  // A slot added and never filled in would otherwise print as a blank heading
+  // over "No options added." on the client's plan.
+  const real = meals.filter((m) => m.name.trim() || m.options.some((o) => o.food_items.trim()));
+  for (const m of real) {
+    const { data: row } = await supabase.from("diet_plan_meals").insert({
+      plan_id: id, seq: m.seq, name: m.name.trim(),
+      time_from: m.time_from?.trim() || null, time_to: m.time_to?.trim() || null,
+      note: m.note?.trim() || null, conditional: m.conditional,
+    }).select("id").maybeSingle();
+    const mealId = (row as { id: string } | null)?.id;
+    if (!mealId) continue;
+    const opts = m.options.filter((o) => o.food_items.trim()).map((o, i) => ({
+      meal_id: mealId, seq: i, food_items: o.food_items.trim(),
+      qty: o.qty?.trim() || null, kcal: o.kcal, protein_g: o.protein_g,
+      micronutrients: o.micronutrients?.trim() || null,
+    }));
+    if (opts.length) await supabase.from("diet_plan_options").insert(opts);
+  }
+  revalidatePath("/workspace");
+  return { ok: true };
+}
+
+/** Send a finished draft for sign-off. */
+export async function submitDietPlan(formData: FormData) {
+  const p = await planGuard();
+  if (!p) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+
+  // The builder disables Submit while problems remain, but a disabled button is
+  // a courtesy, not a control. Re-check here so a stale tab or a direct post
+  // can't push a plan with an empty meal slot into review.
+  const { data: pl } = await supabase.from("diet_plans")
+    .select("kcal, diet_plan_meals(name, conditional, diet_plan_options(food_items, qty))")
+    .eq("id", id).maybeSingle();
+  const row = pl as { kcal: number | null; diet_plan_meals: { name: string; conditional: boolean; diet_plan_options: { food_items: string; qty: string | null }[] }[] } | null;
+  if (row) {
+    const meals = (row.diet_plan_meals ?? []).map((m) => ({
+      seq: 0, name: m.name, time_from: null, time_to: null, note: null, conditional: m.conditional,
+      options: (m.diet_plan_options ?? []).map((o, i) => ({ seq: i, food_items: o.food_items, qty: o.qty, kcal: null, protein_g: null, micronutrients: null })),
+    }));
+    const problems = planProblems(meals, { kcal: row.kcal, protein: null, carbohydrate: null, fats: null, fibre: null, water: null });
+    if (problems.length) return;
+  }
+
+  await supabase.from("diet_plans").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
+  await notifyRoles(supabase, ["Super Admin", "Administrator"], {
+    title: "Diet plan awaiting review",
+    body: `${p.name} submitted a customised diet plan.`,
+    href: "/workspace?tab=charts", icon: "🥗",
+  });
+  revalidatePath("/workspace");
+}
+
+/** Approve and publish, or send it back. Same gate as the diet chart review. */
+export async function reviewDietPlan(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReviewDietChart(p.role)) return;
+  const id = String(formData.get("id") || "");
+  const approve = String(formData.get("approve") || "") === "true";
+  if (!id) return;
+  const supabase = createClient();
+  // Only a plan actually awaiting review can move. Without this, "Send back to
+  // draft" would flip a PUBLISHED, shared plan back to draft in place — and
+  // since shared_at was never cleared, editing and re-approving it would
+  // silently rewrite the document the client is already eating from. Changing a
+  // published plan goes through newDietPlanVersion, which is the whole reason
+  // that action exists.
+  const { data: cur } = await supabase.from("diet_plans").select("status").eq("id", id).maybeSingle();
+  if ((cur as { status: string } | null)?.status !== "in_review") return;
+
+  await supabase.from("diet_plans").update(
+    approve
+      ? { status: "published", reviewed_by: p.name, reviewed_at: new Date().toISOString(), published_at: new Date().toISOString() }
+      : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString() },
+  ).eq("id", id).eq("status", "in_review");
+  await logAudit(p, approve ? "Diet plan published" : "Diet plan sent back", undefined, id);
+  revalidatePath("/workspace");
+  revalidatePath("/portal");
+}
+
+/**
+ * Put the plan in the client's portal, or take it back out.
+ *
+ * Deliberately separate from publishing: publishing is the clinical decision,
+ * sharing is the delivery one. A plan can be approved while a colleague checks
+ * the wording, and withdrawn without un-publishing it.
+ */
+export async function shareDietPlan(formData: FormData) {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  const undo = String(formData.get("undo") || "") === "true";
+  if (!id) return { error: "Missing plan." };
+  const supabase = createClient();
+  const { data: row } = await supabase.from("diet_plans").select("status, client_id").eq("id", id).maybeSingle();
+  const r = row as { status: string; client_id: string } | null;
+  if (!r) return { error: "Plan not found." };
+  if (!undo && r.status !== "published") return { error: "Publish the plan before sharing it." };
+
+  await supabase.from("diet_plans").update({ shared_at: undo ? null : new Date().toISOString() }).eq("id", id);
+  if (!undo) {
+    await notifyClient(supabase, r.client_id, {
+      title: "Your diet plan is ready",
+      body: "Your customised diet plan is now in your portal.",
+      href: "/portal", icon: "🥗",
+    });
+  }
+  await logAudit(p, undo ? "Diet plan withdrawn from portal" : "Diet plan shared to portal", undefined, id);
+  revalidatePath("/workspace");
+  revalidatePath("/portal");
+  return { ok: true };
+}
+
+/** Copy a published plan into a fresh editable draft — the way a plan changes. */
+export async function newDietPlanVersion(formData: FormData) {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "Missing plan." };
+  const supabase = createClient();
+
+  const { data: src } = await supabase.from("diet_plans").select("*").eq("id", id).maybeSingle();
+  const s = src as Record<string, unknown> | null;
+  if (!s) return { error: "Plan not found." };
+  const { count } = await supabase.from("diet_plans").select("id", { count: "exact", head: true }).eq("client_id", s.client_id as string);
+
+  const { data: copy } = await supabase.from("diet_plans").insert({
+    client_id: s.client_id, consultation_id: s.consultation_id,
+    version: (count ?? 0) + 1, status: "draft", issued_on: todayISO(),
+    kcal: s.kcal, protein: s.protein, carbohydrate: s.carbohydrate, fats: s.fats,
+    fibre: s.fibre, water: s.water, allergies: s.allergies, notes: s.notes,
+    how_to_use: s.how_to_use, created_by: p.name,
+  }).select("id").maybeSingle();
+  const newId = (copy as { id: string } | null)?.id;
+  if (!newId) return { error: "Could not copy the plan." };
+
+  const { data: meals } = await supabase.from("diet_plan_meals").select("id, seq, name, time_from, time_to, note, conditional").eq("plan_id", id).order("seq");
+  for (const m of ((meals ?? []) as { id: string; seq: number; name: string; time_from: string | null; time_to: string | null; note: string | null; conditional: boolean }[])) {
+    const { data: nm } = await supabase.from("diet_plan_meals").insert({
+      plan_id: newId, seq: m.seq, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
+    }).select("id").maybeSingle();
+    const nmId = (nm as { id: string } | null)?.id;
+    if (!nmId) continue;
+    const { data: opts } = await supabase.from("diet_plan_options").select("seq, food_items, qty, kcal, protein_g, micronutrients").eq("meal_id", m.id).order("seq");
+    const rows = ((opts ?? []) as Record<string, unknown>[]).map((o) => ({ ...o, meal_id: nmId }));
+    if (rows.length) await supabase.from("diet_plan_options").insert(rows);
+  }
+  revalidatePath("/workspace");
+  return { ok: true, id: newId };
+}
+
+// ============================================================================
+// Rendering a document to an actual PDF file.
+//
+// The seam lives in lib/pdf.ts; this is the part that talks to the database and
+// storage. Nothing here assumes a particular renderer — swapping Browserless
+// for PDFShift is an environment change, not a code change.
+// ============================================================================
+
+/** What the UI needs to decide whether to offer a "Generate PDF" button. */
+export async function pdfStatus(): Promise<{ ready: boolean; provider: string | null; missing: string[] }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { ready: false, provider: null, missing: [] };
+  return pdfReadiness();
+}
+
+/**
+ * Render a document, store it, and record what was issued.
+ *
+ * Returns a signed link to the stored file. The file itself is permanent and
+ * frozen; only the link expires, which is the right way round — the record of
+ * what a client was given must outlive any URL.
+ */
+export async function renderDocument(formData: FormData): Promise<{ ok?: boolean; url?: string; name?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+
+  const kind = String(formData.get("kind") || "") as DocKind;
+  const id = String(formData.get("id") || "");
+  if (!DOC_KINDS.includes(kind)) return { error: "Unknown document type." };
+  if (!id) return { error: "Missing document." };
+
+  const ready = pdfReadiness();
+  if (!ready.ready) return { error: `PDF rendering isn't set up yet — still needs ${ready.missing.join(", ")}.` };
+  const provider = pdfProvider();
+  const url = renderUrl(kind, id);
+  if (!provider || !url) return { error: "PDF rendering isn't set up yet." };
+
+  const supabase = createClient();
+
+  // Who the document belongs to, and what to call the file. Each document type
+  // reaches its client differently, so resolve it per kind rather than guessing.
+  let clientId: string | null = null;
+  let clientName = "Client";
+  let issuedOn: string | null = null;
+  if (kind === "plan") {
+    const { data } = await supabase.from("diet_plans").select("client_id, issued_on, clients(name)").eq("id", id).maybeSingle();
+    const r = data as unknown as { client_id: string; issued_on: string | null; clients: { name: string } | null } | null;
+    clientId = r?.client_id ?? null; clientName = r?.clients?.name ?? "Client"; issuedOn = r?.issued_on ?? null;
+  } else if (kind === "rx") {
+    const { data } = await supabase.from("prescriptions").select("client_id, clients(name)").eq("id", id).maybeSingle();
+    const r = data as unknown as { client_id: string; clients: { name: string } | null } | null;
+    clientId = r?.client_id ?? null; clientName = r?.clients?.name ?? "Client";
+  } else if (kind === "lab" || kind === "summary") {
+    // Both print from a consultation.
+    const { data } = await supabase.from("consultations").select("client_id, clients(name)").eq("id", id).maybeSingle();
+    const r = data as unknown as { client_id: string | null; clients: { name: string } | null } | null;
+    clientId = r?.client_id ?? null; clientName = r?.clients?.name ?? "Client";
+  }
+  if (!clientId) return { error: "That document isn't attached to a client." };
+
+  // ---- render ---------------------------------------------------------------
+  let bytes: Uint8Array;
+  try {
+    bytes = await provider.render(url);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await logAudit(p, "PDF render failed", clientName, `${kind} · ${msg.slice(0, 160)}`);
+    return { error: `Rendering failed — ${msg.slice(0, 160)}` };
+  }
+  // A PDF always starts "%PDF". Anything else means the renderer returned an
+  // error page or an empty body, and storing that would leave a file that opens
+  // to nothing — worse than failing here.
+  if (bytes.length < 1000 || String.fromCharCode(...bytes.slice(0, 4)) !== "%PDF") {
+    return { error: "The renderer did not return a PDF. Check the page loads for a signed-out visitor." };
+  }
+
+  // ---- store ----------------------------------------------------------------
+  const path = storagePath(kind, id);
+  const name = fileName(kind, clientName, issuedOn);
+  const { error: upErr } = await supabase.storage.from("documents")
+    .upload(path, bytes, { contentType: "application/pdf", upsert: false });
+  if (upErr) return { error: upErr.message };
+
+  await supabase.from("issued_documents").insert({
+    kind, ref_id: id, client_id: clientId, path, file_name: name,
+    bytes: bytes.length, provider: provider.name, issued_by: p.name,
+  });
+  await logAudit(p, "Document rendered", clientName, `${DOC_LABEL[kind]} · ${(bytes.length / 1024).toFixed(0)} KB`);
+
+  const { data: signed } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
+  revalidatePath("/workspace");
+  return { ok: true, url: signed?.signedUrl, name };
+}
+
+/** A fresh link to a document already rendered. Links expire; files do not. */
+export async function documentLink(formData: FormData): Promise<{ url?: string; name?: string; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  const docId = String(formData.get("doc_id") || "");
+  if (!docId) return { error: "Missing document." };
+  const supabase = createClient();
+  const { data } = await supabase.from("issued_documents").select("path, file_name").eq("id", docId).maybeSingle();
+  const r = data as { path: string; file_name: string } | null;
+  if (!r) return { error: "Document not found." };
+  const { data: signed } = await supabase.storage.from("documents").createSignedUrl(r.path, 3600);
+  return { url: signed?.signedUrl, name: r.file_name };
 }
