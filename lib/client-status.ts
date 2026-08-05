@@ -5,6 +5,7 @@
 
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { packageCategory } from "@/lib/packages";
+import { disciplineLabel } from "@/lib/disciplines";
 
 export type StatusTone = "neutral" | "info" | "warn" | "good" | "action";
 export type ClientStatus = { label: string; tone: StatusTone; href?: string };
@@ -31,9 +32,6 @@ export function disciplineForRole(role: string | null | undefined): string | nul
   return role ? (ROLE_DISC[role] ?? null) : null;
 }
 
-const DISC_LABEL: Record<string, string> = {
-  doctor: "Doctor", dietitian: "Diet", trainer: "Fitness", coach: "Coaching", psychologist: "Psychology",
-};
 
 /** The single status to show for a client, from the viewer's perspective. */
 export function clientStatus(i: StatusInput | undefined, viewerDiscipline: string | null): ClientStatus {
@@ -43,7 +41,7 @@ export function clientStatus(i: StatusInput | undefined, viewerDiscipline: strin
   if (viewerDiscipline) {
     const c = i.consults[viewerDiscipline];
     if (!c) return { label: "—", tone: "neutral" };
-    if (c.completed) return { label: `${DISC_LABEL[viewerDiscipline]} consult done`, tone: "good" };
+    if (c.completed) return { label: `${disciplineLabel(viewerDiscipline)} consult done`, tone: "good" };
     if (c.booked) return { label: c.when ? `Ready to start · ${c.when}` : "Ready to start", tone: "action", href: "/pro" };
     if ((viewerDiscipline === "doctor" || viewerDiscipline === "dietitian") && i.bloodRequested && !i.bloodSubmitted)
       return { label: "Awaiting blood report", tone: "warn" };
@@ -53,7 +51,7 @@ export function clientStatus(i: StatusInput | undefined, viewerDiscipline: strin
   // Ops: overall onboarding / membership state.
   if (i.category === "membership") {
     if (i.frozen) return { label: "Paused", tone: "warn" };
-    return i.membershipActive ? { label: "Active member", tone: "good" } : { label: "Membership lapsed", tone: "warn" };
+    return i.membershipActive ? { label: "Membership active", tone: "good" } : { label: "Membership lapsed", tone: "warn" };
   }
   if (i.category === "other") return { label: i.frozen ? "Paused" : "—", tone: i.frozen ? "warn" : "neutral" };
   if (i.onboardComplete) return { label: "Onboarded", tone: "good" };

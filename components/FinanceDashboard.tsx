@@ -86,7 +86,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
   // ---- exception queue: every rupee that hasn't landed ---------------------
   const flags: Flag[] = [];
   for (const u of unbilled) {
-    flags.push({ sev: "high", title: `${u.client} — no invoice raised`, detail: `${u.pkg} · ${money(u.amount)} never billed`, href: `/clients/${u.id}`, cta: "Raise invoice", raiseInvoiceClientId: u.id });
+    flags.push({ sev: "high", title: `${u.client} — no invoice raised`, detail: `${u.pkg} · ${money(u.amount)} never billed`, href: `/clients/${u.id}`, cta: "View", raiseInvoiceClientId: u.id });
   }
   for (const i of unpaid) {
     const age = ageDays(i.issued_date, today);
@@ -106,7 +106,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
     const end = cp.end_date as string;
     const term = cp.start_date ? Math.max(1, daysApart(cp.start_date, end)) : 30;
     if (daysApart(today, end) > Math.min(30, Math.ceil(term / 2))) continue;
-    flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package ends ${end}`, detail: `${cp.package_name ?? "Package"} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
+    flags.push({ sev: "med", title: `${nameOf(cp.client_id)} — package expiring`, detail: `${cp.package_name ?? "Package"} ends ${end} · no renewal booked`, href: `/clients/${cp.client_id}`, cta: "Renew" });
   }
   const order = { high: 0, med: 1, low: 2 };
   flags.sort((a, b) => order[a.sev] - order[b.sev]);
@@ -208,7 +208,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
           )) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No invoices raised yet.</div>}
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Link href="/expenses" style={qa}>Expenses</Link>
-            <Link href="/finsheets" style={qa}>Finance Sheets</Link>
+            <Link href="/finsheets" style={qa}>Finance sheets</Link>
             <Link href="/reports" style={qa}>Reports</Link>
           </div>
         </div>

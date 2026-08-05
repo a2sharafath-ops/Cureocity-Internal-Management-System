@@ -11,7 +11,7 @@ export type OpsTab = "overview" | "access" | "passes" | "store";
 // "Soon" tag. Flip `disabled` to false to switch a module on.
 const TABS: { key: OpsTab; label: string; href: string; disabled?: boolean }[] = [
   { key: "overview", label: "Overview", href: "/dashboard" },
-  { key: "access", label: "Access & Check-in", href: "/access", disabled: true },
+  { key: "access", label: "Access & check-in", href: "/access", disabled: true },
   { key: "passes", label: "Passes", href: "/passes", disabled: true },
   { key: "store", label: "Store", href: "/pos", disabled: true },
 ];

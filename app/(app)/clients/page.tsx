@@ -9,6 +9,7 @@ import { ageFromDob } from "@/lib/dob";
 import { loadClientStatuses, clientStatus, disciplineForRole } from "@/lib/client-status";
 import { buildFullJourney } from "@/lib/journey";
 import { todayISO } from "@/lib/today";
+import { disciplineLabel } from "@/lib/disciplines";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,6 @@ export default async function ClientsPage() {
   // Real active packages + full care team per client, so the list reflects
   // everything a client holds — not just the single legacy package / pro_id.
   const CAT_LABEL: Record<string, string> = { membership: "Membership", comprehensive: "Comprehensive", training: "PT", blueprint: "BluePrint", other: "Package" };
-  const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Diet", trainer: "Fitness", coach: "Coach", psychologist: "Psych" };
   const DISC_ORDER = ["doctor", "dietitian", "trainer", "coach", "psychologist"];
   const pkgsByClient = new Map<string, { label: string; category: string }[]>();
   for (const r of (cpAll ?? []) as { client_id: string; package_name: string | null; category: string; status: string }[]) {
@@ -150,7 +150,7 @@ export default async function ClientsPage() {
     const packages = cpkgs.length ? cpkgs : (c.packages?.name ? [{ label: c.packages.name, category: c.package_id === "bp1" ? "blueprint" : "other" }] : []);
     const careTeam = (teamByClient.get(c.id) ?? [])
       .sort((a, b) => DISC_ORDER.indexOf(a.disc) - DISC_ORDER.indexOf(b.disc))
-      .map((t) => ({ disc: DISC_LABEL[t.disc] ?? t.disc, name: t.name }));
+      .map((t) => ({ disc: disciplineLabel(t.disc), name: t.name }));
     return {
       id: c.id, code: c.code, name: c.name, phone: c.phone, email: c.email,
       age: ageFromDob(c.dob), branch: c.branch, used: c.used,

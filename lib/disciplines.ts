@@ -27,3 +27,7 @@ export const DISCIPLINE_LABEL: Record<string, string> = {
 export function disciplineLabel(kind: string): string {
   return DISCIPLINE_LABEL[kind] ?? kind;
 }
+
+/** The five canonical discipline keys, in the order a client meets them.
+ *  Use this when you need to VALIDATE a key; use disciplineLabel() to show it. */
+export const DISCIPLINES = ["doctor", "dietitian", "trainer", "coach", "psychologist"] as const;

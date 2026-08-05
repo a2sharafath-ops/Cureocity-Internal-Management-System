@@ -132,13 +132,13 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       const o = ownerFor(clientId, "dietitian");
       flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: chartHref, cta: "Draft chart", ...sla(completedAt.get(clientId)?.get("Diet"), DIET_DRAFT_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Dietitian"], who: "the dietitian", label: "Diet chart — not drafted", clientId, href: chartHref } });
+        chaseRole: o ? undefined : { roles: ["Dietitian"], who: "Dietitian", label: "Diet chart — not drafted", clientId, href: chartHref } });
     }
     if (deliv.has("workout")) {
       const o = ownerFor(clientId, "trainer");
       flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: workoutHref, cta: "Build plan", ...sla(completedAt.get(clientId)?.get("Trainer"), WORKOUT_PLAN_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "the trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
+        chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "Fitness Trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
     }
 
     if (cats.has("comprehensive")) {

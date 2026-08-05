@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import { moduleScope } from "@/lib/deployment";
 import { isClinician } from "@/lib/roles";
+import { disciplineLabel } from "@/lib/disciplines";
 import OwnerDashboard from "@/components/OwnerDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
 import FinanceDashboard from "@/components/FinanceDashboard";
@@ -124,7 +125,7 @@ export default async function DashboardPage() {
         {isPro ? (
           <>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-              <Kpi icon="🗓" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Sessions Today" value={trainToday.length} sub="Trainer board" href="/trainer" />
+              <Kpi icon="🗓" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Sessions today" value={trainToday.length} sub="Fitness Trainer board" href="/trainer" />
               <Kpi icon="🩺" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Consultations to complete" value={pconsults.length} sub="Professional workspace" href="/pro" />
               <Kpi icon="🧬" iconBg="var(--purple-bg)" iconColor="var(--purple-text)" label="Clients today" value={scheduledAppts.length} sub="Appointment calendar" href="/appointments" />
             </div>
@@ -132,7 +133,7 @@ export default async function DashboardPage() {
               <div style={{ padding: "12px 16px", fontWeight: 700 }}>Consultations to complete</div>
               {pconsults.length ? pconsults.map((c) => (
                 <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderTop: "1px solid var(--border)" }}>
-                  <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{c.kind}</span>
+                  <span style={{ background: "var(--brand-tint)", color: "var(--brand-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{disciplineLabel(c.kind)}</span>
                   {c.clients ? <Link href={`/clients/${c.clients.id}`} style={{ fontWeight: 600, fontSize: 14, textDecoration: "none", color: "inherit" }}>{c.clients.name}</Link> : "—"}
                 </div>
               )) : <div style={{ padding: 16, color: "var(--muted)", fontSize: 13, borderTop: "1px solid var(--border)" }}>Nothing pending.</div>}
@@ -179,10 +180,10 @@ export default async function DashboardPage() {
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
-        <Kpi icon="👤" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Active Clients" value={clientsC.count ?? 0} sub={`${leadsC.count ?? 0} leads in pipeline`} href="/leads" />
-        <Kpi icon="🗓" iconBg="var(--blue-bg)" iconColor="var(--blue)" label="Sessions Today" value={scheduledAppts.length + trainToday.length} sub={`${scheduledAppts.length} consult${scheduledAppts.length === 1 ? "" : "s"} (${assessToday} assessment${assessToday === 1 ? "" : "s"}) · ${trainToday.length} training`} href="/appointments" />
+        <Kpi icon="👤" iconBg="var(--brand-tint)" iconColor="var(--brand-text)" label="Clients" value={clientsC.count ?? 0} sub={`${leadsC.count ?? 0} leads in pipeline`} href="/leads" />
+        <Kpi icon="🗓" iconBg="var(--blue-bg)" iconColor="var(--blue)" label="Sessions today" value={scheduledAppts.length + trainToday.length} sub={`${scheduledAppts.length} consult${scheduledAppts.length === 1 ? "" : "s"} (${assessToday} assessment${assessToday === 1 ? "" : "s"}) · ${trainToday.length} training`} href="/appointments" />
         <Kpi icon="🧾" iconBg="var(--green-bg)" iconColor="var(--green-text)" label={`Revenue — ${monthLabel}`} value={money(revenue)} sub={`this month · from ${paid.length} paid invoice${paid.length === 1 ? "" : "s"}`} href="/billing" />
-        <Kpi icon="📦" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Client Renewals" value={renewC.count ?? 0} sub="package ending ≤30 days or low credits" href="/subscriptions" />
+        <Kpi icon="📦" iconBg="var(--amber-bg)" iconColor="var(--amber-text-soft)" label="Client renewals" value={renewC.count ?? 0} sub="package ending ≤30 days or low credits" href="/subscriptions" />
         {sessions.length > 0 && (
           <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, padding: "12px 18px", minWidth: 230 }}>
             <RingMeter value={Math.round((checkedIn / sessions.length) * 100)} size={72} stroke={9} label="Check-in rate" />
@@ -200,7 +201,7 @@ export default async function DashboardPage() {
         <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
           <div style={{ ...card, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <b style={{ fontSize: 15 }}>Front Desk Follow-ups</b>
+              <b style={{ fontSize: 15 }}>Front Desk follow-ups</b>
               <span style={{ flex: 1 }} />
               <Link href="/followups" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, textDecoration: "none", color: "var(--brand-text)", fontWeight: 600 }}>Open queue →</Link>
             </div>
@@ -215,14 +216,14 @@ export default async function DashboardPage() {
           </div>
 
           <div style={{ ...card, padding: "16px 18px" }}>
-            <b style={{ fontSize: 15 }}>Training Attendance</b>
+            <b style={{ fontSize: 15 }}>Training attendance</b>
             <div style={{ margin: "10px 0 6px", fontSize: 14 }}>
               Today: <b>{checkedIn} of {sessions.length}</b> training clients checked in
             </div>
             <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 12 }}>
-              Check-in is run by trainers (PT &amp; Comprehensive clients) on the trainer board.
+              Check-in is run by Fitness Trainers (PT &amp; Comprehensive clients) on their own board.
             </div>
-            <Link href="/trainer" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Open trainer workspace →</Link>
+            <Link href="/trainer" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Open Fitness Trainer workspace →</Link>
           </div>
         </div>
       </div>

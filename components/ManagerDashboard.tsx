@@ -12,6 +12,7 @@ import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { careWorkFlags } from "@/lib/care-attention";
 import TodayAgenda from "@/components/TodayAgenda";
 import { todayAgenda } from "@/lib/today-agenda";
+import { disciplineLabel } from "@/lib/disciplines";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -84,6 +85,8 @@ export default async function ManagerDashboard({ name }: { name: string }) {
     return a?.staff_id ? { id: a.staff_id, name: staffName.get(a.staff_id) ?? "clinician" } : undefined;
   };
   const KIND_TO_DISC: Record<string, string> = { Doctor: "doctor", Diet: "dietitian", Trainer: "trainer", Coach: "coach", Psychologist: "psychologist" };
+  // Display names come from lib/disciplines.ts. `kind` is a raw DB value —
+  // "Diet", "Trainer", "Coach" — and must never reach the screen unconverted.
   const KIND_TO_ROLE: Record<string, string> = { Doctor: "Doctor", Diet: "Dietitian", Trainer: "Fitness Trainer", Coach: "Health Coach", Psychologist: "Psychologist" };
 
   for (const f of followups.filter((f) => f.due_date < today)) {
@@ -94,13 +97,13 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       detail: `Due ${f.due_date}${f.priority === "mandatory" ? " · mandatory" : ""}`,
       href: "/followups", cta: "View",
       nudge: o ? { clientId: f.client_id, staffId: o.id, label: "Follow-up overdue", who: o.name } : undefined,
-      chaseRole: o ? undefined : { roles: ["Health Coach", "Front Desk"], who: "the coach", label: "Follow-up overdue", clientId: f.client_id, href: "/followups" },
+      chaseRole: o ? undefined : { roles: ["Health Coach", "Front Desk"], who: "Health Coach", label: "Follow-up overdue", clientId: f.client_id, href: "/followups" },
     });
   }
   for (const i of invoices.filter((i) => i.status !== "Paid" && (i.issued_date ?? "") <= overdueCut)) {
     flags.push({
       sev: "high",
-      title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`,
+      title: `INV-${String(i.num ?? 0).padStart(3, "0")} overdue`,
       detail: `${i.client_id ? nameOf(i.client_id) : "—"} · ${money(Number(i.amount))} · issued ${i.issued_date}`,
       href: "/billing", cta: "View",
       chaseRole: { roles: ["Front Desk", "Finance"], who: "Front Desk", label: `Chase payment · INV-${String(i.num ?? 0).padStart(3, "0")}`, clientId: i.client_id ?? undefined, href: "/billing" },
@@ -111,11 +114,11 @@ export default async function ManagerDashboard({ name }: { name: string }) {
     const o = disc ? ownerOf(c.client_id, disc) : undefined;
     flags.push({
       sev: "med",
-      title: `${c.clients?.name ?? nameOf(c.client_id)} — ${c.kind} consultation open`,
+      title: `${c.clients?.name ?? nameOf(c.client_id)} — ${disciplineLabel(c.kind)} consultation open`,
       detail: "Started but not completed",
       href: "/pro", cta: "View",
-      nudge: o ? { clientId: c.client_id, staffId: o.id, label: `${c.kind} consultation — finish`, who: o.name } : undefined,
-      chaseRole: o ? undefined : { roles: [KIND_TO_ROLE[c.kind] ?? "Doctor"], who: "the clinician", label: `${c.kind} consultation — finish`, clientId: c.client_id, href: "/pro" },
+      nudge: o ? { clientId: c.client_id, staffId: o.id, label: `${disciplineLabel(c.kind)} consultation — finish`, who: o.name } : undefined,
+      chaseRole: o ? undefined : { roles: [KIND_TO_ROLE[c.kind] ?? "Doctor"], who: KIND_TO_ROLE[c.kind] ?? "Doctor", label: `${disciplineLabel(c.kind)} consultation — finish`, clientId: c.client_id, href: "/pro" },
     });
   }
   // clients with credits left but nothing on the calendar
@@ -136,7 +139,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
     const missing = ["trainer", "coach"].filter((d) => !mine.some((a) => a.discipline === d));
     if (missing.length) {
       flags.push({
-        sev: "low", title: `${c.name} — no ${missing.join(" or ")} assigned`,
+        sev: "low", title: `${c.name} — no ${missing.map(disciplineLabel).join(" or ")} assigned`,
         detail: "Care team incomplete", href: `/clients/${c.id}`, cta: "View",
         chaseRole: { roles: ["Front Desk", "Manager"], who: "Front Desk", label: "Assign the care team", clientId: c.id, href: `/clients/${c.id}` },
       });

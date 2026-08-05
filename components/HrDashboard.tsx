@@ -163,7 +163,7 @@ export default async function HrDashboard({ name, role = "HR" }: { name: string;
           }) : <div style={{ color: "var(--muted)", fontSize: 13 }}>Nobody in the directory yet.</div>}
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Link href="/hr" style={qa}>HR</Link>
-            <Link href="/users" style={qa}>Users &amp; Roles</Link>
+            <Link href="/users" style={qa}>Users &amp; roles</Link>
             {/* Both are role-gated now, so the shortcut has to ask the same
                 question the page will — otherwise it offers a door that
                 bounces you straight back here. */}

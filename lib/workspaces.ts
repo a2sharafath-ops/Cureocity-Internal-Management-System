@@ -18,9 +18,9 @@ export type WsRole = {
 export const WS_ROLES: WsRole[] = [
   { key: "doctor",  label: "Doctor Workspace",         short: "Doctor",    kind: "Doctor",  icon: "🩺", color: "#0ea5e9" },
   { key: "diet",    label: "Dietitian Workspace",      short: "Dietitian", kind: "Diet",    icon: "🍽", color: "var(--green)" },
-  { key: "trainer", label: "Fitness Trainer Workspace", short: "Trainer",  kind: "Trainer", icon: "🎽", color: "var(--purple)" },
-  { key: "coach",   label: "Health Coach Workspace",   short: "Coach",     kind: "Coach",   icon: "🌿", color: "#e11f34" },
-  { key: "psych",   label: "Psychology Workspace",     short: "Psychologist", kind: "Psychologist", icon: "💬", color: "#db2777" },
+  { key: "trainer", label: "Fitness Trainer Workspace", short: "Fitness Trainer", kind: "Trainer", icon: "🎽", color: "var(--purple)" },
+  { key: "coach",   label: "Health Coach Workspace",   short: "Health Coach", kind: "Coach",   icon: "🌿", color: "#e11f34" },
+  { key: "psych",   label: "Psychologist Workspace", short: "Psychologist", kind: "Psychologist", icon: "💬", color: "#db2777" },
 ];
 
 export function wsRole(key: string | null | undefined): WsRole {
@@ -93,7 +93,7 @@ export type WsTab = {
 function commonTabs(): WsTab[] {
   return [
     { key: "dash", label: "Dashboard", live: true },
-    { key: "clients", label: "My Clients", live: true },
+    { key: "clients", label: "My clients", live: true },
     { key: "appts", label: "Appointments", live: true },
     { key: "summaries", label: "Summaries", live: true },
     { key: "bp", label: "BluePrint", live: true },
@@ -101,8 +101,8 @@ function commonTabs(): WsTab[] {
     // common set rather than any one workspace's role tabs.
     { key: "whiteboard", label: "Whiteboard", live: true },
     { key: "concerns", label: "Concerns", live: true },
-    { key: "library", label: "Resource Library", live: true },
-    { key: "board", label: "MDT", live: true },
+    { key: "library", label: "Resource library", live: true },
+    { key: "board", label: "MDT board", live: true },
   ];
 }
 
@@ -120,24 +120,24 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   // so the shared withRoleTabs insertion point can't express it).
   diet: [
     { key: "dash", label: "Dashboard", live: true },
-    { key: "clients", label: "My Clients", live: true },
+    { key: "clients", label: "My clients", live: true },
     { key: "appts", label: "Appointments", live: true },
     { key: "summaries", label: "Summaries", live: true },
     { key: "bp", label: "BluePrint", live: true },
-    { key: "charts", label: "Diet Charts", live: true },
-    { key: "meals", label: "Meal Monitoring", live: true },
+    { key: "charts", label: "Diet charts", live: true },
+    { key: "meals", label: "Meal monitoring", live: true },
     { key: "whiteboard", label: "Whiteboard", live: true },
     { key: "concerns", label: "Concerns", live: true },
-    { key: "board", label: "MDT", live: true },
+    { key: "board", label: "MDT board", live: true },
     { key: "recipes", label: "Recipes", live: true },
-    { key: "library", label: "Resource Library", live: true },
+    { key: "library", label: "Resource library", live: true },
   ],
   trainer: withRoleTabs([
-    { key: "planner", label: "Workout Planner", live: true },
-    { key: "exlib", label: "Exercise Library", live: true },
+    { key: "planner", label: "Workout planner", live: true },
+    { key: "exlib", label: "Exercise library", live: true },
   ]),
   coach: withRoleTabs([
-    { key: "coaching", label: "Health Coaching", live: true },
+    { key: "coaching", label: "Health coaching", live: true },
     { key: "followups", label: "Follow-ups", live: true },
   ]),
 };

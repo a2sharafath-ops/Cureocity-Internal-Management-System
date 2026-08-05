@@ -120,7 +120,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   for (const c of clients.filter((x) => x.package_id === "bp1")) {
     const b = blood.get(`${c.id}|blueprint`);
     const bp = bps.get(c.id);
-    if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Doctor"], who: "the team", label: "Request BluePrint blood", clientId: c.id, href: "/blueprint" } });
+    if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Doctor"], who: "Front Desk", label: "Request BluePrint blood", clientId: c.id, href: "/blueprint" } });
     else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "View", chaseRole: { roles: ["Health Coach"], who: "Health Coach", label: "Chase blood report", clientId: c.id, href: "/blueprint" } });
     else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review", chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "clinicians", label: "BluePrint sign-off", clientId: c.id, href: "/blueprint" } });
   }
@@ -138,7 +138,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     if (upcoming.length === 0) {
       flags.push({ sev: "med", title: `${c.name} — no upcoming session booked`, detail: `${remaining} credit${remaining === 1 ? "" : "s"} left with nothing scheduled`, href: `/sessions?client=${c.id}`, cta: "Book", chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book next session", clientId: c.id, href: `/sessions?client=${c.id}` } });
     } else if (lastDone && lastDone < quietSince) {
-      flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Fitness Trainer", "Health Coach"], who: "the coach", label: "Re-engage — client gone quiet", clientId: c.id, href: `/clients/${c.id}` } });
+      flags.push({ sev: "med", title: `${c.name} — gone quiet`, detail: `No completed session since ${lastDone}`, href: `/clients/${c.id}`, cta: "View", chaseRole: { roles: ["Fitness Trainer", "Health Coach"], who: "Health Coach", label: "Re-engage — client gone quiet", clientId: c.id, href: `/clients/${c.id}` } });
     }
   }
 
@@ -187,7 +187,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       const t = trainerBy.get(c.id);
       flags.push({ sev: "low", title: `${c.name} — session count mismatch`, detail: `Counter says ${used}, actual completed rows: ${doneRows}`, href: `/clients/${c.id}`, cta: "Reconcile",
         nudge: t ? { clientId: c.id, staffId: t.id, label: "Reconcile session count", who: t.name } : undefined,
-        chaseRole: t ? undefined : { roles: ["Fitness Trainer", "Front Desk", "Manager"], who: "the trainer", label: "Reconcile session count", clientId: c.id, href: `/clients/${c.id}` } });
+        chaseRole: t ? undefined : { roles: ["Fitness Trainer", "Front Desk", "Manager"], who: "Fitness Trainer", label: "Reconcile session count", clientId: c.id, href: `/clients/${c.id}` } });
     }
   }
 
@@ -315,7 +315,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
             </div>
           )) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No audit activity yet.</div>}
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link href="/users" style={qa}>Users &amp; Roles</Link>
+            <Link href="/users" style={qa}>Users &amp; roles</Link>
             <Link href="/packages" style={qa}>Packages</Link>
             <Link href="/services" style={qa}>Services</Link>
             <Link href="/compliance" style={qa}>Governance</Link>

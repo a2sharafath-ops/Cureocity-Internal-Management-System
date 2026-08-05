@@ -10,10 +10,7 @@ import { cancelBooking, repairClientJourney, nudgeRole } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SubmitButton from "@/components/SubmitButton";
 import ClientsTabs from "@/components/ClientsTabs";
-
-const DISC_LABEL: Record<string, string> = {
-  doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist",
-};
+import { disciplineLabel } from "@/lib/disciplines";
 
 export const dynamic = "force-dynamic";
 
@@ -254,7 +251,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
                         const bookingLed = ["doctor", "dietitian", "psychologist"].includes(a.discipline);
                         return (
                           <div key={i} style={{ fontSize: 12, lineHeight: 1.3 }}>
-                            <span style={{ color: "var(--muted)", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".3px" }}>{DISC_LABEL[a.discipline] ?? a.discipline}</span>
+                            <span style={{ color: "var(--muted)", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".3px" }}>{disciplineLabel(a.discipline)}</span>
                             <div style={{ color: a.name ? "var(--ink)" : "var(--muted)", fontWeight: a.name ? 500 : 400, fontStyle: a.name ? "normal" : "italic" }}>
                               {a.name ?? (bookingLed ? "book to assign" : "unassigned")}
                             </div>

@@ -37,7 +37,7 @@ export function buildFullJourney(s: JourneySignals): JStep[] {
         { label: "Blood panel requested", done: s.bloodRequested },
         { label: "Blood report received", done: s.bloodReceived },
         { label: "Doctor consultation", done: s.doctorDone },
-        { label: "Diet consultation", done: s.dietDone },
+        { label: "Dietitian consultation", done: s.dietDone },
         { label: "Fitness assessment", done: s.trainerDone },
         { label: "Diet chart drafted", done: s.hasChart },
         { label: "Diet chart explanation (Day 2)", done: s.dietExplained },
@@ -66,7 +66,7 @@ export function buildFullJourney(s: JourneySignals): JStep[] {
         { label: "Blood panel requested", done: s.bloodRequested },
         { label: "Blood report received", done: s.bloodReceived },
         { label: "Doctor consultation", done: s.doctorDone },
-        { label: "Diet consultation", done: s.dietDone },
+        { label: "Dietitian consultation", done: s.dietDone },
         { label: "Fitness assessment", done: s.trainerDone },
         { label: "BluePrint generated", done: s.blueprintGenerated },
       ];

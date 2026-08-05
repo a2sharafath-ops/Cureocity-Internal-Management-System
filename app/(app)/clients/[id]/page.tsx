@@ -41,6 +41,7 @@ import { getComprehensiveView, getPTView } from "@/lib/actions";
 import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
+import { DISCIPLINES, disciplineLabel } from "@/lib/disciplines";
 
 // Report types, told apart at a glance in the timeline.
 const REPORT_LABEL: Record<string, string> = {
@@ -294,8 +295,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
   // BluePrint consolidated sign-off progress: who's assigned (required) and
   // who's signed. Shown as a "required sign-offs" line so front desk sees who's
   // still pending before the Blueprint can generate.
-  const BP_DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
-  const bpRequired = ((assignRows ?? []) as { discipline: string }[]).map((r) => r.discipline).filter((d) => BP_DISC_LABEL[d]);
+  const bpRequired = ((assignRows ?? []) as { discipline: string }[]).map((r) => r.discipline).filter((d) => (DISCIPLINES as readonly string[]).includes(d));
   const bpSigned = new Set(((signoffRows ?? []) as { discipline: string }[]).map((r) => r.discipline));
   const followups = (fuRows ?? []) as { label: string; due_date: string; status: string; kind: string }[];
   const clientPackages = (cpRows ?? []) as { id: string; package_id: string | null; package_name: string | null; category: string; start_date: string | null; end_date: string | null; price: number | null; status: string }[];
@@ -1222,7 +1222,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               const on = bpSigned.has(d);
               return (
                 <span key={d} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: on ? "var(--green-bg)" : "var(--amber-bg)", color: on ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
-                  {on ? "✓" : "○"} {BP_DISC_LABEL[d]}
+                  {on ? "✓" : "○"} {disciplineLabel(d)}
                 </span>
               );
             })}
