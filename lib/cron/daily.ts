@@ -113,25 +113,35 @@ async function sendReminders(supabase: Admin) {
 }
 
 async function generateFollowups(supabase: Admin) {
-  // The onboarding protocol is the Comprehensive care plan, so the client's
-  // package category has to come along — without it every client, including
-  // BluePrint and facility-only members, was queued for diet follow-ups they
-  // never bought.
+  // The milestone anchor is the package start, not the join date — see
+  // lib/followups.ts. Length comes along so a multi-cycle plan repeats.
   const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
-    supabase.from("client_packages").select("client_id, category").eq("status", "active"),
+    supabase.from("client_packages").select("client_id, category, start_date, end_date").eq("status", "active"),
   ]);
-  const catOf = new Map(
-    ((cps ?? []) as { client_id: string; category: string | null }[]).map((r) => [r.client_id, r.category]),
+  const packOf = new Map(
+    ((cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[])
+      .map((r) => [r.client_id, r]),
   );
+  const dayspan = (a: string | null, b: string | null) =>
+    a && b ? Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) : null;
   const rows = buildFollowupRows(
-    ((clients ?? []) as { id: string; joined: string | null }[])
-      .map((c) => ({ ...c, category: catOf.get(c.id) ?? null })),
+    ((clients ?? []) as { id: string; joined: string | null }[]).map((c) => {
+      const pk = packOf.get(c.id);
+      return {
+        ...c,
+        category: pk?.category ?? null,
+        start: pk?.start_date ?? null,
+        days: dayspan(pk?.start_date ?? null, pk?.end_date ?? null),
+      };
+    }),
     (subs ?? []) as { client_id: string; renews_on: string | null }[],
     "auto",
   );
-  if (rows.length) await supabase.from("followups").upsert(rows, { onConflict: "client_id,label", ignoreDuplicates: true });
+  if (rows.length) {
+    await supabase.from("followups").upsert(rows, { onConflict: "client_id,milestone_key", ignoreDuplicates: true });
+  }
   return rows.length;
 }
 

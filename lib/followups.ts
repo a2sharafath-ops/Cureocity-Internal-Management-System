@@ -1,9 +1,19 @@
-// Front-desk follow-up protocol. Onboarding touchpoints at fixed day-offsets
-// from a client's join date, plus a renewal nudge 7 days before a subscription
-// renews. Pure row builder shared by the server action and the daily cron.
+// Front-desk follow-up protocol — the CALL workflow over the care plan's
+// milestones, plus a renewal nudge before a subscription renews.
+//
+// These rows used to be generated independently, from `clients.joined` and a
+// private DAY_PROTOCOL table. lib/comprehensive.ts holds the same four
+// touchpoints, dated from the package start, and declares itself the source of
+// truth — so a client who joined in March and bought in June had "Day 10 diet
+// follow-up" due on two different dates in two different queues, each closable
+// without the other. The milestone list is now the only definition; this file
+// turns it into calls to make.
 
-export const ONBOARDING_OFFSETS = [2, 10, 21, 28];
+import { MILESTONES, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+
 export const RENEWAL_LEAD_DAYS = 7;
+/** Kept for the Day-2 explanation, which is a call, not a milestone. */
+export const EXPLANATION_OFFSET = 2;
 
 function addDaysUTC(iso: string, days: number) {
   const d = new Date(iso + "T00:00:00Z");
@@ -11,31 +21,40 @@ function addDaysUTC(iso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-/** Which clients get the onboarding protocol at all. It is the Comprehensive
- *  care plan — day 10 and 21 are diet follow-ups, day 28 is the doctor's
- *  month-end review — so a BluePrint client or a facility-only member should
- *  never have been queued for it. Before this filter every client got all
- *  four rows regardless of what they bought. */
-export type ProtocolClient = { id: string; joined: string | null; category?: string | null };
+/** Which clients get the onboarding protocol at all — the Comprehensive care
+ *  plan. A BluePrint client or facility-only member should never be queued. */
+export type ProtocolClient = {
+  id: string;
+  joined: string | null;
+  category?: string | null;
+  /** package start — the milestone anchor. Falls back to `joined`. */
+  start?: string | null;
+  /** package length in days, for multi-cycle plans. */
+  days?: number | null;
+};
 
 export function onProtocol(c: ProtocolClient): boolean {
   return (c.category ?? "").toLowerCase() === "comprehensive";
 }
 
+/** The date a client's protocol clock starts. The package start is what every
+ *  milestone engine uses; `joined` is only a fallback for older rows that never
+ *  recorded one. */
+export function protocolStart(c: ProtocolClient): string | null {
+  return c.start ?? c.joined ?? null;
+}
+
 export type FollowupRow = {
   client_id: string; kind: string; label: string; due_date: string;
-  priority: string; created_by: string; category: string; day: number | null; mode: string; stage: string;
+  priority: string; created_by: string; category: string; day: number | null;
+  mode: string; stage: string; milestone_key: string;
 };
 
-// Protocol day → discipline + label + default mode (mirrors the prototype care plan).
-const DAY_PROTOCOL: Record<number, { category: string; label: string; mode: string }> = {
-  // Day 2 is the diet chart explanation, per services.day_offset and the
-  // Comprehensive protocol — not a fitness check-in. The old label was the one
-  // place the two definitions disagreed.
-  2:  { category: "Diet Consultation",   label: "Day 2 diet chart explanation", mode: "Offline" },
-  10: { category: "Diet Consultation",   label: "Day 10 diet follow-up",   mode: "Online" },
-  21: { category: "Diet Consultation",   label: "Day 21 diet review",      mode: "Offline" },
-  28: { category: "Doctor Consultation", label: "Day 28 doctor follow-up", mode: "Offline" },
+const OWNER_CATEGORY: Record<string, string> = {
+  dietitian: "Diet Consultation",
+  doctor: "Doctor Consultation",
+  trainer: "Fitness Services",
+  coach: "Coaching",
 };
 
 export function buildFollowupRows(
@@ -45,27 +64,49 @@ export function buildFollowupRows(
 ): FollowupRow[] {
   const rows: FollowupRow[] = [];
   for (const c of clients) {
-    if (!c.joined) continue;
-    if (!onProtocol(c)) continue;   // renewal rows below still apply to everyone
-    for (const off of ONBOARDING_OFFSETS) {
-      const p = DAY_PROTOCOL[off];
+    if (!onProtocol(c)) continue;              // renewal rows below apply to everyone
+    const start = protocolStart(c);
+    if (!start) continue;
+
+    // Day 2 — explaining the diet chart. Not in MILESTONES because it is a
+    // call the coach makes, not a booking the calendar has to satisfy.
+    rows.push({
+      client_id: c.id, kind: "onboarding", label: "Day 2 diet chart explanation",
+      due_date: addDaysUTC(start, EXPLANATION_OFFSET), priority: "mandatory", created_by: createdBy,
+      category: "Diet Consultation", day: EXPLANATION_OFFSET, mode: "Offline",
+      stage: "PENDING_CALL", milestone_key: "explain_2",
+    });
+
+    // Everything else comes straight off the care plan, so the call and the
+    // booking gate can never be due on different days again.
+    for (const m of milestoneDates(start, cyclesFor(c.days ?? null))) {
       rows.push({
-        client_id: c.id, kind: "onboarding", label: p.label,
-        due_date: addDaysUTC(c.joined, off), priority: off === 2 ? "mandatory" : "normal", created_by: createdBy,
-        category: p.category, day: off, mode: p.mode, stage: "PENDING_CALL",
+        client_id: c.id, kind: "onboarding", label: m.label,
+        due_date: m.dueDate, priority: "normal", created_by: createdBy,
+        category: OWNER_CATEGORY[m.owner] ?? "Consultation",
+        day: m.due, mode: m.owner === "dietitian" && m.key === "diet_10" ? "Online" : "Offline",
+        stage: "PENDING_CALL", milestone_key: m.gate,
       });
     }
   }
+
   for (const s of subs) {
     if (!s.renews_on) continue;
+    // One renewal row per client, updated as the cycle advances. Keying on the
+    // date meant every renewal minted a new row and orphaned the old one, which
+    // then sat "to call" forever and inflated every overdue counter.
     rows.push({
       client_id: s.client_id, kind: "renewal", label: `Renewal due (${s.renews_on})`,
       due_date: addDaysUTC(s.renews_on, -RENEWAL_LEAD_DAYS), priority: "mandatory", created_by: createdBy,
       category: "Renewal", day: null, mode: "Online", stage: "PENDING_CALL",
+      milestone_key: "renewal",
     });
   }
   return rows;
 }
+
+/** Milestone keys the generator can produce, for the backfill and for tests. */
+export const FOLLOWUP_KEYS = ["explain_2", ...MILESTONES.map((m) => m.key), "renewal"];
 
 // ---------------------------------------------------------------------------
 // Follow-up ⟷ appointment reconciliation.
