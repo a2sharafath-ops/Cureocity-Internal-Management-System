@@ -3818,6 +3818,153 @@ export async function setLeaveStatus(formData: FormData) {
   revalidatePath("/hr");
 }
 
+// ---- compensatory leave -----------------------------------------------------
+// A restricted holiday can only be granted to some of the team; whoever works
+// it is owed the day back. That was being tracked in someone's memory.
+
+export async function grantCompOff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return { error: "Not permitted" };
+  const staff_id = String(formData.get("staff_id") || "");
+  const earned_on = String(formData.get("earned_on") || "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!staff_id || !earned_on || !reason) return { error: "Staff, date and reason are all needed." };
+
+  const { compOffExpiry } = await import("@/lib/roster");
+  const supabase = createClient();
+  const { error } = await supabase.from("comp_offs").insert({
+    staff_id, earned_on, reason,
+    // Stored, not computed on read: changing the policy later must not
+    // retroactively expire credits already promised to someone.
+    expires_on: compOffExpiry(earned_on),
+    granted_by: p.name,
+  });
+  if (error) return { error: error.message };
+
+  await logAudit(p, "Comp-off granted", null, `${earned_on} · ${reason}`);
+  await notifyStaff(supabase, staff_id, {
+    title: "Compensatory off granted",
+    body: `${reason} · use it by ${compOffExpiry(earned_on)}`,
+    href: "/hr?tab=leave", icon: "🕐",
+  });
+  revalidatePath("/hr");
+  return { ok: true };
+}
+
+/** Cancel a credit granted in error. Never deletes — the ledger is the answer
+ *  to "why do I have three?", so a cancelled row stays visible with its note. */
+export async function cancelCompOff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("comp_offs")
+    .update({ status: "cancelled", note: String(formData.get("note") ?? "").trim() || null })
+    .eq("id", id).eq("status", "available");
+  await logAudit(p, "Comp-off cancelled", null, null);
+  revalidatePath("/hr");
+}
+
+/**
+ * Spend a comp-off credit on a day off.
+ *
+ * Creates the leave AND consumes the oldest available credit in one step, so a
+ * balance can never drift from the leaves it paid for. Oldest-first because
+ * credits expire — spending a newer one would let an older one lapse.
+ */
+export async function takeCompOff(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return { error: "Not permitted" };
+  const staff_id = String(formData.get("staff_id") || "");
+  const date = String(formData.get("date") || "");
+  if (!staff_id || !date) return { error: "Staff and date are needed." };
+  const supabase = createClient();
+
+  const today = todayISO();
+  const { data: credits } = await supabase.from("comp_offs")
+    .select("id, expires_on").eq("staff_id", staff_id).eq("status", "available")
+    .gte("expires_on", today).order("expires_on", { ascending: true }).limit(1);
+  const credit = ((credits ?? []) as { id: string; expires_on: string }[])[0];
+  if (!credit) return { error: "No comp-off credit available for this staff member." };
+
+  const { data: lv } = await supabase.from("leaves").insert({
+    staff_id, from_date: date, to_date: date, type: "COMP",
+    reason: String(formData.get("reason") ?? "").trim() || "Compensatory off",
+    status: "approved", decided_by: p.name,
+  }).select("id").maybeSingle();
+
+  await supabase.from("comp_offs").update({
+    status: "used", used_leave: (lv as { id: string } | null)?.id ?? null, used_on: date,
+  }).eq("id", credit.id);
+
+  await logAudit(p, "Comp-off taken", null, date);
+  revalidatePath("/hr");
+  return { ok: true };
+}
+
+// ---- roster -----------------------------------------------------------------
+
+/** Assign (or clear) one person's shift on one day. */
+export async function setRosterShift(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return;
+  const staff_id = String(formData.get("staff_id") || "");
+  const date = String(formData.get("date") || "");
+  const shift = String(formData.get("shift") || "");
+  if (!staff_id || !date) return;
+  const supabase = createClient();
+
+  if (!shift) {
+    await supabase.from("roster").delete().eq("staff_id", staff_id).eq("date", date);
+  } else {
+    await supabase.from("roster").upsert({
+      staff_id, date, shift,
+      start_time: String(formData.get("start_time") ?? "") || null,
+      end_time: String(formData.get("end_time") ?? "") || null,
+      note: String(formData.get("note") ?? "").trim() || null,
+      created_by: p.name, updated_at: new Date().toISOString(),
+    }, { onConflict: "staff_id,date" });
+  }
+  revalidatePath("/hr");
+}
+
+/**
+ * Copy a whole week forward. Rosters repeat far more often than they change,
+ * and filling 20 staff × 7 days by hand is how a roster stops being kept.
+ * Existing entries in the target week are left alone — copying must never
+ * silently overwrite a shift someone has already adjusted.
+ */
+export async function copyRosterWeek(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canHr(p.role)) return { error: "Not permitted" };
+  const from = String(formData.get("from_week") || "");
+  const to = String(formData.get("to_week") || "");
+  if (!from || !to) return { error: "Both weeks are needed." };
+  const supabase = createClient();
+
+  const { weekDates, addDays } = await import("@/lib/roster");
+  const src = weekDates(from), dst = weekDates(to);
+  const { data: rows } = await supabase.from("roster")
+    .select("staff_id, date, shift, start_time, end_time, note").in("date", src);
+  const source = (rows ?? []) as { staff_id: string; date: string; shift: string; start_time: string | null; end_time: string | null; note: string | null }[];
+  if (!source.length) return { error: "That week is empty — nothing to copy." };
+
+  const { data: existing } = await supabase.from("roster").select("staff_id, date").in("date", dst);
+  const taken = new Set(((existing ?? []) as { staff_id: string; date: string }[]).map((r) => `${r.staff_id}|${r.date}`));
+
+  const shifted = source
+    .map((r) => ({ ...r, date: addDays(r.date, 7 * Math.round((Date.parse(`${dst[0]}T00:00:00Z`) - Date.parse(`${src[0]}T00:00:00Z`)) / 604_800_000)), created_by: p.name }))
+    .filter((r) => !taken.has(`${r.staff_id}|${r.date}`));
+  if (!shifted.length) return { error: "That week is already filled in." };
+
+  const { error } = await supabase.from("roster").insert(shifted);
+  if (error) return { error: error.message };
+  await logAudit(p, "Roster week copied", null, `${src[0]} → ${dst[0]} · ${shifted.length} shifts`);
+  revalidatePath("/hr");
+  return { ok: true, copied: shifted.length };
+}
+
 export async function upsertPayroll(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;

@@ -16,16 +16,19 @@ import {
 } from "@/lib/actions";
 import EmployeeDocUpload from "@/components/EmployeeDocUpload";
 import BadgeIssuer from "@/components/BadgeIssuer";
+import RosterGrid from "@/components/RosterGrid";
+import CompOffPanel from "@/components/CompOffPanel";
+import { weekDates } from "@/lib/roster";
 
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; bank_name?: string | null; bank_account?: string | null; ifsc?: string | null; badge_code?: string | null; pin?: string | null };
 
-export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string } }) {
+export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string; week?: string } }) {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/hr")) redirect("/dashboard");
-  const tab = ["attendance", "leave", "holidays", "payroll", "employees", "recruit", "boarding"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
+  const tab = ["attendance", "roster", "leave", "holidays", "payroll", "employees", "recruit", "boarding"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
 
   const today = todayISO();
   // The monthly attendance sheet works on a chosen month (defaults to current).
@@ -59,6 +62,21 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
     supabase.from("employee_documents").select("id, staff_id, title, kind, name, created_at").order("created_at", { ascending: false }),
     supabase.from("salary_structures").select("staff_id, basic, hra, allowances, gst, pf, esi, pt, tds, effective_from"),
   ]);
+
+  // ---- roster + comp-off ---------------------------------------------------
+  // The roster is readable by every signed-in staff member (RLS says so); only
+  // HR / Manager / Admin can change it.
+  const weekOf = searchParams.week && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.week) ? searchParams.week : today;
+  const week = weekDates(weekOf);
+  const canEditRoster = canApproveLeaveType(me.role) || me.role === "Super Admin";
+  const [{ data: shiftData }, { data: rosterData }, { data: compData }] = await Promise.all([
+    supabase.from("shift_types").select("code, name, start_time, end_time, color, working").eq("active", true).order("seq"),
+    supabase.from("roster").select("staff_id, date, shift, start_time, end_time, note").gte("date", week[0]).lte("date", week[6]),
+    supabase.from("comp_offs").select("id, staff_id, earned_on, reason, expires_on, status, used_on, granted_by").order("earned_on", { ascending: false }).limit(200),
+  ]);
+  const shiftTypes = (shiftData ?? []) as { code: string; name: string; start_time: string | null; end_time: string | null; color: string | null; working: boolean }[];
+  const rosterRows = (rosterData ?? []) as { staff_id: string; date: string; shift: string; start_time: string | null; end_time: string | null; note: string | null }[];
+  const compOffs = (compData ?? []) as { id: string; staff_id: string; earned_on: string; reason: string; expires_on: string; status: string; used_on: string | null; granted_by: string | null }[];
 
   const staff = (staffData ?? []) as Staff[];
   const att = new Map(((attData ?? []) as { staff_id: string; status: string }[]).map((a) => [a.staff_id, a.status]));
@@ -153,6 +171,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} items={[
           { key: "attendance", label: "Team & Attendance", href: "/hr?tab=attendance" },
+          { key: "roster", label: "Roster", href: "/hr?tab=roster" },
           { key: "leave", label: "Leave", href: "/hr?tab=leave" },
           { key: "holidays", label: "Holidays", href: "/hr?tab=holidays" },
           { key: "payroll", label: "Payroll & Statutory", href: "/hr?tab=payroll" },
@@ -161,6 +180,23 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
           { key: "boarding", label: "On / Offboarding", href: "/hr?tab=boarding" },
         ]} />
       </div>
+
+      {/* ================= ROSTER ================= */}
+      {tab === "roster" && (
+        <div style={box}>
+          <div style={{ fontWeight: 700, marginBottom: 2 }}>Weekly roster</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>
+            Who is on the floor, by discipline. Everyone can read it; Admin, Manager and HR set it.
+          </div>
+          <RosterGrid
+            staff={staff.map((s) => ({ id: s.id, name: s.name, role: s.role }))}
+            shifts={shiftTypes}
+            rows={rosterRows}
+            weekOf={weekOf}
+            canEdit={canEditRoster}
+          />
+        </div>
+      )}
 
       {/* ================= TEAM & ATTENDANCE ================= */}
       {tab === "attendance" && (
@@ -242,6 +278,15 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
 
       {/* ================= LEAVE ================= */}
       {tab === "leave" && (
+        <div style={{ display: "grid", gap: 16 }}>
+        {/* Compensatory off sits with leave because that is what it becomes —
+            a day owed, then a day taken. */}
+        <CompOffPanel
+          staff={staff.map((s) => ({ id: s.id, name: s.name, role: s.role }))}
+          credits={compOffs}
+          canEdit={canEditRoster}
+          today={today}
+        />
         <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16, alignItems: "start" }}>
           <div style={{ ...box, padding: "16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}><b>Leave Requests</b><span style={{ flex: 1 }} />{chip("var(--amber-bg)", "var(--amber-text)", `${leaves.filter((l) => l.status === "pending").length} pending`)}</div>
@@ -310,6 +355,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
               </table>
             </div>
           </div>
+        </div>
         </div>
       )}
 
