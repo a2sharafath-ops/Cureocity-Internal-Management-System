@@ -3,6 +3,7 @@
 //
 //   • raise a booking task when the fitness reassessment becomes bookable
 //     (day 21), due by day 28, once per cycle;
+//   • flag, once, a package that was bought but never scheduled at all;
 //   • flag, once, any cycle whose 12 strength sessions aren't complete by the
 //     cycle deadline.
 //
@@ -12,14 +13,14 @@
 
 import {
   PT_CATEGORY, milestoneDates, cyclesFor, bookableNow, bookingTaskTitle,
-  ptDeadline, PT_SESSIONS_PER_CYCLE,
+  ptDeadline, PT_SESSIONS_PER_CYCLE, BOOKING_DUE_DAYS, CYCLE_DAYS, addDaysISO,
 } from "@/lib/pt";
 import { loadCatOf } from "@/lib/appt-match";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type PtSweepResult = { scanned: number; booked: number; overdueSessions: number };
+export type PtSweepResult = { scanned: number; booked: number; overdueSessions: number; unbooked: number };
 
 const MANAGEMENT = ["Manager", "Administrator", "Super Admin"];
 
@@ -32,7 +33,7 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
     .eq("protocol", PT_CATEGORY)
     .eq("status", "active");
   const protos = (protoRows ?? []) as { client_id: string; start_date: string; hold_since: string | null }[];
-  if (!protos.length) return { scanned: 0, booked: 0, overdueSessions: 0 };
+  if (!protos.length) return { scanned: 0, booked: 0, overdueSessions: 0, unbooked: 0 };
 
   const ids = protos.map((p) => p.client_id);
   const [{ data: clients }, { data: apptRows }, { data: sessRows }, { data: taskRows }, { data: cpRows }, { data: seenRows }] =
@@ -64,7 +65,13 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
     (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push({ ...a, type: catOf(a.type) });
   }
   const doneSessions = new Map<string, number>();
+  // Booked-or-not is a different question from done-or-not. The cycle breach
+  // below counts completed sessions, which cannot distinguish "booked twelve,
+  // attended none" from "never booked anything" — and those need different
+  // people chasing different things.
+  const anySessions = new Map<string, number>();
   for (const s of (sessRows ?? []) as { client_id: string; status: string }[]) {
+    anySessions.set(s.client_id, (anySessions.get(s.client_id) ?? 0) + 1);
     if (s.status === "completed") doneSessions.set(s.client_id, (doneSessions.get(s.client_id) ?? 0) + 1);
   }
   const openTaskTitles = new Set(((taskRows ?? []) as { client_id: string; title: string }[]).map((t) => `${t.client_id}|${t.title}`));
@@ -72,7 +79,7 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
 
   const newTasks: Record<string, unknown>[] = [];
   const events: Record<string, unknown>[] = [];
-  let booked = 0, overdueSessions = 0;
+  let booked = 0, overdueSessions = 0, unbooked = 0;
 
   for (const p of protos) {
     // Client-side hold pauses the clocks — don't prompt or flag a paused client
@@ -94,6 +101,24 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
         status: "todo", due_date: m.dueDate, created_by: "auto",
       });
       booked++;
+    }
+
+    // ---- package bought but never scheduled -------------------------------
+    // Caught here rather than at the 28-day breach, which is four weeks too
+    // late to save the block. Fires once per client, at the booking deadline.
+    if ((anySessions.get(p.client_id) ?? 0) === 0) {
+      const bookBy = addDaysISO(p.start_date, BOOKING_DUE_DAYS);
+      if (today >= bookBy && !seen.has(`${p.client_id}|sessions_unbooked|breach`)) {
+        seen.add(`${p.client_id}|sessions_unbooked|breach`);
+        events.push({ client_id: p.client_id, protocol: PT_CATEGORY, gate: "sessions_unbooked", kind: "breach", due_at: `${bookBy}T00:00:00Z` });
+        unbooked++;
+        await notifyRoles(supabase, ["Front Desk", "Fitness Trainer", ...MANAGEMENT], {
+          title: `No sessions booked — ${name}`,
+          body: `Package started ${p.start_date}; nothing in the diary. The ${CYCLE_DAYS}-day window is already running.`,
+          href: `/clients/${p.client_id}`,
+          icon: "📭",
+        });
+      }
     }
 
     // ---- session-cycle deadline -------------------------------------------
@@ -122,5 +147,5 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
       .upsert(events, { onConflict: "client_id,protocol,gate,kind", ignoreDuplicates: true });
   }
 
-  return { scanned: protos.length, booked, overdueSessions };
+  return { scanned: protos.length, booked, overdueSessions, unbooked };
 }

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
-import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS } from "@/lib/comprehensive";
+import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
 import { clock, formatLeft } from "@/lib/sla-clock";
 import { dueOn, waitingSince } from "@/lib/due";
 import { loadClientStatuses } from "@/lib/client-status";
@@ -197,7 +197,20 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   if (isComp || isPt) {
     const total = allSess.length;
     const remaining = total - allSess.filter((s) => s.status === "completed").length;
-    if (total > 0 && remaining > 0) {
+    if (total === 0) {
+      // Nothing booked at all. This used to be silent: the "x of 12 remaining"
+      // line needs `total > 0` to say anything, and the 28-day cycle breach only
+      // fires once the whole window has run out. So a package could be paid for
+      // and sit untouched for four weeks with nothing on any screen saying so.
+      const cat = active.find((c) => c.category === (isPt ? "training" : "comprehensive"));
+      const start = proto?.start_date ?? cat?.start_date ?? null;
+      const due = start ? addDaysISO(start, BOOKING_DUE_DAYS) : null;
+      openNow.push({
+        label: "No strength sessions booked",
+        detail: start ? `Package started ${fmt(start)} · nothing in the diary yet` : "Nothing in the diary yet",
+        href: "/sessions", tone: "warn", ...FRONT_DESK, ...dueOn(due, today),
+      });
+    } else if (remaining > 0) {
       const next = allSess.filter((s) => s.status !== "completed" && s.date >= today).map((s) => s.date).sort()[0];
       upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info", sortKey: next, ...FRONT_DESK });
     }
