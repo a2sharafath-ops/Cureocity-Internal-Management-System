@@ -4409,9 +4409,11 @@ export async function fuBookInPerson(formData: FormData) {
     const label = (fu as { label: string | null } | null)?.label ?? "";
     const hay = `${(fu as { category: string | null } | null)?.category ?? ""} ${label}`;
     const disc = /doctor/i.test(hay) ? "Doctor" : /diet/i.test(hay) ? "Dietitian" : /fitness|trainer/i.test(hay) ? "Fitness Trainer" : /coach/i.test(hay) ? "Health Coach" : /psych/i.test(hay) ? "Psychologist" : "";
-    // The Day-2 explanation books as its own appointment type; other protocol
-    // touchpoints book as a Follow-up.
-    const type = /diet chart explanation/i.test(label) ? "Diet Chart Explanation" : "Follow-up";
+    // Book the owning discipline's real service. "Follow-up" is not a catalogue
+    // service, so a milestone could never match it — the queue row closed while
+    // the milestone, its task and the client-card "overdue" line all stayed open.
+    const { apptTypeForFollowup } = await import("@/lib/followups");
+    const type = apptTypeForFollowup({ label, category: (fu as { category: string | null } | null)?.category ?? null });
     redirect(`/appointments?client=${cid}${disc ? `&disc=${encodeURIComponent(disc)}` : ""}&type=${encodeURIComponent(type)}`);
   }
   redirect("/followups");
@@ -4748,16 +4750,24 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
     if (toClose.length) await supabase.from("tasks").update({ status: "done" }).in("id", toClose);
   }
 
-  // The Day-2 diet chart explanation is a follow-up, not a milestone, so booking
-  // it as an appointment (directly on the calendar, or via the coach's Schedule
-  // button) must close its follow-up row — otherwise it keeps showing as "due"
-  // on the client card / coach dashboard even after it's been done. (The
-  // follow-ups queue does this via fuBookInPerson; this covers the direct path.)
-  if (/diet chart explanation/i.test(newType)) {
-    await supabase.from("followups")
-      .update({ stage: "BOOKED", status: "done", done_by: p.name, done_at: new Date().toISOString() })
-      .eq("client_id", client_id).eq("day", 2).neq("status", "done").ilike("label", "%explanation%");
-    revalidatePath("/followups");
+  // Booking closes the follow-up that was chasing the same visit — whichever
+  // door it was booked from. Only the Day-2 explanation used to be handled, so
+  // a Day-10 or Day-28 row stayed "to call" forever after front desk put the
+  // appointment in the diary: it inflated every overdue counter and raised a
+  // whiteboard alert demanding an explanation for work already done.
+  {
+    const { followupMatchesAppointment } = await import("@/lib/followups");
+    const { data: openFu } = await supabase.from("followups")
+      .select("id, label, category").eq("client_id", client_id).neq("status", "done").neq("status", "skipped");
+    const closing = ((openFu ?? []) as { id: string; label: string | null; category: string | null }[])
+      .filter((f) => followupMatchesAppointment(f, newType))
+      .map((f) => f.id);
+    if (closing.length) {
+      await supabase.from("followups")
+        .update({ stage: "BOOKED", status: "done", done_by: p.name, done_at: new Date().toISOString() })
+        .in("id", closing);
+      revalidatePath("/followups");
+    }
   }
 
   await logAudit(p, "Appointment booked", await clientName(supabase, client_id), date);
