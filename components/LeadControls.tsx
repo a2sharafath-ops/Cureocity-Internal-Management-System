@@ -29,8 +29,17 @@ const BUDGET = ["Doesnt ask price first - quality focused", "Mentions premium gy
 const STAGES = ["1-New Lead", "2-Discovery", "3-Product Match", "4-Visit/Trial", "5-Close", "6-Nurture", "LOST"];
 const OBJECTIONS = ["Price too high", "Timing not right now", "Location / distance", "Needs to consult family", "Comparing other gyms", "Not sure of commitment", "Medical clearance pending"];
 
+// A few option strings were written with typos and are now sitting in thousands
+// of lead rows, in lib/leadscore.ts's scoring map and in the seed SQL. Renaming
+// the value would orphan every one of them, so the stored string stays exactly
+// as it is and only the DISPLAYED text is corrected here.
+const OPT_DISPLAY: Record<string, string> = {
+  "Doesnt ask price first - quality focused": "Doesn't ask price first — quality focused",
+};
+export const optText = (o: string) => OPT_DISPLAY[o] ?? o;
+
 function Sel({ name, label, opts, def }: { name: string; label: string; opts: string[]; def?: string | null }) {
-  return <div style={{ display: "grid", gap: 3 }}><label style={lbl}>{label}</label><select style={inputControl} name={name} defaultValue={def ?? ""}><option value="">—</option>{opts.map((o) => <option key={o}>{o}</option>)}</select></div>;
+  return <div style={{ display: "grid", gap: 3 }}><label style={lbl}>{label}</label><select style={inputControl} name={name} defaultValue={def ?? ""}><option value="">—</option>{opts.map((o) => <option key={o} value={o}>{optText(o)}</option>)}</select></div>;
 }
 
 export type StaffOpt = { id: string; name: string };

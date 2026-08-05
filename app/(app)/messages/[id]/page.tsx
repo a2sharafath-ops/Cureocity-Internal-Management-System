@@ -25,7 +25,7 @@ export default async function ThreadPage({ params }: { params: { id: string } })
     <div style={{ maxWidth: 720 }}>
       <RealtimeRefresh tables={["messages"]} />
       <MarkThreadRead clientId={params.id} />
-      <Link href="/messages" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>← Messages</Link>
+      <Link href="/messages" style={{ color: "var(--brand-text)", fontSize: 13, textDecoration: "none" }}>← Communications</Link>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "10px 0 16px" }}>
         <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700 }}>

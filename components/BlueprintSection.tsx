@@ -71,7 +71,7 @@ export default async function BlueprintSection({ me, heading = false }: { me: { 
               <th style={{ padding: "12px 16px" }}>Blood report</th>
               <th style={{ padding: "12px 16px" }}>Consults approved</th>
               <th style={{ padding: "12px 16px" }}>Health scores</th>
-              <th style={{ padding: "12px 16px" }}>Blueprint</th>
+              <th style={{ padding: "12px 16px" }}>BluePrint</th>
             </tr>
           </thead>
           <tbody>

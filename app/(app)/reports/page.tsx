@@ -258,7 +258,7 @@ export default async function ReportsPage() {
         <Card title="Acquisition funnel — leads → converted">
           <Bars data={acqData} color="var(--brand-fill)" />
         </Card>
-        <Card title="New members by month (cohorts)">
+        <Card title="New clients by month (cohorts)">
           <Bars data={cohortData} color="var(--purple)" />
         </Card>
       </div>

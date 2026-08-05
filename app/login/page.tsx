@@ -68,7 +68,7 @@ export default function LoginPage() {
         </div>
         <h1 style={{ fontSize: 18, margin: "0 0 4px" }}>Sign in</h1>
         <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>
-          Internal Management System
+          Sign in to Cureocity
         </p>
 
         <label style={{ fontSize: 12, color: "var(--muted)" }}>Email</label>

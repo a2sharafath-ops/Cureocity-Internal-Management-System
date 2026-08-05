@@ -5,7 +5,7 @@ import { getProfile } from "@/lib/auth";
 import { canSee } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import { leadScore, leadProduct, LS, TIER_STYLE } from "@/lib/leadscore";
-import { LeadEditForm, CallCell, type Lead } from "@/components/LeadControls";
+import { LeadEditForm, CallCell, optText, type Lead } from "@/components/LeadControls";
 import ConvertPanel from "@/components/ConvertPanel";
 import ExperiencePanel from "@/components/ExperiencePanel";
 import LeadRemarks, { type Remark } from "@/components/LeadRemarks";
@@ -142,7 +142,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
             return (
               <div key={s.key as string} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={lblS}>{s.label}</span><b style={{ fontSize: 13, color: pts > 0 ? "var(--brand-text)" : "var(--muted)" }}>+{pts}</b></div>
-                <div style={{ fontSize: 12, marginTop: 2 }}>{val ?? "—"}</div>
+                <div style={{ fontSize: 12, marginTop: 2 }}>{val ? optText(val) : "—"}</div>
               </div>
             );
           })}

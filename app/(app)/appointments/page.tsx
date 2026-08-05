@@ -173,7 +173,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         // Service Timeline passes ?back=timeline; everything else (the Overview
         // "Upcoming" panel, dashboard flags) returns to Overview.
         const backTab = searchParams.back === "timeline" ? "timeline" : "overview";
-        const backLabel = backTab === "timeline" ? "Service Timeline" : "Overview";
+        const backLabel = backTab === "timeline" ? "Service timeline" : "Overview";
         return (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "10px 14px", marginBottom: 14 }}>
           <Link href={`/clients/${focusClientId}?tab=${backTab}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 12px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--brand-text)", whiteSpace: "nowrap" }}>

@@ -226,7 +226,7 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
   revalidatePath("/users");
   revalidatePath("/hr");
   revalidatePath("/appointments");
-  return { ok: `Created ${email} as ${role}${staffId ? " and added them to the care-team directory" : ""}. Share the temporary password with them.` };
+  return { ok: `Created ${email} as ${role}${staffId ? " and linked them to a staff record" : ""}. Share the temporary password with them.` };
 }
 
 export async function createPortalLogin(_prev: InviteState, formData: FormData): Promise<InviteState> {

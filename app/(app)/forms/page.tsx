@@ -39,7 +39,7 @@ export default async function FormsPage() {
         <span style={{ flex: 1 }} />
         <FormBuilder />
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Dynamic intake &amp; consent forms — assign to a patient, collect answers &amp; signatures.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Dynamic intake &amp; consent forms — assign to a client, collect answers &amp; signatures.</p>
 
       {/* forms library */}
       <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Form templates</h2>

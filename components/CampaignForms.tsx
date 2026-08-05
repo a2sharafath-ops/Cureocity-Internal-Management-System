@@ -40,7 +40,7 @@ export function CampaignForm({ templates }: { templates: { id: string; name: str
     <form action={createCampaign} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ ...panel, display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1.2fr auto", gap: 10, alignItems: "end" }}>
       <Field label="Campaign name"><input style={inputControl} name="name" required /></Field>
       <Field label="Template"><select style={inputControl} name="template_id" required defaultValue=""><option value="" disabled>Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
-      <Field label="Audience"><select style={inputControl} name="audience" defaultValue="all"><option value="all">All clients</option><option value="members">Members (has package)</option><option value="subscribers">Active subscribers</option><option value="lapsed">Lapsed (no visit 30d)</option></select></Field>
+      <Field label="Audience"><select style={inputControl} name="audience" defaultValue="all"><option value="all">All clients</option><option value="members">Package holders</option><option value="subscribers">Active subscribers</option><option value="lapsed">Lapsed (no visit 30d)</option></select></Field>
       <button type="submit" style={primary}>Create</button>
     </form>
   );

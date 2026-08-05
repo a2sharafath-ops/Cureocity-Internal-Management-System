@@ -49,9 +49,9 @@ export default function RetentionHub({
     <div>
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "risk", label: "At-Risk", count: kpis.high || undefined },
-          { key: "nps", label: "NPS & Feedback" },
-          { key: "referrals", label: "Referrals & Loyalty" },
+          { key: "risk", label: "At-risk", count: kpis.high || undefined },
+          { key: "nps", label: "NPS & feedback" },
+          { key: "referrals", label: "Referrals & loyalty" },
         ]} />
       </div>
 
@@ -82,7 +82,7 @@ export default function RetentionHub({
                     </td>
                   </tr>
                 ))}
-                {risk.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 14px" }}>No at-risk members detected.</td></tr>}
+                {risk.length === 0 && <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 14px" }}>No at-risk clients detected.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -134,7 +134,7 @@ export default function RetentionHub({
 
           <div style={{ ...box, overflow: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
-              <thead><tr><th style={th}>Member</th><th style={th}>Score</th><th style={th}>Comment</th><th style={th}>Channel</th><th style={th}>When</th></tr></thead>
+              <thead><tr><th style={th}>Client</th><th style={th}>Score</th><th style={th}>Comment</th><th style={th}>Channel</th><th style={th}>When</th></tr></thead>
               <tbody>
                 {npsList.map((f) => { const s = f.score >= 9 ? ["var(--green-bg)", "var(--green-text)"] : f.score <= 6 ? ["var(--red-bg)", "var(--red-text)"] : ["var(--amber-bg)", "var(--amber-text)"];
                   return <tr key={f.id} style={{ borderTop: "1px solid var(--border)" }}><td style={{ ...td, fontWeight: 600 }}>{f.clientName ?? "—"}</td><td style={td}>{chip(s[0], s[1], `${f.score}/10`)}</td><td style={{ ...td, color: "var(--muted)" }}>{f.comment ?? "—"}</td><td style={{ ...td, color: "var(--muted)" }}>{f.channel}</td><td style={{ ...td, color: "var(--muted)" }}>{f.date}</td></tr>;
@@ -169,7 +169,7 @@ export default function RetentionHub({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 8px" }}>
-            <b>Loyalty members</b><span style={{ color: "var(--muted)", fontSize: 12 }}>100 pts = ₹100 credit</span><span style={{ flex: 1 }} />
+            <b>Loyalty clients</b><span style={{ color: "var(--muted)", fontSize: 12 }}>100 pts = ₹100 credit</span><span style={{ flex: 1 }} />
             {canAct && <button type="button" onClick={() => setAward((v) => !v)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}>{award ? "Cancel" : "★ Award points"}</button>}
           </div>
           {award && (
@@ -191,7 +191,7 @@ export default function RetentionHub({
                     <td style={{ ...td, textAlign: "right" }}>{canAct && l.points >= 100 && <form action={redeemLoyalty}><input type="hidden" name="client_id" value={l.clientId} /><button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>Redeem</button></form>}</td>
                   </tr>
                 ))}
-                {loyalty.length === 0 && <tr><td colSpan={4} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "20px 14px" }}>No loyalty members yet — award points to get started.</td></tr>}
+                {loyalty.length === 0 && <tr><td colSpan={4} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "20px 14px" }}>No loyalty clients yet — award points to get started.</td></tr>}
               </tbody>
             </table>
           </div>

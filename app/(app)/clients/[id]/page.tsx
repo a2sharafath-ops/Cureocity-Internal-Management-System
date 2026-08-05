@@ -570,8 +570,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} items={[
           { key: "overview", label: "Overview", href: `/clients/${params.id}?tab=overview${ro ? "&ro=1" : ""}` },
-          { key: "timeline", label: "Service Timeline", href: `/clients/${params.id}?tab=timeline${ro ? "&ro=1" : ""}` },
-          { key: "card", label: "Client Card", href: `/clients/${params.id}?tab=card${ro ? "&ro=1" : ""}` },
+          { key: "timeline", label: "Service timeline", href: `/clients/${params.id}?tab=timeline${ro ? "&ro=1" : ""}` },
+          { key: "card", label: "Client card", href: `/clients/${params.id}?tab=card${ro ? "&ro=1" : ""}` },
         ]} />
       </div>
 
@@ -750,7 +750,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           // A client who also holds Comprehensive/PT DOES have a session block —
           // don't let a facility membership hide it (and its Reschedule actions).
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
-            Facility access member — no scheduled sessions (check-in/out + workout plan).
+            This client has facility access only — no scheduled sessions, just check-in/out and a workout plan.
           </div>
         ) : sess.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No sessions scheduled.</div>

@@ -71,7 +71,7 @@ export function FallbackHead({ s }: { s: AppSettings }) {
   );
 }
 
-/** Patient / prescriber block — identical on both documents so they read as a set. */
+/** Client / prescriber block — identical on both documents so they read as a set. */
 export function PatientBlock({
   name, code, age, gender, doctor, date, docNo, title,
 }: {
@@ -91,7 +91,7 @@ export function PatientBlock({
         <div style={{ fontSize: 10.5, color: "#9ca3af", fontWeight: 600 }}>No. {docNo}</div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px 14px", padding: "10px 0 12px", borderTop: "1px solid #e5e7eb", borderBottom: "1px solid #e5e7eb", marginBottom: 16 }}>
-        {cell("Patient", name)}
+        {cell("Client", name)}
         {cell("ID", code ?? "—")}
         {cell("Age / Sex", [age ? `${age} yrs` : null, gender].filter(Boolean).join(" / "))}
         {cell("Date", date)}

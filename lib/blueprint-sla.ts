@@ -15,6 +15,8 @@
 // Saturday 7pm. Simple to explain and to verify. The escape hatch for nights,
 // weekends and unreachable clients is the explicit hold, not a calendar.
 
+import { disciplineLabel } from "@/lib/disciplines";
+
 export const HOUR = 3_600_000;
 export const SIGNOFF_MS = 24 * HOUR;
 export const CONSOLIDATED_MS = 48 * HOUR;
@@ -220,7 +222,7 @@ export const SLA_TONE: Record<SlaStatus, { bg: string; color: string; label: str
 };
 
 export const KIND_LABEL: Record<SlaKind, string> = {
-  Doctor: "Doctor", Diet: "Dietitian", Trainer: "Trainer",
+  Doctor: disciplineLabel("Doctor"), Diet: disciplineLabel("Diet"), Trainer: disciplineLabel("Trainer"),
 };
 
 /** The three appointments front desk must get into the diary once BluePrint is

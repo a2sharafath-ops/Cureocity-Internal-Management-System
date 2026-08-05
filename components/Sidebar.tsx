@@ -51,6 +51,7 @@ const SECTIONS: NavSection[] = [
       { href: "/templates", label: "Templates & Branding", icon: "🎨" },
       { href: "/notifications", label: "Email Log", icon: "✉" },
       { href: "/audit", label: "Audit Log", icon: "☰" },
+      { href: "/tasks", label: "Tasks", icon: "✔" },
     ],
   },
   {
@@ -63,13 +64,7 @@ const SECTIONS: NavSection[] = [
     title: "People",
     items: [
       { href: "/hr", label: "HR", icon: "👥" },
-      { href: "/kb", label: "SOP's", icon: "📖" },
-    ],
-  },
-  {
-    title: "Sprint",
-    items: [
-      { href: "/tasks", label: "Tasks", icon: "✔" },
+      { href: "/kb", label: "SOPs", icon: "📖" },
     ],
   },
   {
@@ -159,10 +154,10 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
       <nav style={{ display: "flex", flexDirection: "column" }}>
         {sections.map((section) => (
           <div key={section.title ?? "top"}>
-            {/* The section labels — Front Desk, People, Sprint, Admin,
-                Governance, Finance — are internal shorthand for how the system
-                is carved up, not names anyone on the floor uses. Only the owner
-                sees them. */}
+            {/* The section labels — Front Desk, Admin, Governance, People,
+                Finance — are internal shorthand for how the system is carved
+                up, not names anyone on the floor uses. Only the owner sees
+                them. */}
             {section.title && owner && (
               <div style={{ padding: "10px 12px 4px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
                 {section.title}

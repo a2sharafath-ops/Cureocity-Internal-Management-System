@@ -61,7 +61,7 @@ export default async function SubscriptionsPage() {
         )}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>
-        Recurring plans · {active.length} active · est. MRR {money(mrr)} · {dueCount} due for renewal
+        Recurring packages · {active.length} active · est. MRR {money(mrr)} · {dueCount} due for renewal
       </p>
 
       {editable && <SubForm clients={clients} packages={packages} />}
@@ -71,7 +71,7 @@ export default async function SubscriptionsPage() {
           <thead>
             <tr style={{ textAlign: "left", color: "var(--muted)", fontSize: 12 }}>
               <th style={{ padding: "12px 16px" }}>Client</th>
-              <th style={{ padding: "12px 16px" }}>Plan</th>
+              <th style={{ padding: "12px 16px" }}>Package</th>
               <th style={{ padding: "12px 16px" }}>Amount</th>
               <th style={{ padding: "12px 16px" }}>Renews</th>
               <th style={{ padding: "12px 16px" }}>Status</th>

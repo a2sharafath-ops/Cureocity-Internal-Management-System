@@ -79,7 +79,7 @@ export default function RxForm({ clientId, allergies, currentMeds }: { clientId:
         </div>
       )}
 
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes to pharmacist / patient (optional)" style={{ ...input, minHeight: 44, marginBottom: 10, resize: "vertical" }} />
+      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes to pharmacist / client (optional)" style={{ ...input, minHeight: 44, marginBottom: 10, resize: "vertical" }} />
 
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button type="button" onClick={() => submit("signed")} disabled={pending} style={{ background: severe ? "var(--red)" : "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: pending ? "not-allowed" : "pointer" }}>

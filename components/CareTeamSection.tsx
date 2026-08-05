@@ -68,7 +68,7 @@ export default async function CareTeamSection({ me, heading = false }: { me: { r
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
         {card("🧠", "Whiteboard", "Daily team meeting", null, "clients on the board", "/whiteboard", "var(--purple-bg)")}
         {card("🩺", "Consultations", "Doctor · Coach · Psychologist", c0?.consults_pending ?? 0, "to complete", "/pro", "var(--brand-tint)")}
-        {canEmr(me.role) && card("📋", "Client Records", "EMR — problems, meds, vitals", null, "open charts", "/emr", "var(--blue-bg)")}
+        {canEmr(me.role) && card("📋", "Client Records", "Problems, medications, vitals", null, "open charts", "/emr", "var(--blue-bg)")}
         {canEmr(me.role) && card("🧪", "Orders & Labs", "Prescriptions & results", c0?.orders_open ?? 0, "open orders", "/orders", "var(--amber-bg)")}
         {card("🍽", "Meal Monitoring", "Dietitian workspace", c0?.meals_today ?? 0, "logs today", "/meals", "var(--brand-tint)")}
         {card("🎽", "Session Board", "Session check-ins", c0?.sessions_today ?? 0, "sessions today", "/trainer", "var(--purple-bg)")}

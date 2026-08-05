@@ -38,7 +38,7 @@ export default async function OrdersWorklistPage({ searchParams }: { searchParam
           { key: "all", label: "All", href: "/orders?view=all" },
         ]} />
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Pending lab &amp; imaging orders across all patients. Collect samples, then enter results.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>Pending lab &amp; imaging orders across all clients. Collect samples, then enter results.</p>
 
       <div style={{ ...box, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>

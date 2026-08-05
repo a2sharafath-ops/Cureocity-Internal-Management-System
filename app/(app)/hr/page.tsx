@@ -170,14 +170,14 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
 
       <div style={{ marginBottom: 16 }}>
         <SegTabs active={tab} items={[
-          { key: "attendance", label: "Team & Attendance", href: "/hr?tab=attendance" },
+          { key: "attendance", label: "Staff & Attendance", href: "/hr?tab=attendance" },
           { key: "roster", label: "Roster", href: "/hr?tab=roster" },
           { key: "leave", label: "Leave", href: "/hr?tab=leave" },
           { key: "holidays", label: "Holidays", href: "/hr?tab=holidays" },
-          { key: "payroll", label: "Payroll & Statutory", href: "/hr?tab=payroll" },
+          { key: "payroll", label: "Payroll & statutory", href: "/hr?tab=payroll" },
           { key: "employees", label: "Employees", href: "/hr?tab=employees" },
-          { key: "recruit", label: "Recruitment & Docs", href: "/hr?tab=recruit" },
-          { key: "boarding", label: "On / Offboarding", href: "/hr?tab=boarding" },
+          { key: "recruit", label: "Recruitment & docs", href: "/hr?tab=recruit" },
+          { key: "boarding", label: "On / offboarding", href: "/hr?tab=boarding" },
         ]} />
       </div>
 
@@ -186,7 +186,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
         <div style={box}>
           <div style={{ fontWeight: 700, marginBottom: 2 }}>Weekly roster</div>
           <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>
-            Who is on the floor, by discipline. Everyone can read it; Admin, Manager and HR set it.
+            Who is on the floor, by discipline. Everyone can read it; Administrator, Manager and HR set it.
           </div>
           <RosterGrid
             staff={staff.map((s) => ({ id: s.id, name: s.name, role: s.role }))}
@@ -271,7 +271,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                 </tbody>
               </table>
             </div>
-            <div style={{ padding: "8px 16px", color: "var(--muted)", fontSize: 11 }}>P present · A absent · L leave · ½ half-day · mark daily status on the Team panel above.</div>
+            <div style={{ padding: "8px 16px", color: "var(--muted)", fontSize: 11 }}>P present · A absent · L leave · ½ half-day · mark daily status on the Attendance panel above.</div>
           </div>
         </div>
       )}
@@ -303,7 +303,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
           </div>
           <div style={{ ...box, padding: "16px 18px" }}>
             <b>Leave types</b>
-            <div style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 8px" }}>Yearly entitlement per type. {canApproveLeave ? "Changes apply immediately." : "HR proposes a change; a Manager/Admin approves it."}</div>
+            <div style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 8px" }}>Yearly entitlement per type. {canApproveLeave ? "Changes apply immediately." : "HR proposes a change; a Manager or Administrator approves it."}</div>
             {leaveTypes.map((t) => (
               <div key={t.code} style={{ padding: "6px 0", borderTop: "1px solid var(--border)" }}>
                 <form action={saveLeaveType} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -523,7 +523,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
                       <td style={{ ...td, textAlign: "right" }}>
                         {base ? (
                           <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
-                            <a href={`/payslip/${s.id}/print?month=${month}&auto=1`} target="_blank" rel="noopener" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)", textDecoration: "none", whiteSpace: "nowrap" }}>Open / Download</a>
+                            <a href={`/payslip/${s.id}/print?month=${month}&auto=1`} target="_blank" rel="noopener" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--ink)", textDecoration: "none", whiteSpace: "nowrap" }}>Open / download</a>
                             <form action={generatePayslip}>
                               <input type="hidden" name="staff_id" value={s.id} /><input type="hidden" name="month" value={month} />
                               <input type="hidden" name="base" value={base} /><input type="hidden" name="lop_days" value={lop} /><input type="hidden" name="pf" value={pf} /><input type="hidden" name="deductions" value={ded} />

@@ -9,7 +9,7 @@ import { TemplateForm, CampaignForm, SendCampaign } from "@/components/CampaignF
 
 export const dynamic = "force-dynamic";
 
-const AUDIENCE_LABEL: Record<string, string> = { all: "All clients", members: "Members", subscribers: "Active subscribers", lapsed: "Lapsed (30d)" };
+const AUDIENCE_LABEL: Record<string, string> = { all: "All clients", members: "Package holders", subscribers: "Active subscribers", lapsed: "Lapsed (30d)" };
 
 export default async function CampaignsPage() {
   const me = await getProfile();

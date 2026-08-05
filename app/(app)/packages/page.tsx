@@ -11,7 +11,7 @@ type PkgRow = {
   one_time: boolean; requires_slot: boolean; delivery_mode: string; tags: string[] | null; mrp: number | null;
 };
 
-const LINE_LABEL: Record<string, string> = { fm: "Membership", pt: "Personal Training (PT)", comp: "Comprehensive", bp: "BluePrint" };
+const LINE_LABEL: Record<string, string> = { fm: "Membership", pt: "Personal Training", comp: "Comprehensive", bp: "BluePrint" };
 function lineOf(id: string) {
   if (id.startsWith("fm")) return "fm";
   if (id.startsWith("pt")) return "pt";

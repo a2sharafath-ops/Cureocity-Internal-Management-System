@@ -48,7 +48,7 @@ export default async function PassesPage() {
         <span style={{ flex: 1 }} />
         <PassSell passTypes={passTypes} clients={clients} />
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 18px" }}>Day passes &amp; punch cards for members and walk-ins. Each sale posts a paid invoice into Billing.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 18px" }}>Day passes &amp; punch cards for clients and walk-ins. Each sale posts a paid invoice into Billing.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
         {stat("Active passes", String(activePasses))}

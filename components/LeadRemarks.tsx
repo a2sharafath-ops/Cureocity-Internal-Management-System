@@ -84,7 +84,7 @@ export default function LeadRemarks({
   return (
     <div style={box}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div style={{ fontWeight: 700 }}>Remarks &amp; callback</div>
+        <div style={{ fontWeight: 700 }}>Remarks &amp; follow-up</div>
         <span style={{ background: tone.bg, color: tone.color, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 700 }}>
           {v.label}
         </span>
@@ -120,7 +120,7 @@ export default function LeadRemarks({
             <select name="outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as RemarkOutcome)} style={fieldControl}>
               {REMARK_OUTCOMES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
-            <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Call back</label>
+            <label style={{ fontSize: 11.5, color: "var(--muted)" }}>Follow-up date</label>
             <input
               type="date" name="next_follow_up"
               // Re-keyed on outcome so changing it refreshes the suggestion

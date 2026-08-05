@@ -52,7 +52,7 @@ export default async function RxPrintPage({
         <PrintTrigger auto={searchParams?.auto === "1"} />
         {rx.status === "draft" && (
           <span style={{ fontSize: 12.5, color: "#b45309", fontWeight: 600 }}>
-            Draft — sign it before giving this to the patient.
+            Draft — sign it before giving this to the client.
           </span>
         )}
       </div>
@@ -71,7 +71,7 @@ export default async function RxPrintPage({
           <PatientBlock
             title="Prescription"
             docNo={rx.id.slice(0, 8).toUpperCase()}
-            name={c?.name ?? "Patient"} code={c?.code ?? null}
+            name={c?.name ?? "Client"} code={c?.code ?? null}
             age={age} gender={c?.gender ?? null}
             doctor={rx.provider} date={date}
           />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createConsultation } from "@/lib/actions";
+import { disciplineLabel } from "@/lib/disciplines";
 
 const KINDS = ["Doctor", "Diet", "Trainer", "Coach", "Psychologist"];
 
@@ -34,7 +35,7 @@ export default function ConsultationForm({ clients }: { clients: { id: string; n
           <div>
             <label style={{ fontSize: 12, color: "var(--muted)" }}>Type</label>
             <select name="kind" style={input} defaultValue="Doctor">
-              {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
+              {KINDS.map((k) => <option key={k} value={k}>{disciplineLabel(k)}</option>)}
             </select>
           </div>
           <div style={{ gridColumn: "1 / -1" }}>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toggleConsultFlag, saveConsolidatedSummary, signoffConsolidated, startConsult } from "@/lib/actions";
+import { disciplineLabel } from "@/lib/disciplines";
 
 export type ConsultSummary = {
   id: string;
@@ -28,8 +29,6 @@ export type ConsolidatedRow = {
   generated: boolean;
   consolidated: string | null;
 };
-
-const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
@@ -92,7 +91,7 @@ export default function SummariesPanel({
     <div>
       <div style={{ display: "inline-flex", gap: 4, padding: 4, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 14 }}>
         {seg("individual", "Individual summaries", pending)}
-        {seg("consolidated", "Consolidated → Blueprint", consolPending)}
+        {seg("consolidated", "Consolidated → BluePrint", consolPending)}
       </div>
 
       {view === "individual" ? (
@@ -109,7 +108,7 @@ export default function SummariesPanel({
         </form>
 
         <div style={{ ...box, overflow: "hidden" }}>
-          <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)" }}>Approve your {roleLabel} consultation summaries. Approved summaries feed the client&apos;s Blueprint sign-off.</div>
+          <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)" }}>Approve your {roleLabel} consultation summaries. Approved summaries feed the client&apos;s BluePrint sign-off.</div>
           {consults.length ? consults.map((c) => (
             <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -142,7 +141,7 @@ export default function SummariesPanel({
         </>
       ) : (
         <div>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Every clinician assigned to the client must sign off the consolidated summary. The Blueprint generates automatically once <b>all</b> of them have signed.</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Every clinician assigned to the client must sign off the consolidated summary. The BluePrint generates automatically once <b>all</b> of them have signed.</div>
           <div style={{ ...box, overflow: "hidden" }}>
             {consolidated.length ? consolidated.map((c) => {
               const req = c.required.length ? c.required : ["doctor", "dietitian", "trainer"];
@@ -160,11 +159,11 @@ export default function SummariesPanel({
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <b style={{ fontSize: 13 }}>{c.name} <span style={{ color: "var(--muted)", fontWeight: 500 }}>{c.code ? `· ${c.code}` : ""}</span></b>
                       <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-                        {req.map((d) => disc(c.signedByDisc[d], DISC_LABEL[d] ?? d))}
+                        {req.map((d) => disc(c.signedByDisc[d], disciplineLabel(d)))}
                       </div>
                     </div>
                     {c.generated
-                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>Blueprint generated — view</Link>
+                      ? <Link href="/blueprint" style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap" }}>BluePrint generated — view</Link>
                       : <span style={{ background: signedCount === req.length ? "var(--green-bg)" : "var(--amber-bg)", color: signedCount === req.length ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "5px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>{signedCount}/{req.length} signed off</span>}
                   </div>
 
@@ -182,7 +181,7 @@ export default function SummariesPanel({
                       {/* This clinician's own sign-off. */}
                       {mineReq && (
                         mineSigned
-                          ? <span style={{ color: "var(--green-text)", fontSize: 12.5, fontWeight: 600 }}>✓ You signed off ({DISC_LABEL[viewerDisc!] ?? viewerDisc})</span>
+                          ? <span style={{ color: "var(--green-text)", fontSize: 12.5, fontWeight: 600 }}>✓ You signed off ({disciplineLabel(viewerDisc!)})</span>
                           : canSignMine
                             ? <form action={signoffConsolidated}>
                                 <input type="hidden" name="client_id" value={c.client_id} />

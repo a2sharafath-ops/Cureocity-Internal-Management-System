@@ -173,7 +173,7 @@ export default async function DashboardPage() {
         <>
           <span style={{ color: "var(--muted)", fontSize: 13, marginRight: 4 }}>{fullDate}</span>
           <Link href="/appointments" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Book a slot</Link>
-          <Link href="/leads" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add Lead</Link>
+          <Link href="/leads" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>+ Add lead</Link>
         </>
       } />
 
@@ -222,7 +222,7 @@ export default async function DashboardPage() {
             <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 12 }}>
               Check-in is run by trainers (PT &amp; Comprehensive clients) on the trainer board.
             </div>
-            <Link href="/trainer" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Open Trainer Workspace →</Link>
+            <Link href="/trainer" style={{ border: "1px solid var(--border)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "7px 12px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Open trainer workspace →</Link>
           </div>
         </div>
       </div>

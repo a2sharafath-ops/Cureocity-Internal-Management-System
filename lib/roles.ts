@@ -138,11 +138,14 @@ export function canManagePackages(role: string): boolean {
   return role === "Super Admin" || role === "Administrator";
 }
 
-// Who reviews / approves a diet chart before it can be published — the Medical
-// Director (Doctor), plus Admin / Super Admin oversight. Dietitians submit but
-// cannot approve their own charts.
+// Who reviews / approves a diet chart before it can be published: the Super
+// Admin, with the Administrator as backup so a chart never sits waiting on one
+// person. Dietitians submit but cannot approve their own charts.
+//
+// Deliberately NOT the doctor. An earlier note here said "Medical Director",
+// which never matched the code and left the UI telling staff to wait for a
+// doctor's decision that was never coming.
 export function canReviewDietChart(role: string): boolean {
-  // Diet-chart sign-off sits with the Super Admin (with Administrator as backup).
   return role === "Super Admin" || role === "Administrator";
 }
 

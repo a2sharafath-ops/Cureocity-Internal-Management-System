@@ -95,7 +95,7 @@ export default async function TargetsPage() {
         {canSet && <TargetForm month={month} revenue={target.revenue_target} newClients={target.new_clients_target} renewals={target.renewals_target} />}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>
-        Targets for <b>{monthLabel}</b> — {canSet ? "set by Admin" : "set by Admin"} · progress updates live as payments and onboardings happen.
+        Targets for <b>{monthLabel}</b> — set by an Administrator · progress updates live as payments and onboardings happen.
       </p>
 
       {noTarget && (

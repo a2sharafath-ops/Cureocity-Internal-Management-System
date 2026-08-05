@@ -11,7 +11,7 @@ export default function CheckinForm({ clients }: { clients: { id: string; name: 
   return (
     <form action={recordCheckin} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 18, display: "grid", gridTemplateColumns: "1.6fr 1.2fr 1fr auto auto", gap: 10, alignItems: "end" }}>
       <div style={{ display: "grid", gap: 3 }}>
-        <label style={lbl}>Member</label>
+        <label style={lbl}>Client</label>
         <select style={input} name="client_id" value={client} onChange={(e) => setClient(e.target.value)}>
           <option value="">Guest / walk-in</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

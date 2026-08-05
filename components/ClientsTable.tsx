@@ -51,8 +51,8 @@ export default function ClientsTable({ clients, staff, writer }: { clients: Clie
     <div>
       <div style={{ marginBottom: 14 }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "all", label: "All Clients", count: clients.length },
-          { key: "blueprint", label: "Blueprint clients", count: bpCount },
+          { key: "all", label: "All clients", count: clients.length },
+          { key: "blueprint", label: "BluePrint clients", count: bpCount },
         ]} />
       </div>
 

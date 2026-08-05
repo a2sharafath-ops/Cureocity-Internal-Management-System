@@ -548,7 +548,7 @@ export default function ConsoleView({
                 </>
               )}
             </div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>This becomes the shareable summary that feeds the Blueprint sign-off. Generate a draft from the client&apos;s data, or write your own.</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>This becomes the shareable summary that feeds the BluePrint sign-off. Generate a draft from the client&apos;s data, or write your own.</div>
             <textarea name="summary" rows={10} value={summaryText} onChange={(e) => setSummaryText(e.target.value)} placeholder="Session notes, findings, plan…" style={inp} />
             {aiMsg && <div style={{ marginTop: 6, fontSize: 12, color: "var(--brand-text)" }}>{aiMsg}</div>}
             <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -661,7 +661,7 @@ export default function ConsoleView({
                 </a>
               )}
               {rxPrintId && <ShareToPortal kind="rx" id={rxPrintId} sharedAt={rxSharedAt ?? null} label="Share to portal" />}
-              <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 6, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Full prescription in EMR →</Link>
+              <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 6, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Full prescription in the client&apos;s record →</Link>
             </form>
           </div>
         </div>

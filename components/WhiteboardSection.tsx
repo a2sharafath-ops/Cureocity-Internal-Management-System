@@ -10,11 +10,10 @@ import { openWhiteboard, closeWhiteboard } from "@/lib/actions";
 import WhiteboardReviewRow, { type ReviewRowData, type RowAlert } from "@/components/WhiteboardReviewRow";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
+import { disciplineLabel } from "@/lib/disciplines";
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer" };
-
-const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach", psychologist: "Psychologist" };
 
 // Daily team whiteboard — the mandatory working-day walk through every alive
 // client. Reused as the standalone /whiteboard page and the workspace tab.
@@ -69,7 +68,7 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
     const pick = exact ?? rows[0] ?? null;
     const name = pick?.staff_id ? staff.get(pick.staff_id)?.name : null;
     if (name) return discipline && !exact ? `${name} (care team)` : name;
-    return discipline ? `Unassigned ${DISC_LABEL[discipline] ?? discipline}` : "Unassigned";
+    return discipline ? `Unassigned ${disciplineLabel(discipline)}` : "Unassigned";
   };
 
   const slaProtocol = new Map<string, string>();

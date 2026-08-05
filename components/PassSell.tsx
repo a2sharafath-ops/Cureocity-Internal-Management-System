@@ -23,7 +23,7 @@ export default function PassSell({ passTypes, clients }: { passTypes: PassType[]
         </select>
       </div>
       <div style={{ display: "grid", gap: 3 }}>
-        <label style={{ fontSize: 11, color: "var(--muted)" }}>Member (or leave for guest)</label>
+        <label style={{ fontSize: 11, color: "var(--muted)" }}>Client (or leave for guest)</label>
         <select style={input} name="client_id" value={client} onChange={(e) => setClient(e.target.value)}>
           <option value="">Guest</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

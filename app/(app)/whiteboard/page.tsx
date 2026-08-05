@@ -11,7 +11,7 @@ export default async function WhiteboardPage() {
   if (!me || !canSee(me.role, "/whiteboard")) redirect("/dashboard");
   return (
     <div>
-      {isClinician(me.role) ? <BackLink href="/workspace" label="my Workspace" /> : <BackLink />}
+      {isClinician(me.role) ? <BackLink href="/workspace" label="your workspace" /> : <BackLink />}
       <WhiteboardSection me={me} heading />
     </div>
   );

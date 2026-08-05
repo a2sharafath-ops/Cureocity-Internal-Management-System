@@ -41,11 +41,11 @@ export default async function EmrIndexPage({ searchParams }: { searchParams: { q
     <div style={{ maxWidth: 980 }}>
       <RealtimeRefresh tables={["problems", "allergies", "medications"]} />
       <BackLink />
-      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>EMR / Client charts</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Client Records</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Clinical records — problems, allergies, medications, vitals and SOAP notes. Access limited to clinicians.</p>
 
       <form style={{ marginBottom: 14 }}>
-        <input name="q" defaultValue={q} placeholder="Search patients…" style={{ width: 280, padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, background: "#fff" }} />
+        <input name="q" defaultValue={q} placeholder="Search clients…" style={{ width: 280, padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, background: "#fff" }} />
       </form>
 
       <div style={{ ...box, overflow: "hidden" }}>
@@ -62,7 +62,7 @@ export default async function EmrIndexPage({ searchParams }: { searchParams: { q
                 <td style={{ ...td, textAlign: "right" }}><Link href={`/emr/${c.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open chart →</Link></td>
               </tr>
             ))}
-            {clients.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No patients found.</td></tr>}
+            {clients.length === 0 && <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "22px 16px" }}>No clients found.</td></tr>}
           </tbody>
         </table>
       </div>

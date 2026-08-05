@@ -8,7 +8,7 @@ type FileItem = {
 
 function label(kind: string) {
   if (kind === "blood_report") return "Blood report";
-  if (kind === "progress_photo") return "Photo (legacy)";   // no longer captured; kept so old rows still open
+  if (kind === "progress_photo") return "Photo";   // no longer captured; kept so old rows still open
   return "Document";
 }
 

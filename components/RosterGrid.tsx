@@ -17,7 +17,7 @@ const ROLE_GROUPS: { label: string; roles: string[] }[] = [
   { label: "Dietitians",      roles: ["Dietitian"] },
   { label: "Doctors",         roles: ["Doctor"] },
   { label: "Front Desk",      roles: ["Front Desk"] },
-  { label: "Health Coach",    roles: ["Health Coach"] },
+  { label: "Health Coaches",  roles: ["Health Coach"] },
   { label: "Trainers",        roles: ["Fitness Trainer"] },
   { label: "Psychologists",   roles: ["Psychologist"] },
   { label: "Management & HR", roles: ["Administrator", "Super Admin", "Manager", "HR"] },

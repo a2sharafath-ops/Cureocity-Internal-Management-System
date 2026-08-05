@@ -87,10 +87,10 @@ export default async function UsersPage() {
                       : <b>{u.name ?? "—"}</b>}
                     {!u.staff_id && (
                       <div
-                        title="This login isn't linked to a care-team directory row, so they can't be booked as a provider."
+                        title="This login isn't linked to a staff record, so they can't be booked as a provider."
                         style={{ marginTop: 3, fontSize: 11, color: "var(--amber-text-soft)" }}
                       >
-                        not in care-team directory
+                        not linked to a staff record
                       </div>
                     )}
                   </td>

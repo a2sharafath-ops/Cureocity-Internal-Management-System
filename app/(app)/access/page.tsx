@@ -46,7 +46,7 @@ export default async function AccessPage() {
       <RealtimeRefresh tables={["checkins"]} />
       <OpsTabs active="access" />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Access &amp; Check-in</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Front-desk member entry — biometric · card · manual · QR. Today's activity.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Front-desk client entry — biometric · card · manual · QR. Today's activity.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 18 }}>
         {stat("Currently inside", String(insideNow.length))}

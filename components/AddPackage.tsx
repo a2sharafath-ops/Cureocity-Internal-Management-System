@@ -47,7 +47,7 @@ export default function AddPackage({ clientId, packages, hasMembership }: { clie
           <optgroup label="Membership">
             {packages.filter((p) => p.is_facility).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.price.toLocaleString("en-IN")}</option>)}
           </optgroup>
-          <optgroup label="Training / Comprehensive / Other">
+          <optgroup label="PT / Comprehensive / Other">
             {packages.filter((p) => !p.is_facility).map((p) => <option key={p.id} value={p.id}>{p.name} — ₹{p.price.toLocaleString("en-IN")}</option>)}
           </optgroup>
         </select>

@@ -57,7 +57,7 @@ export default function WorkspaceClients({
     if (role === "doctor") return (
       <>
         {kv("Conditions", r.conditions)}
-        {!ro && kv("Clinical record", <Link href={`/emr/${r.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open EMR chart →</Link>)}
+        {!ro && kv("Client record", <Link href={`/emr/${r.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>)}
       </>
     );
     return (

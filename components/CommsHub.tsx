@@ -5,6 +5,17 @@ import Link from "next/link";
 import { sendMessageStaff, createTemplate, createCampaign, sendCampaignNow, archiveTemplate } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
 
+// The audience values are stored on the campaign row, so they stay as they are;
+// only the text a person reads is spelled out. It previously rendered the raw
+// values — "members", "lapsed" — straight into the dropdown.
+const AUDIENCES = [
+  { value: "all", label: "All clients" },
+  { value: "members", label: "Package holders" },
+  { value: "subscribers", label: "Active subscribers" },
+  { value: "lapsed", label: "Lapsed (no visit in 30 days)" },
+];
+
+
 export type CClient = { id: string; name: string; code: string | null; phone: string | null; color: string };
 export type CMsg = { id: string; client_id: string; sender: string; sender_name: string | null; body: string; read: boolean; channel: string; created_at: string };
 export type CTemplate = { id: string; name: string; category: string; subject: string; body: string; channel: string };
@@ -174,7 +185,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
             <form action={createCampaign} onSubmit={() => setTimeout(() => setNewCampaign(false), 50)} style={{ ...box, padding: 16, marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "end" }}>
               <input name="name" placeholder="Campaign name" required style={inpControl} />
               <select name="template_id" required defaultValue="" style={inpControl}><option value="" disabled>Template…</option>{templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-              <select name="audience" defaultValue="all" style={inpControl}>{["all", "members", "subscribers", "lapsed"].map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <select name="audience" defaultValue="all" style={inpControl}>{AUDIENCES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select>
               <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Create</button>
             </form>
           )}

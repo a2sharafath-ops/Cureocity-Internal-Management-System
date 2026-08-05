@@ -4,6 +4,7 @@ import { IST } from "@/lib/datetime";
 import { useRef, useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { uploadResourceFile, deleteResourceFile, type UploadState } from "@/lib/actions";
+import { disciplineLabel } from "@/lib/disciplines";
 
 export type ResourceRow = {
   id: string;
@@ -15,7 +16,6 @@ export type ResourceRow = {
   created_at: string;
 };
 
-const ROLE_LABEL: Record<string, string> = { doctor: "Doctor", diet: "Dietitian", trainer: "Trainer", coach: "Health Coach", all: "Shared" };
 const ext = (n: string) => (n.split(".").pop() || "").toLowerCase();
 const icon = (n: string) => {
   const e = ext(n);
@@ -51,7 +51,7 @@ export default function ResourceLibrary({ role, roleLabel, files }: { role: stri
 
       <form ref={ref} action={formAction} style={{ ...box, padding: 14, marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <select name="role" defaultValue={role} style={inp}>
-          <option value={role}>{ROLE_LABEL[role] ?? role} only</option>
+          <option value={role}>{role === "all" ? "Shared" : disciplineLabel(role)} only</option>
           <option value="all">Shared (all workspaces)</option>
         </select>
         <input name="folder" placeholder="Folder (e.g. Templates)" style={{ ...inp, width: 190 }} />

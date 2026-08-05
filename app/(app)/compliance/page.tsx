@@ -46,7 +46,7 @@ export default async function CompliancePage() {
     <div style={{ maxWidth: 1120 }}>
       <RealtimeRefresh tables={["consents", "breach_incidents"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Compliance &amp; governance</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Consent, incident register, data-retention policy and a PHI-masked access trail. Interop: export any chart as FHIR from the EMR.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 18px" }}>Consent, incident register, data-retention policy and a PHI-masked access trail. Client records can be exported in FHIR format for other health systems.</p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
         {stat("Active consents", String(activeConsents))}
@@ -59,7 +59,7 @@ export default async function CompliancePage() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
         <h2 style={{ fontSize: 15, margin: 0 }}>Health identity (ABHA / UHID)</h2><span style={{ flex: 1 }} /><IdentityForm clients={clients} />
       </div>
-      <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>{identified.length} of {clients.length} patients linked to a national health ID.</p>
+      <p style={{ color: "var(--muted)", fontSize: 12, margin: "0 0 8px" }}>{identified.length} of {clients.length} clients linked to a national health ID.</p>
       <div style={{ ...box, overflow: "hidden", marginBottom: 28 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead><tr><th style={th}>Client</th><th style={th}>ABHA ID</th><th style={th}>UHID</th></tr></thead>
@@ -71,7 +71,7 @@ export default async function CompliancePage() {
                 <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{c.uhid ?? "—"}</td>
               </tr>
             ))}
-            {identified.length === 0 && <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "20px 16px" }}>No patients linked yet.</td></tr>}
+            {identified.length === 0 && <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "20px 16px" }}>No clients linked yet.</td></tr>}
           </tbody>
         </table>
       </div>

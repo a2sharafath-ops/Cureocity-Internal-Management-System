@@ -53,10 +53,10 @@ type ViewKey = keyof typeof VIEWS;
 // Every pipeline stage, in the order a lead travels through them. `key` is the
 // exact `stage` value stored on the row, so filtering is an equality check.
 const STAGES = [
-  { key: "1-New Lead", label: "New Lead" },
+  { key: "1-New Lead", label: "New lead" },
   { key: "2-Discovery", label: "Discovery" },
-  { key: "3-Product Match", label: "Product Match" },
-  { key: "4-Visit/Trial", label: "Visit / Trial" },
+  { key: "3-Product Match", label: "Product match" },
+  { key: "4-Visit/Trial", label: "Visit / trial" },
   { key: "5-Close", label: "Close" },
   { key: "6-Nurture", label: "Nurture" },
   { key: "LOST", label: "Lost" },
@@ -420,7 +420,7 @@ export default async function LeadsPage({
                 <th style={th}>Tier</th>
                 <th style={th}>Added</th>
                 <th style={th}>Last remark</th>
-                <th style={th}>Callback</th>
+                <th style={th}>Follow-up</th>
                 <th style={th}>Owner</th>
                 <th style={th}>Stage</th>
                 <th style={th} />

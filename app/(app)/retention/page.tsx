@@ -81,7 +81,7 @@ export default async function RetentionPage() {
     <div style={{ maxWidth: 1120 }}>
       <RealtimeRefresh tables={["nps_responses", "referrals", "loyalty", "subscriptions", "sessions", "invoices"]} />
       <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Retention</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Churn risk · satisfaction (NPS) · referrals &amp; loyalty — keep members engaged.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Churn risk · satisfaction (NPS) · referrals &amp; loyalty — keep clients engaged.</p>
 
       <RetentionHub risk={risk} kpis={kpis} npsList={npsList} npsStats={npsStats} referrals={refRows} loyalty={loyalty} clients={clients.map((c) => ({ id: c.id, name: c.name }))} canAct={canAct} />
     </div>

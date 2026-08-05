@@ -167,7 +167,7 @@ export default async function HrDashboard({ name, role = "HR" }: { name: string;
             {/* Both are role-gated now, so the shortcut has to ask the same
                 question the page will — otherwise it offers a door that
                 bounces you straight back here. */}
-            {canSee(role, "/kb") && <Link href="/kb" style={qa}>SOP&apos;s</Link>}
+            {canSee(role, "/kb") && <Link href="/kb" style={qa}>SOPs</Link>}
             {canSee(role, "/tasks") && <Link href="/tasks" style={qa}>Tasks</Link>}
           </div>
         </div>

@@ -28,7 +28,7 @@ export default async function KbPage() {
     <div style={{ maxWidth: 900 }}>
       <RealtimeRefresh tables={["sops"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, margin: 0 }}>SOP&apos;s</h1>
+        <h1 style={{ fontSize: 20, margin: 0 }}>SOPs</h1>
         <span style={{ flex: 1 }} />
         {canEdit && <SopForm />}
       </div>

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const TABS = [
-  { key: "sales", label: "Sales" },
+  { key: "sales", label: "Collections" },
   { key: "payable", label: "Payables" },
   { key: "estimates", label: "Estimates" },
   { key: "bank", label: "Bank" },

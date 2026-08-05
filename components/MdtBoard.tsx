@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { addMdtNote, acknowledgeMdt } from "@/lib/actions";
+import { disciplineLabel } from "@/lib/disciplines";
 
 export type MdtRow = {
   id: string;
@@ -16,7 +17,10 @@ export type MdtRow = {
   created_at: string;
 };
 
-const ROLE_LABEL: Record<string, string> = { doctor: "Doctor", diet: "Dietitian", trainer: "Trainer", coach: "Health Coach" };
+// Escalation targets — unchanged set of disciplines an MDT note can be routed
+// to (psychologist deliberately excluded, as before). Display text now comes
+// from the shared discipline map.
+const ESCALATE_KINDS = ["doctor", "diet", "trainer", "coach"] as const;
 
 export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
@@ -47,7 +51,7 @@ export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients:
           </div>
           {esc && (
             <select name="to_role" defaultValue="doctor" style={inp}>
-              {Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {ESCALATE_KINDS.map((k) => <option key={k} value={k}>{disciplineLabel(k)}</option>)}
             </select>
           )}
           <textarea name="body" required placeholder="Update, observation or escalation reason…" rows={3} style={{ ...inp, resize: "vertical" }} />
@@ -63,7 +67,7 @@ export default function MdtBoard({ notes, clients }: { notes: MdtRow[]; clients:
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <b style={{ fontSize: 13 }}>{m.author ?? "—"}</b>
                 {m.client_name && <span style={{ color: "var(--muted)", fontSize: 12 }}>· {m.client_name}</span>}
-                {m.escalated && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>→ {ROLE_LABEL[m.to_role ?? ""] ?? m.to_role}</span>}
+                {m.escalated && <span style={{ background: "var(--purple-bg)", color: "var(--purple-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>→ {disciplineLabel(m.to_role ?? "")}</span>}
                 <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{fmt(m.created_at)}</span>
               </div>
               <div style={{ fontSize: 13, marginTop: 3 }}>{m.body}</div>

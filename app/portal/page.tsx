@@ -284,7 +284,7 @@ export default async function PortalHome() {
           )}
           {bp?.generated ? (
             <div style={{ fontSize: 13 }}>
-              <b style={{ color: "var(--green-text)" }}>Your Personal Health Blueprint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
+              <b style={{ color: "var(--green-text)" }}>Your Personal Health BluePrint is ready</b>{bp.generated_date ? ` (${bp.generated_date})` : ""}.
               {" "}<Link href="/portal/blueprint" style={{ color: "var(--brand-text)", fontWeight: 600, textDecoration: "none" }}>View full report →</Link>
               {bp.consolidated && <div style={{ marginTop: 6, color: "var(--muted)" }}>{bp.consolidated}</div>}
               {bp.scores && (() => {
@@ -292,7 +292,7 @@ export default async function PortalHome() {
                 const avg = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
                 return (
                   <div style={{ display: "flex", gap: 20, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-                    <Gauge value={avg} size={180} unit="/ 100" label="Overall wellness" caption="your Personal Health Blueprint" />
+                    <Gauge value={avg} size={180} unit="/ 100" label="Overall wellness" caption="your Personal Health BluePrint" />
                     <div style={{ flex: 1, minWidth: 240, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(88px, 1fr))", gap: 14, justifyItems: "center" }}>
                       {BP_SCORES.filter((s) => bp.scores && typeof bp.scores[s.key] === "number").map((s) => (
                         <RingMeter key={s.key} value={Number(bp.scores![s.key])} size={78} stroke={9} label={s.label} />

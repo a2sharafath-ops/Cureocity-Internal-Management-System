@@ -170,7 +170,7 @@ export default async function ClientsPage() {
         <h1 style={{ fontSize: 20, margin: 0 }}>Clients</h1>
         <span style={{ flex: 1 }} />
         {writer && (
-          <Link href="/clients/new" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>+ Onboard Client</Link>
+          <Link href="/clients/new" style={{ background: "var(--ink)", color: "#fff", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>+ Add client</Link>
         )}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 14px" }}>CRM Hub — searchable contacts list</p>
@@ -181,7 +181,7 @@ export default async function ClientsPage() {
         <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "var(--brand-tint)", border: "1px solid #99f6e4", borderRadius: "var(--radius)", padding: "12px 16px", marginBottom: 12, fontSize: 14 }}>
           <span><b>Tablet intake received:</b> {s.first_name} {s.last_name ?? ""}{s.phone ? ` · ${s.phone}` : ""} — synced to front desk</span>
           <span style={{ flex: 1 }} />
-          <Link href={`/clients/new?sub=${s.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Review &amp; Add Client</Link>
+          <Link href={`/clients/new?sub=${s.id}`} style={{ background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "7px 13px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>Review &amp; add client</Link>
         </div>
       ))}
 

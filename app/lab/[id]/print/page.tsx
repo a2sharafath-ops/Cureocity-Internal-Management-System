@@ -79,7 +79,7 @@ export default async function LabPrintPage({
           <PatientBlock
             title="Investigation request"
             docNo={orders[0].id.slice(0, 8).toUpperCase()}
-            name={c?.name ?? "Patient"} code={c?.code ?? null}
+            name={c?.name ?? "Client"} code={c?.code ?? null}
             age={age} gender={c?.gender ?? null}
             doctor={orders[0].provider} date={date}
           />

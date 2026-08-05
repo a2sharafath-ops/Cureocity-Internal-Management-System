@@ -7,8 +7,7 @@
 
 import { RingMeter, Gauge } from "@/components/Meters";
 import { BP_SCORES, BP_DOMAINS, band, type BpScores } from "@/lib/blueprint";
-
-const DISC_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Trainer", coach: "Coach", psychologist: "Psychologist" };
+import { disciplineLabel } from "@/lib/disciplines";
 
 export default function BlueprintReport({
   subject, scores, consolidated, generatedDate, signoffs = [],
@@ -89,7 +88,7 @@ export default function BlueprintReport({
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {signoffs.map((s) => (
                 <span key={s.discipline} style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 11px", fontSize: 11.5, fontWeight: 600 }}>
-                  ✓ {DISC_LABEL[s.discipline] ?? s.discipline}{s.by_name ? ` · ${s.by_name}` : ""}
+                  ✓ {disciplineLabel(s.discipline)}{s.by_name ? ` · ${s.by_name}` : ""}
                 </span>
               ))}
             </div>

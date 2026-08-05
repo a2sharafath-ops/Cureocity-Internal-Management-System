@@ -159,7 +159,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: {
   return (
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["clients", "consultations", "blood_requests", "blueprints", "invoices", "sessions", "appointments", "client_packages", "client_assignments"]} />
-      <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Clients</h1>
+      <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>Onboarding</h1>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 14px" }}>
         Every client mid-onboarding, by package — where each one is and the next action. {inProgress} in progress.
       </p>

@@ -35,6 +35,7 @@ import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import CoachMarkersSection from "@/components/CoachMarkersSection";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { careWorkFlags } from "@/lib/care-attention";
+import { disciplineLabel } from "@/lib/disciplines";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
   visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
@@ -505,7 +506,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {readOnly && (
         <div style={{ background: "var(--amber-bg)", color: "var(--amber-text)", border: "1px solid #fde68a", borderRadius: 10, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, marginBottom: 12 }}>
-          Viewing the {role.short} workspace — read-only. You can review client details but can&apos;t edit another discipline&apos;s records.
+          Viewing the {disciplineLabel(roleKey)} workspace — read-only. You can review client details but can&apos;t edit another discipline&apos;s records.
         </div>
       )}
 
