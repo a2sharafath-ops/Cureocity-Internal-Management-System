@@ -8,15 +8,20 @@ type Staff = { id: string; name: string; role: string };
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-// Disciplines in the order a clinic thinks about the floor: who greets, who
-// coaches, who trains, then the clinical roles.
+// Grouped by what someone actually does on a shift, in the order you'd read
+// the floor. Front office is the desk — not everyone who happens to sit near
+// it: an Administrator, a Manager and an HR lead are back office, and rostering
+// them under "Front office" made it look like five people were covering
+// reception. Management is listed last because the roster's first question is
+// who is on the floor, not who is in the building.
 const ROLE_GROUPS: { label: string; roles: string[] }[] = [
-  { label: "Front office",  roles: ["Front Desk", "Administrator", "Manager", "HR"] },
-  { label: "Health coach",  roles: ["Health Coach"] },
-  { label: "Trainers",      roles: ["Fitness Trainer"] },
-  { label: "Dietitians",    roles: ["Dietitian"] },
-  { label: "Doctors",       roles: ["Doctor"] },
-  { label: "Psychologists", roles: ["Psychologist"] },
+  { label: "Front office",     roles: ["Front Desk"] },
+  { label: "Health coach",     roles: ["Health Coach"] },
+  { label: "Trainers",         roles: ["Fitness Trainer"] },
+  { label: "Dietitians",       roles: ["Dietitian"] },
+  { label: "Doctors",          roles: ["Doctor"] },
+  { label: "Psychologists",    roles: ["Psychologist"] },
+  { label: "Management & HR",  roles: ["Administrator", "Super Admin", "Manager", "HR"] },
 ];
 
 export default function RosterGrid({
