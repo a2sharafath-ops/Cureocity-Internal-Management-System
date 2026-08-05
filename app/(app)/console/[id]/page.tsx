@@ -25,7 +25,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
   const row = data as unknown as {
     id: string; kind: string; status: string; summary: string | null;
     answers: [string, string][] | null; flags: { text: string; severity: string }[] | null;
-    draft: { vitals?: Record<string, string>; order?: Record<string, string>; rx?: Record<string, string> } | null;
+    draft: { vitals?: Record<string, string>; order?: Record<string, string>; rx?: Record<string, string>; transcript?: string } | null;
     client_id: string | null; lead_id: string | null;
     clients: { name: string; code: string | null } | null; leads: { name: string } | null;
   };
@@ -177,6 +177,12 @@ export default async function ConsolePage({ params }: { params: { id: string } }
     rxList = ((rx ?? []) as unknown as { drug: string; dose: string | null; frequency: string | null; duration: string | null }[]);
   }
 
+  // Vitals, lab orders and prescriptions write rows keyed to a real client. A
+  // lead has no clients row, so these were quietly posting a lead id into the
+  // clinical tables; every other clinical panel here is already gated the same
+  // way.
+  const canTools = row.kind === "Doctor" && Boolean(row.client_id);
+
   return (
     <ConsoleView
       id={row.id}
@@ -188,7 +194,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       answers={(row.answers ?? []) as [string, string][]}
       // Vitals typed but never saved — restored so a reload doesn't lose them.
       draftVitals={((row.draft ?? null) as { vitals?: Record<string, string> } | null)?.vitals ?? null}
-      draftPending={{ order: row.draft?.order, rx: row.draft?.rx }}
+      draftPending={{ order: row.draft?.order, rx: row.draft?.rx, transcript: row.draft?.transcript }}
       savedVitals={savedVitals}
       savedVitalsAt={savedVitalsAt}
       rxPrintId={rxPrintId}
@@ -197,7 +203,7 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       flags={(row.flags ?? []) as { text: string; severity: string }[]}
       summary={row.summary}
       status={row.status}
-      canTools={row.kind === "Doctor"}
+      canTools={canTools}
       reports={reports}
       orders={orders}
       prescriptions={rxList}

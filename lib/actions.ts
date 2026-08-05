@@ -1500,13 +1500,15 @@ export async function saveConsultSession(formData: FormData) {
       if (eid) await supabase.from("vitals").update({ ...vitalVals, recorded_by: p.name }).eq("id", eid);
       else await supabase.from("vitals").insert({ client_id: vClient, date: today, ...vitalVals, recorded_by: p.name });
       // The vitals have become a real record, so drop them from the scratch
-      // copy — but keep anything still unsent (a half-typed order or
-      // prescription), which saving the questionnaire has nothing to do with.
+      // copy — but keep everything still in flight: a half-typed order or
+      // prescription, and the scribe transcript. Saving the questionnaire has
+      // nothing to do with any of them, and silently discarding twenty minutes
+      // of dictation because someone pressed Save would be unforgivable.
       const { data: dRow } = await supabase.from("consultations").select("draft").eq("id", id).maybeSingle();
       const d = ((dRow as { draft: Record<string, unknown> | null } | null)?.draft ?? {}) as Record<string, unknown>;
-      const rest = { order: d.order, rx: d.rx };
+      const rest = { order: d.order, rx: d.rx, transcript: d.transcript };
       await supabase.from("consultations").update({
-        draft: rest.order || rest.rx ? rest : null,
+        draft: rest.order || rest.rx || rest.transcript ? rest : null,
       }).eq("id", id);
     }
   }
@@ -1544,8 +1546,10 @@ export async function autosaveConsult(
   summary: string,
   vitals?: Record<string, string>,
   questionsFromClient?: string[],
-  /** Typed but not yet placed / signed — recoverable, never a record. */
-  pending?: { order?: Record<string, string>; rx?: Record<string, string> },
+  /** Typed but not yet placed / signed — recoverable, never a record.
+   *  `transcript` is the ambient scribe's working note, kept for the same
+   *  reason: losing twenty minutes of dictation to a reload is unforgivable. */
+  pending?: { order?: Record<string, string>; rx?: Record<string, string>; transcript?: string },
 ): Promise<{ ok?: boolean; at?: string; error?: string }> {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return { error: "Not authorized." };
@@ -1595,12 +1599,13 @@ export async function autosaveConsult(
     const e = Object.entries(o ?? {}).filter(([, v]) => String(v ?? "").trim());
     return e.length ? Object.fromEntries(e) : undefined;
   };
-  const pendingDraft = { order: clean(pending?.order), rx: clean(pending?.rx) };
+  const transcript = String(pending?.transcript ?? "").trim() || undefined;
+  const pendingDraft = { order: clean(pending?.order), rx: clean(pending?.rx), transcript };
   const { error } = await supabase.from("consultations").update({
     answers: pairs,
     flags: (flags ?? []).filter((f) => f?.text?.trim()),
     summary: summary.trim() || null,
-    draft: (Object.keys(vDraft).length || pendingDraft.order || pendingDraft.rx)
+    draft: (Object.keys(vDraft).length || pendingDraft.order || pendingDraft.rx || pendingDraft.transcript)
       ? { vitals: vDraft, ...pendingDraft }
       : null,
   }).eq("id", id);
