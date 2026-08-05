@@ -66,7 +66,7 @@ export default async function DashboardPage() {
   // Today and Growth first, with utilisation and the schedule below.
   if (effective === "Manager") return <ManagerDashboard name={me?.name ?? "there"} />;
   if (effective === "Finance") return <FinanceDashboard name={me?.name ?? "there"} />;
-  if (effective === "HR") return <HrDashboard name={me?.name ?? "there"} />;
+  if (effective === "HR") return <HrDashboard name={me?.name ?? "there"} role={effective} />;
 
   const role = effective;
   const isOps = ["Administrator", "Manager", "Front Desk"].includes(role);

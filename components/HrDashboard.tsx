@@ -6,13 +6,14 @@ import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { canSee } from "@/lib/roles";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const sectionTitle: React.CSSProperties = { fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" };
 const qa: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--ink)" };
 
-export default async function HrDashboard({ name }: { name: string }) {
+export default async function HrDashboard({ name, role = "HR" }: { name: string; role?: string }) {
   const supabase = createClient();
   const today = todayISO();
   const month = today.slice(0, 7);
@@ -163,8 +164,11 @@ export default async function HrDashboard({ name }: { name: string }) {
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
             <Link href="/hr" style={qa}>HR</Link>
             <Link href="/users" style={qa}>Users &amp; Roles</Link>
-            <Link href="/kb" style={qa}>SOP&apos;s</Link>
-            <Link href="/tasks" style={qa}>Tasks</Link>
+            {/* Both are role-gated now, so the shortcut has to ask the same
+                question the page will — otherwise it offers a door that
+                bounces you straight back here. */}
+            {canSee(role, "/kb") && <Link href="/kb" style={qa}>SOP&apos;s</Link>}
+            {canSee(role, "/tasks") && <Link href="/tasks" style={qa}>Tasks</Link>}
           </div>
         </div>
 

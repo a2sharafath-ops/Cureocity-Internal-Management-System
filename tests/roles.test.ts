@@ -24,6 +24,21 @@ describe("canSee", () => {
     expect(canSee("Front Desk", "/emr")).toBe(false);
   });
 
+  it("SOPs are HR-only for now, plus the owner", () => {
+    expect(canSee("HR", "/kb")).toBe(true);
+    expect(canSee("Super Admin", "/kb")).toBe(true);
+    for (const r of ["Administrator", "Manager", "Front Desk", "Doctor", "Dietitian", "Staff"]) {
+      expect(canSee(r, "/kb")).toBe(false);
+    }
+  });
+
+  it("the task board is owner-only for now", () => {
+    expect(canSee("Super Admin", "/tasks")).toBe(true);
+    for (const r of ["Administrator", "Manager", "Front Desk", "HR", "Doctor", "Staff"]) {
+      expect(canSee(r, "/tasks")).toBe(false);
+    }
+  });
+
   it("unknown routes default to visible", () => {
     expect(canSee("Staff", "/some-unmapped-route")).toBe(true);
   });

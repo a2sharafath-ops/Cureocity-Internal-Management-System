@@ -59,7 +59,10 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/expenses": ["Administrator", "Manager", "Finance"],
   "/finsheets": ["Administrator", "Manager", "Finance"],
-  "/kb": ["Administrator", "Manager", "Front Desk", ...CLIN, "HR", "Staff"],
+  // SOPs are being rewritten, so the library is closed to the floor for now.
+  // HR keeps it — they own the people-facing SOPs and are the ones editing.
+  // (Super Admin bypasses this map.)
+  "/kb": ["HR"],
   "/subscriptions": ["Administrator", "Manager", "Finance"],
   "/retention": ["Administrator", "Manager", "Front Desk"],
   "/campaigns": ["Administrator", "Manager", "Front Desk"],
@@ -80,7 +83,10 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   // (canAdmin) and in each server action.
   "/users": ["Administrator", "Manager"],
   "/compliance": ["Administrator", "Manager"],
-  "/tasks": "all",
+  // The task board is Super-Admin-only for now. The system still CREATES tasks
+  // for everyone (booking chases, SLA breaches) and they still drive the
+  // "Needs your attention" panels — this only closes the /tasks page itself.
+  "/tasks": [],
   "/hr": ["Administrator", "Manager", "HR"],
   "/exlib": ["Administrator", "Manager", ...CLIN],
   "/notifications": ["Administrator", "Manager"],

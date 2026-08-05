@@ -152,8 +152,13 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {sections.map((section, si) => (
-          <div key={section.title ?? "top"} style={{ marginTop: si === 0 ? 0 : 14 }}>
-            {section.title && (
+          <div key={section.title ?? "top"} style={{ marginTop: si === 0 ? 0 : owner ? 14 : 12 }}>
+            {/* The section labels — Front Desk, People, Sprint, Admin,
+                Governance, Finance — are internal shorthand for how the system
+                is carved up, not names anyone on the floor uses. Only the owner
+                sees them; everyone else gets the same grouping expressed as
+                spacing alone, which is what the grouping is actually for. */}
+            {section.title && owner && (
               <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
                 {section.title}
               </div>
