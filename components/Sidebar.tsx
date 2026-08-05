@@ -150,16 +150,21 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
         </div>
       </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {sections.map((section, si) => (
-          <div key={section.title ?? "top"} style={{ marginTop: si === 0 ? 0 : owner ? 14 : 12 }}>
+      {/* One rhythm the whole way down. The sections still exist — they decide
+          the ORDER of the links — but they no longer add space of their own, so
+          every item sits the same distance from its neighbours whether or not a
+          group boundary falls between them. The 2px gap lives on the links
+          themselves rather than on `nav`, otherwise a section boundary would
+          quietly gain an extra gap. */}
+      <nav style={{ display: "flex", flexDirection: "column" }}>
+        {sections.map((section) => (
+          <div key={section.title ?? "top"}>
             {/* The section labels — Front Desk, People, Sprint, Admin,
                 Governance, Finance — are internal shorthand for how the system
                 is carved up, not names anyone on the floor uses. Only the owner
-                sees them; everyone else gets the same grouping expressed as
-                spacing alone, which is what the grouping is actually for. */}
+                sees them. */}
             {section.title && owner && (
-              <div style={{ padding: "0 12px 5px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
+              <div style={{ padding: "10px 12px 4px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
                 {section.title}
               </div>
             )}
@@ -180,6 +185,7 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
                     alignItems: "center",
                     gap: 11,
                     padding: "9px 12px",
+                    marginBottom: 2,
                     borderRadius: 10,
                     fontSize: 14,
                     fontWeight: active ? 700 : 500,
