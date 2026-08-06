@@ -18,6 +18,7 @@ import {
   clock, dateClock, formatLeft, SLA_TONE, NO_HOLD,
   type Clock, type Hold,
 } from "@/lib/sla-clock";
+import { DELIVERY_OWNER } from "@/lib/work-owners";
 import {
   SIGNOFF_MS, DIET_DRAFT_MS, WORKOUT_PLAN_MS, PRESCRIPTION_MS,
   PT_SESSIONS_PER_CYCLE, DISCIPLINE_KINDS, KIND_LABEL,
@@ -62,7 +63,7 @@ export type Gate = {
   gate: string;
   label: string;
   /** which discipline owes it */
-  owner: "doctor" | "dietitian" | "trainer" | "coach";
+  owner: "doctor" | "dietitian" | "trainer" | "coach" | "psychologist";
   clock: Clock;
 };
 
@@ -75,8 +76,8 @@ export type ComprehensiveReport = {
   cycles: number;
 };
 
-const OWNER_OF: Record<DisciplineKind, "doctor" | "dietitian" | "trainer"> = {
-  Doctor: "doctor", Diet: "dietitian", Trainer: "trainer",
+const OWNER_OF: Record<DisciplineKind, "doctor" | "dietitian" | "trainer" | "psychologist"> = {
+  Doctor: "doctor", Diet: "dietitian", Trainer: "trainer", Psychologist: "psychologist",
 };
 
 export function comprehensiveSla(
@@ -186,10 +187,11 @@ export function comprehensiveSla(
   };
 }
 
-/** Roles to notify for a gate's owner. Mirrors ownsConsultKind. */
-export const OWNER_ROLES: Record<Gate["owner"], string[]> = {
-  doctor: ["Doctor"],
-  dietitian: ["Dietitian"],
-  trainer: ["Fitness Trainer"],
-  coach: ["Health Coach"],
-};
+/**
+ * Roles to notify for a gate's owner.
+ *
+ * This was a fourth private copy of "discipline → role", and it had already
+ * fallen a discipline behind. It now re-exports the shared map so there is
+ * exactly one place a new discipline has to be added.
+ */
+export const OWNER_ROLES: Record<Gate["owner"], string[]> = DELIVERY_OWNER;

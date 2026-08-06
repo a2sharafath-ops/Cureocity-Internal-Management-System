@@ -61,7 +61,7 @@ export type Milestone = {
   key: string;
   label: string;
   /** discipline that owns it — matches client_assignments.discipline */
-  owner: "doctor" | "dietitian" | "trainer" | "coach";
+  owner: "doctor" | "dietitian" | "trainer" | "coach" | "psychologist";
   /** earliest the milestone becomes bookable, in days from package start */
   from: number;
   /** deadline, in days from package start */
@@ -116,11 +116,19 @@ export const BOOKING_DUE_DAYS = 2;
  *  client can hold one of each. */
 export const BLOOD_PANEL = "comprehensive";
 
-export const DISCIPLINE_KINDS = ["Doctor", "Diet", "Trainer"] as const;
+// The psychology consultation is optional, but once it HAPPENS its summary is
+// owed like any other — 24h, same as the doctor's. Adding it here is safe for
+// clients who decline: the gate's clock only starts when a consult of that
+// kind completes, so it simply stays "waiting" forever and never breaches.
+//
+// Before this, the psychologist was a discipline with a login, a workspace, a
+// consultation kind and matching rules — and not one obligation anywhere. They
+// could see a client and owe nothing for it.
+export const DISCIPLINE_KINDS = ["Doctor", "Diet", "Trainer", "Psychologist"] as const;
 export type DisciplineKind = (typeof DISCIPLINE_KINDS)[number];
 
 export const KIND_LABEL: Record<DisciplineKind, string> = {
-  Doctor: "Doctor", Diet: "Dietitian", Trainer: "Trainer",
+  Doctor: "Doctor", Diet: "Dietitian", Trainer: "Trainer", Psychologist: "Psychologist",
 };
 
 // ---- date helpers ----------------------------------------------------------

@@ -9,6 +9,7 @@ import { dueOn, waitingSince } from "@/lib/due";
 import { clock, formatLeft } from "@/lib/sla-clock";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
+import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 import { loadClientStatuses } from "@/lib/client-status";
 import {
@@ -270,13 +271,20 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       }
     }
 
-    if (cats.has("comprehensive")) {
-      const comp = rows.find((r) => r.category === "comprehensive");
+    // Milestones for BOTH protocols. This block used to be Comprehensive-only,
+    // so a PT client's day-28 fitness reassessment could go a month overdue
+    // with nothing on any queue saying so.
+    if (cats.has("comprehensive") || cats.has("training")) {
+      const isPt = !cats.has("comprehensive") && cats.has("training");
+      const comp = rows.find((r) => r.category === (isPt ? "training" : "comprehensive"));
       // Overdue calendar milestones (bookings that never got made).
       const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
       if (start) {
         const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
-        for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(span)), apptsBy.get(clientId) ?? [], services)) {
+        const dated = isPt
+          ? ptMilestoneDates(start, ptCyclesFor(span))
+          : milestoneDates(start, cyclesFor(span));
+        for (const m of unsatisfiedMilestones(clientId, dated, apptsBy.get(clientId) ?? [], services)) {
           if (today <= m.dueDate) continue; // dashboard shows only overdue milestones
           // A missed milestone is two failures wearing one label: nobody booked
           // it, or it was booked and not held. MILESTONES records the

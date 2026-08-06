@@ -12,6 +12,7 @@ import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKO
 import { clock, formatLeft } from "@/lib/sla-clock";
 import { dueOn, waitingSince } from "@/lib/due";
 import { loadClientStatuses } from "@/lib/client-status";
+import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
@@ -197,9 +198,13 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // hasn't been written). Until then the "Diet chart — not drafted" item above
   // is what's outstanding. Chased against the assigned coach, not front desk.
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && hasChart) {
+    // Two people, as always: the coach SCHEDULES it, the dietitian DELIVERS it
+    // (it is their chart being explained). Naming only the coach left the
+    // dietitian unchased for a session she is the one who has to hold.
+    const explainRoles = [...BOOKING_OWNER, ...DELIVERY_OWNER.dietitian];
     const coachOwned: Pick<StatusItem, "ownerStaffId" | "ownerName" | "chaseRoles" | "chaseWho"> =
-      coach ? { ownerStaffId: coach.id, ownerName: coach.name, chaseRoles: ["Health Coach"], chaseWho: "Health Coach" }
-            : { chaseRoles: ["Health Coach"], chaseWho: "Health Coach" };
+      coach ? { ownerStaffId: coach.id, ownerName: coach.name, chaseRoles: explainRoles, chaseWho: "Health Coach" }
+            : { chaseRoles: explainRoles, chaseWho: "Health Coach" };
     if (dietExplain.due_date <= today) openNow.push({ label: "Diet chart explanation — due", detail: `Day 2 · was due ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "warn", ...coachOwned });
     else upcoming.push({ label: "Diet chart explanation (Day 2)", detail: `by ${fmt(dietExplain.due_date)}`, href: `/followups?client=${clientId}`, tone: "info", sortKey: dietExplain.due_date, ...coachOwned });
   }
@@ -229,8 +234,9 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   }
 
   // ---- comprehensive calendar milestones ---------------------------------
-  if (isComp) {
-    const comp = active.find((c) => c.category === "comprehensive");
+  // Same fix as the dashboard: PT has a milestone too, and it was invisible.
+  if (isComp || isPt) {
+    const comp = active.find((c) => c.category === (isComp ? "comprehensive" : "training"));
     const start = proto?.start_date ?? comp?.start_date ?? null;
     if (start) {
       // Resolve each booking's type to its service category so a manually-booked
@@ -239,7 +245,10 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       const { data: svcData } = await sb.from("services").select("name, category, day_offset");
       const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
       const spanDays = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
-      for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(spanDays)), (appts ?? []) as ApptMatchRow[], services)) {
+      const dated = isComp
+        ? milestoneDates(start, cyclesFor(spanDays))
+        : ptMilestoneDates(start, ptCyclesFor(spanDays));
+      for (const m of unsatisfiedMilestones(clientId, dated, (appts ?? []) as ApptMatchRow[], services)) {
         // Booked by the coach, held by the Health Professional whose discipline
         // MILESTONES names — so chase both rather than inventing one owner.
         const chase = { chaseRoles: [...BOOKING_OWNER, ...(DELIVERY_OWNER[m.owner] ?? [])], chaseWho: "Health Coach" };

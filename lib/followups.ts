@@ -10,6 +10,7 @@
 // turns it into calls to make.
 
 import { MILESTONES, milestoneDates, cyclesFor } from "@/lib/comprehensive";
+import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 
 export const RENEWAL_LEAD_DAYS = 7;
 /** Kept for the Day-2 explanation, which is a call, not a milestone. */
@@ -33,9 +34,20 @@ export type ProtocolClient = {
   days?: number | null;
 };
 
+/**
+ * Which packages have a follow-up ladder.
+ *
+ * PT was excluded, so a training client's fitness reassessment — a real
+ * milestone with a real day-28 deadline in lib/pt.ts — never entered the queue
+ * or either attention panel. It existed in the protocol definition and nowhere
+ * a human would ever see it.
+ */
 export function onProtocol(c: ProtocolClient): boolean {
-  return (c.category ?? "").toLowerCase() === "comprehensive";
+  const cat = (c.category ?? "").toLowerCase();
+  return cat === "comprehensive" || cat === "training";
 }
+
+const isPt = (c: ProtocolClient) => (c.category ?? "").toLowerCase() === "training";
 
 /** The date a client's protocol clock starts. The package start is what every
  *  milestone engine uses; `joined` is only a fallback for older rows that never
@@ -68,9 +80,9 @@ export function buildFollowupRows(
     const start = protocolStart(c);
     if (!start) continue;
 
-    // Day 2 — explaining the diet chart. Not in MILESTONES because it is a
-    // call the coach makes, not a booking the calendar has to satisfy.
-    rows.push({
+    // Day 2 — explaining the diet chart. Comprehensive only: a PT client has
+    // no dietitian and no chart to explain.
+    if (!isPt(c)) rows.push({
       client_id: c.id, kind: "onboarding", label: "Day 2 diet chart explanation",
       due_date: addDaysUTC(start, EXPLANATION_OFFSET), priority: "mandatory", created_by: createdBy,
       category: "Diet Consultation", day: EXPLANATION_OFFSET, mode: "Offline",
@@ -79,7 +91,12 @@ export function buildFollowupRows(
 
     // Everything else comes straight off the care plan, so the call and the
     // booking gate can never be due on different days again.
-    for (const m of milestoneDates(start, cyclesFor(c.days ?? null))) {
+    // PT has its own single milestone (the day-28 fitness reassessment);
+    // Comprehensive has four. Same shape, so the row builder below is shared.
+    const dated = isPt(c)
+      ? ptMilestoneDates(start, ptCyclesFor(c.days ?? null))
+      : milestoneDates(start, cyclesFor(c.days ?? null));
+    for (const m of dated) {
       rows.push({
         client_id: c.id, kind: "onboarding", label: m.label,
         due_date: m.dueDate, priority: "normal", created_by: createdBy,

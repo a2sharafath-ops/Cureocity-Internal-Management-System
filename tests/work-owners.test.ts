@@ -129,3 +129,49 @@ describe("Comprehensive includes exactly one psychology consultation", () => {
     expect(disciplinesForCategory("training")).not.toContain("psychologist");
   });
 });
+
+// ---------------------------------------------------------------------------
+// PT clients used to fall out of every queue: the follow-up generator was
+// Comprehensive-only, so a training client's day-28 fitness reassessment lived
+// in lib/pt.ts and appeared nowhere a human would look.
+// ---------------------------------------------------------------------------
+import { onProtocol, buildFollowupRows } from "@/lib/followups";
+import { MILESTONES as PT_MILESTONES } from "@/lib/pt";
+import { DISCIPLINE_KINDS, KIND_LABEL } from "@/lib/comprehensive";
+
+describe("PT clients get a follow-up ladder", () => {
+  const pt = { id: "p1", category: "training", start: "2026-08-01", joined: null, days: 28 };
+  const comp = { id: "c1", category: "comprehensive", start: "2026-08-01", joined: null, days: 28 };
+
+  it("counts training as being on a protocol", () => {
+    expect(onProtocol(pt)).toBe(true);
+    expect(onProtocol(comp)).toBe(true);
+    expect(onProtocol({ ...pt, category: "membership" })).toBe(false);
+  });
+
+  it("generates the fitness reassessment for a PT client", () => {
+    const rows = buildFollowupRows([pt], [], "test");
+    expect(rows.map((r) => r.label)).toContain("Fitness reassessment");
+    expect(PT_MILESTONES[0].label).toBe("Fitness reassessment");
+  });
+
+  it("does not give a PT client the diet-chart explanation — there is no chart", () => {
+    const rows = buildFollowupRows([pt], [], "test");
+    expect(rows.some((r) => /explanation/i.test(r.label))).toBe(false);
+    // …but a Comprehensive client still gets it.
+    expect(buildFollowupRows([comp], [], "test").some((r) => /explanation/i.test(r.label))).toBe(true);
+  });
+
+  it("does not give a PT client the diet and doctor milestones", () => {
+    const labels = buildFollowupRows([pt], [], "test").map((r) => r.label);
+    expect(labels).not.toContain("Day 10 diet follow-up");
+    expect(labels).not.toContain("Day 28 doctor review");
+  });
+});
+
+describe("the psychologist owes something", () => {
+  it("has a summary sign-off gate like every other discipline", () => {
+    expect(DISCIPLINE_KINDS).toContain("Psychologist");
+    expect(KIND_LABEL.Psychologist).toBe("Psychologist");
+  });
+});
