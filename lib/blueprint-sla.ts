@@ -21,6 +21,16 @@ export const HOUR = 3_600_000;
 export const SIGNOFF_MS = 24 * HOUR;
 export const CONSOLIDATED_MS = 49 * HOUR;
 
+/**
+ * How long after the last sign-off the BluePrint itself may go ungenerated.
+ *
+ * There was no window at all: "BluePrint not generated" could sit for months
+ * and never read as overdue, because nothing defined when it was late. The
+ * blood is in, the three clinicians have signed — the document is the only
+ * thing between the client and what they paid for.
+ */
+export const GENERATION_MS = 48 * HOUR;
+
 /** Warn once a quarter of the window is left — 6h on the 24h clock, 12h on
  *  the 48h. Proportional rather than fixed so both feel the same. */
 export const WARN_FRACTION = 0.25;

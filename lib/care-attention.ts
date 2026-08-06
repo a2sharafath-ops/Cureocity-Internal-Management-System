@@ -10,6 +10,7 @@ import { clock, formatLeft } from "@/lib/sla-clock";
 import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
+import { GENERATION_MS as BP_GENERATION_MS } from "@/lib/blueprint-sla";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 import { loadClientStatuses } from "@/lib/client-status";
 import {
@@ -301,8 +302,24 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
 
     if (cats.has("blueprint") && !bpGen.has(clientId)) {
       const bpBlood = bloodBy.get(clientId)?.get("blueprint");
-      if (bpBlood) flags.push({ sev: "med", title: `${who} — BluePrint not generated`, detail: "Blood in · awaiting clinician sign-offs", href: "/blueprint", cta: "Review",
-        chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "clinicians", label: "BluePrint sign-off", clientId, href: "/blueprint" } });
+      if (bpBlood) {
+        // The clock starts at the LAST sign-off: until all three disciplines
+        // have signed, the document genuinely cannot be produced. Once they
+        // have, GENERATION_MS is how long it may sit — previously nothing, so
+        // this flag could never read as overdue no matter how long it waited.
+        const signed = ["Doctor", "Diet", "Trainer"]
+          .map((k) => completedAt.get(clientId)?.get(k))
+          .filter(Boolean) as string[];
+        const allSigned = signed.length === 3 ? signed.sort().slice(-1)[0] : null;
+        flags.push({
+          sev: allSigned ? "high" : "med",
+          title: `${who} — BluePrint not generated`,
+          detail: allSigned ? "Blood in · all three sign-offs done" : "Blood in · awaiting clinician sign-offs",
+          href: "/blueprint", cta: "Review",
+          ...sla(allSigned, BP_GENERATION_MS),
+          chaseRole: { roles: [...DELIVERY_OWNER.doctor, ...DELIVERY_OWNER.dietitian, ...DELIVERY_OWNER.trainer], who: "clinicians", label: "BluePrint sign-off", clientId, href: "/blueprint" },
+        });
+      }
     }
   }
   return flags;

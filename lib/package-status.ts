@@ -197,6 +197,19 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // once the dietitian's chart draft exists (you can't explain a chart that
   // hasn't been written). Until then the "Diet chart — not drafted" item above
   // is what's outstanding. Chased against the assigned coach, not front desk.
+  // If the chart was never drafted, the explanation cannot happen — but the
+  // follow-up row still goes overdue in the background. Hiding the item made
+  // the client card look clean while the queue rotted, so the BLOCKAGE is now
+  // what is shown, chased against the dietitian who owes the chart.
+  if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && !hasChart && dietExplain.due_date <= today) {
+    openNow.push({
+      label: "Diet chart explanation — blocked",
+      detail: `Day 2 · was due ${fmt(dietExplain.due_date)} · no chart drafted to explain`,
+      href: `/workspace?role=diet&tab=charts&client=${clientId}`, tone: "warn",
+      chaseRoles: DELIVERY_OWNER.dietitian, chaseWho: "Dietitian",
+      ...dueOn(dietExplain.due_date, today),
+    });
+  }
   if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && hasChart) {
     // Two people, as always: the coach SCHEDULES it, the dietitian DELIVERS it
     // (it is their chart being explained). Naming only the coach left the

@@ -116,11 +116,14 @@ async function sendReminders(supabase: Admin) {
 async function generateFollowups(supabase: Admin) {
   // The milestone anchor is the package start, not the join date — see
   // lib/followups.ts. Length comes along so a multi-cycle plan repeats.
-  const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
+  const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
     supabase.from("client_packages").select("client_id, category, start_date, end_date").eq("status", "active"),
+    // The protocol date is authoritative where one exists — protocolStartFor.
+    supabase.from("care_protocols").select("client_id, start_date").eq("status", "active"),
   ]);
+  const protoOf = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
   const packOf = new Map(
     ((cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[])
       .map((r) => [r.client_id, r]),
@@ -134,6 +137,7 @@ async function generateFollowups(supabase: Admin) {
         ...c,
         category: pk?.category ?? null,
         start: pk?.start_date ?? null,
+        protocolStart: protoOf.get(c.id) ?? null,
         days: dayspan(pk?.start_date ?? null, pk?.end_date ?? null),
       };
     }),

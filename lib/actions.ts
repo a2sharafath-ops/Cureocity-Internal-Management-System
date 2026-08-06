@@ -11,7 +11,7 @@ import { HOW_TO_USE, DEFAULT_MEALS, planProblems } from "@/lib/diet-plan";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
 import { draftAssessment } from "@/lib/diet-assessment";
-import { canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -1178,7 +1178,7 @@ export async function renewPackage(formData: FormData): Promise<{ ok: boolean; e
  */
 export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const p = await getProfile();
-  if (!p || !canWrite(p.role)) return { ok: false, error: "Not permitted" };
+  if (!p || !canManageSessions(p.role)) return { ok: false, error: "Not authorized." };   // the trainer who runs them may also book them
   const client_id = String(formData.get("client_id") || "");
   const trainer_id = String(formData.get("trainer_id") || "");
   const start = String(formData.get("start_date") || todayISO());
@@ -1295,7 +1295,7 @@ export async function startConsultFromAppointment(formData: FormData) {
   // Either a client booking or a pre-sale trial booked against a lead.
   if (!appt || (!appt.client_id && !appt.lead_id)) return;
 
-  const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
+  const adminish = isAdminish(p.role);
   // A real clinician may only open their own booking; admins/managers may open any.
   if (!adminish && p.staffId && appt.provider_id && p.staffId !== appt.provider_id) return;
 
@@ -1344,7 +1344,7 @@ export async function markConsultDone(formData: FormData) {
     .select("id, client_id, lead_id, provider_id, status").eq("id", appointment_id).maybeSingle();
   if (!appt) return;
 
-  const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
+  const adminish = isAdminish(p.role);
   // A real clinician may only close their own booking; admins/managers may close any.
   if (!adminish && p.staffId && appt.provider_id && p.staffId !== appt.provider_id) return;
 
@@ -1647,6 +1647,14 @@ export async function completeConsultation(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Approve / share a consultation summary.
+ *
+ * DELIBERATE, reviewed Aug 2026: a summary is the clinician's own note about
+ * their own consultation, so they approve and share it themselves. This is
+ * intentionally lighter than the diet documents, which are prescriptive
+ * artefacts a client eats from and so need the Medical Director's signature.
+ */
 export async function toggleConsultFlag(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;
@@ -2629,6 +2637,13 @@ export async function uploadClientFile(_prev: UploadState, formData: FormData): 
   if (!me || me.role === "Client") return { error: "Not authorized." };
   const clientId = String(formData.get("client_id"));
   const kind = String(formData.get("kind") || "document");
+  // A blood report or InBody is a clinical record, and filing one SATISFIES the
+  // client's blood panel (below). "Any staff member" included HR and Finance,
+  // who could quietly close a clinical gate by attaching a file.
+  const CLINICAL_KINDS = ["blood_report", "inbody", "lab_report"];
+  if (CLINICAL_KINDS.includes(kind) && !canConsult(me.role) && !canWrite(me.role)) {
+    return { error: "Only clinical staff or front desk can file a clinical report." };
+  }
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file to upload." };
   if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
@@ -2716,7 +2731,7 @@ export async function signoffConsolidated(formData: FormData) {
   if (!p) return;
   const client_id = String(formData.get("client_id"));
   if (!client_id) return;
-  const adminish = ["Super Admin", "Administrator", "Manager"].includes(p.role);
+  const adminish = isAdminish(p.role);
   // A clinician signs off their own discipline; an admin/persona may pass one.
   const disc = adminish ? String(formData.get("discipline") || "") : (BP_ROLE_TO_DISC[p.role] ?? "");
   if (!disc || !BP_DISC_TO_KIND[disc]) return;
@@ -4046,7 +4061,9 @@ export async function addTask(formData: FormData) {
 
 export async function setTaskStatus(formData: FormData) {
   const p = await getProfile();
-  if (!p) return;
+  // Was "is anybody signed in". Any staff member could close or delete any
+  // task on the board, including the auto-created booking chases.
+  if (!p || !isStaffRole(p.role)) return;
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["todo", "doing", "blocked", "done"].includes(status)) return;
@@ -4058,7 +4075,7 @@ export async function setTaskStatus(formData: FormData) {
 // Nudge the team about a task (in-app notification to Admin/Manager + audit).
 export async function remindTask(formData: FormData) {
   const p = await getProfile();
-  if (!p) return;
+  if (!p || !isStaffRole(p.role)) return;
   const id = String(formData.get("id"));
   const supabase = createClient();
   const { data: t } = await supabase.from("tasks").select("title, staff:assignee_id(name)").eq("id", id).maybeSingle();
@@ -4071,7 +4088,9 @@ export async function remindTask(formData: FormData) {
 
 export async function deleteTask(formData: FormData) {
   const p = await getProfile();
-  if (!p) return;
+  // Deleting is narrower than closing: it destroys the record that the work
+  // was ever owed.
+  if (!p || !canManageTasks(p.role)) return;
   const supabase = createClient();
   await supabase.from("tasks").delete().eq("id", String(formData.get("id")));
   revalidatePath("/tasks");
@@ -4102,7 +4121,7 @@ export async function toggleExercise(formData: FormData) {
 
 export async function assignWorkout(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return;   // same table, same guard as the planner
   const client_id = String(formData.get("client_id"));
   const template_id = String(formData.get("template_id"));
   if (!client_id || !template_id) return;
@@ -4119,7 +4138,7 @@ export async function assignWorkout(formData: FormData) {
 
 export async function removeWorkout(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return;   // same table, same guard as the planner
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
   const supabase = createClient();
@@ -4497,11 +4516,14 @@ export async function generateFollowups() {
   const supabase = createClient();
   // The milestone anchor is the package start, not the join date — see
   // lib/followups.ts. Length comes along so a multi-cycle plan repeats.
-  const [{ data: clients }, { data: subs }, { data: cps }] = await Promise.all([
+  const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
     supabase.from("client_packages").select("client_id, category, start_date, end_date").eq("status", "active"),
+    // The protocol date is authoritative where one exists — protocolStartFor.
+    supabase.from("care_protocols").select("client_id, start_date").eq("status", "active"),
   ]);
+  const protoOf = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
   const packOf = new Map(
     ((cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[])
       .map((r) => [r.client_id, r]),
@@ -4515,6 +4537,7 @@ export async function generateFollowups() {
         ...c,
         category: pk?.category ?? null,
         start: pk?.start_date ?? null,
+        protocolStart: protoOf.get(c.id) ?? null,
         days: dayspan(pk?.start_date ?? null, pk?.end_date ?? null),
       };
     }),
@@ -6198,6 +6221,16 @@ export async function publishDietChart(formData: FormData) {
 
 // Publish & share directly, skipping MD review — for charts that don't need it.
 // Dietitian-owned; works from Draft / In review / Approved.
+/**
+ * Publish a diet chart to the client WITHOUT Medical Director review.
+ *
+ * DELIBERATE, reviewed Aug 2026. Yes, this lets the author bypass the reviewer,
+ * and yes that is the person being reviewed. It is kept because the clinic
+ * needs a way to get a chart to a client when the director is unreachable, and
+ * it audits itself honestly as "published without review" so the bypass is
+ * always visible after the fact. It applies to the flat diet chart only — the
+ * diet PLAN and the assessment summary have no equivalent.
+ */
 export async function publishDietChartDirect(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
@@ -7006,7 +7039,7 @@ export type ClientQuickView = NonNullable<Awaited<ReturnType<typeof getClientQui
  */
 export async function togglePackageFreeze(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canWrite(p.role)) return;
+  if (!p || !canBill(p.role)) return;   // whoever sells may freeze; voiding reverses a sale and stays with canVoidPackage
   const id = String(formData.get("client_id"));
   if (!id) return;
 
@@ -7319,9 +7352,12 @@ export async function pdfStatus(): Promise<{ ready: boolean; provider: string | 
  */
 export async function renderDocument(formData: FormData): Promise<{ ok?: boolean; url?: string; name?: string; docId?: string; error?: string }> {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  if (!p) return { error: "Not authorized." };
 
   const kind = String(formData.get("kind") || "") as DocKind;
+  // Per DOCUMENT, not per person: sending a prescription needs what writing one
+  // needs. `canConsult` let a trainer WhatsApp a client's rx.
+  if (!canDeliverDoc(p.role, kind)) return { error: "Not authorized." };
   const id = String(formData.get("id") || "");
   if (!DOC_KINDS.includes(kind)) return { error: "Unknown document type." };
   if (!id) return { error: "Missing document." };
@@ -7396,9 +7432,16 @@ export async function renderDocument(formData: FormData): Promise<{ ok?: boolean
 /** A fresh link to a document already rendered. Links expire; files do not. */
 export async function documentLink(formData: FormData): Promise<{ url?: string; name?: string; error?: string }> {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  if (!p) return { error: "Not authorized." };
   const docId = String(formData.get("doc_id") || "");
   if (!docId) return { error: "Missing document." };
+  // The document's own kind decides who may hand it over — see canDeliverDoc.
+  {
+    const sb0 = createClient();
+    const { data: k } = await sb0.from("issued_documents").select("kind").eq("id", docId).maybeSingle();
+    const kind = (k as { kind: string } | null)?.kind ?? "";
+    if (!canDeliverDoc(p.role, kind)) return { error: "Not authorized." };
+  }
   const supabase = createClient();
   const { data } = await supabase.from("issued_documents").select("path, file_name").eq("id", docId).maybeSingle();
   const r = data as { path: string; file_name: string } | null;
@@ -7417,9 +7460,16 @@ export async function documentLink(formData: FormData): Promise<{ url?: string; 
  */
 export async function sendDocumentWhatsApp(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  if (!p) return { error: "Not authorized." };
   const docId = String(formData.get("doc_id") || "");
   if (!docId) return { error: "Missing document." };
+  // The document's own kind decides who may hand it over — see canDeliverDoc.
+  {
+    const sb0 = createClient();
+    const { data: k } = await sb0.from("issued_documents").select("kind").eq("id", docId).maybeSingle();
+    const kind = (k as { kind: string } | null)?.kind ?? "";
+    if (!canDeliverDoc(p.role, kind)) return { error: "Not authorized." };
+  }
 
   const wati = watiReadiness();
   if (!wati.ready) return { error: `WhatsApp isn't set up — missing ${wati.missing.join(", ")}.` };

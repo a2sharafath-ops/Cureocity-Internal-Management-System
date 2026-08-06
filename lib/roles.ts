@@ -172,6 +172,13 @@ export function canManagePackages(role: string): boolean {
  * The cost of that clarity is a single point of failure: with no Medical
  * Director account active, every submitted chart waits. The Users & Roles page
  * warns when the clinic has none, and `hasNoReviewer` below is what it checks.
+ *
+ * DELIBERATE, reviewed Aug 2026: the Medical Director MAY approve a document
+ * she wrote herself. She is the clinic's clinical authority and the only
+ * reviewer; requiring a second signature would mean appointing a second
+ * reviewer, which the clinic does not have. Self-approval is therefore allowed
+ * for this role ONLY — no other role can approve anything, their own or not.
+ * Please don't "fix" this into a self-approval block without asking.
  */
 export function canReviewDietChart(role: string): boolean {
   return isMedicalDirector(role);
@@ -302,6 +309,36 @@ export function canReimburseSubmit(role: string): boolean {
 }
 export function canReimburseApprove(role: string): boolean {
   return role === "Super Admin";
+}
+
+/**
+ * Who may DELIVER a document to a client — the PDF, the portal link, the
+ * WhatsApp send.
+ *
+ * Delivery was gated on `canConsult`, which is far wider than authoring: a
+ * Fitness Trainer or a Psychologist could generate and WhatsApp a client's
+ * PRESCRIPTION or LAB REQUISITION — documents they cannot write, and cannot
+ * even open in /emr. Sending a document is a clinical act; it should need at
+ * least what writing it needs.
+ */
+export function canDeliverDoc(role: string, kind: string): boolean {
+  if (kind === "rx" || kind === "lab") return canEmr(role);
+  if (kind === "plan" || kind === "assess") return canReviewDietChart(role) || isAdminish(role) || role === "Dietitian";
+  return canConsult(role);   // consultation summary — the clinician's own note
+}
+
+/** Anyone who works here. Mirrors is_staff() in SQL, which is `role <> 'Client'`
+ *  — the client portal signs in with a real profile, so "is somebody logged in"
+ *  is NOT a staff check. */
+export function isStaffRole(role: string): boolean {
+  return role !== "Client";
+}
+
+/** Super Admin / Administrator / Manager / Medical Director. Mirrors is_admin()
+ *  in SQL, and replaces the inline copies of this list scattered through
+ *  lib/actions.ts — one of which had already fallen behind. */
+export function isAdminish(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager", "Medical Director"].includes(role);
 }
 
 // Who can access compliance & governance (consent, breach, retention).

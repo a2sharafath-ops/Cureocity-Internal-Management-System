@@ -4,7 +4,7 @@ import {
   canAppointments, canEditAppointments, canPos, canConsult, canReviewDietChart,
   canRecordPayment, canVoidPackage, canSetTargets, canHr, canManageBlueprint,
   canManageSessions, canMessage, hasNoReviewer, isClinician, isMedicalDirector,
-  ROLE_LIST,
+  ROLE_LIST, canDeliverDoc, isStaffRole, isAdminish,
 } from "@/lib/roles";
 import { roleFromStaffRole, visibleWorkspaces, canEditWorkspace } from "@/lib/workspaces";
 import { canWriteMedical, canWriteNutrition, canWriteFitness, ownsConsultKind } from "@/lib/discipline";
@@ -222,5 +222,57 @@ describe("Medical Director", () => {
 
   it("is offered in the assignable role list", () => {
     expect(ROLE_LIST).toContain(MD);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delivery is a clinical act. Gating it on canConsult let a Fitness Trainer or
+// a Psychologist WhatsApp a client's prescription — a document they cannot
+// author and cannot even open in /emr.
+// ---------------------------------------------------------------------------
+describe("canDeliverDoc", () => {
+  it("a prescription or lab requisition needs EMR access", () => {
+    for (const kind of ["rx", "lab"]) {
+      expect(canDeliverDoc("Doctor", kind)).toBe(true);
+      expect(canDeliverDoc("Medical Director", kind)).toBe(true);
+      expect(canDeliverDoc("Fitness Trainer", kind)).toBe(false);
+      expect(canDeliverDoc("Psychologist", kind)).toBe(false);
+      expect(canDeliverDoc("Health Coach", kind)).toBe(false);
+      expect(canDeliverDoc("Dietitian", kind)).toBe(false);
+    }
+  });
+
+  it("a diet plan or assessment goes out via the dietitian or the reviewer", () => {
+    for (const kind of ["plan", "assess"]) {
+      expect(canDeliverDoc("Dietitian", kind)).toBe(true);
+      expect(canDeliverDoc("Medical Director", kind)).toBe(true);
+      expect(canDeliverDoc("Fitness Trainer", kind)).toBe(false);
+    }
+  });
+
+  it("a consultation summary stays with whoever can consult", () => {
+    expect(canDeliverDoc("Fitness Trainer", "summary")).toBe(true);
+    expect(canDeliverDoc("Front Desk", "summary")).toBe(false);
+  });
+});
+
+describe("isStaffRole", () => {
+  it("a portal client is signed in but is not staff", () => {
+    // The bug this guards: `if (!p) return` reads as a staff check and isn't —
+    // getProfile returns a profile for portal logins too.
+    expect(isStaffRole("Client")).toBe(false);
+    expect(isStaffRole("Front Desk")).toBe(true);
+    expect(isStaffRole("Medical Director")).toBe(true);
+  });
+});
+
+describe("isAdminish", () => {
+  it("includes the Medical Director, which the inline copies did not", () => {
+    for (const r of ["Super Admin", "Administrator", "Manager", "Medical Director"]) {
+      expect(isAdminish(r), r).toBe(true);
+    }
+    for (const r of ["Doctor", "Front Desk", "Finance", "HR", "Staff"]) {
+      expect(isAdminish(r), r).toBe(false);
+    }
   });
 });

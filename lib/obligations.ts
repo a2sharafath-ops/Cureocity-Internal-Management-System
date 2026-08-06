@@ -104,3 +104,25 @@ export function outstandingDeliverables(x: {
   if ((x.isComp || x.isPt) && x.trainerConsultDone && !x.hasWorkout) out.push("workout");
   return out;
 }
+
+
+/**
+ * The one answer to "when did this client's clock start".
+ *
+ * `care_protocols.start_date` wins where a protocol row exists; the package's
+ * own start is the fallback for clients who predate protocols or were never
+ * given one.
+ *
+ * It lives here because the follow-up GENERATOR used the package date while
+ * both attention engines preferred the protocol date. When those two differ,
+ * the day-10 phone call and the day-10 booking gate land on different days for
+ * the same client — the file header in lib/followups.ts says that exact bug was
+ * fixed once already, by a different route.
+ */
+export function protocolStartFor(
+  protocolStart: string | null | undefined,
+  packageStart: string | null | undefined,
+  joined?: string | null,
+): string | null {
+  return protocolStart ?? packageStart ?? joined ?? null;
+}

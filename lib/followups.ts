@@ -11,6 +11,7 @@
 
 import { MILESTONES, milestoneDates, cyclesFor } from "@/lib/comprehensive";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
+import { protocolStartFor } from "@/lib/obligations";
 
 export const RENEWAL_LEAD_DAYS = 7;
 /** Kept for the Day-2 explanation, which is a call, not a milestone. */
@@ -32,6 +33,8 @@ export type ProtocolClient = {
   start?: string | null;
   /** package length in days, for multi-cycle plans. */
   days?: number | null;
+  /** care_protocols.start_date, where one exists — see protocolStartFor. */
+  protocolStart?: string | null;
 };
 
 /**
@@ -53,7 +56,9 @@ const isPt = (c: ProtocolClient) => (c.category ?? "").toLowerCase() === "traini
  *  milestone engine uses; `joined` is only a fallback for older rows that never
  *  recorded one. */
 export function protocolStart(c: ProtocolClient): string | null {
-  return c.start ?? c.joined ?? null;
+  // Shared with the attention engines so a client's follow-up dates and their
+  // milestone dates can never be computed from different anchors.
+  return protocolStartFor(c.protocolStart, c.start, c.joined);
 }
 
 export type FollowupRow = {
@@ -82,6 +87,12 @@ export function buildFollowupRows(
 
     // Day 2 — explaining the diet chart. Comprehensive only: a PT client has
     // no dietitian and no chart to explain.
+    //
+    // Once per PACKAGE, not once per cycle — deliberate, reviewed Aug 2026.
+    // It explains the INITIAL chart; a comp12 client gets three diet cycles but
+    // one explanation, because the later cycles adjust a plan the client has
+    // already had walked through. Note this sits outside the milestone loop
+    // below, which is what makes that true.
     if (!isPt(c)) rows.push({
       client_id: c.id, kind: "onboarding", label: "Day 2 diet chart explanation",
       due_date: addDaysUTC(start, EXPLANATION_OFFSET), priority: "mandatory", created_by: createdBy,
