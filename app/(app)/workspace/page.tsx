@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
-import { canSee, isClinician, isMedicalDirector, canReviewDietChart } from "@/lib/roles";
+import { canSee, isClinician, canReviewDietChart } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
@@ -183,7 +183,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
           sev: "high",
           title: `${r.clients?.name ?? "A client"} — ${label.toLowerCase()} awaiting your approval`,
           detail: "Submitted by the dietitian · nothing reaches the client until you publish it",
-          href: "/workspace?role=diet&tab=charts", cta: "Review",
+          // Their own tab, not the dietitian's workspace — following this used
+          // to strand them in another discipline with no way back.
+          href: "/workspace?tab=approvals", cta: "Review",
         });
       }
     }
@@ -657,39 +659,20 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     <div style={{ maxWidth: 1160 }}>
       <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "blueprints", "followups"]} />
 
-      {/* Workspace chrome — one discipline at a time. Clinicians have exactly one
-          and admins switch with the header persona menu, so neither needs a
-          control here. The Medical Director oversees all five and can use
-          NEITHER route: the persona menu is admin-only (setPreviewRole), which
-          left them able to reach the diet workspace only by following an
-          approval link. Hence a switcher, shown to them alone — adding it for
-          admins would break the deliberate faithfulness of persona preview. */}
+      {/* Workspace chrome — one discipline at a time. Clinicians have exactly
+          one; admins switch with the header persona menu. The Medical Director
+          briefly had chips here, added when the approval screen still lived in
+          the dietitian's workspace and they had no way to reach it. The
+          Approvals tab now follows them into whichever workspace they are in,
+          so the chips were solving a problem that no longer exists — and a row
+          of other people's job titles on your own screen reads as impersonation
+          rather than oversight. Their cross-discipline ACCESS is unchanged
+          (WS_OVERSIGHT, and is_admin() in SQL); a ?role= link still resolves. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 20, margin: 0 }}>{role.label}</h1>
           <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>Your clients, consultations, blueprint sign-off and role tools in one place</p>
         </div>
-        {isMedicalDirector(me.role) && allowed.length > 1 && (
-          <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
-            {allowed.map((k) => {
-              const on = k === roleKey;
-              return (
-                <Link
-                  key={k}
-                  href={`/workspace?role=${k}`}
-                  style={{
-                    textDecoration: "none", borderRadius: 999, padding: "5px 12px",
-                    fontSize: 12, fontWeight: 600, border: "1px solid var(--border)",
-                    background: on ? "var(--ink)" : "#fff",
-                    color: on ? "#fff" : "var(--muted)",
-                  }}
-                >
-                  {wsRole(k).short}
-                </Link>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {readOnly && (

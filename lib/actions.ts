@@ -6135,7 +6135,7 @@ export async function submitDietChartForReview(formData: FormData) {
   // the owner sees the waiting queue on their dashboard instead.
   await notifyRoles(supabase, ["Medical Director"], {
     title: "Diet chart awaiting review", body: `${who} · submitted by ${p.name}`,
-    href: "/workspace?role=diet&tab=charts", icon: "🥗",
+    href: "/workspace?tab=approvals", icon: "🥗",
   });
   revalidatePath("/workspace");
 }
@@ -7152,7 +7152,7 @@ export async function submitDietPlan(formData: FormData) {
   await notifyRoles(supabase, ["Medical Director"], {
     title: "Diet plan awaiting review",
     body: `${p.name} submitted a customised diet plan.`,
-    href: "/workspace?role=diet&tab=charts", icon: "🥗",
+    href: "/workspace?tab=approvals", icon: "🥗",
   });
   revalidatePath("/workspace");
 }
@@ -7580,7 +7580,7 @@ export async function submitDietAssessment(formData: FormData) {
   await notifyRoles(supabase, ["Medical Director"], {
     title: "Assessment summary awaiting review",
     body: `${p.name} submitted a dietary assessment summary.`,
-    href: "/workspace?role=diet&tab=charts", icon: "📋",
+    href: "/workspace?tab=approvals", icon: "📋",
   });
   revalidatePath("/workspace");
 }
