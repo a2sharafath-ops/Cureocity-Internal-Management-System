@@ -8,8 +8,13 @@ import { createClient } from "@/lib/supabase/server";
 import { dueOn, waitingSince } from "@/lib/due";
 import { clock, formatLeft } from "@/lib/sla-clock";
 import type { Flag } from "@/components/AttentionPanel";
-import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS } from "@/lib/comprehensive";
+import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { loadClientStatuses } from "@/lib/client-status";
+import { onboardingRow, type ClientInput } from "@/lib/onboarding";
+
+const addDaysISO = (iso: string, n: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -38,6 +43,40 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     (asg ?? []) as unknown as AssignRow[],
     (appts ?? []) as unknown as ApptOwnerRow[],
   );
+  // The day-0 bookings and the strength-session prompt.
+  //
+  // These were the dashboard's blind spot. Its milestone loop reads MILESTONES,
+  // which begins at day 10 — the three INITIAL consultations live in a separate
+  // list that only the client card consulted. So the most urgent thing front
+  // desk owns (a client has paid and nobody has booked them in) was visible on
+  // one client's page and on no queue anywhere, and the dashboard would first
+  // mention that client on day 10, ten days late.
+  //
+  // Deliberately driven by onboardingRow — the same engine the client card and
+  // the Onboarding page run — rather than a second implementation of "which
+  // bookings are outstanding". Labels, links and completion rules stay in one
+  // place, which is the whole point of lib/obligations.
+  const { data: initSvc } = await sb.from("services").select("category, day_offset, name").ilike("name", "Initial%");
+  const initialOffsets = new Map<string, number>();
+  for (const sv of ((initSvc ?? []) as { category: string; day_offset: number | null }[])) {
+    if (sv.day_offset == null) continue;
+    const prev = initialOffsets.get(sv.category);
+    if (prev == null || sv.day_offset < prev) initialOffsets.set(sv.category, sv.day_offset);
+  }
+  const [{ data: sessAll }, { data: invAll }] = await Promise.all([
+    sb.from("sessions").select("client_id, status"),
+    sb.from("invoices").select("client_id"),
+  ]);
+  const sessCount = new Map<string, number>();
+  const sessScheduled = new Set<string>();
+  for (const r of (sessAll ?? []) as { client_id: string | null; status: string }[]) {
+    if (!r.client_id) continue;
+    sessCount.set(r.client_id, (sessCount.get(r.client_id) ?? 0) + 1);
+    if (r.status === "scheduled") sessScheduled.add(r.client_id);
+  }
+  const hasInvoice = new Set(((invAll ?? []) as { client_id: string | null }[])
+    .map((r) => r.client_id).filter(Boolean) as string[]);
+
   // Service catalogue → category resolver + pre-filled Book links.
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
   const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
@@ -83,6 +122,8 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
   for (const a of (appts ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push(a);
   }
+
+  const statuses = await loadClientStatuses(sb, Array.from(catsBy.keys()), today);
 
   const flags: Flag[] = [];
   for (const [clientId, rows] of catsBy) {
@@ -139,6 +180,59 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: workoutHref, cta: "Build plan", ...sla(completedAt.get(clientId)?.get("Trainer"), WORKOUT_PLAN_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
         chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "Fitness Trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
+    }
+
+    // ---- overdue day-0 bookings ------------------------------------------
+    const st = statuses.get(clientId);
+    if (st && ["blueprint", "comprehensive", "training", "membership"].includes(st.category)) {
+      const activeCp = rows.find((r) => r.category === st.category);
+      const pkgStart = protoBy.get(clientId)?.start_date ?? activeCp?.start_date ?? null;
+      const input: ClientInput = {
+        clientId, clientName: who, category: st.category,
+        packageName: activeCp?.category ?? st.category,
+        ownerName: null, hasInvoice: hasInvoice.has(clientId),
+        bloodRequested: st.bloodRequested, bloodSubmitted: st.bloodSubmitted,
+        doctor: { scheduled: st.consults.doctor?.booked ?? false, completed: st.consults.doctor?.completed ?? false },
+        diet: { scheduled: st.consults.dietitian?.booked ?? false, completed: st.consults.dietitian?.completed ?? false },
+        trainer: { scheduled: st.consults.trainer?.booked ?? false, completed: st.consults.trainer?.completed ?? false },
+        blueprintGenerated: bpGen.has(clientId),
+        sessionScheduled: sessScheduled.has(clientId),
+      };
+      for (const step of onboardingRow(input).steps) {
+        // Booked-but-not-yet-held is not front-desk work — it is scheduled and
+        // waiting on the clinician. Sessions have their own flag below.
+        if (step.done || step.booked || /session/i.test(step.label)) continue;
+        // The deadline is whatever the clinic set in Services → Day offset, not
+        // a number in this file.
+        const offset = step.bookCategory ? initialOffsets.get(step.bookCategory) ?? null : null;
+        const due = offset != null && pkgStart ? addDaysISO(pkgStart, offset) : null;
+        if (!due || today <= due) continue;   // this queue is overdue-only
+        const href = step.action?.href ?? `/clients/${clientId}`;
+        flags.push({
+          sev: "high", title: `${who} — ${step.label.toLowerCase()}`, detail: "",
+          href, cta: "Book", ...dueOn(due, today),
+          dedupeKey: `init:${clientId}:${step.bookCategory ?? step.label}`,
+          chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: step.label, clientId, href },
+        });
+      }
+    }
+
+    // ---- paid, but not one strength session in the diary -------------------
+    if (cats.has("comprehensive") || cats.has("training")) {
+      if ((sessCount.get(clientId) ?? 0) === 0) {
+        const cat = rows.find((r) => r.category === (cats.has("training") ? "training" : "comprehensive"));
+        const start = protoBy.get(clientId)?.start_date ?? cat?.start_date ?? null;
+        const due = start ? addDaysISO(start, BOOKING_DUE_DAYS) : null;
+        if (due && today > due) {
+          flags.push({
+            sev: "high", title: `${who} — no strength sessions booked`,
+            detail: start ? `Package started ${fmt(start)} · nothing in the diary yet` : "Nothing in the diary yet",
+            href: "/sessions", cta: "Schedule", ...dueOn(due, today),
+            dedupeKey: `sess:${clientId}`,
+            chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book 12 strength sessions", clientId, href: "/sessions" },
+          });
+        }
+      }
     }
 
     if (cats.has("comprehensive")) {
