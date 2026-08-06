@@ -53,10 +53,11 @@ function slotRangeText(m: PlanMeal): string {
  * already eating from.
  */
 export default function DietPlanBuilder({
-  planId, clientName, status, version, canReview, initial, readOnly = false, pdf }: {
+  planId, clientName, status, version, canReview, initial, readOnly = false, pdf, whatsapp }: {
   planId: string;
   /** Whether server-side PDF rendering is configured — see lib/pdf.ts. */
   pdf: { ready: boolean; missing: string[] };
+  whatsapp?: { ready: boolean; missing: string[] };
   clientName: string;
   status: string;
   version: number;
@@ -168,7 +169,7 @@ export default function DietPlanBuilder({
         {/* Preview prints from the reader's browser and leaves nothing behind.
             This makes a stored file — attachable, and a record of what was
             issued, which the live print page can never be. */}
-        <RenderPdfButton kind="plan" id={planId} ready={pdf.ready} missing={pdf.missing} />
+        <RenderPdfButton kind="plan" id={planId} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} />
 
         {!readOnly && status === "draft" && (
           <>

@@ -144,3 +144,24 @@ describe("readiness", () => {
     expect(renderUrl("plan", "abc")).toBeNull();
   });
 });
+
+describe("the assessment is its own document kind", () => {
+  it("routes to its own print page", () => {
+    expect(printPath("assess", "abc")).toBe("/diet-assessment/abc/print");
+  });
+
+  it("a consultation-summary token cannot open an assessment with the same id", () => {
+    // The token exists to name ONE document. Sharing a kind between two tables
+    // would make that property depend on ids never colliding, which is not the
+    // guarantee it was built to give.
+    const t = signDocToken("summary", "abc")!;
+    expect(verifyDocToken(t, "assess", "abc")).toBe(false);
+    const a = signDocToken("assess", "abc")!;
+    expect(verifyDocToken(a, "summary", "abc")).toBe(false);
+    expect(verifyDocToken(a, "assess", "abc")).toBe(true);
+  });
+
+  it("stores under its own prefix", () => {
+    expect(storagePath("assess", "abc").startsWith("assess/")).toBe(true);
+  });
+});

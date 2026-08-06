@@ -38,6 +38,15 @@ function card(children: React.ReactNode, extra?: React.CSSProperties) {
   );
 }
 
+// One row of the assessment's two-column health-status list. Missing figures
+// (not measured, not typed in yet) are dropped rather than shown as "--" —
+// this compact card is a summary, not the full record; the print document is
+// where an unmeasured figure is spelled out explicitly.
+function AssessmentStat({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null;
+  return <div><span style={{ color: "var(--muted)" }}>{label}:</span> <b>{value}</b></div>;
+}
+
 export default async function PortalHome() {
   const supabase = createClient();
 
@@ -171,6 +180,20 @@ export default async function PortalHome() {
     myDietPlanMeals = dpMeals.map((m) => ({ ...m, options: dpOptsByMeal.get(m.id!) ?? [] }));
   }
 
+  // The Dietary Assessment Summary — companion to the diet plan above. Same
+  // delivery gate: only the most recent assessment that is both published
+  // AND shared is ever shown here; RLS enforces the same pair of conditions.
+  const { data: assessRow } = await supabase
+    .from("diet_assessments")
+    .select("id, height, weight, bmi, bmr, tee, muscle_mass, fat_mass, body_fat, visceral_fat, waist_hip, primary_goals, target_weight, timeline_weeks, objectives")
+    .eq("client_id", client.id).eq("status", "published").not("shared_at", "is", null)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const myAssessment = assessRow as {
+    id: string; height: number | null; weight: number | null; bmi: number | null; bmr: number | null; tee: number | null;
+    muscle_mass: number | null; fat_mass: number | null; body_fat: number | null; visceral_fat: number | null; waist_hip: number | null;
+    primary_goals: string | null; target_weight: number | null; timeline_weeks: number | null; objectives: string | null;
+  } | null;
+
   const { data: apptRows } = await supabase
     .from("appointments").select("id, type, title, date, hour, status, staff(name)")
     .eq("client_id", client.id).gte("date", TODAY).eq("status", "scheduled").order("date").order("hour").limit(8);
@@ -228,7 +251,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts","meal_day_summaries","diet_plans"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts","meal_day_summaries","diet_plans","diet_assessments"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -642,6 +665,58 @@ export default async function PortalHome() {
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {/* Assessment summary — the compact, phone-readable counterpart to the
+          branded print document above. Same gate as the diet plan: no
+          published-and-shared assessment, no card. */}
+      {myAssessment && card(
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 700 }}>Your assessment summary</div>
+            <span style={{ flex: 1 }} />
+            <a href={`/diet-assessment/${myAssessment.id}/print`} target="_blank" rel="noopener"
+               style={{ fontSize: 12.5, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
+              Download / print →
+            </a>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 13, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+            <AssessmentStat label="Height" value={myAssessment.height != null ? `${myAssessment.height} cm` : null} />
+            <AssessmentStat label="Weight" value={myAssessment.weight != null ? `${myAssessment.weight} kg` : null} />
+            <AssessmentStat label="BMI" value={myAssessment.bmi != null ? `${myAssessment.bmi} kg/m²` : null} />
+            <AssessmentStat label="BMR" value={myAssessment.bmr != null ? `${myAssessment.bmr} kcal` : null} />
+            <AssessmentStat label="TEE" value={myAssessment.tee != null ? `${myAssessment.tee} kcal` : null} />
+            <AssessmentStat label="Muscle mass" value={myAssessment.muscle_mass != null ? `${myAssessment.muscle_mass} kg` : null} />
+            <AssessmentStat label="Body fat mass" value={myAssessment.fat_mass != null ? `${myAssessment.fat_mass} kg` : null} />
+            <AssessmentStat label="Body fat %" value={myAssessment.body_fat != null ? `${myAssessment.body_fat}%` : null} />
+            <AssessmentStat label="Visceral fat" value={myAssessment.visceral_fat != null ? String(myAssessment.visceral_fat) : null} />
+            <AssessmentStat label="Waist hip ratio" value={myAssessment.waist_hip != null ? String(myAssessment.waist_hip) : null} />
+          </div>
+
+          {(myAssessment.primary_goals || myAssessment.target_weight != null || myAssessment.timeline_weeks != null || myAssessment.objectives) && (
+            <div style={{ display: "grid", gap: 8, fontSize: 13 }}>
+              {myAssessment.primary_goals && (
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: 11 }}>Primary goals</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{myAssessment.primary_goals}</div>
+                </div>
+              )}
+              {(myAssessment.target_weight != null || myAssessment.timeline_weeks != null) && (
+                <div style={{ display: "flex", gap: 16 }}>
+                  {myAssessment.target_weight != null && <span><b style={{ color: "var(--text)" }}>{myAssessment.target_weight} kg</b> target weight</span>}
+                  {myAssessment.timeline_weeks != null && <span><b style={{ color: "var(--text)" }}>{myAssessment.timeline_weeks} weeks</b> timeline</span>}
+                </div>
+              )}
+              {myAssessment.objectives && (
+                <div>
+                  <div style={{ color: "var(--muted)", fontSize: 11 }}>Specific objectives</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{myAssessment.objectives}</div>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

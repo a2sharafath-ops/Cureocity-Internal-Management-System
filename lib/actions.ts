@@ -9,6 +9,8 @@ const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
 import { HOW_TO_USE, DEFAULT_MEALS, planProblems } from "@/lib/diet-plan";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
+import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
+import { draftAssessment } from "@/lib/diet-assessment";
 import { canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
@@ -7269,7 +7271,7 @@ export async function pdfStatus(): Promise<{ ready: boolean; provider: string | 
  * frozen; only the link expires, which is the right way round — the record of
  * what a client was given must outlive any URL.
  */
-export async function renderDocument(formData: FormData): Promise<{ ok?: boolean; url?: string; name?: string; error?: string }> {
+export async function renderDocument(formData: FormData): Promise<{ ok?: boolean; url?: string; name?: string; docId?: string; error?: string }> {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return { error: "Not authorized." };
 
@@ -7299,6 +7301,10 @@ export async function renderDocument(formData: FormData): Promise<{ ok?: boolean
     const { data } = await supabase.from("prescriptions").select("client_id, clients(name)").eq("id", id).maybeSingle();
     const r = data as unknown as { client_id: string; clients: { name: string } | null } | null;
     clientId = r?.client_id ?? null; clientName = r?.clients?.name ?? "Client";
+  } else if (kind === "assess") {
+    const { data } = await supabase.from("diet_assessments").select("client_id, issued_on, clients(name)").eq("id", id).maybeSingle();
+    const r = data as unknown as { client_id: string; issued_on: string | null; clients: { name: string } | null } | null;
+    clientId = r?.client_id ?? null; clientName = r?.clients?.name ?? "Client"; issuedOn = r?.issued_on ?? null;
   } else if (kind === "lab" || kind === "summary") {
     // Both print from a consultation.
     const { data } = await supabase.from("consultations").select("client_id, clients(name)").eq("id", id).maybeSingle();
@@ -7330,15 +7336,15 @@ export async function renderDocument(formData: FormData): Promise<{ ok?: boolean
     .upload(path, bytes, { contentType: "application/pdf", upsert: false });
   if (upErr) return { error: upErr.message };
 
-  await supabase.from("issued_documents").insert({
+  const { data: docRow } = await supabase.from("issued_documents").insert({
     kind, ref_id: id, client_id: clientId, path, file_name: name,
     bytes: bytes.length, provider: provider.name, issued_by: p.name,
-  });
+  }).select("id").maybeSingle();
   await logAudit(p, "Document rendered", clientName, `${DOC_LABEL[kind]} · ${(bytes.length / 1024).toFixed(0)} KB`);
 
   const { data: signed } = await supabase.storage.from("documents").createSignedUrl(path, 3600);
   revalidatePath("/workspace");
-  return { ok: true, url: signed?.signedUrl, name };
+  return { ok: true, url: signed?.signedUrl, name, docId: (docRow as { id: string } | null)?.id };
 }
 
 /** A fresh link to a document already rendered. Links expire; files do not. */
@@ -7353,4 +7359,245 @@ export async function documentLink(formData: FormData): Promise<{ url?: string; 
   if (!r) return { error: "Document not found." };
   const { data: signed } = await supabase.storage.from("documents").createSignedUrl(r.path, 3600);
   return { url: signed?.signedUrl, name: r.file_name };
+}
+
+/**
+ * Send an already-rendered document to the client's WhatsApp.
+ *
+ * Deliberately takes an `issued_documents` row rather than a plan or
+ * prescription id: you send a FILE that exists, not a document you hope renders.
+ * That also means the delivery record points at the exact bytes the client
+ * received, which is the whole reason the table exists.
+ */
+export async function sendDocumentWhatsApp(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  const docId = String(formData.get("doc_id") || "");
+  if (!docId) return { error: "Missing document." };
+
+  const wati = watiReadiness();
+  if (!wati.ready) return { error: `WhatsApp isn't set up — missing ${wati.missing.join(", ")}.` };
+
+  const supabase = createClient();
+  const { data } = await supabase.from("issued_documents")
+    .select("id, kind, path, file_name, client_id, sent_at, clients(name, phone)")
+    .eq("id", docId).maybeSingle();
+  const doc = data as unknown as {
+    id: string; kind: string; path: string; file_name: string; client_id: string | null;
+    sent_at: string | null; clients: { name: string; phone: string | null } | null;
+  } | null;
+  if (!doc) return { error: "Document not found." };
+  if (doc.sent_at) return { error: "Already sent. Render a fresh copy to send again." };
+  const phone = doc.clients?.phone ?? null;
+  if (!phone) return { error: "That client has no phone number on record." };
+
+  // Wati fetches the file from its own servers, so the link must outlive the
+  // request. A day is generous for a retry and still expires.
+  const { data: signed } = await supabase.storage.from("documents").createSignedUrl(doc.path, 86_400);
+  if (!signed?.signedUrl) return { error: "Could not produce a link to the file." };
+
+  const first = (doc.clients?.name ?? "there").trim().split(/\s+/)[0];
+  const res = await sendDocument({
+    phone,
+    template: { name: templateFor(doc.kind), params: [first] },
+    mediaUrl: signed.signedUrl,
+    fileName: doc.file_name,
+  });
+
+  // Record the outcome either way. A failed send that leaves no trace is how
+  // "I sent it" and "they never got it" both end up true.
+  await supabase.from("issued_documents").update(
+    res.ok
+      ? { sent_at: new Date().toISOString(), sent_to: normalisePhone(phone), send_error: null }
+      : { send_error: res.error?.slice(0, 300) ?? "Unknown error" },
+  ).eq("id", docId);
+
+  await logAudit(p, res.ok ? "Document sent on WhatsApp" : "WhatsApp send failed",
+    doc.clients?.name, `${doc.file_name}${res.ok ? "" : ` · ${res.error?.slice(0, 120)}`}`);
+  revalidatePath("/workspace");
+  return res.ok ? { ok: true } : { error: res.error };
+}
+
+/** Readiness for the UI, so a Send button is offered only when it can work. */
+export async function whatsappStatus(): Promise<{ ready: boolean; missing: string[] }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { ready: false, missing: [] };
+  return watiReadiness();
+}
+
+// ============================================================================
+// Dietary Assessment Summary — the companion document to the diet plan.
+// ============================================================================
+
+/**
+ * Start an assessment, pre-filled from everything already recorded.
+ *
+ * The point of drafting rather than opening blank: a dietitian who has just
+ * spent an hour on the questionnaire should be correcting, not retyping it into
+ * a second document.
+ */
+export async function createDietAssessment(formData: FormData): Promise<{ ok?: boolean; id?: string; error?: string }> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Missing client." };
+  const consultation_id = String(formData.get("consultation_id") || "") || null;
+  const supabase = createClient();
+
+  const [{ data: c }, { data: m }, { data: alg }, { data: consult }, { count }] = await Promise.all([
+    supabase.from("clients").select("dob, gender, occupation, height, weight, conditions, goals").eq("id", client_id).maybeSingle(),
+    supabase.from("measurements").select("weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, bmr")
+      .eq("client_id", client_id).order("date", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("allergies").select("substance, severity").eq("client_id", client_id),
+    supabase.from("consultations").select("answers, created_at, staff(name)")
+      .eq("client_id", client_id).eq("kind", "Diet").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("diet_assessments").select("id", { count: "exact", head: true }).eq("client_id", client_id),
+  ]);
+
+  const con = consult as unknown as { answers: [string, string][] | null; created_at: string; staff: { name: string } | null } | null;
+  const draft = draftAssessment({
+    client: (c ?? { dob: null, gender: null, occupation: null, height: null, weight: null, conditions: null, goals: null }) as never,
+    measurement: (m ?? null) as never,
+    allergies: ((alg ?? []) as { substance: string; severity: string }[]).map((a) => `${a.substance}${a.severity ? ` (${a.severity})` : ""}`),
+    answers: con?.answers ?? [],
+    dietitian: con?.staff?.name ?? p.name,
+    consultedOn: con?.created_at ? con.created_at.slice(0, 10) : null,
+  });
+
+  const { data: row, error } = await supabase.from("diet_assessments").insert({
+    client_id, consultation_id, version: (count ?? 0) + 1, status: "draft",
+    issued_on: todayISO(), created_by: p.name, ...draft,
+  }).select("id").maybeSingle();
+  if (error) return { error: error.message };
+
+  const { data: cl } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  await logAudit(p, "Assessment summary drafted", (cl as { name: string } | null)?.name, `v${(count ?? 0) + 1}`);
+  revalidatePath("/workspace");
+  return { ok: true, id: (row as { id: string } | null)?.id };
+}
+
+/** Save the assessment. Published rows are immutable — change goes to a new version. */
+export async function saveDietAssessment(id: string, patch: Record<string, unknown>): Promise<{ ok?: boolean; error?: string }> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  if (!id) return { error: "Missing assessment." };
+  const supabase = createClient();
+  const { data: cur } = await supabase.from("diet_assessments").select("status").eq("id", id).maybeSingle();
+  const status = (cur as { status: string } | null)?.status;
+  if (!status) return { error: "Assessment not found." };
+  if (status === "published" || status === "archived") return { error: "Published — start a new version to change it." };
+
+  // Whitelist: a patch comes from the browser, and letting it name its own
+  // columns would let it move `status` or `client_id`.
+  const ALLOWED = new Set([
+    "consulted_on", "dietitian", "medical_history", "existing_condition", "medications", "allergies", "family_history",
+    "occupation", "daily_activity", "exercise", "sleep_hours", "sleep_quality", "stress_level", "gut_health", "weight_change",
+    "diet_type", "food_allergies", "food_dislikes", "supplements",
+    "height", "weight", "bmi", "bmr", "tee", "muscle_mass", "fat_mass", "body_fat", "visceral_fat", "waist_hip",
+    "primary_goals", "target_weight", "timeline_weeks", "objectives",
+    "meal_frequency", "meals_per_day", "snacking", "hydration", "notes", "issued_on",
+  ]);
+  const clean: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  for (const [k, v] of Object.entries(patch)) if (ALLOWED.has(k)) clean[k] = v;
+
+  const { error } = await supabase.from("diet_assessments").update(clean).eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/workspace");
+  return { ok: true };
+}
+
+/**
+ * Copy a published assessment into a fresh editable draft.
+ *
+ * Deliberately NOT `createDietAssessment`, which re-drafts from live data: that
+ * would discard every correction the dietitian made and silently swap in
+ * today's InBody figures. A revision starts from what was issued.
+ */
+export async function newDietAssessmentVersion(formData: FormData): Promise<{ ok?: boolean; id?: string; error?: string }> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "Missing assessment." };
+  const supabase = createClient();
+
+  const { data: src } = await supabase.from("diet_assessments").select("*").eq("id", id).maybeSingle();
+  const s = src as Record<string, unknown> | null;
+  if (!s) return { error: "Assessment not found." };
+  const { count } = await supabase.from("diet_assessments").select("id", { count: "exact", head: true }).eq("client_id", s.client_id as string);
+
+  // Everything except the row's own identity and its lifecycle stamps.
+  const { id: _id, version: _v, status: _s, created_at: _c, updated_at: _u,
+    reviewed_by: _rb, reviewed_at: _ra, published_at: _pa, shared_at: _sa, ...carry } = s;
+
+  const { data: copy, error } = await supabase.from("diet_assessments").insert({
+    ...carry, version: (count ?? 0) + 1, status: "draft",
+    issued_on: todayISO(), created_by: p.name,
+  }).select("id").maybeSingle();
+  if (error) return { error: error.message };
+  revalidatePath("/workspace");
+  return { ok: true, id: (copy as { id: string } | null)?.id };
+}
+
+export async function submitDietAssessment(formData: FormData) {
+  const p = await planGuard();
+  if (!p) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = createClient();
+  await supabase.from("diet_assessments").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
+  await notifyRoles(supabase, ["Super Admin", "Administrator"], {
+    title: "Assessment summary awaiting review",
+    body: `${p.name} submitted a dietary assessment summary.`,
+    href: "/workspace?tab=charts", icon: "📋",
+  });
+  revalidatePath("/workspace");
+}
+
+export async function reviewDietAssessment(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canReviewDietChart(p.role)) return;
+  const id = String(formData.get("id") || "");
+  const approve = String(formData.get("approve") || "") === "true";
+  if (!id) return;
+  const supabase = createClient();
+  // Only a row actually awaiting review may move — same reasoning as the plan:
+  // otherwise a published, shared document could be flipped back and rewritten
+  // under a client who already has it.
+  const { data: cur } = await supabase.from("diet_assessments").select("status").eq("id", id).maybeSingle();
+  if ((cur as { status: string } | null)?.status !== "in_review") return;
+
+  await supabase.from("diet_assessments").update(
+    approve
+      ? { status: "published", reviewed_by: p.name, reviewed_at: new Date().toISOString(), published_at: new Date().toISOString() }
+      : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString() },
+  ).eq("id", id).eq("status", "in_review");
+  await logAudit(p, approve ? "Assessment summary published" : "Assessment summary sent back", undefined, id);
+  revalidatePath("/workspace");
+  revalidatePath("/portal");
+}
+
+export async function shareDietAssessment(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  const undo = String(formData.get("undo") || "") === "true";
+  if (!id) return { error: "Missing assessment." };
+  const supabase = createClient();
+  const { data: row } = await supabase.from("diet_assessments").select("status, client_id").eq("id", id).maybeSingle();
+  const r = row as { status: string; client_id: string } | null;
+  if (!r) return { error: "Assessment not found." };
+  if (!undo && r.status !== "published") return { error: "Publish it before sharing." };
+
+  await supabase.from("diet_assessments").update({ shared_at: undo ? null : new Date().toISOString() }).eq("id", id);
+  if (!undo) {
+    await notifyClient(supabase, r.client_id, {
+      title: "Your dietary assessment is ready",
+      body: "Your assessment summary is now in your portal.",
+      href: "/portal", icon: "📋",
+    });
+  }
+  await logAudit(p, undo ? "Assessment withdrawn from portal" : "Assessment shared to portal", undefined, id);
+  revalidatePath("/workspace");
+  revalidatePath("/portal");
+  return { ok: true };
 }

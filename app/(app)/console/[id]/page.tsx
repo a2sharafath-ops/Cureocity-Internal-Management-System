@@ -6,6 +6,8 @@ import { consultQ, consultQFor } from "@/lib/consult-questions";
 import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
 import ConsoleView, { type ConsoleHealth } from "@/components/ConsoleView";
 import { todayISO } from "@/lib/today";
+import { pdfReadiness } from "@/lib/pdf";
+import { watiReadiness } from "@/lib/wati";
 import { fmtTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
@@ -204,6 +206,8 @@ export default async function ConsolePage({ params }: { params: { id: string } }
       summary={row.summary}
       status={row.status}
       canTools={canTools}
+      pdf={pdfReadiness()}
+      whatsapp={watiReadiness()}
       reports={reports}
       orders={orders}
       prescriptions={rxList}

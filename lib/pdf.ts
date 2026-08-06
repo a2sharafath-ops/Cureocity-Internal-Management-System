@@ -25,7 +25,7 @@ export type PdfProvider = {
 };
 
 /** The documents that can be rendered. Each maps to a print route. */
-export const DOC_KINDS = ["plan", "rx", "lab", "summary"] as const;
+export const DOC_KINDS = ["plan", "rx", "lab", "summary", "assess"] as const;
 export type DocKind = (typeof DOC_KINDS)[number];
 
 export const DOC_LABEL: Record<DocKind, string> = {
@@ -33,6 +33,7 @@ export const DOC_LABEL: Record<DocKind, string> = {
   rx: "Prescription",
   lab: "Lab requisition",
   summary: "Consultation summary",
+  assess: "Dietary assessment summary",
 };
 
 /** Where each document's printable page lives. */
@@ -42,6 +43,7 @@ export function printPath(kind: DocKind, id: string): string {
     case "rx": return `/rx/${id}/print`;
     case "lab": return `/lab/${id}/print`;
     case "summary": return `/consult/${id}/print`;
+    case "assess": return `/diet-assessment/${id}/print`;
   }
 }
 

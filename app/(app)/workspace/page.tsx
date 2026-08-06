@@ -20,7 +20,9 @@ import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import DietPlanSection, { type DietPlanRow } from "@/components/DietPlanSection";
+import DietAssessmentSection, { type DietAssessmentRow } from "@/components/DietAssessmentSection";
 import { pdfReadiness } from "@/lib/pdf";
+import { watiReadiness } from "@/lib/wati";
 import { type PlanMeal, type PlanOption } from "@/lib/diet-plan";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
@@ -369,6 +371,51 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       })),
     }));
   }
+  // Dietary Assessment Summary — the companion document to the diet plan,
+  // same tab, its own client picker and version list.
+  let dietAssessments: DietAssessmentRow[] = [];
+  if (tab === "charts") {
+    const { data: da } = await supabase
+      .from("diet_assessments")
+      .select(
+        "id, client_id, version, status, issued_on, consulted_on, dietitian, medical_history, existing_condition, medications, allergies, family_history, " +
+        "occupation, daily_activity, exercise, sleep_hours, sleep_quality, stress_level, gut_health, weight_change, " +
+        "diet_type, food_allergies, food_dislikes, supplements, " +
+        "height, weight, bmi, bmr, tee, muscle_mass, fat_mass, body_fat, visceral_fat, waist_hip, " +
+        "primary_goals, target_weight, timeline_weeks, objectives, " +
+        "meal_frequency, meals_per_day, snacking, hydration, notes, shared_at, created_at, clients(name, dob, gender)",
+      )
+      .order("created_at", { ascending: false });
+    type RawAssessment = {
+      id: string; client_id: string; version: number; status: string; issued_on: string | null;
+      consulted_on: string | null; dietitian: string | null; medical_history: string | null; existing_condition: string | null;
+      medications: { medication: string; notes: string }[] | null; allergies: string | null; family_history: string | null;
+      occupation: string | null; daily_activity: string | null; exercise: { type: string; frequency: string; duration: string }[] | null;
+      sleep_hours: string | null; sleep_quality: string | null; stress_level: "low" | "medium" | "high" | null; gut_health: string | null; weight_change: string | null;
+      diet_type: string | null; food_allergies: string | null; food_dislikes: string | null; supplements: string | null;
+      height: number | null; weight: number | null; bmi: number | null; bmr: number | null; tee: number | null;
+      muscle_mass: number | null; fat_mass: number | null; body_fat: number | null; visceral_fat: number | null; waist_hip: number | null;
+      primary_goals: string | null; target_weight: number | null; timeline_weeks: number | null; objectives: string | null;
+      meal_frequency: string | null; meals_per_day: string | null; snacking: string | null; hydration: string | null; notes: string | null;
+      shared_at: string | null; created_at: string; clients: { name: string; dob: string | null; gender: string | null } | null;
+    };
+    dietAssessments = ((da ?? []) as unknown as RawAssessment[]).map((r) => ({
+      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
+      created_at: r.created_at, issued_on: r.issued_on, sharedAt: r.shared_at,
+      dob: r.clients?.dob ?? null, gender: r.clients?.gender ?? null,
+      assessment: {
+        consulted_on: r.consulted_on, dietitian: r.dietitian, medical_history: r.medical_history, existing_condition: r.existing_condition,
+        medications: r.medications ?? [], allergies: r.allergies, family_history: r.family_history,
+        occupation: r.occupation, daily_activity: r.daily_activity, exercise: r.exercise ?? [],
+        sleep_hours: r.sleep_hours, sleep_quality: r.sleep_quality, stress_level: r.stress_level, gut_health: r.gut_health, weight_change: r.weight_change,
+        diet_type: r.diet_type, food_allergies: r.food_allergies, food_dislikes: r.food_dislikes, supplements: r.supplements,
+        height: r.height, weight: r.weight, bmi: r.bmi, bmr: r.bmr, tee: r.tee,
+        muscle_mass: r.muscle_mass, fat_mass: r.fat_mass, body_fat: r.body_fat, visceral_fat: r.visceral_fat, waist_hip: r.waist_hip,
+        primary_goals: r.primary_goals, target_weight: r.target_weight, timeline_weeks: r.timeline_weeks, objectives: r.objectives,
+        meal_frequency: r.meal_frequency, meals_per_day: r.meals_per_day, snacking: r.snacking, hydration: r.hydration, notes: r.notes,
+      },
+    }));
+  }
   // Trainer tool: per-client workout plans (draft → publish), mirrors diet charts.
   let workoutPlans: WorkoutPlanRow[] = [];
   if (tab === "planner") {
@@ -530,7 +577,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "diet_plans", "diet_plan_meals", "diet_plan_options", "client_workouts", "recipes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline only; switch via the header persona menu */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
@@ -737,7 +784,17 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "charts" && (
         <div style={{ marginTop: 24 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Customised diet plan</div>
-          <DietPlanSection plans={dietPlans} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} />
+          <DietPlanSection plans={dietPlans} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
+        </div>
+      )}
+
+      {/* ---- DIETARY ASSESSMENT SUMMARY (dietitian) — the companion document
+           to the diet plan: what was found, where the plan came from. Same tab,
+           same role gate. ---- */}
+      {tab === "charts" && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Dietary assessment summary</div>
+          <DietAssessmentSection assessments={dietAssessments} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
         </div>
       )}
 

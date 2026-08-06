@@ -36,12 +36,13 @@ const pillOf = (status: string) => {
  * the "charts" tab: same tab, a different (richer, structured) document.
  */
 export default function DietPlanSection({
-  plans, clients, canReview, canCompose, pdf }: {
+  plans, clients, canReview, canCompose, pdf, whatsapp }: {
   plans: DietPlanRow[];
   clients: { id: string; name: string }[];
   /** Can approve/send-back a plan awaiting sign-off. */
   canReview: boolean;
   pdf: { ready: boolean; missing: string[] };
+  whatsapp?: { ready: boolean; missing: string[] };
   /** Can author plans at all (role gate + workspace read-only combined). */
   canCompose: boolean;
 }) {
@@ -134,7 +135,7 @@ export default function DietPlanSection({
       )}
 
       {selectedPlan && (
-        <DietPlanBuilder pdf={pdf}
+        <DietPlanBuilder pdf={pdf} whatsapp={whatsapp}
           key={selectedPlan.id}
           planId={selectedPlan.id}
           clientName={selectedPlan.client_name ?? "—"}

@@ -10,6 +10,7 @@ import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
 import ShareToPortal from "@/components/ShareToPortal";
 import { sectionsFor, questionBody, answeredIn } from "@/lib/consult-sections";
 import AmbientScribe from "@/components/AmbientScribe";
+import RenderPdfButton from "@/components/RenderPdfButton";
 
 type Flag = { text: string; severity: string };
 
@@ -35,7 +36,7 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 const FORM = "consult-form";
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -61,6 +62,10 @@ export default function ConsoleView({
   /** When each document reached the client's portal, if it has. */
   rxSharedAt?: string | null;
   labSharedAt?: string | null;
+  /** Whether server-side PDF rendering is configured — see lib/pdf.ts. */
+  pdf?: { ready: boolean; missing: string[] };
+  /** WhatsApp readiness — see lib/wati.ts. */
+  whatsapp?: { ready: boolean; missing: string[] };
   reports?: ReportRow[];
   orders?: { test: string; priority: string | null; created_at: string }[];
   prescriptions?: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
@@ -682,6 +687,14 @@ export default function ConsoleView({
             {!client.isLead && (
               <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
                 <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview PDF →</a> · reflects the last saved summary. Save first, review, edit if needed, then share from the consultations list.
+                {pdf && (
+                  <div style={{ marginTop: 8 }}>
+                    {/* Preview prints from your own browser and leaves nothing
+                        behind. This stores a file — what the client was actually
+                        given, frozen. Save first: it renders the SAVED summary. */}
+                    <RenderPdfButton kind="summary" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -743,6 +756,11 @@ export default function ConsoleView({
                       Print lab requisition ({orders.length}) →
                     </a>
                   )}
+                  {orders.length > 0 && pdf && (
+                    <div style={{ marginTop: 6 }}>
+                      <RenderPdfButton kind="lab" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
+                    </div>
+                  )}
                   {orders.length > 0 && <ShareToPortal kind="lab" id={id} sharedAt={labSharedAt ?? null} label="Share to portal" />}
                 </form>
               </ToolRow>
@@ -771,6 +789,11 @@ export default function ConsoleView({
                        style={{ display: "block", marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
                       Print prescription →
                     </a>
+                  )}
+                  {rxPrintId && pdf && (
+                    <div style={{ marginTop: 6 }}>
+                      <RenderPdfButton kind="rx" id={rxPrintId} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
+                    </div>
                   )}
                   {rxPrintId && <ShareToPortal kind="rx" id={rxPrintId} sharedAt={rxSharedAt ?? null} label="Share to portal" />}
                   <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 6, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Full prescription in the client&apos;s record →</Link>
