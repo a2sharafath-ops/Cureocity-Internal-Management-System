@@ -154,9 +154,26 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   if (me.staffId && isClinician(me.role)) {
     const scopedIdSet = new Set(scoped.map((c) => c.id));
     const allFlags = await careWorkFlags(today);
+    // Two ways a flag is yours, and both are needed.
+    //
+    //   • by name — the queue resolved YOU as the owner (`nudge`);
+    //   • by role — it is owed by your role and nobody individual could be
+    //     resolved (`chaseRole`).
+    //
+    // Only the first was checked, which was fine while every role-wide flag
+    // belonged to Front Desk — they read them on the ops dashboard. Now that
+    // booking is the Health Coach's, all of it arrives as `chaseRole`, and a
+    // coach is redirected away from that dashboard: they would have been made
+    // accountable for work their own screen never showed them.
+    const mine = (f: Flag) => {
+      if (f.nudge) return f.nudge.staffId === me.staffId && (!f.nudge.clientId || scopedIdSet.has(f.nudge.clientId));
+      if (f.chaseRole) return f.chaseRole.roles.includes(me.role) && (!f.chaseRole.clientId || scopedIdSet.has(f.chaseRole.clientId));
+      return false;
+    };
     myAttention = allFlags
-      .filter((f) => f.nudge?.staffId === me.staffId && (!f.nudge.clientId || scopedIdSet.has(f.nudge.clientId)))
-      .map((f) => ({ sev: f.sev, title: f.title, detail: f.detail, href: f.href, cta: f.cta ?? "View" }));
+      .filter(mine)
+      // Buttons stripped to a plain "View" — you don't chase yourself.
+      .map((f) => ({ sev: f.sev, title: f.title, detail: f.detail, href: f.href, cta: f.cta ?? "View", dueLabel: f.dueLabel, overdue: f.overdue }));
   }
 
   // The reviewer's own queue. The Medical Director signs off every diet chart,
