@@ -22,6 +22,8 @@ export type ClientInput = {
   doctor: ConsultState;
   diet: ConsultState;
   trainer: ConsultState;
+  /** Comprehensive only, and exactly once per package. */
+  psych?: ConsultState;
   blueprintGenerated: boolean;
   sessionScheduled: boolean;
 };
@@ -104,6 +106,7 @@ function stepsFor(i: ClientInput): Step[] {
         consultStep("Doctor consultation", i.doctor, "Doctor", id),
         consultStep("Diet consultation", i.diet, "Dietitian", id),
         consultStep("Fitness assessment", i.trainer, "Fitness Trainer", id),
+        consultStep("Psychology consultation", i.psych ?? { scheduled: false, completed: false }, "Psychologist", id),
         { label: "Strength sessions scheduled", done: i.sessionScheduled, action: { cta: "Schedule", href: `/clients/${id}` } },
       ];
     case "training":

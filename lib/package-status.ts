@@ -122,6 +122,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       doctor: { scheduled: st.consults.doctor?.booked ?? false, completed: st.consults.doctor?.completed ?? false },
       diet: { scheduled: st.consults.dietitian?.booked ?? false, completed: st.consults.dietitian?.completed ?? false },
       trainer: { scheduled: st.consults.trainer?.booked ?? false, completed: st.consults.trainer?.completed ?? false },
+      psych: { scheduled: st.consults.psychologist?.booked ?? false, completed: st.consults.psychologist?.completed ?? false },
       blueprintGenerated: Boolean(bp?.generated),
       sessionScheduled: allSess.some((s) => s.status === "scheduled"),
     };

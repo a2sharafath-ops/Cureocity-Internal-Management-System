@@ -34,7 +34,7 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
     supabase.from("clients").select("id, code, name, dob, gender, conditions, goals").or(`branch.eq.${branch},branch.is.null`),
     supabase.from("blueprints").select("client_id, scores, generated"),
     supabase.from("sessions").select("client_id, status, date"),
-    supabase.from("concerns").select("id, client_id, status, body, role").eq("status", "Open"),
+    supabase.from("concerns").select("id, client_id, status, body, role, created_at").eq("status", "Open"),
     supabase.from("followups").select("id, client_id, status, due_date, label").eq("status", "pending"),
     supabase.from("measurements").select("client_id, weight, body_fat, bmi, date").order("date", { ascending: false }),
     supabase.from("client_packages").select("client_id, category, status").eq("status", "active"),
@@ -46,7 +46,7 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; dob: string | null; gender: string | null; conditions: string | null; goals: string[] | null }[];
   const bps = new Map(((bpData ?? []) as { client_id: string; scores: BpScores | null; generated: boolean }[]).map((b) => [b.client_id, b]));
   const sessions = (sessData ?? []) as { client_id: string; status: string; date: string }[];
-  const concerns = (concernData ?? []) as { id: string; client_id: string; status: string; body: string; role: string | null }[];
+  const concerns = (concernData ?? []) as { id: string; client_id: string; status: string; body: string; role: string | null; created_at: string | null }[];
   const followups = (fuData ?? []) as { id: string; client_id: string; status: string; due_date: string; label: string }[];
   const measurements = (measureData ?? []) as { client_id: string; weight: number | null; body_fat: number | null; bmi: number | null; date: string | null }[];
   const staff = new Map(((staffData ?? []) as { id: string; name: string; role: string }[]).map((s) => [s.id, s]));
@@ -102,7 +102,8 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
       scores: bps.get(c.id)?.scores ?? null,
       slaBreached: breached.has(c.id),
       slaProtocol: slaProtocol.get(c.id) ?? (cats.includes("blueprint") ? "blueprint" : cats[0] ?? null),
-      openConcerns: concerns.filter((x) => x.client_id === c.id).map((x) => ({ id: x.id, body: x.body, role: x.role })),
+      openConcerns: concerns.filter((x) => x.client_id === c.id).map((x) => ({ id: x.id, body: x.body, role: x.role, created_at: x.created_at })),
+      today,
       overdueFollowups: followups.filter((f) => f.client_id === c.id && f.due_date < today).map((f) => ({ id: f.id, label: f.label })),
       nothingBooked: !upcoming && Boolean(lastSession),
       daysQuiet: lastSession ? daysBetween(lastSession, today) : 0,

@@ -46,14 +46,16 @@ export type StageInput = {
   /** care-turnaround / protocol SLA breached, and which protocol */
   slaBreached?: boolean;
   slaProtocol?: string | null;              // "blueprint" | "comprehensive" | …
-  openConcerns: { id: string; body: string; role: string | null }[];
+  openConcerns: { id: string; body: string; role: string | null; created_at?: string | null }[];
+  /** today, ISO — so concern age is computed against the board's date. */
+  today?: string;
   overdueFollowups: { id: string; label: string }[];
   /** minor signals — nudge to yellow, not a forced alert */
   nothingBooked?: boolean;
   daysQuiet?: number;                        // days since last completed session
 };
 
-import { UNOWNED_CONCERN_DISCIPLINE } from "@/lib/work-owners";
+import { UNOWNED_CONCERN_DISCIPLINE, CONCERN_ESCALATION_DAYS } from "@/lib/work-owners";
 
 /** Normalise the various discipline spellings to the client_assignments set. */
 export function normDiscipline(d: string | null | undefined): string | null {
@@ -80,7 +82,19 @@ export function clientAlerts(i: StageInput): WbAlert[] {
     // used to resolve to null — an orange alert on the board that nobody was
     // asked to answer. The Health Coach owns the client relationship, so it
     // falls to them by default.
-    out.push({ key: `concern:${c.id}`, kind: "concern", label: "Open concern", detail: c.body, severity: "orange", discipline: normDiscipline(c.role) ?? UNOWNED_CONCERN_DISCIPLINE });
+    // Age is the escalation, and it needs no column: a concern is escalated
+    // because nobody has closed it, and un-escalates the moment somebody does.
+    const ageDays = c.created_at
+      ? Math.floor((Date.parse(i.today ?? new Date().toISOString().slice(0, 10)) - Date.parse(c.created_at.slice(0, 10))) / 86_400_000)
+      : 0;
+    const escalated = ageDays >= CONCERN_ESCALATION_DAYS;
+    out.push({
+      key: `concern:${c.id}`, kind: "concern",
+      label: escalated ? `Open concern — ${ageDays} days, escalated` : "Open concern",
+      detail: c.body,
+      severity: escalated ? "red" : "orange",
+      discipline: normDiscipline(c.role) ?? UNOWNED_CONCERN_DISCIPLINE,
+    });
   }
 
   for (const f of i.overdueFollowups) {

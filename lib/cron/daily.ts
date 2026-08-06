@@ -10,6 +10,7 @@ import { runPtSla } from "@/lib/cron/pt-sla";
 import { runLeadFollowups } from "@/lib/cron/lead-followups";
 import { runLeadCoverage } from "@/lib/cron/lead-coverage";
 import { runLeadIdle } from "@/lib/cron/lead-idle";
+import { runConcernEscalation } from "@/lib/cron/concern-escalation";
 import { runLeadStagnation } from "@/lib/cron/lead-stagnation";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -167,12 +168,15 @@ export async function runDaily() {
   // Leads where work is happening but nothing progresses. Silent until the
   // 0086 stage clock has recorded real transitions.
   const stag = await runLeadStagnation(supabase, todayISO());
+  // Concerns the coach hasn't answered — escalated to the Medical Director.
+  const esc = await runConcernEscalation(supabase, todayISO());
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
     detail: `renewed ${renewed} · reminders ${reminders} · follow-ups ${followups}`
       + ` · blueprint SLA ${sla.scanned}/${sla.warnings}/${sla.breaches}`
       + ` · comprehensive SLA ${comp.scanned}/${comp.warnings}/${comp.breaches} (scanned/warned/breached)`
+      + ` · concerns escalated ${esc.escalated}/${esc.scanned}`
       + ` · ${comp.booked} bookings queued, ${comp.outOfOrder} out of order`
       + ` · PT SLA ${pt.scanned} scanned / ${pt.booked} reassess booked / ${pt.unbooked} never scheduled / ${pt.overdueSessions} sessions behind`
       + ` · callbacks ${cb.due} due / ${cb.late} late / ${cb.escalated} escalated`

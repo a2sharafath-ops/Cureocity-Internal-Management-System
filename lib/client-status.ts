@@ -162,6 +162,7 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
       doctor: { scheduled: consults.doctor.booked, completed: consults.doctor.completed },
       diet: { scheduled: consults.dietitian.booked, completed: consults.dietitian.completed },
       trainer: { scheduled: consults.trainer.booked, completed: consults.trainer.completed },
+      psych: { scheduled: consults.psychologist.booked, completed: consults.psychologist.completed },
       blueprintGenerated: bpGen.has(c.id),
       sessionScheduled: sessSched.has(c.id),
     };

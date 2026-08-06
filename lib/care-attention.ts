@@ -13,6 +13,7 @@ import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, typ
 import { loadClientStatuses } from "@/lib/client-status";
 import {
   BOOKING_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners,
+  CONCERN_ESCALATION_OWNER, CONCERN_ESCALATION_DAYS,
 } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
@@ -25,7 +26,7 @@ const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 
 export async function careWorkFlags(today: string): Promise<Flag[]> {
   const sb = createClient();
-  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: appts }] = await Promise.all([
+  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: appts }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
     sb.from("consultations").select("client_id, kind, status, completed_at"),
@@ -34,6 +35,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
     sb.from("blueprints").select("client_id, generated"),
     sb.from("care_protocols").select("client_id, start_date, approved_at").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
+    sb.from("concerns").select("client_id, body, created_at").eq("status", "Open"),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
   ]);
 
@@ -126,6 +128,12 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push(a);
   }
 
+  const concernsBy = new Map<string, { body: string; created_at: string | null }[]>();
+  for (const c of (openConcerns ?? []) as { client_id: string | null; body: string; created_at: string | null }[]) {
+    if (!c.client_id) continue;
+    (concernsBy.get(c.client_id) ?? concernsBy.set(c.client_id, []).get(c.client_id)!).push(c);
+  }
+
   const statuses = await loadClientStatuses(sb, Array.from(catsBy.keys()), today);
 
   const flags: Flag[] = [];
@@ -185,6 +193,25 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         chaseRole: o ? undefined : { roles: DELIVERY_OWNER.trainer, who: "Fitness Trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
     }
 
+    // ---- a concern nobody has answered -----------------------------------
+    // The coach owns it from the moment it is raised. After
+    // CONCERN_ESCALATION_DAYS it stops being theirs alone and the Medical
+    // Director is told — the clinical backstop, so nothing raised about a
+    // client can quietly sit open forever.
+    for (const c of concernsBy.get(clientId) ?? []) {
+      if (!c.created_at) continue;
+      const ageDays = Math.floor((Date.parse(today) - Date.parse(c.created_at.slice(0, 10))) / 86_400_000);
+      if (ageDays < CONCERN_ESCALATION_DAYS) continue;
+      flags.push({
+        sev: "high",
+        title: `${who} — concern open ${ageDays} days`,
+        detail: c.body.slice(0, 120),
+        href: `/workspace?role=coach&tab=concerns`, cta: "Open",
+        dedupeKey: `concern-esc:${clientId}`,
+        chaseRole: { roles: CONCERN_ESCALATION_OWNER, who: "Medical Director", label: `Unanswered concern — ${who}`, clientId, href: "/workspace?role=coach&tab=concerns" },
+      });
+    }
+
     // ---- overdue day-0 bookings ------------------------------------------
     const st = statuses.get(clientId);
     if (st && ["blueprint", "comprehensive", "training", "membership"].includes(st.category)) {
@@ -198,6 +225,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         doctor: { scheduled: st.consults.doctor?.booked ?? false, completed: st.consults.doctor?.completed ?? false },
         diet: { scheduled: st.consults.dietitian?.booked ?? false, completed: st.consults.dietitian?.completed ?? false },
         trainer: { scheduled: st.consults.trainer?.booked ?? false, completed: st.consults.trainer?.completed ?? false },
+        psych: { scheduled: st.consults.psychologist?.booked ?? false, completed: st.consults.psychologist?.completed ?? false },
         blueprintGenerated: bpGen.has(clientId),
         sessionScheduled: sessScheduled.has(clientId),
       };

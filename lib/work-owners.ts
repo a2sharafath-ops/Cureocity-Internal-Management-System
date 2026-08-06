@@ -103,6 +103,18 @@ export const BLOOD_CHASE_OWNER: OwnerRoles = ["Health Coach"];
 export const UNOWNED_CONCERN_DISCIPLINE = "coach";
 export const CONCERN_ESCALATION_OWNER: OwnerRoles = ["Medical Director"];
 
+/**
+ * How long an open concern may sit before it stops being the coach's alone.
+ *
+ * Time-based on purpose — no `escalated` column to set, forget to set, or leave
+ * stale after the concern is resolved. A concern is escalated because it is
+ * old, and it stops being escalated the moment somebody closes it.
+ */
+export const CONCERN_ESCALATION_DAYS = 3;
+
+/** Working the follow-up queue itself. */
+export const FOLLOWUP_QUEUE_OWNER: OwnerRoles = ["Front Desk"];
+
 // ---- approval ---------------------------------------------------------------
 
 /** Clinical sign-off on anything a client receives. */

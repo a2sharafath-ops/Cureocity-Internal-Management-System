@@ -5,7 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { dueOn, waitingSince, fmtDay, daysBetweenISO } from "@/lib/due";
-import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER } from "@/lib/work-owners";
+import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, FOLLOWUP_QUEUE_OWNER } from "@/lib/work-owners";
 
 const shift = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Payment terms: 7 days from issue. */
@@ -99,7 +99,11 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
     const oldest = late.reduce((a, b) => (a.due_date < b.due_date ? a : b)).due_date;
     flags.push({ sev: "high", title: `${late.length} overdue follow-up${late.length === 1 ? "" : "s"}`,
       detail: "Calls / bookings past due", href: "/followups", cta: "Open queue",
-      dueLabel: `oldest ${fmtDay(oldest)} · ${daysBetweenISO(oldest, today)} days overdue`, overdue: true });
+      dueLabel: `oldest ${fmtDay(oldest)} · ${daysBetweenISO(oldest, today)} days overdue`, overdue: true ,
+      // The queue is worked by front desk (canWorkFollowups), so the summary
+      // line names them. Individual rows carry their own discipline; this is
+      // the "nobody has touched the queue" signal.
+      chaseRole: { roles: FOLLOWUP_QUEUE_OWNER, who: "Front Desk", label: `Work the follow-up queue — ${late.length} overdue`, href: "/followups" } });
   }
 
   const order = { high: 0, med: 1, low: 2 };

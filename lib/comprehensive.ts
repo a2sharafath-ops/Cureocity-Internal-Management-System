@@ -90,6 +90,11 @@ export const INITIAL_BOOKINGS = [
   { key: "doctor",    label: "Book initial doctor consultation",   apptType: "Doctor Consultation",  consultKind: "Doctor" },
   { key: "dietitian", label: "Book initial diet consultation",     apptType: "Diet Consultation",    consultKind: "Diet" },
   { key: "trainer",   label: "Book initial fitness assessment",    apptType: "Fitness Services",     consultKind: "Trainer" },
+  // Comprehensive includes ONE psychology consultation. It sits with the other
+  // initials because it is booked at day 0 and, unlike the diet and fitness
+  // touchpoints, it is never repeated per cycle — one per package, not one per
+  // 28 days. Keeping it out of MILESTONES is what enforces that.
+  { key: "psychologist", label: "Book psychology consultation",     apptType: "Counselling",          consultKind: "Psychologist" },
 ] as const;
 
 /** Front desk also books the 12 strength sessions — prompted, not auto. The
