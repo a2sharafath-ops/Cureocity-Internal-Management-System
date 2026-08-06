@@ -126,7 +126,7 @@ export default async function HrDashboard({ name, role = "HR" }: { name: string;
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
-      <AttentionPanel flags={flags} />
+      <AttentionPanel flags={flags} viewerRole={role} />
 
       {/* 3 — TODAY */}
       <div style={sectionTitle}>Today</div>

@@ -699,7 +699,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
           {myAttention.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <AttentionPanel flags={myAttention} />
+              <AttentionPanel flags={myAttention} viewerRole={me.role} viewerStaffId={me.staffId ?? null} />
             </div>
           )}
 

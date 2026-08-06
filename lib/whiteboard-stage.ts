@@ -53,6 +53,8 @@ export type StageInput = {
   daysQuiet?: number;                        // days since last completed session
 };
 
+import { UNOWNED_CONCERN_DISCIPLINE } from "@/lib/work-owners";
+
 /** Normalise the various discipline spellings to the client_assignments set. */
 export function normDiscipline(d: string | null | undefined): string | null {
   if (!d) return null;
@@ -74,7 +76,11 @@ export function clientAlerts(i: StageInput): WbAlert[] {
   }
 
   for (const c of i.openConcerns) {
-    out.push({ key: `concern:${c.id}`, kind: "concern", label: "Open concern", detail: c.body, severity: "orange", discipline: normDiscipline(c.role) });
+    // A concern raised as "general", or against a role this app doesn't map,
+    // used to resolve to null — an orange alert on the board that nobody was
+    // asked to answer. The Health Coach owns the client relationship, so it
+    // falls to them by default.
+    out.push({ key: `concern:${c.id}`, kind: "concern", label: "Open concern", detail: c.body, severity: "orange", discipline: normDiscipline(c.role) ?? UNOWNED_CONCERN_DISCIPLINE });
   }
 
   for (const f of i.overdueFollowups) {

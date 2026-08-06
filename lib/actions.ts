@@ -25,6 +25,7 @@ import { resolveNotificationTarget, nudgeLink } from "@/lib/notification-target"
 import { openaiComplete, type AiState } from "@/lib/ai";
 import { notifyRoles, notifyStaff, notifyClient } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
+import { BOOKING_OWNER } from "@/lib/work-owners";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
 import { leadScore } from "@/lib/leadscore";
 import {
@@ -1735,6 +1736,19 @@ async function startBlueprintJourney(
       created_by: actor,
     }));
   if (rows.length) await supabase.from("tasks").insert(rows);
+
+  // These three used to be inserted as unassigned "Ops" tasks and then sit on
+  // a board nobody owned. Booking is the Health Coach's job like every other
+  // booking, so they are told, by name, with the same wording the rest of the
+  // booking work uses.
+  if (rows.length) {
+    await notifyRoles(supabase, BOOKING_OWNER, {
+      title: `BluePrint — ${rows.length} appointment${rows.length === 1 ? "" : "s"} to book`,
+      body: `${clientName} · due in ${BP_BOOKING_DUE_DAYS} days`,
+      href: `/appointments?client=${clientId}`, icon: "📅",
+      link: { kind: "client", ref: clientId },
+    });
+  }
 
   if (notify) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
     title: "BluePrint started",

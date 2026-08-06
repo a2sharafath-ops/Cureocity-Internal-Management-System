@@ -62,7 +62,12 @@ export function buildOwnerResolver(
 // package-status, care-attention and today-agenda. This centralises the
 // satisfied-check + pre-filled Book link; callers still decide WHICH milestones
 // to surface (overdue / upcoming / due-today) and how to render them.
-export type MilestoneLike = { apptType: string; from: number; fromDate: string; dueDate: string; label: string; gate: string };
+// `owner` is the DELIVERING discipline — the Health Professional who actually
+// holds the appointment. It used to be dropped here, which is how the attention
+// queues ended up inventing "Front Desk" as the owner of every milestone while
+// the SLA engine chased the clinician: the field recording the answer never
+// reached the code that needed it.
+export type MilestoneLike = { apptType: string; from: number; fromDate: string; dueDate: string; label: string; gate: string; owner: string };
 export type ServiceRow = { name: string; category: string; day_offset: number | null };
 export type ApptMatchRow = { type: string | null; date: string | null; status: string };
 

@@ -195,7 +195,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
-      <AttentionPanel flags={flags} />
+      <AttentionPanel flags={flags} viewerRole="Manager" />
 
       {/* 3 — TODAY */}
       <div style={sectionTitle}>Today</div>

@@ -154,7 +154,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
-      <AttentionPanel flags={flags} />
+      <AttentionPanel flags={flags} viewerRole="Finance" />
 
       {/* 3 — TODAY / COLLECTIONS */}
       <div style={sectionTitle}>Collections</div>

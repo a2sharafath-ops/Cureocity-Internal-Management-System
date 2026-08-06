@@ -59,8 +59,22 @@ const viewBtn: React.CSSProperties = {
   color: "var(--brand-text)", whiteSpace: "nowrap",
 };
 
-export default function AttentionPanel({ flags }: { flags: Flag[] }) {
+export default function AttentionPanel({
+  flags, viewerRole, viewerStaffId,
+}: {
+  flags: Flag[];
+  /** The viewer's own role, so the panel never offers to chase them about
+   *  their own work — "Chase Front Desk" is nonsense on a front-desk screen. */
+  viewerRole?: string;
+  /** Same idea for a named clinician: don't offer to remind yourself. */
+  viewerStaffId?: string | null;
+}) {
   const [open, setOpen] = useState(false);
+  // Is this flag the viewer's own work?
+  const mine = (f: Flag) =>
+    (Boolean(f.nudge) && Boolean(viewerStaffId) && f.nudge!.staffId === viewerStaffId)
+    || (Boolean(f.chaseRole) && Boolean(viewerRole) && f.chaseRole!.roles.includes(viewerRole!));
+
   const score = healthScore(flags);
   const counts = {
     high: flags.filter((f) => f.sev === "high").length,
@@ -154,8 +168,13 @@ export default function AttentionPanel({ flags }: { flags: Flag[] }) {
               </div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-              {/* Chase — nudge the person/team who owns the work */}
-              {f.nudge ? (
+              {/* Chase — nudge the person/team who owns the work.
+                  Suppressed when the viewer IS that person or team: the item is
+                  then their own to do, and the View/Book link beside it is the
+                  action. A "Chase Front Desk" button on the front desk's own
+                  dashboard reads as either a bug or an instruction to nudge a
+                  colleague who is standing next to them. */}
+              {mine(f) ? null : f.nudge ? (
                 <form action={nudgeClinician}>
                   <input type="hidden" name="client_id" value={f.nudge.clientId} />
                   <input type="hidden" name="staff_id" value={f.nudge.staffId} />

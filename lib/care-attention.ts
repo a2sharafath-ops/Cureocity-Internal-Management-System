@@ -11,6 +11,9 @@ import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 import { loadClientStatuses } from "@/lib/client-status";
+import {
+  BOOKING_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners,
+} from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
 const addDaysISO = (iso: string, n: number) =>
@@ -167,19 +170,19 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         ...waitingSince(bloodAsked.get(clientId), today),
         dedupeKey: `blood:${clientId}`,
         nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId, href: bloodHref } });
+        chaseRole: o ? undefined : { roles: BLOOD_CHASE_OWNER, who: "Health Coach", label: "Blood report — awaiting client", clientId, href: bloodHref } });
     }
     if (deliv.has("dietchart")) {
       const o = ownerFor(clientId, "dietitian");
       flags.push({ sev: "med", title: `${who} — diet chart not drafted`, detail: o ? `Owed by ${o.name}` : "Owed after the diet consult", href: chartHref, cta: "Draft chart", ...sla(completedAt.get(clientId)?.get("Diet"), DIET_DRAFT_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Diet chart — not drafted", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Dietitian"], who: "Dietitian", label: "Diet chart — not drafted", clientId, href: chartHref } });
+        chaseRole: o ? undefined : { roles: DELIVERY_OWNER.dietitian, who: "Dietitian", label: "Diet chart — not drafted", clientId, href: chartHref } });
     }
     if (deliv.has("workout")) {
       const o = ownerFor(clientId, "trainer");
       flags.push({ sev: "med", title: `${who} — workout plan not created`, detail: o ? `Owed by ${o.name}` : "Owed after the fitness assessment", href: workoutHref, cta: "Build plan", ...sla(completedAt.get(clientId)?.get("Trainer"), WORKOUT_PLAN_MS),
         nudge: o ? { clientId, staffId: o.id, label: "Workout plan — not created", who: o.name } : undefined,
-        chaseRole: o ? undefined : { roles: ["Fitness Trainer"], who: "Fitness Trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
+        chaseRole: o ? undefined : { roles: DELIVERY_OWNER.trainer, who: "Fitness Trainer", label: "Workout plan — not created", clientId, href: workoutHref } });
     }
 
     // ---- overdue day-0 bookings ------------------------------------------
@@ -212,7 +215,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
           sev: "high", title: `${who} — ${step.label.toLowerCase()}`, detail: "",
           href, cta: "Book", ...dueOn(due, today),
           dedupeKey: `init:${clientId}:${step.bookCategory ?? step.label}`,
-          chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: step.label, clientId, href },
+          chaseRole: { roles: BOOKING_OWNER, who: "Health Coach", label: step.label, clientId, href },
         });
       }
     }
@@ -229,7 +232,10 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
             detail: start ? `Package started ${fmt(start)} · nothing in the diary yet` : "Nothing in the diary yet",
             href: "/sessions", cta: "Schedule", ...dueOn(due, today),
             dedupeKey: `sess:${clientId}`,
-            chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: "Book 12 strength sessions", clientId, href: "/sessions" },
+            // Nothing in the diary is a booking failure AND a delivery one, so
+            // both hear about it; a booked block running behind is the
+            // trainer's alone (sessionOwners).
+            chaseRole: { roles: sessionOwners(false), who: "Health Coach & trainer", label: "Book 12 strength sessions", clientId, href: "/sessions" },
           });
         }
       }
@@ -243,8 +249,15 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
         for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(span)), apptsBy.get(clientId) ?? [], services)) {
           if (today <= m.dueDate) continue; // dashboard shows only overdue milestones
-          flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: "", href: m.bookHref, cta: "Book", ...dueOn(m.dueDate, today),
-            chaseRole: { roles: ["Front Desk"], who: "Front Desk", label: `Book ${m.label}`, clientId, href: m.bookHref } });
+          // A missed milestone is two failures wearing one label: nobody booked
+          // it, or it was booked and not held. MILESTONES records the
+          // DELIVERING discipline and this queue used to throw that away and
+          // say "Front Desk" — so the same overdue item chased different people
+          // on different screens. Name both.
+          const deliver = DELIVERY_OWNER[m.owner] ?? [];
+          const o = ownerFor(clientId, m.owner);
+          flags.push({ sev: "high", title: `${who} — ${m.label.toLowerCase()} overdue`, detail: o ? `To be held by ${o.name}` : "", href: m.bookHref, cta: "Book", ...dueOn(m.dueDate, today),
+            chaseRole: { roles: [...BOOKING_OWNER, ...deliver], who: "Health Coach", label: `Book ${m.label}`, clientId, href: m.bookHref } });
         }
       }
     }

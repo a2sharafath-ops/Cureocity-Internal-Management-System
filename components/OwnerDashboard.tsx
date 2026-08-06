@@ -289,7 +289,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       </div>
 
       {/* 2 — NEEDS ATTENTION (collapsed to a health score until clicked) */}
-      <AttentionPanel flags={flags} />
+      <AttentionPanel flags={flags} viewerRole="Super Admin" />
 
       {/* 3 — TODAY. Full width: this is the second thing an owner looks at. */}
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Today</div>

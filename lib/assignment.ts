@@ -39,7 +39,11 @@ export function disciplinesForCategory(category: string): Discipline[] {
   switch (category) {
     case "blueprint":
     case "comprehensive":
-      return ["doctor", "dietitian", "trainer", "coach"];
+      // The psychologist is provisioned like the doctor and the dietitian —
+      // by booking. Before this they were a discipline with a workspace, a
+      // consultation kind and matching rules, but no package ever named them,
+      // so the only way one was ever assigned was an accidental escape hatch.
+      return ["doctor", "dietitian", "trainer", "coach", "psychologist"];
     case "training":
       return ["trainer", "coach"];
     default:

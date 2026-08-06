@@ -19,7 +19,7 @@ import { disciplineLabel } from "@/lib/disciplines";
 
 export const HOUR = 3_600_000;
 export const SIGNOFF_MS = 24 * HOUR;
-export const CONSOLIDATED_MS = 48 * HOUR;
+export const CONSOLIDATED_MS = 49 * HOUR;
 
 /** Warn once a quarter of the window is left — 6h on the 24h clock, 12h on
  *  the 48h. Proportional rather than fixed so both feel the same. */

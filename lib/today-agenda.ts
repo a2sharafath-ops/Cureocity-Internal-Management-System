@@ -28,6 +28,11 @@ export type AgendaItem = {
   overdue: boolean;         // due before today and still open (followups)
   href: string;
   sessionId?: string;       // strength sessions — enables inline "Mark done"
+  /** The Health Professional this item belongs to, where one is known.
+   *  Every agenda item used to be ownerless, so a shared Today list said what
+   *  was happening without ever saying whose it was. */
+  ownerId?: string | null;
+  ownerName?: string | null;
 };
 
 export type Agenda = {
@@ -46,12 +51,18 @@ function fmtHour(h: number | null): string | null {
   return `${hr}:00 ${am ? "AM" : "PM"}`;
 }
 
-export async function todayAgenda(today: string): Promise<Agenda> {
+/**
+ * @param viewerStaffId When given, the agenda is narrowed to that person's own
+ *   day — the items they own. Ops roles pass nothing and see the whole clinic,
+ *   which is the point of their dashboard; a Health Professional looking at a
+ *   clinic-wide list has to hunt for their own name in it.
+ */
+export async function todayAgenda(today: string, viewerStaffId?: string | null): Promise<Agenda> {
   const sb = createClient();
 
   const [{ data: apptRows }, { data: sessRows }, { data: fuRows }, { data: cps }, { data: clients }, { data: protos }] = await Promise.all([
-    sb.from("appointments").select("id, type, hour, date, status, clients(id, name)").eq("date", today).neq("status", "cancelled").order("hour"),
-    sb.from("sessions").select("id, hour, date, status, client_id, clients(id, name)").eq("date", today).order("hour"),
+    sb.from("appointments").select("id, type, hour, date, status, provider_id, staff:provider_id(name), clients(id, name)").eq("date", today).neq("status", "cancelled").order("hour"),
+    sb.from("sessions").select("id, hour, date, status, client_id, trainer_id, staff:trainer_id(name), clients(id, name)").eq("date", today).order("hour"),
     sb.from("followups").select("id, client_id, label, due_date, status, clients(id, name)").lte("due_date", today).neq("status", "done").order("due_date"),
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active").in("category", [COMPREHENSIVE_CATEGORY, PT_CATEGORY]),
     sb.from("clients").select("id, name"),
@@ -61,17 +72,19 @@ export async function todayAgenda(today: string): Promise<Agenda> {
   const nameOf = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
 
   // ---- appointments today ----------------------------------------------------
-  const appointments: AgendaItem[] = ((apptRows ?? []) as unknown as { id: string; type: string | null; hour: number | null; status: string; clients: { id: string; name: string } | null }[]).map((a) => ({
+  let appointments: AgendaItem[] = ((apptRows ?? []) as unknown as { id: string; type: string | null; hour: number | null; status: string; provider_id: string | null; staff: { name: string } | null; clients: { id: string; name: string } | null }[]).map((a) => ({
     id: a.id, kind: "appointment", clientId: a.clients?.id ?? null, clientName: a.clients?.name ?? "—",
     label: a.type ?? "Appointment", time: fmtHour(a.hour), done: a.status === "completed", overdue: false,
     href: a.clients?.id ? `/appointments?client=${a.clients.id}` : "/appointments",
+    ownerId: a.provider_id, ownerName: a.staff?.name ?? null,
   }));
 
   // ---- strength sessions today ----------------------------------------------
-  const sessions: AgendaItem[] = ((sessRows ?? []) as unknown as { id: string; hour: number | null; status: string; client_id: string | null; clients: { id: string; name: string } | null }[]).map((s) => ({
+  let sessions: AgendaItem[] = ((sessRows ?? []) as unknown as { id: string; hour: number | null; status: string; client_id: string | null; trainer_id: string | null; staff: { name: string } | null; clients: { id: string; name: string } | null }[]).map((s) => ({
     id: s.id, kind: "session", clientId: s.clients?.id ?? s.client_id ?? null, clientName: s.clients?.name ?? "—",
     label: "Strength session", time: fmtHour(s.hour), done: s.status === "completed", overdue: false,
     href: s.clients?.id ? `/clients/${s.clients.id}` : "/trainer", sessionId: s.id,
+    ownerId: s.trainer_id, ownerName: s.staff?.name ?? null,
   }));
 
   // ---- follow-ups due today (and missed ones still open) --------------------
@@ -114,6 +127,14 @@ export async function todayAgenda(today: string): Promise<Agenda> {
       });
     }
   }
+
+  // Items with no owner (follow-ups, unbooked milestones) stay visible to
+  // everyone: they are precisely the work that has not been picked up yet, and
+  // hiding them from the person best placed to act would be the wrong default.
+  const mine = <T extends AgendaItem>(rows: T[]): T[] =>
+    viewerStaffId ? rows.filter((r) => !r.ownerId || r.ownerId === viewerStaffId) : rows;
+  appointments = mine(appointments);
+  sessions = mine(sessions);
 
   const all = [...appointments, ...sessions, ...followups, ...deadlines];
   return {

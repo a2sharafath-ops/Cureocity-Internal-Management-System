@@ -155,7 +155,7 @@ export default async function DashboardPage() {
   // clinician-deliverable flags (diet chart / workout plan not done) — the same
   // "Remind {clinician}" action the Owner/Manager dashboards and the client
   // Package-status panel already offer. One capability, one behaviour everywhere.
-  const [fdFlags, careFlags, agenda] = await Promise.all([frontDeskFlags(TODAY), careWorkFlags(TODAY), todayAgenda(TODAY)]);
+  const [fdFlags, careFlags, agenda] = await Promise.all([frontDeskFlags(TODAY), careWorkFlags(TODAY), todayAgenda(TODAY, me?.staffId ?? null)]);
   const sevRank = { high: 0, med: 1, low: 2 } as const;
   // Dedupe tasks raised by both queues (e.g. a blood report appears in both the
   // front-desk and care-work lists). Care flags go first so the named-owner
@@ -169,7 +169,7 @@ export default async function DashboardPage() {
     <div style={{ maxWidth: 1180 }}>
       <RealtimeRefresh tables={["sessions", "appointments", "leads", "consultations", "invoices", "subscriptions"]} />
 
-      <AttentionPanel flags={opsFlags} />
+      <AttentionPanel flags={opsFlags} viewerRole={role} viewerStaffId={me?.staffId ?? null} />
 
       {/* controls: tabs (left) + quick actions (right) */}
       <OpsTabs active="overview" right={

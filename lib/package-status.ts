@@ -12,6 +12,7 @@ import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKO
 import { clock, formatLeft } from "@/lib/sla-clock";
 import { dueOn, waitingSince } from "@/lib/due";
 import { loadClientStatuses } from "@/lib/client-status";
+import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
 
@@ -20,6 +21,9 @@ export type StatusItem = { label: string; detail?: string; href?: string; tone: 
 // Ops work with no single clinician owner (bookings, blood chase, invoices) is
 // owned by the front desk — overseers chase them rather than doing it themselves.
 const FRONT_DESK: Pick<StatusItem, "chaseRoles" | "chaseWho"> = { chaseRoles: ["Front Desk"], chaseWho: "Front Desk" };
+// Booking is the Health Coach's; front desk keeps the buttons but is not chased.
+const BOOKING: Pick<StatusItem, "chaseRoles" | "chaseWho"> = { chaseRoles: BOOKING_OWNER, chaseWho: "Health Coach" };
+const RENEWAL: Pick<StatusItem, "chaseRoles" | "chaseWho"> = { chaseRoles: RENEWAL_OWNER, chaseWho: "Front Desk" };
 export type PackageStatus = { openNow: StatusItem[]; upcoming: StatusItem[] };
 
 const daysBetween = (a: string, b: string) =>
@@ -139,7 +143,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
         : null;
       const due = offset != null && pkgStart ? addDaysISO(pkgStart, offset) : null;
       if (step.booked) upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info", sortKey: due ?? undefined });
-      else openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...FRONT_DESK, ...dueOn(due, today) });
+      else openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...BOOKING, ...dueOn(due, today) });
     }
   }
 
@@ -177,7 +181,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     hasChart, hasWorkout, compBloodSubmitted: compBlood ? compBlood.submitted : null,
   }));
   // Blood card + consolidated approval live on this same page, so no cross-link.
-  if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: ["Health Coach"], chaseWho: "Health Coach",
+  if (deliv.has("compblood")) openNow.push({ label: "Comprehensive blood report — awaiting client", tone: "warn", chaseRoles: BLOOD_CHASE_OWNER, chaseWho: "Health Coach",
     ...waitingSince(compBlood?.requested_at, today) });
   if (deliv.has("dietchart")) openNow.push({ label: "Diet chart — not drafted", detail: diet ? `Owed by ${diet.name}` : undefined, ownerStaffId: diet?.id, ownerName: diet?.name, ownerCta: "Draft chart", href: "/workspace?role=diet&tab=charts", tone: "warn", ...slaHint(completedAtOf.get("Diet"), DIET_DRAFT_MS) });
   if (deliv.has("workout")) openNow.push({ label: "Workout plan — not created", detail: trainer ? `Owed by ${trainer.name}` : undefined, ownerStaffId: trainer?.id, ownerName: trainer?.name, ownerCta: "Create plan", href: "/workspace?role=trainer&tab=planner", tone: "warn", ...slaHint(completedAtOf.get("Trainer"), WORKOUT_PLAN_MS) });
@@ -208,11 +212,12 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       openNow.push({
         label: "No strength sessions booked",
         detail: start ? `Package started ${fmt(start)} · nothing in the diary yet` : "Nothing in the diary yet",
-        href: "/sessions", tone: "warn", ...FRONT_DESK, ...dueOn(due, today),
+        // Nothing booked at all is both a booking miss and a delivery one.
+        href: "/sessions", tone: "warn", chaseRoles: sessionOwners(false), chaseWho: "Health Coach & trainer", ...dueOn(due, today),
       });
     } else if (remaining > 0) {
       const next = allSess.filter((s) => s.status !== "completed" && s.date >= today).map((s) => s.date).sort()[0];
-      upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info", sortKey: next, ...FRONT_DESK });
+      upcoming.push({ label: `${remaining} of ${total} strength sessions remaining`, detail: next ? `next ${fmt(next)}` : undefined, href: "/sessions", tone: "info", sortKey: next, chaseRoles: sessionOwners(true), chaseWho: "Fitness Trainer" });
     }
   }
 
@@ -228,8 +233,11 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
       const spanDays = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
       for (const m of unsatisfiedMilestones(clientId, milestoneDates(start, cyclesFor(spanDays)), (appts ?? []) as ApptMatchRow[], services)) {
-        if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: m.bookHref, tone: "warn", ...FRONT_DESK });
-        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: m.bookHref, tone: "info", sortKey: m.dueDate, ...FRONT_DESK });
+        // Booked by the coach, held by the Health Professional whose discipline
+        // MILESTONES names — so chase both rather than inventing one owner.
+        const chase = { chaseRoles: [...BOOKING_OWNER, ...(DELIVERY_OWNER[m.owner] ?? [])], chaseWho: "Health Coach" };
+        if (today > m.dueDate) openNow.push({ label: `${m.label} — overdue`, detail: `was due ${fmt(m.dueDate)}`, href: m.bookHref, tone: "warn", ...chase });
+        else upcoming.push({ label: m.label, detail: `by ${fmt(m.dueDate)}`, href: m.bookHref, tone: "info", sortKey: m.dueDate, ...chase });
       }
     }
   }
@@ -237,7 +245,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // ---- package end dates --------------------------------------------------
   for (const c of active) {
     if (!c.end_date) continue;
-    upcoming.push({ label: `${c.package_name ?? c.category} ends`, detail: fmt(c.end_date), tone: "neutral", sortKey: c.end_date });
+    // Ending = a renewal conversation owed. It used to carry no owner at all.
+    upcoming.push({ label: `${c.package_name ?? c.category} ends`, detail: fmt(c.end_date), tone: "neutral", sortKey: c.end_date, ...RENEWAL });
   }
 
   // Sort by the real ISO due-date (chronological). Items without a date sort
