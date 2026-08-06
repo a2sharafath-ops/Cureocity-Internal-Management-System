@@ -90,6 +90,34 @@ describe("Comprehensive includes exactly one psychology consultation", () => {
     }
   });
 
+  it("is OPTIONAL — never due, never counted, never chased", () => {
+    const row = onboardingRow(base);
+    const psych = row.steps.find((s) => /psychology/i.test(s.label))!;
+    expect(psych.optional).toBe(true);
+    // The step exists but is not one of the things the client is owed, so an
+    // untouched psychology consult must never hold onboarding open.
+    expect(row.total).toBe(row.steps.filter((s) => !s.optional).length);
+    expect(row.nextLabel).not.toMatch(/psychology/i);
+  });
+
+  it("lets onboarding complete without it", () => {
+    const done = onboardingRow({
+      ...base,
+      bloodRequested: true,
+      doctor: { scheduled: true, completed: true },
+      diet: { scheduled: true, completed: true },
+      trainer: { scheduled: true, completed: true },
+      psych: { scheduled: false, completed: false },   // declined
+      sessionScheduled: true,
+    });
+    expect(done.complete).toBe(true);
+  });
+
+  it("is the only optional step on the ladder", () => {
+    const optional = onboardingRow(base).steps.filter((s) => s.optional);
+    expect(optional.map((s) => s.label)).toEqual(["Book psychology consultation"]);
+  });
+
   it("closes once it is booked", () => {
     const booked = onboardingRow({ ...base, psych: { scheduled: true, completed: false } }).steps
       .find((s) => /psychology/i.test(s.label))!;

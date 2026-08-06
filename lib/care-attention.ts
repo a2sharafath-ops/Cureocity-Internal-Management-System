@@ -232,7 +232,8 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       for (const step of onboardingRow(input).steps) {
         // Booked-but-not-yet-held is not front-desk work — it is scheduled and
         // waiting on the clinician. Sessions have their own flag below.
-        if (step.done || step.booked || /session/i.test(step.label)) continue;
+        // Optional steps are offered, never owed — they cannot go overdue.
+        if (step.done || step.booked || step.optional || /session/i.test(step.label)) continue;
         // The deadline is whatever the clinic set in Services → Day offset, not
         // a number in this file.
         const offset = step.bookCategory ? initialOffsets.get(step.bookCategory) ?? null : null;

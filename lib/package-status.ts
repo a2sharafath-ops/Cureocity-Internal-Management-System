@@ -143,7 +143,13 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
         ? initialOffsets.get(step.bookCategory) ?? null
         : null;
       const due = offset != null && pkgStart ? addDaysISO(pkgStart, offset) : null;
-      if (step.booked) upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info", sortKey: due ?? undefined });
+      // An optional step is never "open now" — nobody owes it. It sits under
+      // Upcoming as something the client can have, with no date and no chase.
+      if (step.optional) {
+        if (!step.booked) upcoming.push({ label: `${step.label} (optional)`, detail: "Available if the client wants it", href: step.action?.href ?? clientHref, tone: "neutral" });
+        else upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info", sortKey: due ?? undefined });
+      }
+      else if (step.booked) upcoming.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "info", sortKey: due ?? undefined });
       else openNow.push({ label: step.label, href: step.action?.href ?? clientHref, tone: "warn", ...BOOKING, ...dueOn(due, today) });
     }
   }

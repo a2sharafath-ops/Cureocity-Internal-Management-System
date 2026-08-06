@@ -36,6 +36,11 @@ export type Step = {
    *  caller look the service's `day_offset` up in the catalogue and date the
    *  step, rather than this module hard-coding a deadline the clinic owns. */
   bookCategory?: string;
+  /** Offered, not owed. An optional step never carries a due date, never
+   *  counts toward "3 of 4 done", and is never the client's next action —
+   *  otherwise onboarding would read as incomplete forever for the clients who
+   *  simply don't want it. */
+  optional?: boolean;
 };
 
 export type OnboardRow = {
@@ -106,7 +111,7 @@ function stepsFor(i: ClientInput): Step[] {
         consultStep("Doctor consultation", i.doctor, "Doctor", id),
         consultStep("Diet consultation", i.diet, "Dietitian", id),
         consultStep("Fitness assessment", i.trainer, "Fitness Trainer", id),
-        consultStep("Psychology consultation", i.psych ?? { scheduled: false, completed: false }, "Psychologist", id),
+        { ...consultStep("Psychology consultation", i.psych ?? { scheduled: false, completed: false }, "Psychologist", id), optional: true },
         { label: "Strength sessions scheduled", done: i.sessionScheduled, action: { cta: "Schedule", href: `/clients/${id}` } },
       ];
     case "training":
@@ -129,8 +134,13 @@ function stepsFor(i: ClientInput): Step[] {
 
 export function onboardingRow(i: ClientInput): OnboardRow {
   const steps = stepsFor(i);
-  const doneCount = steps.filter((s) => s.done).length;
-  const firstOpen = steps.find((s) => !s.done);
+  // Completion is measured over the REQUIRED steps only. Counting an optional
+  // consultation would leave every client who declines it permanently at
+  // "4 of 5", which reads as a failure by the clinic rather than a choice by
+  // the client.
+  const required = steps.filter((s) => !s.optional);
+  const doneCount = required.filter((s) => s.done).length;
+  const firstOpen = required.find((s) => !s.done);
   return {
     clientId: i.clientId,
     clientName: i.clientName,
@@ -140,8 +150,8 @@ export function onboardingRow(i: ClientInput): OnboardRow {
     assignments: i.assignments ?? [],
     steps,
     doneCount,
-    total: steps.length,
-    complete: doneCount === steps.length,
+    total: required.length,
+    complete: doneCount === required.length,
     nextLabel: firstOpen?.label ?? null,
     next: firstOpen?.action,
   };

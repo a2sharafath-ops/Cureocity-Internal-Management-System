@@ -1842,7 +1842,10 @@ async function startComprehensiveJourney(
     { onConflict: "client_id,protocol,start_date", ignoreDuplicates: true },
   );
 
-  const consultItems = INITIAL_BOOKINGS.map((b) => ({ title: `${b.label} — ${clientName}`, kind: b.consultKind as string }));
+  // Optional bookings raise no task and no deadline — see INITIAL_BOOKINGS.
+  const consultItems = INITIAL_BOOKINGS
+    .filter((b) => !("optional" in b && b.optional))
+    .map((b) => ({ title: `${b.label} — ${clientName}`, kind: b.consultKind as string }));
   const sessTitle = `${PT_BOOKING_LABEL} — ${clientName}`;
   const wanted = [...consultItems.map((b) => b.title), sessTitle];
   // Dedupe against tasks in ANY status, and skip consult bookings whose
