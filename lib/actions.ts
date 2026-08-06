@@ -7174,12 +7174,26 @@ export async function reviewDietPlan(formData: FormData) {
   const { data: cur } = await supabase.from("diet_plans").select("status").eq("id", id).maybeSingle();
   if ((cur as { status: string } | null)?.status !== "in_review") return;
 
+  const note = String(formData.get("note") || "").trim() || null;
+  const { data: who } = await supabase.from("diet_plans").select("clients:client_id(name)").eq("id", id).maybeSingle();
+  const name = (who as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
+
   await supabase.from("diet_plans").update(
     approve
-      ? { status: "published", reviewed_by: p.name, reviewed_at: new Date().toISOString(), published_at: new Date().toISOString() }
-      : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString() },
+      // Clearing the note on approval matters: a stale "too much sodium" left
+      // on a published plan reads as an outstanding objection to a document
+      // the client is already eating from.
+      ? { status: "published", reviewed_by: p.name, reviewed_at: new Date().toISOString(), published_at: new Date().toISOString(), review_note: null }
+      : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: note },
   ).eq("id", id).eq("status", "in_review");
-  await logAudit(p, approve ? "Diet plan published" : "Diet plan sent back", undefined, id);
+  await logAudit(p, approve ? "Diet plan published" : "Diet plan sent back", name, note ?? id);
+  // Without this the dietitian's plan just reappeared as a draft with no word
+  // from anyone — they had to guess what the reviewer objected to.
+  await notifyRoles(supabase, ["Dietitian"], {
+    title: `Diet plan ${approve ? "approved" : "sent back"} — ${name}`,
+    body: approve ? `Published by ${p.name}` : `${p.name}: ${note ?? "changes requested"}`,
+    href: "/workspace?role=diet&tab=charts", icon: approve ? "✅" : "✏️",
+  });
   revalidatePath("/workspace");
   revalidatePath("/portal");
 }
@@ -7575,12 +7589,21 @@ export async function reviewDietAssessment(formData: FormData) {
   const { data: cur } = await supabase.from("diet_assessments").select("status").eq("id", id).maybeSingle();
   if ((cur as { status: string } | null)?.status !== "in_review") return;
 
+  const note = String(formData.get("note") || "").trim() || null;
+  const { data: who } = await supabase.from("diet_assessments").select("clients:client_id(name)").eq("id", id).maybeSingle();
+  const name = (who as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
+
   await supabase.from("diet_assessments").update(
     approve
-      ? { status: "published", reviewed_by: p.name, reviewed_at: new Date().toISOString(), published_at: new Date().toISOString() }
-      : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString() },
+      ? { status: "published", reviewed_by: p.name, reviewed_at: new Date().toISOString(), published_at: new Date().toISOString(), review_note: null }
+      : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: note },
   ).eq("id", id).eq("status", "in_review");
-  await logAudit(p, approve ? "Assessment summary published" : "Assessment summary sent back", undefined, id);
+  await logAudit(p, approve ? "Assessment summary published" : "Assessment summary sent back", name, note ?? id);
+  await notifyRoles(supabase, ["Dietitian"], {
+    title: `Assessment summary ${approve ? "approved" : "sent back"} — ${name}`,
+    body: approve ? `Published by ${p.name}` : `${p.name}: ${note ?? "changes requested"}`,
+    href: "/workspace?role=diet&tab=charts", icon: approve ? "✅" : "✏️",
+  });
   revalidatePath("/workspace");
   revalidatePath("/portal");
 }

@@ -21,6 +21,7 @@ import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary"
 import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import DietPlanSection, { type DietPlanRow } from "@/components/DietPlanSection";
 import DietAssessmentSection, { type DietAssessmentRow } from "@/components/DietAssessmentSection";
+import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
 import { type PlanMeal, type PlanOption } from "@/lib/diet-plan";
@@ -612,6 +613,36 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     return `${hr}:00 ${am ? "AM" : "PM"}`;
   };
 
+  // One flat queue across all three document types. Built here because the page
+  // already holds the fetched rows; the component stays a dumb renderer.
+  const approvalRows: ApprovalRow[] = tab !== "approvals" ? [] : [
+    ...dietCharts.filter((c) => c.status === "In review").map((c): ApprovalRow => ({
+      kind: "chart", id: c.id, clientId: c.client_id, clientName: c.client_name,
+      version: c.version, createdAt: c.created_at, author: c.by_name,
+      summary: [c.calories ? `${c.calories} kcal` : null, c.protein ? `${c.protein} protein` : null].filter(Boolean).join(" · ") || null,
+      readHref: `/diet-chart/${c.id}/print`,
+    })),
+    ...dietPlans.filter((p) => p.status === "in_review").map((p): ApprovalRow => ({
+      kind: "plan", id: p.id, clientId: p.client_id, clientName: p.client_name,
+      version: p.version, createdAt: p.created_at, author: null,
+      summary: [
+        p.targets.kcal ? `${p.targets.kcal} kcal` : null,
+        p.targets.protein ? `${p.targets.protein} protein` : null,
+        `${p.meals.length} meal${p.meals.length === 1 ? "" : "s"}`,
+      ].filter(Boolean).join(" · ") || null,
+      readHref: `/diet-plan/${p.id}/print`,
+    })),
+    ...dietAssessments.filter((a) => a.status === "in_review").map((a): ApprovalRow => ({
+      kind: "assess", id: a.id, clientId: a.client_id, clientName: a.client_name,
+      version: a.version, createdAt: a.created_at, author: a.assessment.dietitian,
+      summary: [
+        a.assessment.daily_activity,
+        a.assessment.tee ? `TEE ${a.assessment.tee} kcal` : null,
+      ].filter(Boolean).join(" · ") || null,
+      readHref: `/diet-assessment/${a.id}/print`,
+    })),
+  ];
+
   // Fetched here rather than inline in the JSX: the approvals block below is a
   // plain (non-async) IIFE, so it cannot await.
   const dietDefaultRows = (tab === "charts" || tab === "approvals")
@@ -851,56 +882,23 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
       {/* ---- APPROVALS (Medical Director) ----------------------------------
-           Everything waiting on this reviewer's signature, in one list, with
-           the composer hidden: the reviewer approves or sends back, they do not
-           write the document. Reusing the dietitian's own components rather
-           than building a parallel view means the director reads exactly what
-           the dietitian wrote, and a change to either document shows up here
-           without a second implementation drifting out of step. ---- */}
-      {tab === "approvals" && (() => {
-        const pCharts = dietCharts.filter((c) => c.status === "In review");
-        const pPlans = dietPlans.filter((p) => p.status === "in_review");
-        const pAssess = dietAssessments.filter((a) => a.status === "in_review");
-        const total = pCharts.length + pPlans.length + pAssess.length;
-        return (
-          <>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 16, margin: "0 0 2px" }}>Awaiting your approval</h2>
-              <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>
-                {total
-                  ? `${total} document${total === 1 ? "" : "s"} submitted by the dietitian. Nothing reaches the client until you publish it.`
-                  : "Nothing is waiting on you right now."}
-              </p>
-            </div>
-
-            {total === 0 ? (
-              <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "28px 20px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
-                Submitted diet charts, plans and assessment summaries appear here for sign-off.
-              </div>
-            ) : (
-              <>
-                {pCharts.length > 0 && (
-                  <div style={{ marginBottom: 24 }}>
-                    <DietCharts charts={pCharts} clients={clientOpts} canReview canCompose={false} defaultRows={dietDefaultRows} />
-                  </div>
-                )}
-                {pPlans.length > 0 && (
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Customised diet plan</div>
-                    <DietPlanSection plans={pPlans} clients={clientOpts} canReview canCompose={false} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
-                  </div>
-                )}
-                {pAssess.length > 0 && (
-                  <div style={{ marginBottom: 24 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Dietary assessment summary</div>
-                    <DietAssessmentSection assessments={pAssess} clients={clientOpts} canReview canCompose={false} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        );
-      })()}
+           The documents ARE the list. The dietitian's own sections are built
+           around a client picker, which is right for an author working one
+           client at a time and wrong for a reviewer, who cannot know which
+           clients are waiting. ---- */}
+      {tab === "approvals" && (
+        <>
+          <div style={{ marginBottom: 16 }}>
+            <h2 style={{ fontSize: 16, margin: "0 0 2px" }}>Awaiting your approval</h2>
+            <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>
+              {approvalRows.length
+                ? `${approvalRows.length} document${approvalRows.length === 1 ? "" : "s"} submitted by the dietitian. Nothing reaches the client until you publish it.`
+                : "Nothing is waiting on you right now."}
+            </p>
+          </div>
+          <ApprovalsQueue rows={approvalRows} />
+        </>
+      )}
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
       {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} defaultRows={dietDefaultRows} />}
