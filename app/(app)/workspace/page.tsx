@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
-import { canSee, isClinician, canReviewDietChart } from "@/lib/roles";
+import { canSee, isClinician, isMedicalDirector, canReviewDietChart } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
@@ -609,12 +609,39 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     <div style={{ maxWidth: 1160 }}>
       <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "blueprints", "followups"]} />
 
-      {/* Workspace chrome — one discipline only; switch via the header persona menu */}
+      {/* Workspace chrome — one discipline at a time. Clinicians have exactly one
+          and admins switch with the header persona menu, so neither needs a
+          control here. The Medical Director oversees all five and can use
+          NEITHER route: the persona menu is admin-only (setPreviewRole), which
+          left them able to reach the diet workspace only by following an
+          approval link. Hence a switcher, shown to them alone — adding it for
+          admins would break the deliberate faithfulness of persona preview. */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 20, margin: 0 }}>{role.label}</h1>
           <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>Your clients, consultations, blueprint sign-off and role tools in one place</p>
         </div>
+        {isMedicalDirector(me.role) && allowed.length > 1 && (
+          <div style={{ display: "flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
+            {allowed.map((k) => {
+              const on = k === roleKey;
+              return (
+                <Link
+                  key={k}
+                  href={`/workspace?role=${k}`}
+                  style={{
+                    textDecoration: "none", borderRadius: 999, padding: "5px 12px",
+                    fontSize: 12, fontWeight: 600, border: "1px solid var(--border)",
+                    background: on ? "var(--ink)" : "#fff",
+                    color: on ? "#fff" : "var(--muted)",
+                  }}
+                >
+                  {wsRole(k).short}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {readOnly && (
