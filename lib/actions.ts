@@ -7175,7 +7175,7 @@ export async function reviewDietPlan(formData: FormData) {
   if ((cur as { status: string } | null)?.status !== "in_review") return;
 
   const note = String(formData.get("note") || "").trim() || null;
-  const { data: who } = await supabase.from("diet_plans").select("clients:client_id(name)").eq("id", id).maybeSingle();
+  const { data: who } = await supabase.from("diet_plans").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
   const name = (who as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
 
   await supabase.from("diet_plans").update(
@@ -7189,10 +7189,19 @@ export async function reviewDietPlan(formData: FormData) {
   await logAudit(p, approve ? "Diet plan published" : "Diet plan sent back", name, note ?? id);
   // Without this the dietitian's plan just reappeared as a draft with no word
   // from anyone — they had to guess what the reviewer objected to.
+  // Approval publishes; it does not deliver. `shared_at` stays null until
+  // someone presses Share, and the client's RLS needs BOTH — so an approved
+  // plan sits invisible to the client until this notification is acted on.
+  // Hence the explicit "ready to share", and a link deep enough to land on the
+  // client's own row rather than an empty picker.
+  const planClientId = (who as unknown as { client_id?: string } | null)?.client_id;
+  const planHref = `/workspace?role=diet&tab=charts${planClientId ? `&client=${planClientId}` : ""}`;
   await notifyRoles(supabase, ["Dietitian"], {
-    title: `Diet plan ${approve ? "approved" : "sent back"} — ${name}`,
-    body: approve ? `Published by ${p.name}` : `${p.name}: ${note ?? "changes requested"}`,
-    href: "/workspace?role=diet&tab=charts", icon: approve ? "✅" : "✏️",
+    title: approve ? `Diet plan approved — ready to share — ${name}` : `Diet plan sent back — ${name}`,
+    body: approve
+      ? `${p.name} approved it. Press Share to send it to ${name} — until then they can't see it.`
+      : `${p.name}: ${note ?? "changes requested"}`,
+    href: planHref, icon: approve ? "📤" : "✏️",
   });
   revalidatePath("/workspace");
   revalidatePath("/portal");
@@ -7590,7 +7599,7 @@ export async function reviewDietAssessment(formData: FormData) {
   if ((cur as { status: string } | null)?.status !== "in_review") return;
 
   const note = String(formData.get("note") || "").trim() || null;
-  const { data: who } = await supabase.from("diet_assessments").select("clients:client_id(name)").eq("id", id).maybeSingle();
+  const { data: who } = await supabase.from("diet_assessments").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
   const name = (who as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
 
   await supabase.from("diet_assessments").update(
@@ -7599,10 +7608,14 @@ export async function reviewDietAssessment(formData: FormData) {
       : { status: "draft", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: note },
   ).eq("id", id).eq("status", "in_review");
   await logAudit(p, approve ? "Assessment summary published" : "Assessment summary sent back", name, note ?? id);
+  const asClientId = (who as unknown as { client_id?: string } | null)?.client_id;
+  const asHref = `/workspace?role=diet&tab=charts${asClientId ? `&client=${asClientId}` : ""}`;
   await notifyRoles(supabase, ["Dietitian"], {
-    title: `Assessment summary ${approve ? "approved" : "sent back"} — ${name}`,
-    body: approve ? `Published by ${p.name}` : `${p.name}: ${note ?? "changes requested"}`,
-    href: "/workspace?role=diet&tab=charts", icon: approve ? "✅" : "✏️",
+    title: approve ? `Assessment summary approved — ready to share — ${name}` : `Assessment summary sent back — ${name}`,
+    body: approve
+      ? `${p.name} approved it. Press Share to send it to ${name} — until then they can't see it.`
+      : `${p.name}: ${note ?? "changes requested"}`,
+    href: asHref, icon: approve ? "📤" : "✏️",
   });
   revalidatePath("/workspace");
   revalidatePath("/portal");
