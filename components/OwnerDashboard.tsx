@@ -89,6 +89,60 @@ export default async function OwnerDashboard({ name }: { name: string }) {
 
   // ---- exception queue ------------------------------------------------------
   const flags: Flag[] = [];
+
+  // ---- awaiting the Medical Director's sign-off --------------------------
+  // Diet plans, charts and assessment summaries all stop at one approval, and
+  // that approval is the Medical Director's alone (canReviewDietChart). The
+  // owner cannot clear this queue — so it appears here as oversight, chasing
+  // the director rather than offering a Review button that would refuse.
+  //
+  // If nobody holds the role, the queue cannot move at all. That is a blocking
+  // fact about the clinic, not a document-level one, so it is raised once and
+  // loudly instead of being repeated per waiting document.
+  const REVIEW_HREF = "/workspace?role=diet&tab=charts";
+  const [{ data: revPlans }, { data: revCharts }, { data: revAssess }, { data: directors }] = await Promise.all([
+    supabase.from("diet_plans").select("id, clients(name)").eq("status", "in_review"),
+    supabase.from("diet_charts").select("id, clients(name)").eq("status", "In review"),
+    supabase.from("diet_assessments").select("id, clients(name)").eq("status", "in_review"),
+    supabase.from("profiles").select("id").eq("role", "Medical Director").limit(1),
+  ]);
+  const reviewQueue: [string, { clients: { name: string } | null }[]][] = [
+    ["Diet plan", (revPlans ?? []) as never],
+    ["Diet chart", (revCharts ?? []) as never],
+    ["Assessment summary", (revAssess ?? []) as never],
+  ];
+  const waiting = reviewQueue.reduce((n, [, rows]) => n + rows.length, 0);
+  const noDirector = !(directors ?? []).length;
+
+  if (noDirector) {
+    flags.push({
+      sev: "high",
+      title: "No Medical Director assigned",
+      detail: waiting
+        ? `${waiting} clinical document${waiting === 1 ? "" : "s"} cannot be approved until someone holds the role — nothing reaches those clients meanwhile`
+        : "Diet plans, charts and assessment summaries can only be approved by a Medical Director",
+      href: "/users", cta: "Assign",
+    });
+  }
+
+  for (const [label, rows] of reviewQueue) {
+    for (const r of rows) {
+      flags.push({
+        sev: "med",
+        title: `${r.clients?.name ?? "A client"} — ${label.toLowerCase()} awaiting approval`,
+        detail: "Submitted by the dietitian · nothing reaches the client until the Medical Director publishes it",
+        href: REVIEW_HREF, cta: "View",
+        ...(noDirector ? {} : {
+          chaseRole: {
+            roles: ["Medical Director"], who: "Medical Director",
+            label: `Approve ${label.toLowerCase()} — ${r.clients?.name ?? "client"}`,
+            href: REVIEW_HREF,
+          },
+        }),
+      });
+    }
+  }
+
   const invByClient = new Map<string, number>();
   for (const i of invoices) if (i.client_id) invByClient.set(i.client_id, (invByClient.get(i.client_id) ?? 0) + 1);
 

@@ -3,7 +3,10 @@
 // exists so server actions can fail fast with a readable message instead of a
 // silent RLS rejection. KEEP THE TWO IN SYNC.
 
-const ADMIN = ["Administrator", "Super Admin", "Manager"];
+// Mirrors is_admin() in SQL (0067, widened by 0130). The Medical Director is
+// here because supervising five disciplines means being able to correct any of
+// them — this grants no commercial access, which lives in lib/roles.ts.
+const ADMIN = ["Administrator", "Super Admin", "Manager", "Medical Director"];
 const isAdmin = (role: string) => ADMIN.includes(role);
 
 // discipline login role → workspace key (matches my_ws_key() in SQL)

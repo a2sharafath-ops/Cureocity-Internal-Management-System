@@ -89,7 +89,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>{canCompose ? "Compose a plan → submit for Super Admin review → publish once approved." : "Review submitted diet charts: approve or send back with a note."}</div>
+        <div style={{ fontSize: 13, color: "var(--muted)" }}>{canCompose ? "Compose a plan → submit for Medical Director review → publish once approved." : "Review submitted diet charts: approve or send back with a note."}</div>
         <span style={{ flex: 1 }} />
         {canCompose && <button type="button" onClick={() => setOpen((v) => !v)} style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{open ? "Cancel" : "+ New diet chart"}</button>}
       </div>
@@ -157,7 +157,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
               {/* Share now — publish directly when review isn't needed. Available
                   on Draft and In review, alongside the review path. */}
               {(dc.status === "Draft" || dc.status === "In review") && canCompose && (
-                <form action={publishDietChartDirect}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }} title="Publish to the client without Super Admin review">Share now</button></form>
+                <form action={publishDietChartDirect}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--brand-fill)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }} title="Publish to the client without Medical Director review">Share now</button></form>
               )}
               {dc.status === "In review" && (canReview ? (
                 <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
@@ -169,7 +169,7 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
                   </form>
                   <form action={reviewDietChart}><input type="hidden" name="id" value={dc.id} /><input type="hidden" name="decision" value="approve" /><button style={{ background: "var(--green)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Approve</button></form>
                 </span>
-              ) : <span style={{ fontSize: 12, color: "var(--muted)" }}>Awaiting Super Admin review</span>)}
+              ) : <span style={{ fontSize: 12, color: "var(--muted)" }}>Awaiting Medical Director review</span>)}
               {dc.status === "Approved" && (
                 <form action={publishDietChart}><input type="hidden" name="id" value={dc.id} /><button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>Publish</button></form>
               )}

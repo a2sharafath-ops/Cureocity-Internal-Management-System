@@ -161,7 +161,7 @@ export async function changePassword(_prev: PwState, formData: FormData): Promis
 }
 
 const ALLOWED_ROLES = [
-  "Super Admin", "Administrator", "Manager", "Front Desk",
+  "Super Admin", "Administrator", "Manager", "Medical Director", "Front Desk",
   "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist",
   "Finance", "HR", "Staff",
 ];
@@ -6130,7 +6130,10 @@ export async function submitDietChartForReview(formData: FormData) {
   await supabase.from("diet_charts").update({ status: "In review", submitted_at: new Date().toISOString(), review_note: null }).eq("id", id);
   const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
   await logAudit(p, "Diet chart submitted for review", who, id);
-  await notifyRoles(supabase, ["Super Admin", "Administrator"], {
+  // Only the Medical Director can approve these (canReviewDietChart), so only
+  // they are told. A notification its recipient cannot act on is just noise —
+  // the owner sees the waiting queue on their dashboard instead.
+  await notifyRoles(supabase, ["Medical Director"], {
     title: "Diet chart awaiting review", body: `${who} · submitted by ${p.name}`,
     href: "/workspace?role=diet&tab=charts", icon: "🥗",
   });
@@ -7143,10 +7146,13 @@ export async function submitDietPlan(formData: FormData) {
   }
 
   await supabase.from("diet_plans").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
-  await notifyRoles(supabase, ["Super Admin", "Administrator"], {
+  // Only the Medical Director can approve these (canReviewDietChart), so only
+  // they are told. A notification its recipient cannot act on is just noise —
+  // the owner sees the waiting queue on their dashboard instead.
+  await notifyRoles(supabase, ["Medical Director"], {
     title: "Diet plan awaiting review",
     body: `${p.name} submitted a customised diet plan.`,
-    href: "/workspace?tab=charts", icon: "🥗",
+    href: "/workspace?role=diet&tab=charts", icon: "🥗",
   });
   revalidatePath("/workspace");
 }
@@ -7545,10 +7551,13 @@ export async function submitDietAssessment(formData: FormData) {
   if (!id) return;
   const supabase = createClient();
   await supabase.from("diet_assessments").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
-  await notifyRoles(supabase, ["Super Admin", "Administrator"], {
+  // Only the Medical Director can approve these (canReviewDietChart), so only
+  // they are told. A notification its recipient cannot act on is just noise —
+  // the owner sees the waiting queue on their dashboard instead.
+  await notifyRoles(supabase, ["Medical Director"], {
     title: "Assessment summary awaiting review",
     body: `${p.name} submitted a dietary assessment summary.`,
-    href: "/workspace?tab=charts", icon: "📋",
+    href: "/workspace?role=diet&tab=charts", icon: "📋",
   });
   revalidatePath("/workspace");
 }

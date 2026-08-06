@@ -147,6 +147,36 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       .map((f) => ({ sev: f.sev, title: f.title, detail: f.detail, href: f.href, cta: f.cta ?? "View" }));
   }
 
+  // The reviewer's own queue. The Medical Director signs off every diet chart,
+  // plan and assessment, but they land on the DOCTOR workspace (their own
+  // caseload) while the approval screen lives in the DIET one — so without this
+  // the only route to it is a notification, and a missed notification means a
+  // client waits on a document nobody can see is waiting. Shown on whichever
+  // discipline they happen to be looking at, for that reason.
+  if (canReviewDietChart(me.role)) {
+    const [{ data: qPlans }, { data: qCharts }, { data: qAssess }] = await Promise.all([
+      supabase.from("diet_plans").select("id, clients(name)").eq("status", "in_review"),
+      supabase.from("diet_charts").select("id, clients(name)").eq("status", "In review"),
+      supabase.from("diet_assessments").select("id, clients(name)").eq("status", "in_review"),
+    ]);
+    // All three documents are sections of the one "Diet charts" tab.
+    const queue: [string, { clients: { name: string } | null }[]][] = [
+      ["Diet plan", (qPlans ?? []) as never],
+      ["Diet chart", (qCharts ?? []) as never],
+      ["Assessment summary", (qAssess ?? []) as never],
+    ];
+    for (const [label, rows] of queue) {
+      for (const r of rows) {
+        myAttention.unshift({
+          sev: "high",
+          title: `${r.clients?.name ?? "A client"} — ${label.toLowerCase()} awaiting your approval`,
+          detail: "Submitted by the dietitian · nothing reaches the client until you publish it",
+          href: "/workspace?role=diet&tab=charts", cta: "Review",
+        });
+      }
+    }
+  }
+
   // Health Coach owns scheduling the Day-2 diet chart explanation. Surface it
   // straight from this coach's scoped clients (any due/overdue Day-2 explanation
   // follow-up still open) so it always reaches the assigned coach — independent
@@ -609,7 +639,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
             <MetricCard label="MDT updates" value={mdtNotes.length} href={`/workspace?role=${roleKey}&tab=board`} />
           </div>
 
-          {me.staffId && isClinician(me.role) && (
+          {myAttention.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <AttentionPanel flags={myAttention} />
             </div>

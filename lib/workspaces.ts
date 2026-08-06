@@ -45,7 +45,10 @@ export function roleFromPersonaKind(kind: string | null | undefined): WsRoleKey 
 // details* they're permitted to see, which the database enforces via RLS
 // (can_read_ws / can_read_consult_kind in supabase/0068) — not via workspaces.
 // Only Admin/Manager/Super Admin can step through every discipline (oversight).
-const WS_OVERSIGHT = ["Administrator", "Super Admin", "Manager"];
+// The Medical Director is here rather than in roleFromStaffRole below: mapping
+// them to one discipline would hide the other four, and the diet-chart queue
+// they exist to approve lives in the DIET workspace, not the doctor's.
+const WS_OVERSIGHT = ["Administrator", "Super Admin", "Manager", "Medical Director"];
 
 // The discipline workspace this login role opens. Always at most ONE — nobody
 // (not even an admin) gets an in-workspace switcher. Admins move between

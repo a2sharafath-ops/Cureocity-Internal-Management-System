@@ -3,7 +3,7 @@
 import { updateUserRole } from "@/lib/actions";
 
 const ROLES = [
-  "Super Admin", "Administrator", "Manager", "Front Desk",
+  "Super Admin", "Administrator", "Manager", "Medical Director", "Front Desk",
   "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist",
   "Finance", "HR", "Staff",
 ];

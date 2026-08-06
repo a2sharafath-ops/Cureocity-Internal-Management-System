@@ -12,6 +12,7 @@ export type Role =
   | "Super Admin"
   | "Administrator"
   | "Manager"
+  | "Medical Director"
   | "Front Desk"
   | "Doctor"
   | "Dietitian"
@@ -26,35 +27,57 @@ export function isClinician(role: string): boolean {
   return (CLINICIAN_ROLES as readonly string[]).includes(role);
 }
 
+/**
+ * The Medical Director — clinical lead over all five disciplines.
+ *
+ * Deliberately NOT a member of CLINICIAN_ROLES. That list means "a discipline
+ * with its own workspace and its own caseload", and it drives
+ * `roleFromStaffRole`; putting the director in it would pin them to ONE
+ * discipline and lock them out of the other four — the same trap that hid the
+ * diet-chart queue from the Super Admin. They reach every discipline through
+ * WS_OVERSIGHT instead, landing on the doctor workspace by default because that
+ * is the caseload they carry themselves.
+ *
+ * They are clinical oversight, not commercial: no billing, no invoices, no POS,
+ * no finance sheets, no payroll. See the money helpers below — the director is
+ * absent from every one.
+ */
+export function isMedicalDirector(role: string): boolean {
+  return role === "Medical Director";
+}
+
 const CLIN = [...CLINICIAN_ROLES] as Role[];
+// Clinicians plus the director — for anything on the clinical floor that the
+// director supervises, which is all of it.
+const CLIN_MD = [...CLIN, "Medical Director"] as Role[];
 
 // Which nav items each role can see. "all" = every role.
 export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/dashboard": "all",
-  "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/onboarding": ["Administrator", "Manager", "Front Desk"],
   "/leads": ["Administrator", "Manager", "Front Desk"],
   // Communications is Super-Admin-only for now (Super Admin bypasses this map).
   "/messages": [],
-  "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN],
-  "/classes": ["Administrator", "Manager", "Front Desk", ...CLIN],
-  "/appointments": ["Administrator", "Manager", "Front Desk", ...CLIN],
+  "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
+  "/classes": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
+  "/appointments": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/followups": ["Administrator", "Manager", "Front Desk", "Health Coach"],
   "/intake": ["Administrator", "Manager", "Front Desk"],
   "/access": ["Administrator", "Manager", "Front Desk"],
-  "/trainer": ["Administrator", "Manager", ...CLIN],
+  "/trainer": ["Administrator", "Manager", ...CLIN_MD],
   // Managers have their own dashboard; the discipline workspaces are for the
   // clinicians who actually carry a caseload (Administrator keeps access for
   // previewing/supporting).
-  "/workspace": ["Administrator", ...CLIN],
-  "/careteam": ["Administrator", "Manager", ...CLIN],
+  "/workspace": ["Administrator", "Medical Director", ...CLIN],
+  "/careteam": ["Administrator", "Manager", ...CLIN_MD],
   // the daily multi-disciplinary meeting — every clinician takes part
-  "/whiteboard": ["Administrator", "Manager", ...CLIN],
-  "/telehealth": ["Administrator", "Manager", ...CLIN],
-  "/forms": ["Administrator", "Manager", "Front Desk", ...CLIN],
-  "/pro": ["Administrator", "Manager", ...CLIN],
-  "/meals": ["Administrator", "Manager", ...CLIN],
-  "/blueprint": ["Administrator", "Manager", ...CLIN],
+  "/whiteboard": ["Administrator", "Manager", ...CLIN_MD],
+  "/telehealth": ["Administrator", "Manager", ...CLIN_MD],
+  "/forms": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
+  "/pro": ["Administrator", "Manager", ...CLIN_MD],
+  "/meals": ["Administrator", "Manager", ...CLIN_MD],
+  "/blueprint": ["Administrator", "Manager", ...CLIN_MD],
   "/packages": ["Administrator", "Manager", "Front Desk"],
   "/billing": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/expenses": ["Administrator", "Manager", "Finance"],
@@ -71,8 +94,8 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/pos": ["Administrator", "Manager", "Front Desk", "Finance"],
   "/passes": ["Administrator", "Manager", "Front Desk", "Finance"],
   // Medical records & orders are Doctor-owned (enforced by RLS in 0068).
-  "/emr": ["Administrator", "Manager", "Doctor"],
-  "/orders": ["Administrator", "Manager", "Doctor"],
+  "/emr": ["Administrator", "Manager", "Medical Director", "Doctor"],
+  "/orders": ["Administrator", "Manager", "Medical Director", "Doctor"],
   "/reports": ["Administrator", "Manager", "Finance"],
   // Managers see a read-only roster with the sign-in controls only; role,
   // branch, rename, delete and add-staff remain Administrator / Super Admin
@@ -88,7 +111,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   // "Needs your attention" panels — this only closes the /tasks page itself.
   "/tasks": [],
   "/hr": ["Administrator", "Manager", "HR"],
-  "/exlib": ["Administrator", "Manager", ...CLIN],
+  "/exlib": ["Administrator", "Manager", ...CLIN_MD],
   "/notifications": ["Administrator", "Manager"],
   "/audit": ["Administrator"],
   "/templates": ["Administrator", "Manager"],
@@ -130,7 +153,7 @@ export function canWorkFollowups(role: string): boolean {
 
 // Who can reschedule / complete strength sessions (front desk + clinicians).
 export function canManageSessions(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
 // Who can add / edit / deactivate packages. Administrator only.
@@ -138,15 +161,25 @@ export function canManagePackages(role: string): boolean {
   return role === "Super Admin" || role === "Administrator";
 }
 
-// Who reviews / approves a diet chart before it can be published: the Super
-// Admin, with the Administrator as backup so a chart never sits waiting on one
-// person. Dietitians submit but cannot approve their own charts.
-//
-// Deliberately NOT the doctor. An earlier note here said "Medical Director",
-// which never matched the code and left the UI telling staff to wait for a
-// doctor's decision that was never coming.
+/**
+ * Who signs off a diet chart, diet plan or assessment summary before it can be
+ * published: the Medical Director, and nobody else.
+ *
+ * This is a clinical decision, so it sits with the clinical lead rather than
+ * with whoever happens to hold an admin login. Dietitians submit; they cannot
+ * approve their own work.
+ *
+ * The cost of that clarity is a single point of failure: with no Medical
+ * Director account active, every submitted chart waits. The Users & Roles page
+ * warns when the clinic has none, and `hasNoReviewer` below is what it checks.
+ */
 export function canReviewDietChart(role: string): boolean {
-  return role === "Super Admin" || role === "Administrator";
+  return isMedicalDirector(role);
+}
+
+/** True when no active staff member can approve clinical documents. */
+export function hasNoReviewer(activeRoles: string[]): boolean {
+  return !activeRoles.some(canReviewDietChart);
 }
 
 // Who can approve a leave-type entitlement change (Manager / Admin only). HR can
@@ -183,12 +216,12 @@ export function canManageTasks(role: string): boolean {
 
 // Who can run consultations / write summaries.
 export function canConsult(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
 // Who can drive the BluePrint flow (blood reports, generate).
 export function canManageBlueprint(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
 // Who can VIEW billing (page + client-card billing section). Front Desk included.
@@ -218,19 +251,19 @@ export function isBillingOverseer(role: string): boolean {
 
 // Who can message clients.
 export function canMessage(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
 // Who can schedule group classes / manage bookings.
 export function canClasses(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
 // Who can book / manage calendar appointments.
 // Who can VIEW the appointment calendar — ops roles plus every clinician (they
 // need to see their own schedule).
 export function canAppointments(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
 // Who can EDIT the calendar — book, reschedule, cancel, change status. Front
@@ -253,7 +286,7 @@ export function canPos(role: string): boolean {
 
 // Who can view/edit the clinical EMR + orders. Doctor-owned (RLS 0067/0068).
 export function canEmr(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Doctor"].includes(role);
+  return role === "Super Admin" || ["Administrator", "Manager", "Medical Director", "Doctor"].includes(role);
 }
 
 // Finance-ops gate: manage the petty-cash float, top-ups and reimbursement
@@ -288,7 +321,7 @@ export function canHr(role: string): boolean {
 
 // The assignable roles, in seniority order (for the Users & Roles cards).
 export const ROLE_LIST: Role[] = [
-  "Super Admin", "Administrator", "Manager", "Front Desk",
+  "Super Admin", "Administrator", "Manager", "Medical Director", "Front Desk",
   "Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist",
   "Finance", "HR", "Staff",
 ];
@@ -326,6 +359,7 @@ export const ROLE_CAPS: Record<string, string[]> = {
   "Super Admin":         ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
   "Administrator":       ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
   "Manager":             ["refund", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
+  "Medical Director":    ["phi", "viewAudit"],
   "Front Desk":          [],
   "Doctor":              ["phi"],
   "Dietitian":           ["phi"],

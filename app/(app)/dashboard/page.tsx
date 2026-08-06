@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import { moduleScope } from "@/lib/deployment";
-import { isClinician } from "@/lib/roles";
+import { isClinician, isMedicalDirector } from "@/lib/roles";
 import { disciplineLabel } from "@/lib/disciplines";
 import OwnerDashboard from "@/components/OwnerDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
@@ -74,7 +74,9 @@ export default async function DashboardPage() {
   const isPro = isClinician(role);
 
   // Clinicians' home is their discipline workspace — no separate dashboard.
-  if (isPro) redirect("/workspace");
+  // The Medical Director lands there too: they carry a doctor's caseload, and
+  // the workspace is where the approval queue and every discipline live.
+  if (isPro || isMedicalDirector(role)) redirect("/workspace");
 
   const supabase = createClient();
   const monthStart = TODAY.slice(0, 7) + "-01";

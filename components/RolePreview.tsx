@@ -3,7 +3,14 @@
 import { setPreviewRole } from "@/lib/actions";
 import { PERSONAS } from "@/lib/personas";
 
-const ROLES = ["Manager", "Front Desk", "Finance", "HR", "Staff"];
+// The Medical Director sits here rather than under "Professional workspaces":
+// the personas below are single disciplines that route to one workspace, and
+// the director deliberately isn't one — they oversee all five.
+//
+// Preview shows you what a role SEES. It does not grant what a role can DO:
+// every write still checks the real login role, so previewing as the director
+// will not let an admin approve a diet chart. That is the point of the role.
+const ROLES = ["Manager", "Medical Director", "Front Desk", "Finance", "HR", "Staff"];
 
 export default function RolePreview({ preview, profession }: { preview: string | null; profession: string | null }) {
   const active = profession ?? preview;
