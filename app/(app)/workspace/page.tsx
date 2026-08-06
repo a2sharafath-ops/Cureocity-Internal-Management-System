@@ -78,7 +78,18 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   // Read-only cross-discipline view is limited to the client-detail tabs.
   const RO_TABS = ["dash", "clients", "monitor"];
-  const tabs = readOnly ? WS_TABS[roleKey].filter((t) => RO_TABS.includes(t.key)) : WS_TABS[roleKey];
+  const baseTabs = readOnly ? WS_TABS[roleKey].filter((t) => RO_TABS.includes(t.key)) : WS_TABS[roleKey];
+
+  // The reviewer's queue needs a home of its own. Sign-off lives in sections of
+  // the DIETITIAN's "Diet charts" tab, which is the right place for the person
+  // who wrote the document and the wrong one for the person approving it — the
+  // Medical Director had to know to switch discipline, open a tab named after
+  // someone else's job, and scroll. So they get an Approvals tab in whichever
+  // workspace they are already in.
+  const canReview = canReviewDietChart(me.role);
+  const tabs = canReview
+    ? [...baseTabs, { key: "approvals", label: "Approvals", live: true }]
+    : baseTabs;
 
   // Resolve active tab — only in-workspace tabs (live or stub) are selectable here.
   const inWs = tabs.filter((t) => !t.href);
@@ -361,7 +372,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
   // Dietitian tools.
   let dietCharts: DietChartRow[] = [];
-  if (tab === "charts") {
+  if (tab === "charts" || tab === "approvals") {
     const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, summary, meals, by_name, created_at, review_note, reviewed_by, clients(name)").order("created_at", { ascending: false });
     dietCharts = ((dc ?? []) as unknown as (DietChartRow & { clients: { name: string } | null })[]).map((r) => ({
       id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
@@ -372,7 +383,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // The structured, multi-page diet plan (meal slots + numbered options),
   // alongside the flat diet chart above — same tab, a different document.
   let dietPlans: DietPlanRow[] = [];
-  if (tab === "charts") {
+  if (tab === "charts" || tab === "approvals") {
     const { data: dp } = await supabase
       .from("diet_plans")
       .select(
@@ -404,7 +415,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   // Dietary Assessment Summary — the companion document to the diet plan,
   // same tab, its own client picker and version list.
   let dietAssessments: DietAssessmentRow[] = [];
-  if (tab === "charts") {
+  if (tab === "charts" || tab === "approvals") {
     const { data: da } = await supabase
       .from("diet_assessments")
       .select(
@@ -600,6 +611,12 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     const am = h < 12, hr = h % 12 === 0 ? 12 : h % 12;
     return `${hr}:00 ${am ? "AM" : "PM"}`;
   };
+
+  // Fetched here rather than inline in the JSX: the approvals block below is a
+  // plain (non-async) IIFE, so it cannot await.
+  const dietDefaultRows = (tab === "charts" || tab === "approvals")
+    ? (await getAppSettings()).diet.defaultRows
+    : undefined;
 
   // Tab bar — live/stub tabs stay in the workspace, href tabs bridge to existing pages.
   const tabItems = tabs.map((t) => ({ key: t.key, label: t.label, href: t.href ?? `/workspace?role=${roleKey}&tab=${t.key}` }));
@@ -833,8 +850,60 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {/* ---- RESOURCE LIBRARY ---- */}
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}
 
+      {/* ---- APPROVALS (Medical Director) ----------------------------------
+           Everything waiting on this reviewer's signature, in one list, with
+           the composer hidden: the reviewer approves or sends back, they do not
+           write the document. Reusing the dietitian's own components rather
+           than building a parallel view means the director reads exactly what
+           the dietitian wrote, and a change to either document shows up here
+           without a second implementation drifting out of step. ---- */}
+      {tab === "approvals" && (() => {
+        const pCharts = dietCharts.filter((c) => c.status === "In review");
+        const pPlans = dietPlans.filter((p) => p.status === "in_review");
+        const pAssess = dietAssessments.filter((a) => a.status === "in_review");
+        const total = pCharts.length + pPlans.length + pAssess.length;
+        return (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <h2 style={{ fontSize: 16, margin: "0 0 2px" }}>Awaiting your approval</h2>
+              <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>
+                {total
+                  ? `${total} document${total === 1 ? "" : "s"} submitted by the dietitian. Nothing reaches the client until you publish it.`
+                  : "Nothing is waiting on you right now."}
+              </p>
+            </div>
+
+            {total === 0 ? (
+              <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "28px 20px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+                Submitted diet charts, plans and assessment summaries appear here for sign-off.
+              </div>
+            ) : (
+              <>
+                {pCharts.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <DietCharts charts={pCharts} clients={clientOpts} canReview canCompose={false} defaultRows={dietDefaultRows} />
+                  </div>
+                )}
+                {pPlans.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Customised diet plan</div>
+                    <DietPlanSection plans={pPlans} clients={clientOpts} canReview canCompose={false} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
+                  </div>
+                )}
+                {pAssess.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Dietary assessment summary</div>
+                    <DietAssessmentSection assessments={pAssess} clients={clientOpts} canReview canCompose={false} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        );
+      })()}
+
       {/* ---- DIET CHARTS (dietitian) ---- */}
-      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} defaultRows={(await getAppSettings()).diet.defaultRows} />}
+      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} defaultRows={dietDefaultRows} />}
 
       {/* ---- CUSTOMISED DIET PLAN BUILDER (dietitian) — the structured multi-page
            document, separate from the flat diet chart above. Same role gate. ---- */}
