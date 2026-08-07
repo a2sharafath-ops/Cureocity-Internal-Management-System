@@ -160,7 +160,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       {/* convert — kept at the bottom */}
       <div style={{ ...box, background: "#f0fdf9" }}>
         <b style={{ fontSize: 15 }}>Convert to client</b>
-        <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 14px" }}>Pick a package &amp; offer, record referral, capture consent, and verify by OTP. On success the client, sessions and package invoice are created and you're taken to billing.</p>
+        <p style={{ color: "var(--muted)", fontSize: 13, margin: "4px 0 14px" }}>Pick a package &amp; offer, record referral, capture consent, and verify by OTP. On success the client, sessions and package invoice are created and you&apos;re taken to billing.</p>
         <LeadOpportunity
           leadId={lead.id}
           stage={lead.stage}

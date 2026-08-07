@@ -35,7 +35,7 @@ export default function NotificationBell({ items, unread }: { items: Notif[]; un
                 <form action={markAllNotificationsRead}><button type="submit" style={{ border: "none", background: "transparent", color: "var(--brand-text)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Mark all read</button></form>
               )}
             </div>
-            {items.length === 0 && <div style={{ padding: "22px 14px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>You're all caught up.</div>}
+            {items.length === 0 && <div style={{ padding: "22px 14px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>You&apos;re all caught up.</div>}
             {items.map((n) => {
               const body = (
                 <div style={{ display: "flex", gap: 10, padding: "10px 14px", borderBottom: "1px solid var(--border)", background: n.read ? "transparent" : "rgba(13,148,136,0.06)" }}>
