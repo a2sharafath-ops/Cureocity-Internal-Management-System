@@ -23,7 +23,21 @@ export type FlagInput = {
   gender?: string | null;
 };
 
-const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+/**
+ * A measurement, or null.
+ *
+ * Zero and negatives are rejected on purpose. There is no such thing as a blood
+ * pressure of 0, an SpO2 of 0, a pulse of 0 or a BMI of 0 in a client sitting in
+ * front of you — those values only ever mean "not recorded". Treating them as
+ * readings produced critical alerts ("hypoxaemic", "bradycardic") on clients
+ * whose vitals simply hadn't been taken yet, which is both alarming and the
+ * fastest way to teach people to ignore the panel.
+ *
+ * The caller in ConsoleView is fixed too; this is the floor so the next caller
+ * can't reintroduce it.
+ */
+const n = (v: number | null | undefined) =>
+  (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
 
 /**
  * Pull lab values out of the answered questionnaire. The Doctor intake asks for

@@ -144,3 +144,52 @@ describe("labsFromAnswers — implausible values", () => {
     expect(out.some((f) => /HbA1c/i.test(f.text))).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Missing is not zero.
+//
+// Number("") is 0, so an empty vitals box was read as a measurement and the
+// panel offered "SpO₂ 0% — hypoxaemic" and "BP 0/0 — low systolic" as clinical
+// findings on any client seen before their vitals were taken.
+// ---------------------------------------------------------------------------
+describe("zero means not-recorded, never a reading", () => {
+  it("suggests nothing at all from all-zero vitals", () => {
+    const out = deriveFlags({
+      vitals: { systolic: 0, diastolic: 0, pulse: 0, spo2: 0, temp_c: 0 },
+      inbody: { bmi: 0, bodyFat: 0, visceral: 0 },
+      labs: {}, gender: "Male",
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("does not call a zero SpO₂ hypoxaemic", () => {
+    const out = deriveFlags({ vitals: { spo2: 0 }, labs: {} });
+    expect(out.some((f) => /hypox/i.test(f.text))).toBe(false);
+  });
+
+  it("does not call a zero pulse bradycardic", () => {
+    const out = deriveFlags({ vitals: { pulse: 0 }, labs: {} });
+    expect(out.some((f) => /bradycardic/i.test(f.text))).toBe(false);
+  });
+
+  it("does not call a zero systolic low", () => {
+    const out = deriveFlags({ vitals: { systolic: 0, diastolic: 0 }, labs: {} });
+    expect(out.some((f) => /low systolic/i.test(f.text))).toBe(false);
+  });
+
+  it("still catches genuinely low readings", () => {
+    // The guard must not swallow real findings — 85 systolic and 88% SpO₂ are
+    // real and must still fire.
+    expect(deriveFlags({ vitals: { systolic: 85, diastolic: 55 }, labs: {} })
+      .some((f) => /low systolic/i.test(f.text))).toBe(true);
+    expect(deriveFlags({ vitals: { spo2: 88 }, labs: {} })
+      .some((f) => /hypox/i.test(f.text))).toBe(true);
+    expect(deriveFlags({ vitals: { pulse: 44 }, labs: {} })
+      .some((f) => /bradycardic/i.test(f.text))).toBe(true);
+  });
+
+  it("still catches genuinely high readings", () => {
+    expect(deriveFlags({ vitals: { systolic: 186, diastolic: 112 }, labs: {} })
+      .some((f) => /severely elevated/i.test(f.text))).toBe(true);
+  });
+});

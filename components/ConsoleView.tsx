@@ -134,7 +134,16 @@ export default function ConsoleView({
   // only: nothing reaches the record until the clinician accepts it.
   const suggestions = (() => {
     const answered = questions.map((q, idx) => [q, (ans[idx] ?? "").trim()] as [string, string]).filter(([, a]) => a);
-    const num = (s: string) => { const v = Number(String(s).trim()); return Number.isFinite(v) ? v : null; };
+    // Number("") is 0, not NaN — so an EMPTY vitals box read as a measurement of
+    // zero, and the suggestion engine dutifully reported "SpO2 0% - hypoxaemic"
+    // and "BP 0/0 - low systolic" as findings on every client seen before their
+    // vitals were taken. A blank box means NOT MEASURED.
+    const num = (s: string) => {
+      const t = String(s ?? "").trim();
+      if (!t) return null;
+      const v = Number(t);
+      return Number.isFinite(v) ? v : null;
+    };
     return deriveFlags({
       vitals: { systolic: num(vit.systolic), diastolic: num(vit.diastolic), pulse: num(vit.pulse), spo2: num(vit.spo2), temp_c: num(vit.temp_c) },
       inbody: { bmi: health?.bmi ?? null, bodyFat: health?.bodyFat ?? null, visceral: health?.visceral ?? null },

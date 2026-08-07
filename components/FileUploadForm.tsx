@@ -31,7 +31,15 @@ export default function FileUploadForm({
     <form ref={ref} action={formAction} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       {clientId && <input type="hidden" name="client_id" value={clientId} />}
       <input type="hidden" name="kind" value={kind} />
-      <input type="file" name="file" accept={accept} required style={{ fontSize: 13 }} />
+      {/* Choosing the file IS the upload. Requiring a second click on a
+          separate button meant a file could sit selected-but-not-sent, looking
+          for all the world like it had been filed — and a report someone
+          believes is on the record but isn't is worse than no report. The
+          button stays for keyboard use and as the pending indicator. */}
+      <input
+        type="file" name="file" accept={accept} required style={{ fontSize: 13 }}
+        onChange={(e) => { if (e.currentTarget.files?.length) ref.current?.requestSubmit(); }}
+      />
       <SubmitBtn label={label} />
       {state.error && <span style={{ color: "var(--red-text)", fontSize: 12 }}>{state.error}</span>}
       {state.ok && <span style={{ color: "var(--green-text)", fontSize: 12 }}>{state.ok}</span>}
