@@ -8,6 +8,7 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { withChaseHistory } from "@/lib/chase-log";
 import { packageCategory } from "@/lib/packages";
 import { careWorkFlags } from "@/lib/care-attention";
 import TodayAgenda from "@/components/TodayAgenda";
@@ -289,7 +290,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
       </div>
 
       {/* 2 — NEEDS ATTENTION (collapsed to a health score until clicked) */}
-      <AttentionPanel flags={flags} viewerRole="Super Admin" />
+      <AttentionPanel flags={await withChaseHistory(flags)} viewerRole="Super Admin" />
 
       {/* 3 — TODAY. Full width: this is the second thing an owner looks at. */}
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".6px", color: "var(--muted)", textTransform: "uppercase", margin: "0 0 8px" }}>Today</div>

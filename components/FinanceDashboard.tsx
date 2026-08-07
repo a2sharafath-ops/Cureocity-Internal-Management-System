@@ -7,6 +7,7 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { withChaseHistory } from "@/lib/chase-log";
 import { packageCategory } from "@/lib/packages";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -154,7 +155,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
-      <AttentionPanel flags={flags} viewerRole="Finance" />
+      <AttentionPanel flags={await withChaseHistory(flags)} viewerRole="Finance" />
 
       {/* 3 — TODAY / COLLECTIONS */}
       <div style={sectionTitle}>Collections</div>

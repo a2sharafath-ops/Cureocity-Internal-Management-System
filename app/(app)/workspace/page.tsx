@@ -41,6 +41,7 @@ import FollowupsBoard, { type FuRow } from "@/components/FollowupsBoard";
 import CoachMarkersSection from "@/components/CoachMarkersSection";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { careWorkFlags } from "@/lib/care-attention";
+import { withChaseHistory } from "@/lib/chase-log";
 import { disciplineLabel } from "@/lib/disciplines";
 import { canWriteNutrition } from "@/lib/discipline";
 import {
@@ -170,10 +171,13 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       if (f.chaseRole) return f.chaseRole.roles.includes(me.role) && (!f.chaseRole.clientId || scopedIdSet.has(f.chaseRole.clientId));
       return false;
     };
-    myAttention = allFlags
-      .filter(mine)
-      // Buttons stripped to a plain "View" — you don't chase yourself.
-      .map((f) => ({ sev: f.sev, title: f.title, detail: f.detail, href: f.href, cta: f.cta ?? "View", dueLabel: f.dueLabel, overdue: f.overdue }));
+    // Buttons stripped to a plain "View" — you don't chase yourself — but the
+    // chase note stays: knowing you were chased twice about this is the point.
+    const withNote = await withChaseHistory(allFlags.filter(mine));
+    myAttention = withNote.map((f) => ({
+      sev: f.sev, title: f.title, detail: f.detail, href: f.href,
+      cta: f.cta ?? "View", dueLabel: f.dueLabel, overdue: f.overdue, chaseNote: f.chaseNote,
+    }));
   }
 
   // The reviewer's own queue. The Medical Director signs off every diet chart,

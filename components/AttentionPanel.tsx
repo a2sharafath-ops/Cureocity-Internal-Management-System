@@ -22,6 +22,10 @@ export type Flag = {
   /** when set, only the first flag with a given key is shown (dedupes the same
    *  underlying task raised by more than one queue). */
   dedupeKey?: string;
+  /** "chased 2d ago by Sini · 3rd time" — what has already been tried on this
+   *  item. The Chase button stays live regardless; only the work being done
+   *  clears the flag. */
+  chaseNote?: string;
   /** "was due 28 Jul · 8 days overdue" / "waiting 12 days · since 24 Jul".
    *  Severity says how bad; this says how late — which is what decides who
    *  gets rung first. */
@@ -175,6 +179,12 @@ export default function AttentionPanel({
                     </span>
                   </>
                 )}
+                {f.chaseNote && (
+                  <>
+                    <span style={{ opacity: 0.45 }}>·</span>
+                    <span style={{ color: "var(--muted)", fontStyle: "italic" }}>{f.chaseNote}</span>
+                  </>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
@@ -189,7 +199,7 @@ export default function AttentionPanel({
                   <input type="hidden" name="client_id" value={f.nudge.clientId} />
                   <input type="hidden" name="staff_id" value={f.nudge.staffId} />
                   <input type="hidden" name="label" value={f.nudge.label} />
-                  <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${f.nudge.who ? firstName(f.nudge.who) : "Person"} notified`} style={chaseBtn}>
+                  <SubmitButton pendingLabel="Sending…" doneLabel={`✓ ${f.nudge.who ? firstName(f.nudge.who) : "Person"} notified`} style={chaseBtn}>
                     {f.nudge.who ? `Chase ${firstName(f.nudge.who)}` : "Chase"}
                   </SubmitButton>
                 </form>
@@ -199,7 +209,7 @@ export default function AttentionPanel({
                   <input type="hidden" name="label" value={f.chaseRole.label} />
                   {f.chaseRole.clientId && <input type="hidden" name="client_id" value={f.chaseRole.clientId} />}
                   {f.chaseRole.href && <input type="hidden" name="href" value={f.chaseRole.href} />}
-                  <SubmitButton persist pendingLabel="Sending…" doneLabel={`✓ ${f.chaseRole.who} notified`} style={chaseBtn}>
+                  <SubmitButton pendingLabel="Sending…" doneLabel={`✓ ${f.chaseRole.who} notified`} style={chaseBtn}>
                     {`Chase ${f.chaseRole.who}`}
                   </SubmitButton>
                 </form>

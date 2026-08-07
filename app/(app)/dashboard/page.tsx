@@ -13,6 +13,7 @@ import AttentionPanel from "@/components/AttentionPanel";
 import OpsTabs from "@/components/OpsTabs";
 import { frontDeskFlags } from "@/lib/frontdesk-attention";
 import { careWorkFlags } from "@/lib/care-attention";
+import { withChaseHistory } from "@/lib/chase-log";
 import TodayAgenda from "@/components/TodayAgenda";
 import { todayAgenda } from "@/lib/today-agenda";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -161,9 +162,9 @@ export default async function DashboardPage() {
   // front-desk and care-work lists). Care flags go first so the named-owner
   // version wins over the generic one.
   const seenKey = new Set<string>();
-  const opsFlags = [...careFlags, ...fdFlags]
+  const opsFlags = await withChaseHistory([...careFlags, ...fdFlags]
     .filter((f) => { if (!f.dedupeKey) return true; if (seenKey.has(f.dedupeKey)) return false; seenKey.add(f.dedupeKey); return true; })
-    .sort((a, b) => sevRank[a.sev] - sevRank[b.sev]);
+    .sort((a, b) => sevRank[a.sev] - sevRank[b.sev]));
   const agendaDate = new Date(TODAY + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
   return (
     <div style={{ maxWidth: 1180 }}>

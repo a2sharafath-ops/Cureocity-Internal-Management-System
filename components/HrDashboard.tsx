@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { withChaseHistory } from "@/lib/chase-log";
 import { canSee } from "@/lib/roles";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -126,7 +127,7 @@ export default async function HrDashboard({ name, role = "HR" }: { name: string;
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
-      <AttentionPanel flags={flags} viewerRole={role} />
+      <AttentionPanel flags={await withChaseHistory(flags)} viewerRole={role} />
 
       {/* 3 — TODAY */}
       <div style={sectionTitle}>Today</div>

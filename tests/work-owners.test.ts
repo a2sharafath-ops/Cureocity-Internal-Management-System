@@ -225,3 +225,40 @@ describe("coach markers", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The Chase button forgets on refresh — deliberately, because the work is still
+// undone and the flag must stay. The ROW is where the memory lives.
+// ---------------------------------------------------------------------------
+import { chaseLabel, chaseFor, type ChaseIndex } from "@/lib/chase-log";
+
+describe("chase history", () => {
+  const NOW = Date.parse("2026-08-07T12:00:00Z");
+
+  it("reads as plain English at each timescale", () => {
+    expect(chaseLabel({ at: "2026-08-07T11:59:40Z", by: "Sini Antony", count: 1 }, NOW)).toBe("chased just now by Sini");
+    expect(chaseLabel({ at: "2026-08-07T11:30:00Z", by: "Sini Antony", count: 1 }, NOW)).toBe("chased 30 min ago by Sini");
+    expect(chaseLabel({ at: "2026-08-07T09:00:00Z", by: "Sini Antony", count: 1 }, NOW)).toBe("chased 3h ago by Sini");
+    expect(chaseLabel({ at: "2026-08-05T12:00:00Z", by: "Sini Antony", count: 1 }, NOW)).toBe("chased 2d ago by Sini");
+  });
+
+  it("counts repeats, so a third chase is visibly a third chase", () => {
+    expect(chaseLabel({ at: "2026-08-05T12:00:00Z", by: "Sini Antony", count: 2 }, NOW)).toMatch(/2nd time$/);
+    expect(chaseLabel({ at: "2026-08-05T12:00:00Z", by: "Sini Antony", count: 4 }, NOW)).toMatch(/4th time$/);
+  });
+
+  it("survives a missing actor name", () => {
+    expect(chaseLabel({ at: "2026-08-05T12:00:00Z", by: null, count: 1 }, NOW)).toBe("chased 2d ago");
+  });
+
+  it("matches on label+client, falling back to the bare label", () => {
+    const idx: ChaseIndex = new Map([
+      ["book doctor consultation|c1", { at: "2026-08-06T12:00:00Z", by: "Sini", count: 1 }],
+      ["book diet consultation|", { at: "2026-08-06T12:00:00Z", by: "Sini", count: 1 }],
+    ]);
+    expect(chaseFor(idx, "Book doctor consultation", "c1")).not.toBeNull();
+    expect(chaseFor(idx, "Book diet consultation", "c9")).not.toBeNull();  // bare-label fallback
+    expect(chaseFor(idx, "Book fitness assessment", "c1")).toBeNull();
+    expect(chaseFor(idx, undefined)).toBeNull();
+  });
+});

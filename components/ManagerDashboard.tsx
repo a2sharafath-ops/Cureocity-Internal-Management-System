@@ -9,6 +9,7 @@ import { todayISO } from "@/lib/today";
 import MetricCard from "@/components/MetricCard";
 import { monthTrend, prevMonthKey, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
+import { withChaseHistory } from "@/lib/chase-log";
 import { careWorkFlags } from "@/lib/care-attention";
 import TodayAgenda from "@/components/TodayAgenda";
 import { todayAgenda } from "@/lib/today-agenda";
@@ -195,7 +196,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
       </div>
 
       {/* 2 — NEEDS ATTENTION */}
-      <AttentionPanel flags={flags} viewerRole="Manager" />
+      <AttentionPanel flags={await withChaseHistory(flags)} viewerRole="Manager" />
 
       {/* 3 — TODAY */}
       <div style={sectionTitle}>Today</div>
