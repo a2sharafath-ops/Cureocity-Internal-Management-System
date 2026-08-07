@@ -82,7 +82,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
   const staffName = new Map(staff.map((s) => [s.id, s.name]));
   const ownerOf = (clientId: string, disc: string) => {
     const a = assigns.find((x) => x.client_id === clientId && x.discipline === disc && x.staff_id);
-    return a?.staff_id ? { id: a.staff_id, name: staffName.get(a.staff_id) ?? "clinician" } : undefined;
+    return a?.staff_id ? { id: a.staff_id, name: staffName.get(a.staff_id) ?? "Health Professional" } : undefined;
   };
   const KIND_TO_DISC: Record<string, string> = { Doctor: "doctor", Diet: "dietitian", Trainer: "trainer", Coach: "coach", Psychologist: "psychologist" };
   // Display names come from lib/disciplines.ts. `kind` is a raw DB value —

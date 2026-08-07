@@ -42,7 +42,7 @@ export default async function EmrIndexPage({ searchParams }: { searchParams: { q
       <RealtimeRefresh tables={["problems", "allergies", "medications"]} />
       <BackLink />
       <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Client Records</h1>
-      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Clinical records — problems, allergies, medications, vitals and SOAP notes. Access limited to clinicians.</p>
+      <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>Clinical records — problems, allergies, medications, vitals and SOAP notes. Access limited to Health Professionals.</p>
 
       <form style={{ marginBottom: 14 }}>
         <input name="q" defaultValue={q} placeholder="Search clients…" style={{ width: 280, padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, background: "#fff" }} />

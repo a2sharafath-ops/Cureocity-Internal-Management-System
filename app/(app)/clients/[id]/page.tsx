@@ -680,7 +680,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <div style={{ fontWeight: 700 }}>Care Team</div>
-          <span style={{ color: "var(--muted)", fontSize: 12 }}>· assigned clinicians</span>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>· assigned Health Professionals</span>
         </div>
         {careTeam.length ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -691,7 +691,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               </div>
             ))}
           </div>
-        ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No clinicians assigned yet.</div>}
+        ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No Health Professionals assigned yet.</div>}
 
         {/* Who owns this client commercially and pastorally. These sat in
             Personal Info, which is contact detail — being someone's coach is
@@ -962,7 +962,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
               <span style={{ color: "var(--muted)", fontSize: 12 }}>· {svc.rows.length}</span>
               <span style={{ flex: 1 }} />
               <span style={{ color: "var(--muted)", fontSize: 12 }}>
-                {svc.clinician ? `Clinician: ${svc.clinician}` : "No clinician assigned"}
+                {svc.clinician ? `Health Professional: ${svc.clinician}` : "No Health Professional assigned"}
               </span>
             </div>
             {svc.rows.map((cs) => {

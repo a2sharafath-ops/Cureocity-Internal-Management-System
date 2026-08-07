@@ -129,7 +129,7 @@ export default async function LabPrintPage({
 
           <div style={{ marginTop: 46, display: "flex", justifyContent: "flex-end" }}>
             <div style={{ textAlign: "center", minWidth: 190 }}>
-              <div style={{ borderTop: "1px solid #9ca3af", paddingTop: 5, fontSize: 12, fontWeight: 700, color: "#111" }}>{orders[0].provider ?? "Requesting clinician"}</div>
+              <div style={{ borderTop: "1px solid #9ca3af", paddingTop: 5, fontSize: 12, fontWeight: 700, color: "#111" }}>{orders[0].provider ?? "Requesting Health Professional"}</div>
               <div style={{ fontSize: 10.5, color: "#6b7280" }}>Signature &amp; seal</div>
             </div>
           </div>

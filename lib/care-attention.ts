@@ -13,9 +13,10 @@ import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/
 import { GENERATION_MS as BP_GENERATION_MS } from "@/lib/blueprint-sla";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
 import { loadClientStatuses } from "@/lib/client-status";
+import { MARKERS, markerOverdueDays, markerNeedsReferral, type MarkerState } from "@/lib/coach-markers";
 import {
   BOOKING_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners,
-  CONCERN_ESCALATION_OWNER, CONCERN_ESCALATION_DAYS,
+  CONCERN_ESCALATION_OWNER, CONCERN_ESCALATION_DAYS, MARKER_BASELINE_GRACE_DAYS,
 } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 
@@ -28,7 +29,7 @@ const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 
 export async function careWorkFlags(today: string): Promise<Flag[]> {
   const sb = createClient();
-  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: appts }] = await Promise.all([
+  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: coachRows }, { data: appts }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
     sb.from("consultations").select("client_id, kind, status, completed_at"),
@@ -38,6 +39,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("blueprints").select("client_id, generated"),
     sb.from("care_protocols").select("client_id, start_date, approved_at").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
     sb.from("concerns").select("client_id, body, created_at").eq("status", "Open"),
+    sb.from("coach_assessments").select("client_id, marker, date, tone, band").order("date", { ascending: false }),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
   ]);
 
@@ -136,6 +138,14 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     (concernsBy.get(c.client_id) ?? concernsBy.set(c.client_id, []).get(c.client_id)!).push(c);
   }
 
+  // Latest reading per client+marker. The query is date-descending, so the
+  // first row seen for a key is the newest.
+  const markerLatest = new Map<string, MarkerState>();
+  for (const r of (coachRows ?? []) as { client_id: string; marker: string; date: string; tone: string | null; band: string | null }[]) {
+    const key = `${r.client_id}|${r.marker}`;
+    if (!markerLatest.has(key)) markerLatest.set(key, { marker: r.marker as never, date: r.date, tone: r.tone, band: r.band });
+  }
+
   const statuses = await loadClientStatuses(sb, Array.from(catsBy.keys()), today);
 
   const flags: Flag[] = [];
@@ -212,6 +222,58 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         dedupeKey: `concern-esc:${clientId}`,
         chaseRole: { roles: CONCERN_ESCALATION_OWNER, who: "Medical Director", label: `Unanswered concern — ${who}`, clientId, href: "/workspace?role=coach&tab=concerns" },
       });
+    }
+
+    // ---- the Health Coach's six markers ----------------------------------
+    //
+    // These raised NOTHING anywhere: no follow-up, no task, no flag. The only
+    // place an overdue PSS-10 or HAM-A appeared was inside the coach's own tab,
+    // so if that coach was on leave the whole clinic was blind to it —
+    // including the referral pathway for severe anxiety and substance use.
+    //
+    // Only for clients who actually have a coach on their care team; a
+    // membership client is not owed coaching.
+    if (cats.has("comprehensive") || cats.has("training")) {
+      const coachOwner = ownerFor(clientId, "coach");
+      for (const m of MARKERS) {
+        const last = markerLatest.get(`${clientId}|${m.key}`);
+
+        // A reading in the referral band outranks any cadence question: the
+        // number itself is the reason to act, however recently it was taken.
+        if (markerNeedsReferral(last)) {
+          flags.push({
+            sev: "high",
+            title: `${who} — ${m.label.toLowerCase()} in referral band`,
+            detail: `${m.tool} · ${last!.band ?? "referral"} · ${m.referral}`,
+            href: "/workspace?role=coach&tab=coaching", cta: "Open",
+            dedupeKey: `marker-refer:${clientId}:${m.key}`,
+            nudge: coachOwner ? { clientId, staffId: coachOwner.id, label: `${m.label} — referral band`, who: coachOwner.name } : undefined,
+            chaseRole: coachOwner ? undefined : { roles: DELIVERY_OWNER.coach, who: "Health Coach", label: `${m.label} — referral band`, clientId, href: "/workspace?role=coach&tab=coaching" },
+          });
+          continue;
+        }
+
+        // Cadence. A client with no baseline at all is only flagged once the
+        // package has had time to start — MARKER_BASELINE_GRACE_DAYS — so a
+        // client who joined this morning doesn't arrive with six red flags.
+        const activeCp = rows.find((r) => r.category === (cats.has("comprehensive") ? "comprehensive" : "training"));
+        const start = protoBy.get(clientId)?.start_date ?? activeCp?.start_date ?? null;
+        const sinceStart = start ? Math.floor((Date.parse(today) - Date.parse(start)) / 86_400_000) : 0;
+        if (!last && sinceStart < MARKER_BASELINE_GRACE_DAYS) continue;
+
+        const over = markerOverdueDays(m, last, today, sinceStart - MARKER_BASELINE_GRACE_DAYS);
+        if (over === null || over <= 0) continue;
+        flags.push({
+          sev: "med",
+          title: last ? `${who} — ${m.label.toLowerCase()} re-assessment overdue` : `${who} — ${m.label.toLowerCase()} never assessed`,
+          detail: last ? `${m.tool} · last ${last.date} · every ${m.reassessDays} days` : `${m.tool} · no baseline on file`,
+          href: "/workspace?role=coach&tab=coaching", cta: "Assess",
+          dueLabel: `${over} day${over === 1 ? "" : "s"} overdue`, overdue: true,
+          dedupeKey: `marker-due:${clientId}:${m.key}`,
+          nudge: coachOwner ? { clientId, staffId: coachOwner.id, label: `${m.label} re-assessment due`, who: coachOwner.name } : undefined,
+          chaseRole: coachOwner ? undefined : { roles: DELIVERY_OWNER.coach, who: "Health Coach", label: `${m.label} re-assessment due`, clientId, href: "/workspace?role=coach&tab=coaching" },
+        });
+      }
     }
 
     // ---- overdue day-0 bookings ------------------------------------------
@@ -314,10 +376,10 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         flags.push({
           sev: allSigned ? "high" : "med",
           title: `${who} — BluePrint not generated`,
-          detail: allSigned ? "Blood in · all three sign-offs done" : "Blood in · awaiting clinician sign-offs",
+          detail: allSigned ? "Blood in · all three sign-offs done" : "Blood in · awaiting Health Professional sign-offs",
           href: "/blueprint", cta: "Review",
           ...sla(allSigned, BP_GENERATION_MS),
-          chaseRole: { roles: [...DELIVERY_OWNER.doctor, ...DELIVERY_OWNER.dietitian, ...DELIVERY_OWNER.trainer], who: "clinicians", label: "BluePrint sign-off", clientId, href: "/blueprint" },
+          chaseRole: { roles: [...DELIVERY_OWNER.doctor, ...DELIVERY_OWNER.dietitian, ...DELIVERY_OWNER.trainer], who: "Health Professionals", label: "BluePrint sign-off", clientId, href: "/blueprint" },
         });
       }
     }

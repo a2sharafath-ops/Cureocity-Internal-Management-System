@@ -25,14 +25,14 @@ export default function RolePreview({ preview, profession }: { preview: string |
         name="role"
         value={active ?? "off"}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        title="Preview the app as another role, or step into a professional workspace"
+        title="Preview the app as another role, or step into a Health Professional's workspace"
         style={{ border: "1px solid rgba(20,20,25,0.07)", borderRadius: 999, padding: "6px 10px", fontSize: 12, background: "rgba(255,255,255,0.55)", cursor: "pointer" }}
       >
         <option value="off">View as… (Administrator)</option>
         <optgroup label="Roles">
           {ROLES.map((r) => <option key={r} value={r}>View as {r}</option>)}
         </optgroup>
-        <optgroup label="Professional workspaces">
+        <optgroup label="Health Professionals">
           {PERSONAS.map((p) => <option key={p.key} value={p.key}>Enter as {p.label}</option>)}
         </optgroup>
       </select>

@@ -286,7 +286,7 @@ export default function TrainingScheduleView({
             </div>
             <div style={{ overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
-                <thead><tr><th style={th}>Client</th><th style={th}>Assessment</th><th style={th}>Professional</th><th style={th}>Date</th><th style={th}>Visibility</th></tr></thead>
+                <thead><tr><th style={th}>Client</th><th style={th}>Assessment</th><th style={th}>Health Professional</th><th style={th}>Date</th><th style={th}>Visibility</th></tr></thead>
                 <tbody>
                   {assessmentRecords.map((a) => (
                     <tr key={a.id} style={{ borderTop: "1px solid var(--border)" }}>

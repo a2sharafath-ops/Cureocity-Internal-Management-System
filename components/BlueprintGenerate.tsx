@@ -34,7 +34,7 @@ export default function BlueprintGenerate({
               Save
             </button>
             <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6, maxWidth: 320 }}>
-              Generates automatically once all assigned clinicians sign off (Summaries tab).
+              Generates automatically once all assigned Health Professionals sign off (Summaries tab).
             </div>
           </div>
         </form>

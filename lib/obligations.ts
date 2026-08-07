@@ -35,7 +35,7 @@ export function buildOwnerResolver(
 ): (clientId: string, discipline: string) => Owner | undefined {
   const assigned = new Map<string, Owner>();
   for (const a of assignments) {
-    if (a.staff_id) assigned.set(`${a.client_id}|${a.discipline}`, { id: a.staff_id, name: a.staff?.name ?? "clinician" });
+    if (a.staff_id) assigned.set(`${a.client_id}|${a.discipline}`, { id: a.staff_id, name: a.staff?.name ?? "Health Professional" });
   }
   const fallback = new Map<string, Owner>();
   for (const a of appts) {

@@ -96,7 +96,7 @@ export default function ComprehensiveProtocol({
   const OWED = new Set(["running", "due_soon", "breached"]);
   const turnaroundChase = (g: Gate): Chase | null =>
     overseer && OWED.has(g.clock.status)
-      ? { roles: OWNER_ROLES[g.owner], who: OWNER_DISC[g.owner] ?? "clinician", label: g.label, clientId }
+      ? { roles: OWNER_ROLES[g.owner], who: OWNER_DISC[g.owner] ?? "Health Professional", label: g.label, clientId }
       : null;
   const milestoneChase = (g: Gate, href: string | null): Chase | null =>
     overseer && href ? { roles: ["Front Desk"], who: "Front Desk", label: g.label, href, clientId } : null;

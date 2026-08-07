@@ -12,7 +12,17 @@ const TONE: Record<string, { dot: string }> = {
   neutral: { dot: "#94a3b8" },
 };
 
-const firstName = (n: string) => n.split(" ")[0];
+/**
+ * A person's first name, for a button that has to stay short.
+ *
+ * Guarded against the generic fallbacks the obligation engines use when a staff
+ * row has no name on it ("Health Professional", "Fitness Trainer", …). Naively
+ * splitting those produced "Chase Health" and "Chase Fitness", which reads as a
+ * bug to anyone who sees it. A fallback is a role label, not a person, so it is
+ * shown whole.
+ */
+const GENERIC_OWNER = /^(Health Professional|Health Coach|Fitness Trainer|Medical Director|Front Desk|clinician|trainer|Owner|Person)$/i;
+const firstName = (n: string) => (GENERIC_OWNER.test(n.trim()) ? n.trim() : n.split(" ")[0]);
 
 const chaseBtn: React.CSSProperties = { border: "none", background: "var(--brand-fill)", color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
 // Owner action: the viewer owns this deliverable, so give them a button to go do

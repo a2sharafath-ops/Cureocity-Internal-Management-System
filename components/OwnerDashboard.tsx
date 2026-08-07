@@ -176,7 +176,7 @@ export default async function OwnerDashboard({ name }: { name: string }) {
     const bp = bps.get(c.id);
     if (!b) flags.push({ sev: "med", title: `${c.name} — blood report not requested`, detail: "BluePrint can't start until requested", href: "/blueprint", cta: "View", chaseRole: { roles: ["Front Desk", "Doctor"], who: "Front Desk", label: "Request BluePrint blood", clientId: c.id, href: "/blueprint" } });
     else if (!b.submitted) flags.push({ sev: "med", title: `${c.name} — blood report pending`, detail: "Requested, awaiting the client", href: "/blueprint", cta: "View", chaseRole: { roles: ["Health Coach"], who: "Health Coach", label: "Chase blood report", clientId: c.id, href: "/blueprint" } });
-    else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review", chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "clinicians", label: "BluePrint sign-off", clientId: c.id, href: "/blueprint" } });
+    else if (!bp?.generated) flags.push({ sev: "med", title: `${c.name} — BluePrint not generated`, detail: "Needs the 3-discipline sign-off", href: "/blueprint", cta: "Review", chaseRole: { roles: ["Doctor", "Dietitian", "Fitness Trainer"], who: "Health Professionals", label: "BluePrint sign-off", clientId: c.id, href: "/blueprint" } });
   }
 
   // 5. churn signals — credits left but nothing on the calendar, or gone quiet

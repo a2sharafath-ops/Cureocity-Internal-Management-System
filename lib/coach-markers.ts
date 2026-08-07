@@ -101,3 +101,39 @@ export const TONE_STYLE: Record<Band["tone"], { bg: string; text: string }> = {
   warn: { bg: "var(--amber-bg)", text: "var(--amber-text)" },
   bad: { bg: "var(--red-bg)", text: "var(--red-text)" },
 };
+
+
+// ---- when a marker is due --------------------------------------------------
+//
+// Shared with the attention queue. The coach's own tab already computed this
+// inline; the queue needs the identical rule, and two copies of a cadence is
+// exactly how the ownership rules drifted apart elsewhere.
+
+export type MarkerState = { marker: MarkerKey; date: string; tone: string | null; band: string | null };
+
+/** Days a marker is overdue, or null when it is not. Never assessed = overdue
+ *  from the moment the client has a coach, which is what `neverDays` covers. */
+export function markerOverdueDays(
+  m: Marker,
+  last: MarkerState | undefined,
+  today: string,
+  neverDays = 0,
+): number | null {
+  const day = (a: string, b: string) =>
+    Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+  if (!last) return neverDays;               // no baseline on file at all
+  const over = day(last.date, today) - m.reassessDays;
+  return over > 0 ? over : null;
+}
+
+/**
+ * A marker whose LAST reading was in the referral band.
+ *
+ * This is the one that matters most and the one nothing surfaced: a HAM-A of
+ * 25+ or an AUDIT-C of 4+ sat in the coach's tab with a red chip and raised
+ * nothing anywhere else. `tone: "bad"` is the stored form of "referral band"
+ * (see saveCoachAssessment, which also opens a concern on it).
+ */
+export function markerNeedsReferral(last: MarkerState | undefined): boolean {
+  return last?.tone === "bad";
+}

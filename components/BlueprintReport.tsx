@@ -48,7 +48,7 @@ export default function BlueprintReport({
 
         {/* Scores by domain */}
         {filled.length === 0 ? (
-          <div style={{ color: "var(--muted)", fontSize: 14, padding: "16px 0" }}>Health scores haven&apos;t been entered yet. Once the clinicians record the 9 scores, they appear here.</div>
+          <div style={{ color: "var(--muted)", fontSize: 14, padding: "16px 0" }}>Health scores haven&apos;t been entered yet. Once the Health Professionals record the 9 scores, they appear here.</div>
         ) : (
           BP_DOMAINS.map((d) => {
             const items = BP_SCORES.filter((s) => s.domain === d.key && typeof scores?.[s.key] === "number");

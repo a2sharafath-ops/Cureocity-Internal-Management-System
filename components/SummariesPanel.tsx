@@ -141,7 +141,7 @@ export default function SummariesPanel({
         </>
       ) : (
         <div>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Every clinician assigned to the client must sign off the consolidated summary. The BluePrint generates automatically once <b>all</b> of them have signed.</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>Every Health Professional assigned to the client must sign off the consolidated summary. The BluePrint generates automatically once <b>all</b> of them have signed.</div>
           <div style={{ ...box, overflow: "hidden" }}>
             {consolidated.length ? consolidated.map((c) => {
               const req = c.required.length ? c.required : ["doctor", "dietitian", "trainer"];

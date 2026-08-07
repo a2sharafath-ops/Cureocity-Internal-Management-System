@@ -175,3 +175,53 @@ describe("the psychologist owes something", () => {
     expect(KIND_LABEL.Psychologist).toBe("Psychologist");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The six coach markers raised nothing anywhere — not to the coach's queue, not
+// to the manager, not to the Super Admin. The HAM-A self-harm referral band was
+// among them.
+// ---------------------------------------------------------------------------
+import { MARKERS, markerOverdueDays, markerNeedsReferral, MARKER_KEYS } from "@/lib/coach-markers";
+import { MARKER_BASELINE_GRACE_DAYS } from "@/lib/work-owners";
+
+describe("coach markers", () => {
+  const stress = MARKERS.find((m) => m.key === "stress")!;
+
+  it("covers all six markers", () => {
+    expect(MARKER_KEYS).toHaveLength(6);
+    expect(MARKERS).toHaveLength(6);
+  });
+
+  it("is overdue once the cadence has elapsed", () => {
+    const last = { marker: "stress" as const, date: "2026-08-01", tone: "good", band: "Low" };
+    // reassessDays is 14 — 20 days later is 6 days overdue.
+    expect(markerOverdueDays(stress, last, "2026-08-21")).toBe(6);
+  });
+
+  it("is not overdue inside the cadence", () => {
+    const last = { marker: "stress" as const, date: "2026-08-01", tone: "good", band: "Low" };
+    expect(markerOverdueDays(stress, last, "2026-08-10")).toBeNull();
+  });
+
+  it("treats a referral-band reading as urgent regardless of how recent it is", () => {
+    // The number is the reason to act, not the calendar.
+    expect(markerNeedsReferral({ marker: "anxiety" as const, date: "2026-08-21", tone: "bad", band: "Severe" })).toBe(true);
+    expect(markerNeedsReferral({ marker: "anxiety" as const, date: "2026-08-21", tone: "good", band: "Mild" })).toBe(false);
+    expect(markerNeedsReferral(undefined)).toBe(false);
+  });
+
+  it("gives a new client a grace window before chasing a missing baseline", () => {
+    // Otherwise every new Comprehensive client lands on the coach's queue with
+    // six red flags on day one, which teaches people to ignore the panel.
+    expect(MARKER_BASELINE_GRACE_DAYS).toBeGreaterThan(0);
+    expect(markerOverdueDays(stress, undefined, "2026-08-21", 0)).toBe(0);
+    expect(markerOverdueDays(stress, undefined, "2026-08-21", 5)).toBe(5);
+  });
+
+  it("every marker names a referral threshold", () => {
+    for (const m of MARKERS) {
+      expect(m.referral, m.key).toBeTruthy();
+      expect(m.reassessDays, m.key).toBeGreaterThan(0);
+    }
+  });
+});

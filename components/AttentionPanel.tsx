@@ -29,7 +29,17 @@ export type Flag = {
   overdue?: boolean;
 };
 
-const firstName = (n: string) => n.split(" ")[0];
+/**
+ * A person's first name, for a button that has to stay short.
+ *
+ * Guarded against the generic fallbacks the obligation engines use when a staff
+ * row has no name on it ("Health Professional", "Fitness Trainer", …). Naively
+ * splitting those produced "Chase Health" and "Chase Fitness", which reads as a
+ * bug to anyone who sees it. A fallback is a role label, not a person, so it is
+ * shown whole.
+ */
+const GENERIC_OWNER = /^(Health Professional|Health Coach|Fitness Trainer|Medical Director|Front Desk|clinician|trainer|Owner|Person)$/i;
+const firstName = (n: string) => (GENERIC_OWNER.test(n.trim()) ? n.trim() : n.split(" ")[0]);
 
 const SEV = {
   high: { bg: "var(--red-bg)", col: "var(--red-text)", label: "Urgent", weight: 10 },

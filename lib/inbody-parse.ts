@@ -145,6 +145,6 @@ export function inbodySummaryFromText(text: string, gender?: string | null): str
   if (m.targetWeight !== undefined) goals.push(`target weight ${one(m.targetWeight)} kg`);
   if (goals.length) lines.push(`Device targets: ${goals.join(" · ")}.`);
 
-  lines.push("Auto-extracted from the uploaded InBody report — figures not yet reviewed by a clinician.");
+  lines.push("Auto-extracted from the uploaded InBody report — figures not yet reviewed by a Health Professional.");
   return lines.join("\n");
 }

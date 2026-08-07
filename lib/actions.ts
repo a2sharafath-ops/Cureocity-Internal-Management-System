@@ -1212,7 +1212,11 @@ export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok
  */
 export async function approveComprehensive(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  // The comment below called this the doctor's sign-off while the guard let any
+  // role with canConsult approve it — a Health Coach or Fitness Trainer could
+  // sign the consolidated Comprehensive summary. canEmr is the doctor set
+  // (Doctor + Medical Director + admins), which is what the wording promised.
+  if (!p || !canEmr(p.role)) return;
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return;
   const supabase = createClient();
@@ -2546,7 +2550,7 @@ export async function nudgeClinician(formData: FormData) {
     // goes stale, even if the drafting screen moves.
     link: client_id ? nudgeLink(label, client_id) : undefined,
   });
-  await logAudit(p, "Clinician nudged", c?.name, label);
+  await logAudit(p, "Health Professional nudged", c?.name, label);
   revalidatePath(`/clients/${client_id}`);
 }
 
@@ -2773,7 +2777,7 @@ export async function signoffConsolidated(formData: FormData) {
       .eq("client_id", client_id).eq("category", "blueprint").eq("status", "active");
     await logAudit(p, "Blueprint generated (all sign-offs complete)", await clientName(supabase, client_id), null);
     await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
-      title: "BluePrint generated", body: `${await clientName(supabase, client_id)} — all clinicians signed off.`, href: "/blueprint", icon: "🧬",
+      title: "BluePrint generated", body: `${await clientName(supabase, client_id)} — all Health Professionals signed off.`, href: "/blueprint", icon: "🧬",
     });
   }
 
