@@ -1,3 +1,4 @@
+import { CANCELLED } from "@/lib/consult-lifecycle";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
@@ -67,7 +68,9 @@ export default async function ProPage() {
       : false
   ));
 
-  const pending = consults.filter((c) => c.status !== "completed").length;
+  // "Not completed" used to mean outstanding. It now also catches cancelled
+  // consultations, which are the opposite of outstanding.
+  const pending = consults.filter((c) => c.status !== "completed" && c.status !== CANCELLED).length;
   const canEdit = canConsult(me.role);
 
   return (

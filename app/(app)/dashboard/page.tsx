@@ -95,7 +95,7 @@ export default async function DashboardPage() {
     supabase.from("invoices").select("amount").eq("status", "Paid").gte("paid_date", monthStart),
     supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "active").lte("renews_on", in30),
     supabase.from("invoices").select("id", { count: "exact", head: true }).eq("status", "Unpaid").lte("issued_date", overdueCut),
-    supabase.from("consultations").select("id, kind, clients(id, name)").neq("status", "completed").order("created_at", { ascending: false }).limit(8),
+    supabase.from("consultations").select("id, kind, clients(id, name)").not("status", "in", '("completed","cancelled")').order("created_at", { ascending: false }).limit(8),
     supabase.from("followups").select("id, day, label").eq("status", "pending").lt("due_date", TODAY),
     supabase.from("followups").select("id, priority, day, label").eq("status", "pending").eq("due_date", TODAY),
   ]);

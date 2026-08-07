@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { toggleConsultFlag, saveConsolidatedSummary, signoffConsolidated, startConsult } from "@/lib/actions";
+import { toggleConsultFlag, saveConsolidatedSummary, signoffConsolidated, startConsult, cancelConsultation, deleteEmptyConsultation } from "@/lib/actions";
 import { disciplineLabel } from "@/lib/disciplines";
+import { CANCELLED } from "@/lib/consult-lifecycle";
 
 export type ConsultSummary = {
   id: string;
@@ -14,6 +15,10 @@ export type ConsultSummary = {
   approved: boolean;
   shared: boolean;
   created_at: string;
+  /** Nothing clinical was ever recorded against it — safe to destroy. */
+  canDelete?: boolean;
+  /** Why it can't be — shown so "Cancel instead" doesn't look arbitrary. */
+  keepReason?: string | null;
 };
 
 export type ConsolidatedRow = {
@@ -58,6 +63,89 @@ function SummaryStatus({ id, text, status }: { id: string; text: string | null; 
   );
 }
 
+/**
+ * One consultation in the list, with its removal controls.
+ *
+ * Split out of the panel because the confirm strip needs per-row state. Removal
+ * is deliberately two clicks and never sits next to Approve — a stray click on
+ * a row you're signing off shouldn't be able to take the consultation away.
+ */
+function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => string }) {
+  const [confirming, setConfirming] = useState(false);
+  const cancelled = c.status === CANCELLED;
+
+  const btn: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" };
+
+  return (
+    <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", background: cancelled ? "var(--neutral-bg)" : undefined }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, flexWrap: "wrap", opacity: cancelled ? 0.62 : 1 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <b style={{ fontSize: 13, textDecoration: cancelled ? "line-through" : "none" }}>{c.client_name ?? "—"}</b>
+            <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{fmt(c.created_at)} · {c.status}</span>
+            {cancelled && <span style={{ background: "var(--neutral-bg)", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Cancelled</span>}
+            {!cancelled && c.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
+            {!cancelled && c.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
+          </div>
+          <SummaryStatus id={c.id} text={c.summary} status={c.status} />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
+          {cancelled ? (
+            // Undo is the only action on a cancelled row. Approving or sharing
+            // something that was called off would be a nonsense.
+            <form action={cancelConsultation}>
+              <input type="hidden" name="id" value={c.id} />
+              <input type="hidden" name="undo" value="true" />
+              <button style={btn}>Undo cancel</button>
+            </form>
+          ) : (
+            <>
+              <Link href={`/console/${c.id}`} style={{ ...btn, textDecoration: "none", color: "var(--ink)" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
+              <form action={toggleConsultFlag}>
+                <input type="hidden" name="id" value={c.id} />
+                <input type="hidden" name="field" value="approved" />
+                <input type="hidden" name="value" value={String(c.approved)} />
+                <button style={{ ...btn, background: c.approved ? "#fff" : "var(--ink)", color: c.approved ? "var(--muted)" : "#fff", border: c.approved ? "1px solid var(--border)" : "none", padding: "5px 12px" }}>{c.approved ? "Unapprove" : "Approve"}</button>
+              </form>
+              <form action={toggleConsultFlag}>
+                <input type="hidden" name="id" value={c.id} />
+                <input type="hidden" name="field" value="shared" />
+                <input type="hidden" name="value" value={String(c.shared)} />
+                <button style={{ ...btn, color: "var(--brand-text)" }}>{c.shared ? "Unshare" : "Share"}</button>
+              </form>
+              <button type="button" onClick={() => setConfirming((v) => !v)} title="Cancel or remove this consultation"
+                style={{ ...btn, border: "none", background: "transparent", color: "var(--muted)", padding: "5px 8px" }}>
+                {confirming ? "✕" : "Remove…"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {confirming && !cancelled && (
+        <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--amber-bg)", borderRadius: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: "var(--amber-text)", flex: 1, minWidth: 220 }}>
+            {c.canDelete
+              ? "Nothing has been recorded against this one. Cancel keeps it on the record; delete removes it entirely."
+              : `Cancelling keeps the record and stops it counting as outstanding. It can't be deleted — ${c.keepReason}.`}
+          </span>
+          <form action={cancelConsultation}>
+            <input type="hidden" name="id" value={c.id} />
+            <button style={btn}>Cancel consultation</button>
+          </form>
+          {c.canDelete && (
+            <form action={deleteEmptyConsultation}>
+              <input type="hidden" name="id" value={c.id} />
+              <button style={{ ...btn, border: "1px solid var(--red)", color: "var(--red)" }}>Delete permanently</button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SummariesPanel({
   roleLabel, roleKind, consults, consolidated, clients, viewerDisc = null, canSignAny = false,
 }: {
@@ -72,7 +160,8 @@ export default function SummariesPanel({
   canSignAny?: boolean;
 }) {
   const [view, setView] = useState<"individual" | "consolidated">("individual");
-  const pending = consults.filter((c) => !c.approved).length;
+  // A cancelled consultation is not outstanding work — it is the opposite.
+  const pending = consults.filter((c) => !c.approved && c.status !== CANCELLED).length;
   const consolPending = consolidated.filter((c) => !c.generated).length;
 
   const seg = (k: "individual" | "consolidated", label: string, n: number) => (
@@ -109,34 +198,9 @@ export default function SummariesPanel({
 
         <div style={{ ...box, overflow: "hidden" }}>
           <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)" }}>Approve your {roleLabel} consultation summaries. Approved summaries feed the client&apos;s BluePrint sign-off.</div>
-          {consults.length ? consults.map((c) => (
-            <div key={c.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <b style={{ fontSize: 13 }}>{c.client_name ?? "—"}</b>
-                  <span style={{ color: "var(--muted)", fontSize: 11.5 }}>{fmt(c.created_at)} · {c.status}</span>
-                  {c.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
-                  {c.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
-                </div>
-                <SummaryStatus id={c.id} text={c.summary} status={c.status} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
-                <Link href={`/console/${c.id}`} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, textDecoration: "none", color: "var(--ink)", whiteSpace: "nowrap" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
-                <form action={toggleConsultFlag}>
-                  <input type="hidden" name="id" value={c.id} />
-                  <input type="hidden" name="field" value="approved" />
-                  <input type="hidden" name="value" value={String(c.approved)} />
-                  <button style={{ background: c.approved ? "#fff" : "var(--ink)", color: c.approved ? "var(--muted)" : "#fff", border: c.approved ? "1px solid var(--border)" : "none", borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>{c.approved ? "Unapprove" : "Approve"}</button>
-                </form>
-                <form action={toggleConsultFlag}>
-                  <input type="hidden" name="id" value={c.id} />
-                  <input type="hidden" name="field" value="shared" />
-                  <input type="hidden" name="value" value={String(c.shared)} />
-                  <button style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--brand-text)", whiteSpace: "nowrap" }}>{c.shared ? "Unshare" : "Share"}</button>
-                </form>
-              </div>
-            </div>
-          )) : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {roleLabel} summaries yet.</div>}
+          {consults.length
+            ? consults.map((c) => <ConsultRow key={c.id} c={c} fmt={fmt} />)
+            : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {roleLabel} summaries yet.</div>}
         </div>
         </>
       ) : (

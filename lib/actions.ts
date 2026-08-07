@@ -17,6 +17,7 @@ import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
 import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
+import { deletable, statusAfterUndo, CANCELLED } from "@/lib/consult-lifecycle";
 import { buildFollowupRows } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
@@ -1681,6 +1682,111 @@ export async function toggleConsultFlag(formData: FormData) {
   await supabase.from("consultations").update(patch).eq("id", id);
   revalidatePath("/pro");
   revalidatePath("/", "layout");
+}
+
+// ---- getting rid of a consultation -----------------------------------------
+
+/**
+ * Who may cancel or delete a consultation.
+ *
+ * The owning discipline plus admins — the same test that governs approving and
+ * sharing it, because removing a consultation is a bigger decision than either.
+ * `ownsConsultKind` already returns true for admins, so this is one call.
+ */
+async function consultLifecycleGuard(id: string) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return null;
+  const supabase = createClient();
+  const { data: row } = await supabase
+    .from("consultations")
+    .select("id, kind, status, client_id, summary, ai_summary, answers, flags, draft, completed_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (!row) return null;
+  if (!ownsConsultKind(p.role, (row as { kind: string }).kind)) return null;
+  return { p, supabase, row: row as ConsultRowForLifecycle };
+}
+
+type ConsultRowForLifecycle = {
+  id: string; kind: string; status: string; client_id: string | null;
+  summary: string | null; ai_summary: string | null;
+  answers: unknown[] | null; flags: unknown[] | null; draft: unknown | null;
+  completed_at: string | null;
+};
+
+/**
+ * Cancel a consultation, or undo the cancellation.
+ *
+ * Nothing is destroyed. The row keeps its answers, its summary and anything
+ * that points at it; it simply stops counting as outstanding work. That matters
+ * because several screens treat "not completed" as "somebody still owes this",
+ * so an abandoned consultation otherwise sits on the dashboard forever.
+ */
+export async function cancelConsultation(formData: FormData) {
+  const id = String(formData.get("id"));
+  const undo = String(formData.get("undo")) === "true";
+  const ctx = await consultLifecycleGuard(id);
+  if (!ctx) return { ok: false, error: "Not permitted" };
+  const { p, supabase, row } = ctx;
+
+  const status = undo ? statusAfterUndo(row.completed_at) : CANCELLED;
+  await supabase.from("consultations").update({ status }).eq("id", id);
+  await logAudit(
+    p,
+    undo ? "Consultation cancellation undone" : "Consultation cancelled",
+    await clientName(supabase, row.client_id ?? ""),
+    `${row.kind} · ${row.status} → ${status}`,
+  );
+  revalidatePath("/workspace");
+  revalidatePath("/pro");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
+ * Destroy a consultation that never held anything.
+ *
+ * The emptiness rule lives in `lib/consult-lifecycle.ts` and is re-checked here
+ * rather than trusted from the client: the button is only rendered for empty
+ * rows, but a form post is a form post. If the row has gained content since the
+ * page rendered, this refuses and says why.
+ */
+export async function deleteEmptyConsultation(formData: FormData) {
+  const id = String(formData.get("id"));
+  const ctx = await consultLifecycleGuard(id);
+  if (!ctx) return { ok: false, error: "Not permitted" };
+  const { p, supabase, row } = ctx;
+
+  // Counted, not fetched — we only need to know whether anything points here.
+  const [{ count: orderCount }, { count: rxCount }] = await Promise.all([
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("consultation_id", id),
+    supabase.from("prescriptions").select("id", { count: "exact", head: true }).eq("consultation_id", id),
+  ]);
+
+  const verdict = deletable({
+    status: row.status,
+    summary: row.summary,
+    aiSummary: row.ai_summary,
+    answers: row.answers,
+    flags: row.flags,
+    draft: row.draft,
+    orderCount: orderCount ?? 0,
+    prescriptionCount: rxCount ?? 0,
+  });
+  if (!verdict.deletable) {
+    return { ok: false, error: `Can't delete — ${verdict.reason}. Cancel it instead.` };
+  }
+
+  // Audit BEFORE the delete: afterwards there is no row to describe, and a
+  // deletion with no trace is the one thing worse than the stray row.
+  await logAudit(p, "Consultation deleted", await clientName(supabase, row.client_id ?? ""), `${row.kind} · empty`);
+  const { error } = await supabase.from("consultations").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/workspace");
+  revalidatePath("/pro");
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 // ---- BluePrint -------------------------------------------------------------

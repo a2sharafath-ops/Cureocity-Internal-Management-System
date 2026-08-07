@@ -30,6 +30,7 @@ import { loadCatOf } from "@/lib/appt-match";
 import { getAppSettings } from "@/lib/settings";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
+import { deletable } from "@/lib/consult-lifecycle";
 import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
 import TrialOutcomeActions from "@/components/TrialOutcomeActions";
@@ -507,7 +508,9 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     const bpClients = allClients.filter((c) => bpIdSet.has(c.id));
     const bpIds = bpClients.map((c) => c.id);
     const [{ data: cs }, signoffRes, bpRes, asgRes, signRes] = await Promise.all([
-      supabase.from("consultations").select("id, client_id, summary, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),
+      // ai_summary / answers / flags / draft are fetched only to answer "is this
+      // row empty enough to delete" — see deletable(). They are not rendered.
+      supabase.from("consultations").select("id, client_id, summary, ai_summary, answers, flags, draft, status, approved, shared, created_at, clients(name)").eq("kind", role.kind).order("created_at", { ascending: false }),
       // per-discipline INDIVIDUAL-approval status (security-definer RPC)
       supabase.rpc("blueprint_signoff"),
       bpIds.length ? supabase.from("blueprints").select("client_id, generated, consolidated").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; generated: boolean; consolidated: string | null }[] }),
@@ -515,9 +518,44 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       bpIds.length ? supabase.from("client_assignments").select("client_id, discipline").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; discipline: string }[] }),
       bpIds.length ? supabase.from("blueprint_signoffs").select("client_id, discipline").in("client_id", bpIds) : Promise.resolve({ data: [] as { client_id: string; discipline: string }[] }),
     ]);
-    consultSummaries = ((cs ?? []) as unknown as (ConsultSummary & { clients: { name: string } | null })[]).map((r) => ({
-      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, summary: r.summary, status: r.status, approved: r.approved, shared: r.shared, created_at: r.created_at,
-    }));
+    // Which consultations have clinical records hanging off them. Two queries
+    // for the whole list rather than two per row — the panel only needs to know
+    // whether a Delete button is safe to offer.
+    type RawConsult = ConsultSummary & {
+      clients: { name: string } | null;
+      ai_summary: string | null; answers: unknown[] | null; flags: unknown[] | null; draft: unknown | null;
+    };
+    const rawConsults = (cs ?? []) as unknown as RawConsult[];
+    const consultIds = rawConsults.map((r) => r.id);
+    const [ordRes, rxRes] = consultIds.length
+      ? await Promise.all([
+          supabase.from("orders").select("consultation_id").in("consultation_id", consultIds),
+          supabase.from("prescriptions").select("consultation_id").in("consultation_id", consultIds),
+        ])
+      : [{ data: [] as { consultation_id: string | null }[] }, { data: [] as { consultation_id: string | null }[] }];
+    const tally = (rows: { consultation_id: string | null }[] | null) => {
+      const m = new Map<string, number>();
+      for (const r of rows ?? []) if (r.consultation_id) m.set(r.consultation_id, (m.get(r.consultation_id) ?? 0) + 1);
+      return m;
+    };
+    const ordBy = tally(ordRes.data as { consultation_id: string | null }[] | null);
+    const rxBy = tally(rxRes.data as { consultation_id: string | null }[] | null);
+
+    consultSummaries = rawConsults.map((r) => {
+      // The same rule the server action re-checks on submit. Computed here so
+      // the button only appears where it will actually work.
+      const verdict = deletable({
+        status: r.status, summary: r.summary, aiSummary: r.ai_summary,
+        answers: r.answers, flags: r.flags, draft: r.draft,
+        orderCount: ordBy.get(r.id) ?? 0, prescriptionCount: rxBy.get(r.id) ?? 0,
+      });
+      return {
+        id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, summary: r.summary,
+        status: r.status, approved: r.approved, shared: r.shared, created_at: r.created_at,
+        canDelete: verdict.deletable,
+        keepReason: verdict.deletable ? null : verdict.reason,
+      };
+    });
     // Individual-summary approval per discipline (from the RPC).
     const KINDS = ["doctor", "diet", "trainer", "coach", "psych"] as const;
     const KIND2DISC: Record<string, string> = { doctor: "doctor", diet: "dietitian", trainer: "trainer", coach: "coach", psych: "psychologist" };

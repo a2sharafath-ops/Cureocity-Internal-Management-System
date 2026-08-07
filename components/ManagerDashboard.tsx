@@ -51,7 +51,7 @@ export default async function ManagerDashboard({ name }: { name: string }) {
     supabase.from("staff").select("id, name, role, is_trainer"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("followups").select("id, client_id, status, due_date, priority, clients(id, name)").eq("status", "pending"),
-    supabase.from("consultations").select("id, kind, status, client_id, clients(id, name)").neq("status", "completed"),
+    supabase.from("consultations").select("id, kind, status, client_id, clients(id, name)").not("status", "in", '("completed","cancelled")'),
     supabase.from("client_assignments").select("client_id, discipline, staff_id"),
   ]);
 
