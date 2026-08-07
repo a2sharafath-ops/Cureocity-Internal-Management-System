@@ -276,3 +276,24 @@ describe("isAdminish", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Client Records and Orders & Labs were reachable only by going through a
+// specific client — a doctor had no "everything I've ordered" view. They now
+// have their own nav entries, gated the usual way.
+// ---------------------------------------------------------------------------
+describe("clinical nav", () => {
+  it("the Doctor and Medical Director can see both", () => {
+    for (const r of ["Doctor", "Medical Director"]) {
+      expect(canSee(r, "/emr"), r).toBe(true);
+      expect(canSee(r, "/orders"), r).toBe(true);
+    }
+  });
+
+  it("the other disciplines cannot — records and orders are doctor-owned", () => {
+    for (const r of ["Dietitian", "Fitness Trainer", "Health Coach", "Psychologist", "Front Desk", "Finance", "HR"]) {
+      expect(canSee(r, "/emr"), r).toBe(false);
+      expect(canSee(r, "/orders"), r).toBe(false);
+    }
+  });
+});
