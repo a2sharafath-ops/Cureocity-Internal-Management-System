@@ -79,7 +79,7 @@ export default async function DashboardPage() {
   // the workspace is where the approval queue and every discipline live.
   if (isPro || isMedicalDirector(role)) redirect("/workspace");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const monthStart = TODAY.slice(0, 7) + "-01";
   const in30 = addDays(TODAY, 30);
   const overdueCut = addDays(TODAY, -14);

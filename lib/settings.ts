@@ -129,7 +129,7 @@ function merge(saved: Partial<AppSettings> | null | undefined): AppSettings {
 
 export const getAppSettings = cache(async (): Promise<AppSettings> => {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await supabase.from("app_settings").select("data").eq("id", 1).maybeSingle();
     return merge((data as { data?: Partial<AppSettings> } | null)?.data);
   } catch {

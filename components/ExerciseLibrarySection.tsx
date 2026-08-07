@@ -10,7 +10,7 @@ type Tpl = { id: string; name: string; mode: string; type: string; items: { exer
 // Exercise Library — reused as the standalone /exlib page and the trainer
 // workspace tab. `focusClientId` pre-selects a client for one-click assignment.
 export default async function ExerciseLibrarySection({ heading = false, focusClientId }: { heading?: boolean; focusClientId?: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: exData }, { data: tplData }, { data: clientData }] = await Promise.all([
     supabase.from("exercises").select("id, name, mode, type, active").order("type").order("name"),
     supabase.from("workout_templates").select("id, name, mode, type, items").order("created_at", { ascending: false }),

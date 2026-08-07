@@ -22,7 +22,7 @@ export default async function TargetsPage() {
   const monthStart = month + "-01";
   const monthLabel = new Date(today + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: targetRow }, { data: paidInv }, clientsC, { data: renewInv }, { data: leadRows }] = await Promise.all([
     supabase.from("sales_targets").select("revenue_target, new_clients_target, renewals_target, set_by").eq("month", month).maybeSingle(),
     supabase.from("invoices").select("amount").eq("status", "Paid").gte("paid_date", monthStart),

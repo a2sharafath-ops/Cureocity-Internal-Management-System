@@ -12,7 +12,7 @@ import { SLA_KINDS } from "@/lib/blueprint-sla";
 // The BluePrint 3-discipline sign-off board — reused as the standalone /blueprint
 // page and as the "BluePrint" tab inside the workspace. Fetches its own data.
 export default async function BlueprintSection({ me, heading = false }: { me: { role: string }; heading?: boolean }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   // BluePrint clients = active BluePrint package (client_packages), not the
   // legacy clients.package_id / "bp1" hardcode.
   const { data: cpRows } = await supabase

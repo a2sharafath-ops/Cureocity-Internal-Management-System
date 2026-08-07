@@ -12,11 +12,12 @@ import { fmtTime } from "@/lib/datetime";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConsolePage({ params }: { params: { id: string } }) {
+export default async function ConsolePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const me = await getProfile();
   if (!me || !canConsult(me.role)) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("consultations")
     .select("id, kind, status, summary, answers, flags, draft, client_id, lead_id, clients(name, code), leads(name)")

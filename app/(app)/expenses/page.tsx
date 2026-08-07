@@ -18,7 +18,7 @@ export default async function ExpensesPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/expenses")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("expenses").select("id, description, category, amount, date, created_by").order("date", { ascending: false }).limit(200);
   const expenses = (data ?? []) as Exp[];
 

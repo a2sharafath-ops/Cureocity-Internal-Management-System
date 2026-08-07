@@ -19,12 +19,12 @@ import { verifyDocToken, type DocKind } from "@/lib/pdf";
  * another client's plan, or at a list. It is a key to one door, and it expires
  * in ten minutes.
  */
-export function printClient(kind: DocKind, id: string, token?: string | null) {
+export async function printClient(kind: DocKind, id: string, token?: string | null) {
   if (token && verifyDocToken(token, kind, id)) {
     // Render-only. Nothing downstream writes; this widens reads for one row.
     return createAdminClient();
   }
-  return createClient();
+  return await createClient();
 }
 
 /** True when this request is a renderer rather than a person — used to hide

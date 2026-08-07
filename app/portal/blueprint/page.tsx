@@ -6,7 +6,7 @@ import type { BpScores } from "@/lib/blueprint";
 export const dynamic = "force-dynamic";
 
 export default async function PortalBlueprintPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   // RLS scopes to the logged-in client only.
   const { data: client } = await supabase.from("clients").select("id, name, code").limit(1).maybeSingle();
   if (!client) return <div style={{ padding: 24, color: "var(--muted)" }}>No client record is linked to your login.</div>;

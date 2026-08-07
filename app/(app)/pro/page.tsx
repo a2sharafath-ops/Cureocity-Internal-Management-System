@@ -35,7 +35,7 @@ export default async function ProPage() {
   const persona = getPersona(profession);
   const disciplineKind = persona?.kind && persona.kind !== "Trainer" && persona.kind !== "Diet" ? persona.kind : null;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: consultData }, { data: clientData }, { data: apptData }, { data: cpData }] = await Promise.all([
     supabase.from("consultations").select("id, kind, status, summary, approved, shared, by_name, created_at, clients(name)").order("created_at", { ascending: false }).limit(100),
     supabase.from("clients").select("id, name").order("name"),

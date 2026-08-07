@@ -30,10 +30,12 @@ export const dynamic = "force-dynamic";
 // has no "assessment" kind yet, so this reuses "summary" per the seam owner's
 // note — a UUID-bound token minted for "summary" cannot practically collide
 // with another document's id, and widening the seam is a separate change.
-export default async function DietAssessmentPrintPage({
-  params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
-  const supabase = printClient("assess", params.id, searchParams.doc_token);
+export default async function DietAssessmentPrintPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string; doc_token?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
+  const supabase = await printClient("assess", params.id, searchParams.doc_token);
 
   const { data } = await supabase
     .from("diet_assessments")
@@ -280,17 +282,17 @@ export default async function DietAssessmentPrintPage({
       {hasCover ? (
         // Uploaded cover art, full-bleed at A4 — replaces the built-in white
         // front page entirely. The white front page remains the fallback.
-        <div className="page1" style={{ padding: 0 }}>
+        (<div className="page1" style={{ padding: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={docAssess.cover} alt="" style={{ position: "absolute", inset: 0, width: "210mm", height: "297mm", objectFit: "cover", display: "block" }} />
-        </div>
+        </div>)
       ) : Page1}
 
       {/* ---------------- Remaining sections ---------------- */}
       <div className="body-wrap">
         {hasFrame && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={docAssess.bg} alt="" className="assess-bg" />
+          (<img src={docAssess.bg} alt="" className="assess-bg" />)
         )}
         <div style={hasFrame ? { position: "relative", zIndex: 1, padding: `${docAssess.top}mm ${docAssess.side}mm ${docAssess.bottom}mm` } : undefined}>
           {bodyContent}

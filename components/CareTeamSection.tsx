@@ -9,7 +9,7 @@ import ClientStatusBadge from "@/components/ClientStatusBadge";
 // Care Team Hub — reused as the standalone /careteam page and the workspace tab.
 export default async function CareTeamSection({ me, heading = false }: { me: { role: string; staffId?: string | null }; heading?: boolean }) {
   const today = todayISO();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: countRows } = await supabase.rpc("care_team_counts", { p_today: today });
   const c0 = (Array.isArray(countRows) ? countRows[0] : countRows) as {
     consults_pending: number; sessions_today: number; orders_open: number;

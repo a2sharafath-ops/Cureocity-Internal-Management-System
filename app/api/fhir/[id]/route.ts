@@ -6,14 +6,15 @@ import { buildFhirBundle } from "@/lib/fhir";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const me = await getProfile();
   if (!me || !canEmr(me.role)) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
   const cid = params.id;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("id, name, gender, dob, phone, email").eq("id", cid).maybeSingle();
   if (!client) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
 

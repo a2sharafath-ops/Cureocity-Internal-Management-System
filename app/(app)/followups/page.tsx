@@ -18,7 +18,7 @@ export default async function FollowupsPage() {
   // doesn't regenerate it.
   const canGenerate = canWrite(me.role);
   const today = todayISO();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Scoped to the viewer.
   //

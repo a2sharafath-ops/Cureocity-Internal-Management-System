@@ -31,7 +31,7 @@ function fmtHour(h: number | null) {
 }
 
 export default async function ManagerDashboard({ name }: { name: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const agenda = await todayAgenda(today);
   const month = today.slice(0, 7);

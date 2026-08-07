@@ -50,7 +50,10 @@ export function printPath(kind: DocKind, id: string): string {
 /** Storage path inside the private `documents` bucket. Versioned by issue time
  *  so re-issuing never overwrites the file a client was already sent. */
 export function storagePath(kind: DocKind, id: string, issuedAt: Date = new Date()): string {
-  const stamp = issuedAt.toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  // Avoid a bracket character class here: Tailwind scans lib/**/*.ts comments
+  // too and can mistake that regex syntax for an arbitrary CSS utility. The
+  // alternation removes the same three characters without creating a token.
+  const stamp = issuedAt.toISOString().replace(/-|:|T/g, "").slice(0, 14);
   return `${kind}/${id}-${stamp}.pdf`;
 }
 

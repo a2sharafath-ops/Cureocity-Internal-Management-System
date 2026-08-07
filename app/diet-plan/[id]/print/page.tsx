@@ -20,12 +20,14 @@ export const dynamic = "force-dynamic";
 // policy already encodes exactly that pair of conditions, so (as with
 // consult/print, rx/print and lab/print) no extra profile check is needed
 // here: an unauthorized row simply doesn't come back, and we 404.
-export default async function DietPlanPrintPage({
-  params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+export default async function DietPlanPrintPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string; doc_token?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // A renderer has no session, so a valid one-document token unlocks the
   // read. See lib/print-access.ts.
-  const supabase = printClient("plan", params.id, searchParams.doc_token);
+  const supabase = await printClient("plan", params.id, searchParams.doc_token);
 
   const { data } = await supabase
     .from("diet_plans")
@@ -203,10 +205,10 @@ export default async function DietPlanPrintPage({
       {hasCover ? (
         // Uploaded cover art, full-bleed at A4 — replaces the built-in coral
         // cover entirely. The coral cover remains the fallback below.
-        <div className="page cover" style={{ padding: 0 }}>
+        (<div className="page cover" style={{ padding: 0 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={docPlan.cover} alt="" style={{ position: "absolute", inset: 0, width: "210mm", height: "297mm", objectFit: "cover", display: "block" }} />
-        </div>
+        </div>)
       ) : (
       <div className="page cover" style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 30 }}>

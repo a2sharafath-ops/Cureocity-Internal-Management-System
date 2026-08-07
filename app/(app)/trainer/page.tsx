@@ -35,7 +35,7 @@ export default async function TrainerPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/trainer")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: todayData }, { data: upData }, { data: trainerData }, doneToday] = await Promise.all([
     supabase.from("sessions").select("id, seq, date, hour, status, trainer_id, clients(id, name, code), staff(name)").eq("date", TODAY).order("hour"),
     supabase.from("sessions").select("id, seq, date, hour, status, trainer_id, clients(id, name, code), staff(name)").eq("status", "scheduled").gt("date", TODAY).order("date").order("hour").limit(40),

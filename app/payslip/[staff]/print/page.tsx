@@ -28,14 +28,16 @@ function rupeesInWords(n: number): string {
   return `Rupees ${parts.join(" ")} Only`;
 }
 
-export default async function PayslipPrintPage({
-  params, searchParams,
-}: { params: { staff: string }; searchParams: { month?: string; auto?: string } }) {
+export default async function PayslipPrintPage(
+  props: { params: Promise<{ staff: string }>; searchParams: Promise<{ month?: string; auto?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const me = await getProfile();
   if (!me || !canHr(me.role)) redirect("/dashboard");
 
   const month = searchParams.month || new Date().toISOString().slice(0, 7); // YYYY-MM
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: s }, { data: sal }, { data: pay }] = await Promise.all([
     supabase.from("staff").select("id, name, designation, role, department, work_location, date_of_joining, emp_code, bank_name, bank_account, ifsc").eq("id", params.staff).maybeSingle(),
     supabase.from("salary_structures").select("basic, hra, allowances, gst, pf, esi, pt, tds").eq("staff_id", params.staff).maybeSingle(),

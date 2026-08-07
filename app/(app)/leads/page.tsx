@@ -81,21 +81,22 @@ const PAGE_SIZE = 100;
 // all (pruned in 0069), so those leads show the raw name marked as off-team.
 const FDE_ALIASES: Record<string, string> = { tamanna: "Thamanna Nazer" };
 
-export default async function LeadsPage({
-  searchParams,
-}: {
-  searchParams: {
-    view?: string; stage?: string; tier?: string; q?: string; n?: string;
-    /** date-wise search: created_at range, and a callback-due filter */
-    from?: string; to?: string; due?: string;
-    /** "1" = only leads owned by the signed-in user */
-    mine?: string;
-    /** filter to a single owner (staff id) */
-    owner?: string;
-    /** list order: score (default) | new | old | az | za */
-    sort?: string;
-  };
-}) {
+export default async function LeadsPage(
+  props: {
+    searchParams: Promise<{
+      view?: string; stage?: string; tier?: string; q?: string; n?: string;
+      /** date-wise search: created_at range, and a callback-due filter */
+      from?: string; to?: string; due?: string;
+      /** "1" = only leads owned by the signed-in user */
+      mine?: string;
+      /** filter to a single owner (staff id) */
+      owner?: string;
+      /** list order: score (default) | new | old | az | za */
+      sort?: string;
+    }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // This page had no guard — any signed-in user could reach it by URL.
   const me = await getProfile();
   if (!me || !canSee(me.role, "/leads")) redirect(homeFor(me?.role ?? "Staff"));
@@ -121,7 +122,7 @@ export default async function LeadsPage({
   const to = isDate(searchParams.to) ? searchParams.to! : "";
   const due = ["today", "overdue", "week", "none"].includes(searchParams.due ?? "")
     ? searchParams.due! : "";
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data, error }, { data: campRows }, { data: clientRows }, { data: staffRows }, { data: remarkRows }] = await Promise.all([
     // Page through every lead (newest first). The server caps a single response
     // at 1000 rows, so once the book passed 1000 leads the most recent ones

@@ -48,7 +48,7 @@ function AssessmentStat({ label, value }: { label: string; value: string | null 
 }
 
 export default async function PortalHome() {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // RLS scopes these to the logged-in client only
   const { data: client } = await supabase

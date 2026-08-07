@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useRef, useEffect } from "react";
+import { useFormStatus } from "react-dom";
 import { uploadEmployeeDoc, type UploadState } from "@/lib/actions";
 
 const KINDS = ["Onboarding form", "Certificate", "ID proof", "Contract", "Payslip", "Other"];
@@ -16,7 +16,7 @@ function SubmitBtn() {
 }
 
 export default function EmployeeDocUpload({ staffId }: { staffId: string }) {
-  const [state, formAction] = useFormState<UploadState, FormData>(uploadEmployeeDoc, {});
+  const [state, formAction] = useActionState<UploadState, FormData>(uploadEmployeeDoc, {});
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state.ok) ref.current?.reset(); }, [state.ok]);
 

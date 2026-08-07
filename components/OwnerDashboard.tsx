@@ -24,7 +24,7 @@ function addDays(iso: string, d: number) {
 }
 
 export default async function OwnerDashboard({ name }: { name: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const month = today.slice(0, 7);
   const in30 = addDays(today, 30);

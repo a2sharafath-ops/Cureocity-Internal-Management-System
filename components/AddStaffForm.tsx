@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { inviteStaff, type InviteState } from "@/lib/actions";
 import { BRANCHES } from "@/lib/branches";
 
@@ -36,7 +36,7 @@ function SubmitButton() {
 
 export default function AddStaffForm() {
   const [open, setOpen] = useState(false);
-  const [state, action] = useFormState<InviteState, FormData>(inviteStaff, {});
+  const [state, action] = useActionState<InviteState, FormData>(inviteStaff, {});
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

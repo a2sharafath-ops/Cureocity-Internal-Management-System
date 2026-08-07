@@ -16,7 +16,7 @@ export default async function RetentionPage() {
   if (!me || !canSee(me.role, "/retention")) redirect("/dashboard");
   const canAct = canRetention(me.role);
   const today = todayISO();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [clientsR, sessionsR, subsR, invoicesR, npsR, referralsR, loyaltyR] = await Promise.all([
     supabase.from("clients").select("id, name, package_id, packages(name, price, is_facility)").order("name"),

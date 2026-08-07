@@ -24,6 +24,10 @@ const smallLink: React.CSSProperties = { border: "none", background: "transparen
 const disabledOf = (disabled: boolean, s: React.CSSProperties): React.CSSProperties =>
   disabled ? { ...s, opacity: 0.55, cursor: "default" } : s;
 
+const newDietAssessmentVersionForm = async (formData: FormData) => {
+  await newDietAssessmentVersion(formData);
+};
+
 const statusPill = (status: string) => {
   if (status === "published") return { bg: "var(--green-bg)", fg: "var(--green-text)", text: "Published" };
   if (status === "in_review") return { bg: "var(--blue-bg)", fg: "var(--blue-text)", text: "In review" };
@@ -245,7 +249,7 @@ export default function DietAssessmentBuilder({
               <>
                 {/* Copies THIS assessment. createDietAssessment re-drafts from
                     live data and would throw away the corrections already made. */}
-                <form action={newDietAssessmentVersion}>
+                <form action={newDietAssessmentVersionForm}>
                   <input type="hidden" name="id" value={id} />
                   <button style={darkBtn}>New version</button>
                 </form>

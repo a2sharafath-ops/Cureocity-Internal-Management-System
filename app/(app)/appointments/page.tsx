@@ -35,7 +35,10 @@ function disciplineOf(s: StaffRow): string {
   return "Other";
 }
 
-export default async function AppointmentsPage({ searchParams }: { searchParams: { week?: string; client?: string; disc?: string; back?: string } }) {
+export default async function AppointmentsPage(
+  props: { searchParams: Promise<{ week?: string; client?: string; disc?: string; back?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/appointments")) redirect("/dashboard");
 
@@ -45,7 +48,7 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
   const weekEnd = addDays(weekStart, 6);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [apptsR, clientsR, staffR, tasksR, assignsR, servicesR] = await Promise.all([
     supabase.from("appointments").select("id, client_id, type, title, date, hour, duration_min, status, provider_id, clients(id, name), staff(name)").gte("date", weekStart).lte("date", weekEnd).order("hour"),
     supabase.from("clients").select("id, name").order("name"),

@@ -18,7 +18,7 @@ export default async function StorePage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/pos")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [productsR, clientsR, salesR] = await Promise.all([
     supabase.from("products").select("id, sku, name, category, price, stock, active").order("category").order("name"),
     supabase.from("clients").select("id, name").order("name"),

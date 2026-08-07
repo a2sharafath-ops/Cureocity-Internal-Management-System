@@ -17,7 +17,7 @@ const fmtISOPlus = (iso: string, days: number) => {
 const money = (n: number) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
 export async function frontDeskFlags(today: string): Promise<Flag[]> {
-  const sb = createClient();
+  const sb = await createClient();
   const cut7 = shift(today, -7);
   const [{ data: cps }, { data: inv }, { data: clients }, { data: blood }, { data: tablet }, { data: fu }] = await Promise.all([
     sb.from("client_packages").select("client_id, package_name, price, status, start_date").eq("status", "active"),

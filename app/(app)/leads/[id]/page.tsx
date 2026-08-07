@@ -25,11 +25,12 @@ const SIGNALS: { key: string; label: string }[] = [
   { key: "goals", label: "Goal" }, { key: "location", label: "Location" }, { key: "budget", label: "Budget" }, { key: "profession", label: "Profession" },
 ];
 
-export default async function LeadDetailPage({ params }: { params: { id: string } }) {
+export default async function LeadDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/leads")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: leadRow }, { data: pkgRows }, { data: campRows }, { data: clientRows }, { data: apptRows }, { data: sessRows }, { data: trainerRows }, { data: ownerRows }, { data: remarkRows }, { data: emailRows }, { data: msgRows }] = await Promise.all([
     supabase.from("leads").select("id, name, phone, email, source, campaign, interest, urgency, history, goals, location, budget, profession, stage, fde, owner_id, objection, notes, next_follow_up, next_follow_up_note, follow_up_owner, expected_package_id, expected_value, expected_close, disqualified_at, disqualified_reason, disqualified_by, created_at").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name, price, is_facility").eq("active", true).order("id"),

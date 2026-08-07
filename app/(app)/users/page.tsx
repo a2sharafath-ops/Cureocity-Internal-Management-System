@@ -31,7 +31,7 @@ export default async function UsersPage() {
   if (!me || !canCreds) redirect("/dashboard");
   const canAdmin = me.role === "Administrator" || me.role === "Super Admin";
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
     .select("id, email, name, role, branch, created_at, staff_id")

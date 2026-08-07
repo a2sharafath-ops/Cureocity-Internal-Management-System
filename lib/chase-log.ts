@@ -44,7 +44,7 @@ const keyOf = (label: string, clientId?: string | null) =>
   `${label.trim().toLowerCase()}|${clientId ?? ""}`;
 
 export async function loadChaseLog(): Promise<ChaseIndex> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString();
   const { data } = await supabase
     .from("audit_log")

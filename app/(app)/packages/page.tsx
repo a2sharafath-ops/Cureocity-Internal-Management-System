@@ -24,7 +24,7 @@ export default async function PackagesPage() {
   const me = await getProfile();
   const canManage = canManagePackages(me?.role ?? "");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [pkgR, priceR, psR, clientR] = await Promise.all([
     supabase.from("packages").select("id, name, sessions, validity, price, is_facility, active, one_time, requires_slot, delivery_mode, tags, mrp").order("price"),
     supabase.from("package_prices").select("package_id, branch, price"),

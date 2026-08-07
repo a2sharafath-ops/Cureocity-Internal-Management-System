@@ -21,7 +21,7 @@ export type Profile = {
 // ONE getUser + ONE profiles query per request, shared across the layout and
 // page. This is a direct cut to the fixed per-navigation latency.
 export const getProfile = cache(async (): Promise<Profile | null> => {
-  const supabase = createClient();
+  const supabase = await createClient();
   // getClaims() verifies the JWT locally where possible (network only when it
   // must), avoiding a getUser() round-trip on every request. cache() then dedupes
   // this across the layout + page of a single render.
@@ -56,9 +56,9 @@ export async function getViewRole(): Promise<{ real: string; effective: string; 
   let preview: string | null = null;
   let profession: string | null = null;
   if (real === "Administrator" || real === "Super Admin") {
-    const c = cookies().get("preview_role")?.value;
+    const c = (await cookies()).get("preview_role")?.value;
     if (c) preview = c;
-    const p = cookies().get("preview_profession")?.value;
+    const p = (await cookies()).get("preview_profession")?.value;
     if (p) profession = p;
   }
   return { real, effective: preview ?? real, preview, profession };

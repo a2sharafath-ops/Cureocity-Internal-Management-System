@@ -34,6 +34,9 @@ const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
 // column as the summary without nesting a <form> inside a <form>, which HTML
 // forbids and browsers silently repair by dropping the inner one.
 const FORM = "consult-form";
+const createPrescriptionForm = async (formData: FormData) => {
+  await createPrescription(formData);
+};
 
 export default function ConsoleView({
   id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [],
@@ -758,7 +761,7 @@ export default function ConsoleView({
               </ToolRow>
 
               <ToolRow label="Prescription" hint={rxUnsent ? "unsigned" : undefined} tone={rxUnsent ? "warn" : undefined} openNow={tool === "rx"} onToggle={() => setTool(tool === "rx" ? null : "rx")} last>
-                <form action={createPrescription}>
+                <form action={createPrescriptionForm}>
                   <input type="hidden" name="client_id" value={client.id} />
                   <input type="hidden" name="consultation_id" value={id} />
                   <input type="hidden" name="status" value="signed" />

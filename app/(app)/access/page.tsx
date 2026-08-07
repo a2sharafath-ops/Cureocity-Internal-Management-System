@@ -18,7 +18,7 @@ export default async function AccessPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/access")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: rows }, { data: clientData }] = await Promise.all([
     supabase.from("checkins").select("id, guest_name, method, direction, at, by_name, clients(id, name)").gte("at", todayISO()).order("at", { ascending: false }),
     supabase.from("clients").select("id, name").order("name"),

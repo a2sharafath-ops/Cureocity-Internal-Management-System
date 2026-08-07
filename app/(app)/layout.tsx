@@ -15,7 +15,7 @@ import { signOut } from "@/lib/actions";
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   // Cached getProfile — the layout, getViewRole and the page all resolve to the
   // same single getUser + profiles read for this request (see lib/auth).
   const me = await getProfile();

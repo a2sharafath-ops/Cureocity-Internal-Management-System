@@ -16,7 +16,7 @@ export default async function FormsPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/forms")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: formData }, { data: respData }, { data: clientData }] = await Promise.all([
     supabase.from("forms").select("id, name, type, fields, active").eq("active", true).order("created_at", { ascending: false }),
     supabase.from("form_responses").select("id, status, signed_by, signed_at, answers, clients(id, name), forms(name, type, fields)").order("created_at", { ascending: false }).limit(80),

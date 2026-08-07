@@ -6,7 +6,8 @@ import ExerciseLibrarySection from "@/components/ExerciseLibrarySection";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExlibPage({ searchParams }: { searchParams: { client?: string } }) {
+export default async function ExlibPage(props: { searchParams: Promise<{ client?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/exlib")) redirect("/dashboard");
   return (

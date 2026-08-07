@@ -18,7 +18,7 @@ const btn: React.CSSProperties = { border: "1px solid var(--border)", background
 // Daily team whiteboard — the mandatory working-day walk through every alive
 // client. Reused as the standalone /whiteboard page and the workspace tab.
 export default async function WhiteboardSection({ me, heading = false }: { me: { role: string; branch?: string | null }; heading?: boolean }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const branch = me.branch ?? "Kochi";
 

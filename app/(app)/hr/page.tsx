@@ -25,7 +25,10 @@ export const dynamic = "force-dynamic";
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; bank_name?: string | null; bank_account?: string | null; ifsc?: string | null; badge_code?: string | null; pin?: string | null };
 
-export default async function HrPage({ searchParams }: { searchParams: { tab?: string; month?: string; emp?: string; week?: string } }) {
+export default async function HrPage(
+  props: { searchParams: Promise<{ tab?: string; month?: string; emp?: string; week?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/hr")) redirect("/dashboard");
   const tab = ["attendance", "roster", "leave", "holidays", "payroll", "employees", "recruit", "boarding"].includes(searchParams.tab ?? "") ? searchParams.tab! : "attendance";
@@ -37,7 +40,7 @@ export default async function HrPage({ searchParams }: { searchParams: { tab?: s
   const monthEnd = `${sheetMonth}-31`;
   const year = today.slice(0, 4);
   const month = today.slice(0, 7);
-  const supabase = createClient();
+  const supabase = await createClient();
   const [
     { data: staffData }, { data: attData }, { data: leaveData }, { data: payData }, { data: obData },
     { data: updData }, { data: mtData }, { data: comData }, { data: statData }, { data: candData }, { data: docData }, { data: purData },

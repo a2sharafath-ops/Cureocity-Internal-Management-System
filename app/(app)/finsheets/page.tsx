@@ -21,13 +21,14 @@ const TABS = [
 
 type Ledger = { id: string; date: string; ref: string | null; party: string | null; kind: string | null; direction: string; amount: number; voucher_no: number | null };
 
-export default async function FinsheetsPage({ searchParams }: { searchParams: { tab?: string; cash?: string } }) {
+export default async function FinsheetsPage(props: { searchParams: Promise<{ tab?: string; cash?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/finsheets")) redirect("/dashboard");
   const tab = TABS.some((t) => t.key === searchParams.tab) ? searchParams.tab! : "sales";
   const cashView = searchParams.cash === "payments" ? "payments" : "receipts";
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: invData }, { data: payData }, { data: estData }, { data: ledData }, { data: reimbData }, { data: staffData }, { data: pettyCfg }] = await Promise.all([
     supabase.from("invoices").select("id, num, description, amount, status, paid_date, clients(name)").eq("status", "Paid").order("paid_date", { ascending: false }).limit(200),
     supabase.from("payables").select("id, vendor, item, amount, due_date, status").order("due_date"),

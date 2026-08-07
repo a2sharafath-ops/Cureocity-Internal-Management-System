@@ -10,8 +10,8 @@
 // Disqualification lives here too, because it's the other half of the same
 // question: is this a real deal, and if so how big?
 
-import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { setLeadOpportunity, disqualifyLead, requalifyLead } from "@/lib/actions";
 import { DISQUALIFY_REASONS } from "@/lib/lead-followup";
 import { STAGE_PROBABILITY } from "@/lib/pipeline";
@@ -57,7 +57,7 @@ export default function LeadOpportunity({
   disqualifiedBy: string | null;
   canWrite: boolean;
 }) {
-  const [state, action] = useFormState(setLeadOpportunity, {} as { ok?: string; error?: string });
+  const [state, action] = useActionState(setLeadOpportunity, {} as { ok?: string; error?: string });
   const [showDq, setShowDq] = useState(false);
   const [pkgId, setPkgId] = useState(expectedPackageId ?? "");
 

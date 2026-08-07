@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useEffect, useRef } from "react";
+import { useFormStatus } from "react-dom";
 import { changePassword, type PwState } from "@/lib/actions";
 
 const input: React.CSSProperties = {
@@ -28,7 +28,7 @@ function SubmitButton() {
 }
 
 export default function ChangePasswordForm() {
-  const [state, action] = useFormState<PwState, FormData>(changePassword, {});
+  const [state, action] = useActionState<PwState, FormData>(changePassword, {});
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

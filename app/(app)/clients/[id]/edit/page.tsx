@@ -8,7 +8,8 @@ import { canWrite } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditClientPage({ params }: { params: { id: string } }) {
+export default async function EditClientPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Same gate as updateClientRecord. Without it a clinician could reach this
   // URL directly and fill in a form the server action would then silently
   // refuse — a dead end, not a leak, but a confusing one. Bounce them back to
@@ -16,7 +17,7 @@ export default async function EditClientPage({ params }: { params: { id: string 
   const me = await getProfile();
   if (!me || !canWrite(me.role)) redirect(`/clients/${params.id}`);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: client }, { data: pkgs }] = await Promise.all([
     supabase.from("clients").select("*").eq("id", params.id).maybeSingle(),
     supabase.from("packages").select("id, name").eq("active", true).order("id"),

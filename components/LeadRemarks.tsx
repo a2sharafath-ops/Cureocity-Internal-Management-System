@@ -9,8 +9,8 @@ import { IST } from "@/lib/datetime";
 // chores. Here the outcome picks a sensible callback date automatically, so
 // the common case is: type what happened, pick an outcome, save.
 
-import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { addLeadRemark, setLeadFollowup } from "@/lib/actions";
 import { REMARK_OUTCOMES, SUGGESTED_OFFSET, followupView, FOLLOWUP_TONE, type RemarkOutcome } from "@/lib/lead-followup";
 
@@ -72,7 +72,7 @@ export default function LeadRemarks({
   /** the imported free-text history — shown once, below the structured log */
   legacyNotes: string | null;
 }) {
-  const [state, action] = useFormState(addLeadRemark, {} as { ok?: string; error?: string });
+  const [state, action] = useActionState(addLeadRemark, {} as { ok?: string; error?: string });
   const [outcome, setOutcome] = useState<RemarkOutcome>("no_answer");
   const [showAll, setShowAll] = useState(false);
 

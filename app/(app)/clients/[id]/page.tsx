@@ -117,11 +117,15 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function ClientDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { tab?: string; ro?: string } }) {
+export default async function ClientDetailPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; ro?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const tab = ["overview", "timeline", "card"].includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
   // Read-only view (reached from another discipline's workspace): hide all edits.
   const ro = searchParams.ro === "1";
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: client } = await supabase
     .from("clients")
@@ -749,9 +753,8 @@ export default async function ClientDetailPage({ params, searchParams }: { param
           // Only show the facility-only message when there really are no sessions.
           // A client who also holds Comprehensive/PT DOES have a session block —
           // don't let a facility membership hide it (and its Reschedule actions).
-          <div style={{ color: "var(--muted)", fontSize: 13 }}>
-            This client has facility access only — no scheduled sessions, just check-in/out and a workout plan.
-          </div>
+          (<div style={{ color: "var(--muted)", fontSize: 13 }}>This client has facility access only — no scheduled sessions, just check-in/out and a workout plan.
+                      </div>)
         ) : sess.length === 0 ? (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No sessions scheduled.</div>
         ) : (
@@ -1095,7 +1098,7 @@ export default async function ClientDetailPage({ params, searchParams }: { param
             <div style={{ display: "grid", gap: 2 }}>
               {m.rows.map((r) => (
                 <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, padding: "7px 0", borderTop: "1px solid var(--border)" }}>
-                  <span style={{ ...REPORT_CHIP[r.kind] ?? REPORT_CHIP.medical_report, borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  <span style={{ ...(REPORT_CHIP[r.kind] ?? REPORT_CHIP.medical_report), borderRadius: 999, padding: "1px 9px", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
                     {REPORT_LABEL[r.kind] ?? "Report"}
                   </span>
                   <span style={{ fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>{r.report_label || r.name || "Report"}</span>

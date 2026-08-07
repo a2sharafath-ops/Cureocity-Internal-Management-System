@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useRef, useEffect } from "react";
+import { useFormStatus } from "react-dom";
 import { uploadClientFile, uploadPortalFile, type UploadState } from "@/lib/actions";
 
 function SubmitBtn({ label }: { label: string }) {
@@ -23,7 +23,7 @@ export default function FileUploadForm({
   accept?: string;
 }) {
   const action = variant === "portal" ? uploadPortalFile : uploadClientFile;
-  const [state, formAction] = useFormState<UploadState, FormData>(action, {});
+  const [state, formAction] = useActionState<UploadState, FormData>(action, {});
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state.ok) ref.current?.reset(); }, [state.ok]);
 

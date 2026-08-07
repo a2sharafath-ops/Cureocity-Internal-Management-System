@@ -24,7 +24,7 @@ export default async function SubscriptionsPage() {
   if (!me || !canSee(me.role, "/subscriptions")) redirect("/dashboard");
   const editable = canBill(me.role);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: subData }, { data: clientData }, { data: pkgData }] = await Promise.all([
     supabase.from("subscriptions").select("id, amount, status, auto_renew, renews_on, interval_days, clients(id, name), packages(name)").order("renews_on"),
     supabase.from("clients").select("id, name").order("name"),

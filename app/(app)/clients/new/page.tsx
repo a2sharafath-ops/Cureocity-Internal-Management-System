@@ -5,8 +5,9 @@ import { createClientRecord } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewClientPage({ searchParams }: { searchParams: { sub?: string; err?: string } }) {
-  const supabase = createClient();
+export default async function NewClientPage(props: { searchParams: Promise<{ sub?: string; err?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const { data } = await supabase.from("packages").select("id, name").eq("active", true).order("id");
   const packages = (data ?? []) as { id: string; name: string }[];
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import type { AiState } from "@/lib/ai";
 
 function Btn({ label }: { label: string }) {
@@ -21,7 +21,7 @@ export default function AiSummaryButton({
   clientId: string;
   date?: string;
 }) {
-  const [state, formAction] = useFormState<AiState, FormData>(action, {});
+  const [state, formAction] = useActionState<AiState, FormData>(action, {});
   const [copied, setCopied] = useState(false);
 
   return (

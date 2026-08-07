@@ -11,7 +11,7 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00
 // Health-Coach workspace board — the six SOP markers per client with the latest
 // score, band, due-status and quick score entry, plus the SOP guide.
 export default async function CoachMarkersSection({ me, heading = false }: { me: { role: string; staffId?: string | null }; heading?: boolean }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const isCoach = me.role === "Health Coach";
 

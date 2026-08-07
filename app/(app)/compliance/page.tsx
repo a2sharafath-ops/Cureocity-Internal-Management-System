@@ -17,7 +17,7 @@ export default async function CompliancePage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/compliance")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [consentsR, breachesR, retentionR, clientsR, accessR] = await Promise.all([
     supabase.from("consents").select("id, type, granted, method, granted_date, expires_date, revoked_date, clients(id, name)").order("created_at", { ascending: false }).limit(60),
     supabase.from("breach_incidents").select("id, title, severity, affected_count, discovered_date, status, reported_to_authority, reported_date").order("created_at", { ascending: false }),

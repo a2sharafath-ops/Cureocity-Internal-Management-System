@@ -36,7 +36,8 @@ const TABS = [
   { key: "dunning", label: "Dunning" },
 ];
 
-export default async function BillingPage({ searchParams }: { searchParams: { tab?: string; status?: string } }) {
+export default async function BillingPage(props: { searchParams: Promise<{ tab?: string; status?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/billing")) redirect("/dashboard");
   const tab = ["invoices", "refunds", "dunning", "unbilled"].includes(searchParams.tab ?? "") ? searchParams.tab! : "invoices";
@@ -44,7 +45,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ta
   // the invoices list to that status.
   const statusFilter = ["paid", "unpaid", "refunded"].includes((searchParams.status ?? "").toLowerCase()) ? (searchParams.status!.toLowerCase()) : null;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("invoices")
     .select("id, num, description, amount, status, method, issued_date, paid_date, clients(id, name)")

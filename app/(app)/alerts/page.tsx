@@ -19,7 +19,7 @@ export default async function AlertsPage() {
   const me = await getProfile();
   if (!me) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data } = await supabase
     .from("notifications").select("id, title, body, href, icon, read, created_at")

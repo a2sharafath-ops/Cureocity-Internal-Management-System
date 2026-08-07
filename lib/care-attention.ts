@@ -28,7 +28,7 @@ const daysBetween = (a: string, b: string) =>
 const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
 
 export async function careWorkFlags(today: string): Promise<Flag[]> {
-  const sb = createClient();
+  const sb = await createClient();
   const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: coachRows }, { data: appts }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),

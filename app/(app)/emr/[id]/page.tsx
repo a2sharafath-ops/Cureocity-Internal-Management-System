@@ -15,12 +15,13 @@ export const dynamic = "force-dynamic";
 
 const age = (dob: string | null) => ageFromDob(dob);
 
-export default async function EmrChartPage({ params }: { params: { id: string } }) {
+export default async function EmrChartPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/emr")) redirect("/dashboard");
 
   const cid = params.id;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("id, code, name, phone, gender, dob, conditions, abha_id, uhid").eq("id", cid).maybeSingle();
   if (!client) notFound();
 

@@ -14,7 +14,7 @@ export default async function NotificationsPage() {
   if (!me || !canSee(me.role, "/notifications")) redirect("/dashboard");
 
   const email = emailStatus();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("email_log").select("id, to_email, template, subject, status, error, created_at").order("created_at", { ascending: false }).limit(50);
   const logs = (data ?? []) as { id: string; to_email: string; template: string | null; subject: string | null; status: string; error: string | null; created_at: string }[];
 

@@ -18,12 +18,14 @@ export const dynamic = "force-dynamic";
  * Access is RLS-gated: staff read per the prescriptions policy, a client only
  * their own once shared.
  */
-export default async function RxPrintPage({
-  params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+export default async function RxPrintPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string; doc_token?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // A renderer has no session, so a valid one-document token unlocks the
   // read. See lib/print-access.ts.
-  const supabase = printClient("rx", params.id, searchParams.doc_token);
+  const supabase = await printClient("rx", params.id, searchParams.doc_token);
   const { data } = await supabase
     .from("prescriptions")
     .select("id, status, notes, provider, signed_date, created_at, client_id, clients(name, code, dob, gender), prescription_items(drug, dose, frequency, route, duration, quantity, instructions)")

@@ -27,7 +27,7 @@ function ageDays(iso: string | null, today: string) {
 }
 
 export default async function FinanceDashboard({ name }: { name: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const month = today.slice(0, 7);
   const lastMonth = addDays(month + "-01", -1).slice(0, 7);

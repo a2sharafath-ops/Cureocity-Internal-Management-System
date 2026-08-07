@@ -54,7 +54,10 @@ export const dynamic = "force-dynamic";
 
 type ClientRow = WsClient & { used: number | null; packages: { name: string; sessions: number } | null };
 
-export default async function WorkspacePage({ searchParams }: { searchParams: { role?: string; tab?: string; d?: string } }) {
+export default async function WorkspacePage(
+  props: { searchParams: Promise<{ role?: string; tab?: string; d?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/workspace")) redirect("/dashboard");
 
@@ -98,7 +101,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const inWs = tabs.filter((t) => !t.href);
   const tab = inWs.find((t) => t.key === searchParams.tab) ? searchParams.tab! : "dash";
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const isTrainer = roleKey === "trainer";
   // "Today" is this clinician's own day, not the whole clinic's. A real

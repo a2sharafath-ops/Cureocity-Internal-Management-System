@@ -9,11 +9,12 @@ import MarkThreadRead from "@/components/MarkThreadRead";
 
 export const dynamic = "force-dynamic";
 
-export default async function ThreadPage({ params }: { params: { id: string } }) {
+export default async function ThreadPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const me = await getProfile();
   if (!me) redirect("/login");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("id, name, code").eq("id", params.id).maybeSingle();
   if (!client) notFound();
 

@@ -11,11 +11,11 @@
 // errors — but the server action still returns the index's error verbatim if
 // two people book at once, because the UI can't be the limit.
 //
-// React 18 / Next 14: useFormState from react-dom, pending via useFormStatus
-// inside a child of the form.
+// React 19 keeps action state in React; pending state still comes from
+// useFormStatus inside a child of the form.
 
-import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { bookExperienceSession, setExperienceStatus } from "@/lib/actions";
 import { experienceState, type ExperienceRow } from "@/lib/experience";
 
@@ -98,7 +98,7 @@ export default function ExperiencePanel({
   canBook: boolean;
 }) {
   const s = experienceState(appointments, sessions);
-  const [state, action] = useFormState(bookExperienceSession, {} as { ok?: string; error?: string });
+  const [state, action] = useActionState(bookExperienceSession, {} as { ok?: string; error?: string });
   const [open, setOpen] = useState<"assessment" | "training" | null>(null);
 
   const slot = (

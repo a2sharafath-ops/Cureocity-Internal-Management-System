@@ -14,7 +14,7 @@ export default async function ServicesPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/services")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("services").select("id, name, category, mode, slot_based, day_offset, active").order("category").order("name");
   const services = (data ?? []) as Svc[];
 

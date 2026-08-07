@@ -21,7 +21,7 @@ type Raw = {
 };
 
 export default async function ClientsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const profile = await getProfile();
   const writer = canWrite(profile?.role ?? "");
 

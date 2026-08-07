@@ -58,7 +58,7 @@ function fmtHour(h: number | null): string | null {
  *   clinic-wide list has to hunt for their own name in it.
  */
 export async function todayAgenda(today: string, viewerStaffId?: string | null): Promise<Agenda> {
-  const sb = createClient();
+  const sb = await createClient();
 
   const [{ data: apptRows }, { data: sessRows }, { data: fuRows }, { data: cps }, { data: clients }, { data: protos }] = await Promise.all([
     sb.from("appointments").select("id, type, hour, date, status, provider_id, staff:provider_id(name), clients(id, name)").eq("date", today).neq("status", "cancelled").order("hour"),

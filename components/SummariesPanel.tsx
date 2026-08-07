@@ -36,6 +36,15 @@ export type ConsolidatedRow = {
 };
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
+const toggleConsultFlagForm = async (formData: FormData) => {
+  await toggleConsultFlag(formData);
+};
+const cancelConsultationForm = async (formData: FormData) => {
+  await cancelConsultation(formData);
+};
+const deleteEmptyConsultationForm = async (formData: FormData) => {
+  await deleteEmptyConsultation(formData);
+};
 
 /**
  * A summary is a clinical document, so the list says whether one exists and
@@ -94,7 +103,7 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
           {cancelled ? (
             // Undo is the only action on a cancelled row. Approving or sharing
             // something that was called off would be a nonsense.
-            <form action={cancelConsultation}>
+            <form action={cancelConsultationForm}>
               <input type="hidden" name="id" value={c.id} />
               <input type="hidden" name="undo" value="true" />
               <button style={btn}>Undo cancel</button>
@@ -102,13 +111,13 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
           ) : (
             <>
               <Link href={`/console/${c.id}`} style={{ ...btn, textDecoration: "none", color: "var(--ink)" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
-              <form action={toggleConsultFlag}>
+              <form action={toggleConsultFlagForm}>
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="field" value="approved" />
                 <input type="hidden" name="value" value={String(c.approved)} />
                 <button style={{ ...btn, background: c.approved ? "#fff" : "var(--ink)", color: c.approved ? "var(--muted)" : "#fff", border: c.approved ? "1px solid var(--border)" : "none", padding: "5px 12px" }}>{c.approved ? "Unapprove" : "Approve"}</button>
               </form>
-              <form action={toggleConsultFlag}>
+              <form action={toggleConsultFlagForm}>
                 <input type="hidden" name="id" value={c.id} />
                 <input type="hidden" name="field" value="shared" />
                 <input type="hidden" name="value" value={String(c.shared)} />
@@ -130,12 +139,12 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
               ? "Nothing has been recorded against this one. Cancel keeps it on the record; delete removes it entirely."
               : `Cancelling keeps the record and stops it counting as outstanding. It can't be deleted — ${c.keepReason}.`}
           </span>
-          <form action={cancelConsultation}>
+          <form action={cancelConsultationForm}>
             <input type="hidden" name="id" value={c.id} />
             <button style={btn}>Cancel consultation</button>
           </form>
           {c.canDelete && (
-            <form action={deleteEmptyConsultation}>
+            <form action={deleteEmptyConsultationForm}>
               <input type="hidden" name="id" value={c.id} />
               <button style={{ ...btn, border: "1px solid var(--red)", color: "var(--red)" }}>Delete permanently</button>
             </form>

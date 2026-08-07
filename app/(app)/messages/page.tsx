@@ -17,7 +17,7 @@ export default async function MessagesPage() {
   const canMsg = canMessage(me.role);
   const canCamp = canCampaigns(me.role);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: clientData }, { data: msgData }, { data: tplData }, { data: campData }] = await Promise.all([
     supabase.from("clients").select("id, name, code, phone").order("name"),
     supabase.from("messages").select("id, client_id, sender, sender_name, body, read, channel, created_at").order("created_at", { ascending: false }).limit(500),

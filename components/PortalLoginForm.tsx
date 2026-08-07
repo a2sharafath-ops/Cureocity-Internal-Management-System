@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { createPortalLogin, type InviteState } from "@/lib/actions";
 
 const input: React.CSSProperties = {
@@ -22,7 +22,7 @@ export default function PortalLoginForm({
   clientId, existingEmail,
 }: { clientId: string; existingEmail: string | null }) {
   const [open, setOpen] = useState(false);
-  const [state, action] = useFormState<InviteState, FormData>(createPortalLogin, {});
+  const [state, action] = useActionState<InviteState, FormData>(createPortalLogin, {});
 
   if (existingEmail && !state.ok) {
     return (

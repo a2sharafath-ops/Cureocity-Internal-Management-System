@@ -8,12 +8,13 @@ import type { BpScores } from "@/lib/blueprint";
 
 export const dynamic = "force-dynamic";
 
-export default async function BlueprintReportPage({ params }: { params: { id: string } }) {
+export default async function BlueprintReportPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const me = await getProfile();
   // Any staff who can see clients can view/print the report (front desk delivers it).
   if (!me || !canSee(me.role, "/clients")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: client }, { data: bp }, { data: signs }] = await Promise.all([
     supabase.from("clients").select("id, name, code").eq("id", params.id).maybeSingle(),
     supabase.from("blueprints").select("scores, consolidated, generated, generated_date").eq("client_id", params.id).maybeSingle(),

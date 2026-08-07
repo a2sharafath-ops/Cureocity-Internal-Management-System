@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function AttendanceKioskPage() {
   const me = await getProfile();
   if (!me) redirect("/login");
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("staff").select("id, name").order("name");
   const staff = (data ?? []) as { id: string; name: string }[];
   const logo = brandLogo(await getAppSettings());

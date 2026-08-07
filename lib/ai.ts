@@ -7,7 +7,7 @@
 // gpt-4o for higher quality).
 
 export type AiResult = { text?: string; error?: string };
-export type AiState = AiResult; // for useFormState
+export type AiState = AiResult; // for useActionState
 
 export async function openaiComplete(system: string, user: string, opts?: { model?: string; maxTokens?: number; temperature?: number; json?: boolean }): Promise<AiResult> {
   const key = process.env.OPENAI_API_KEY;

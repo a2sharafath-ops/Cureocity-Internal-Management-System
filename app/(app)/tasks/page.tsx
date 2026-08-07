@@ -15,7 +15,7 @@ export default async function TasksPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/tasks")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: taskData }, { data: staffData }, { data: clientData }] = await Promise.all([
     supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, staff(name), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
     supabase.from("staff").select("id, name").order("name"),

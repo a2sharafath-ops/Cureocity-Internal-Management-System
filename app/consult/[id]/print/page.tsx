@@ -10,12 +10,14 @@ export const dynamic = "force-dynamic";
 // Printable consultation summary — the branded document the clinician previews
 // and the client receives. RLS gates access: staff see any consultation; a
 // client only their own once it's shared. Browser "Save as PDF" — no library.
-export default async function ConsultPrintPage({
-  params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+export default async function ConsultPrintPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string; doc_token?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // A renderer has no session, so a valid one-document token unlocks the
   // read. See lib/print-access.ts.
-  const supabase = printClient("summary", params.id, searchParams.doc_token);
+  const supabase = await printClient("summary", params.id, searchParams.doc_token);
   const { data } = await supabase
     .from("consultations")
     .select("id, kind, status, summary, ai_summary, flags, by_name, created_at, client_id, clients(name, code)")

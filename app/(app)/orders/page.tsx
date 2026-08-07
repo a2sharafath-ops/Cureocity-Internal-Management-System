@@ -10,12 +10,13 @@ import SegTabs from "@/components/SegTabs";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdersWorklistPage({ searchParams }: { searchParams: { view?: string } }) {
+export default async function OrdersWorklistPage(props: { searchParams: Promise<{ view?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/orders")) redirect("/dashboard");
 
   const view = searchParams.view === "all" ? "all" : "open";
-  const supabase = createClient();
+  const supabase = await createClient();
   let query = supabase.from("orders").select("id, category, test, priority, status, result, result_date, created_at, client_id, clients(id, name)").order("created_at", { ascending: false }).limit(200);
   if (view === "open") query = query.in("status", ["ordered", "collected"]);
   const { data } = await query;

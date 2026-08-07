@@ -25,6 +25,10 @@ const amberBtn: React.CSSProperties = { background: "#fff", border: "1px solid v
 const disabledOf = (disabled: boolean, s: React.CSSProperties): React.CSSProperties =>
   disabled ? { ...s, opacity: 0.55, cursor: "default" } : s;
 
+const newDietPlanVersionForm = async (formData: FormData) => {
+  await newDietPlanVersion(formData);
+};
+
 /** A blank option row — a new "+ Add option" click. */
 const blankOption = (seq: number): PlanOption => ({ seq, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: "" });
 /** A blank meal slot — a new "+ Add meal slot" click. */
@@ -205,7 +209,7 @@ export default function DietPlanBuilder({
 
         {!readOnly && status === "published" && (
           <>
-            <form action={newDietPlanVersion}>
+            <form action={newDietPlanVersionForm}>
               <input type="hidden" name="id" value={planId} />
               <button style={darkBtn}>New version</button>
             </form>

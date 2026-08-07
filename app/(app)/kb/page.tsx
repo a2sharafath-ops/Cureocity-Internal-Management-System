@@ -15,7 +15,7 @@ export default async function KbPage() {
   if (!me || !canSee(me.role, "/kb")) redirect("/dashboard");
   const canEdit = canManageSops(me.role);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("sops").select("id, title, category, content, updated_by, updated_at").order("category").order("title");
   const sops = (data ?? []) as Sop[];
 

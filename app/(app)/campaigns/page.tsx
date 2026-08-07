@@ -16,7 +16,7 @@ export default async function CampaignsPage() {
   if (!me || !canSee(me.role, "/campaigns")) redirect("/dashboard");
 
   const email = emailStatus();
-  const supabase = createClient();
+  const supabase = await createClient();
   const [templatesR, campaignsR] = await Promise.all([
     supabase.from("message_templates").select("id, name, category, subject, active").eq("active", true).order("created_at", { ascending: false }),
     supabase.from("campaigns").select("id, name, audience, status, sent_count, sent_at, message_templates(name)").order("created_at", { ascending: false }).limit(50),

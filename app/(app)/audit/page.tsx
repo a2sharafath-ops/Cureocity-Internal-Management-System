@@ -24,7 +24,7 @@ export default async function AuditPage() {
   const me = await getProfile();
   if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("audit_log")
     .select("id, actor_name, actor_role, action, target, detail, created_at")

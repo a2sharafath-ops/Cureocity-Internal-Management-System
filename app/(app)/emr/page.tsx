@@ -8,12 +8,13 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 
 export const dynamic = "force-dynamic";
 
-export default async function EmrIndexPage({ searchParams }: { searchParams: { q?: string } }) {
+export default async function EmrIndexPage(props: { searchParams: Promise<{ q?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/emr")) redirect("/dashboard");
 
   const q = (searchParams.q ?? "").trim();
-  const supabase = createClient();
+  const supabase = await createClient();
   let query = supabase.from("clients").select("id, code, name, phone, gender, dob").order("name");
   if (q) query = query.ilike("name", `%${q}%`);
   const { data } = await query.limit(200);

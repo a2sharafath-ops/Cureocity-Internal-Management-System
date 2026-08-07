@@ -16,12 +16,11 @@
 // React remounts it and the half-typed email address is lost the moment
 // anything else in the panel changes.
 //
-// React 18 / Next 14 here, so form state is useFormState from react-dom and
-// pending comes from useFormStatus inside a child of the form — not React 19's
-// useActionState, which doesn't exist in this runtime.
+// React 19 keeps form action state in React; pending comes from useFormStatus
+// inside a child of the form.
 
-import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { updateUserEmail, sendUserPasswordReset, setUserPassword, type CredState } from "@/lib/actions";
 
 const btn: React.CSSProperties = {
@@ -63,9 +62,9 @@ export default function UserCredentials({
 }: { id: string; email: string | null; name: string; isSelf: boolean }) {
   const [open, setOpen] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const [emailState, emailAction] = useFormState<CredState, FormData>(updateUserEmail, {});
-  const [resetState, resetAction] = useFormState<CredState, FormData>(sendUserPasswordReset, {});
-  const [pwState, pwAction] = useFormState<CredState, FormData>(setUserPassword, {});
+  const [emailState, emailAction] = useActionState<CredState, FormData>(updateUserEmail, {});
+  const [resetState, resetAction] = useActionState<CredState, FormData>(sendUserPasswordReset, {});
+  const [pwState, pwAction] = useActionState<CredState, FormData>(setUserPassword, {});
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>

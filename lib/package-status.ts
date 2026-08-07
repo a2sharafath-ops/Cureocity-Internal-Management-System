@@ -41,7 +41,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   };
   const p = await getProfile();
   if (!p || !canSee(p.role, "/clients")) return null;
-  const sb = createClient();
+  const sb = await createClient();
   const today = todayISO();
 
   const [{ data: cps }, { data: inv }, { data: blood }, { data: cons }, { data: appts }, { data: sess }, { data: charts }, { data: workouts }, { data: bp }, { data: proto }] = await Promise.all([

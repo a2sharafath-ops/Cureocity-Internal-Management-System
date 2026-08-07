@@ -90,7 +90,7 @@ async function logAudit(
   detail?: string | null
 ) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     await supabase.from("audit_log").insert({
       actor_id: actor?.id ?? null,
       actor_name: actor?.name ?? null,
@@ -107,7 +107,7 @@ async function logAudit(
 // ---- auth ------------------------------------------------------------------
 
 export async function signOut() {
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
 }
@@ -116,7 +116,7 @@ export async function setPreviewRole(formData: FormData) {
   const me = await getProfile();
   if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return; // only admins can preview
   const role = String(formData.get("role") ?? "");
-  const store = cookies();
+  const store = await cookies();
 
   // Professional persona → step into that professional's workspace
   const persona = getPersona(role);
@@ -137,7 +137,7 @@ export async function setPreviewRole(formData: FormData) {
 export type PwState = { error?: string; ok?: string };
 
 export async function changePassword(_prev: PwState, formData: FormData): Promise<PwState> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -476,7 +476,7 @@ export async function setTrainerSlot(formData: FormData) {
   const trainer_id = String(formData.get("trainer_id"));
   const hour = Number(formData.get("hour"));
   const status = String(formData.get("status")); // available | unavailable
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("trainer_slots").upsert(
     { trainer_id, hour, status, client_id: null, tag: null, updated_by: p.name, updated_at: new Date().toISOString() },
     { onConflict: "trainer_id,hour" }
@@ -493,7 +493,7 @@ export async function assignTrainerSlot(formData: FormData) {
   const client_id = String(formData.get("client_id")) || null;
   const tag = String(formData.get("tag") || "PT");
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("trainer_slots").upsert(
     { trainer_id, hour, status: "available", client_id, tag, updated_by: p.name, updated_at: new Date().toISOString() },
     { onConflict: "trainer_id,hour" }
@@ -507,7 +507,7 @@ export async function unassignTrainerSlot(formData: FormData) {
   if (!p || !canManageSessions(p.role)) return;
   const trainer_id = String(formData.get("trainer_id"));
   const hour = Number(formData.get("hour"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("trainer_slots").update({ client_id: null, tag: null, updated_by: p.name }).eq("trainer_id", trainer_id).eq("hour", hour);
   revalidatePath("/sessions");
 }
@@ -520,7 +520,7 @@ export async function createAssessment(formData: FormData) {
   const kind = String(formData.get("kind") || "initial");
   const due_date = String(formData.get("due_date") || todayISO());
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("assessments").insert({ client_id, trainer_id, kind, due_date, status: "due", created_by: p.name });
   revalidatePath("/sessions");
 }
@@ -529,7 +529,7 @@ export async function markAssessmentBooked(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("assessments").update({ status: "booked", scheduled_date: todayISO() }).eq("id", id);
   revalidatePath("/sessions");
 }
@@ -538,7 +538,7 @@ export async function completeAssessment(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("assessments").update({ status: "done", scheduled_date: todayISO() }).eq("id", id);
   revalidatePath("/sessions");
 }
@@ -548,7 +548,7 @@ export async function toggleAssessmentShared(formData: FormData) {
   if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
   const shared = String(formData.get("shared")) === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("assessments").update({ shared: !shared }).eq("id", id);
   revalidatePath("/sessions");
 }
@@ -561,7 +561,7 @@ export async function addRecoverySession(formData: FormData) {
   const staff_id = String(formData.get("staff_id")) || null;
   const date = String(formData.get("date") || todayISO());
   const hour = Number(formData.get("hour")) || null;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("recovery_sessions").insert({ client_id, kind, staff_id, date, hour, status: "scheduled", created_by: p.name });
   revalidatePath("/sessions");
 }
@@ -570,7 +570,7 @@ export async function completeRecoverySession(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("recovery_sessions").update({ status: "completed" }).eq("id", id);
   revalidatePath("/sessions");
 }
@@ -582,7 +582,7 @@ export async function rescheduleSession(formData: FormData) {
   const date = String(formData.get("date"));
   const hour = Number(formData.get("hour"));
   const trainer_id = String(formData.get("trainer_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: s } = await supabase.from("sessions").select("seq, clients(name)").eq("id", id).maybeSingle();
   // Rescheduling also revives the session to "scheduled" — so a missed session
   // (recorded as cancelled) that the client asks to make up becomes a live
@@ -601,7 +601,7 @@ export async function markSessionComplete(formData: FormData) {
   if (!p || !canManageSessions(p.role)) return;
   const id = String(formData.get("id"));
   const clientId = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("sessions").update({ status: "completed" }).eq("id", id);
   // bump the client's used count
   const { data: c } = await supabase.from("clients").select("used, name").eq("id", clientId).maybeSingle();
@@ -617,7 +617,7 @@ export async function togglePackageActive(formData: FormData) {
   if (!p || !canManagePackages(p.role)) return;
   const id = String(formData.get("id"));
   const active = String(formData.get("active")) === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("packages").update({ active: !active }).eq("id", id);
   await logAudit(p, active ? "Package deactivated" : "Package activated", id, null);
   revalidatePath("/packages");
@@ -641,7 +641,7 @@ export async function savePackage(formData: FormData) {
   const priceCalicut = Number(formData.get("price_calicut")) || priceKochi;
   const base = priceKochi || priceCalicut;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const fields = { name, sessions, validity, price: base, is_facility, one_time, requires_slot, delivery_mode, tags };
   if (id) {
     await supabase.from("packages").update(fields).eq("id", id);
@@ -664,7 +664,7 @@ export async function updateLeadStage(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const id = String(formData.get("id"));
   const stage = String(formData.get("stage"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: lead } = await supabase.from("leads").select("name").eq("id", id).maybeSingle();
   await supabase.from("leads").update({ stage }).eq("id", id);
   await logAudit(p, "Lead stage changed", lead?.name, `→ ${stage}`);
@@ -678,7 +678,7 @@ export async function createLead(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Double-submit guard. A walk-in form submitted twice (impatient double-click,
   // or a retried request) produced two identical leads ~1s apart — the front
@@ -775,7 +775,7 @@ export async function updateLead(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch: Record<string, unknown> = {};
   for (const f of LEAD_FIELDS) patch[f] = String(formData.get(f) ?? "").trim() || null;
   // Reassignment is explicit: only touch ownership when the form actually
@@ -814,7 +814,7 @@ export async function sendLeadOtp(formData: FormData): Promise<{ ok: boolean; de
   const phone = String(formData.get("phone") || "").trim();
   if (!phone) return { ok: false, error: "No phone on this lead" };
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("verifications").insert({
     phone, code, purpose: "lead_convert", expires_at: new Date(Date.now() + 10 * 60000).toISOString(),
   });
@@ -833,7 +833,7 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
   if (String(formData.get("tnc")) !== "on" || String(formData.get("consent")) !== "on") {
     return { ok: false, error: "Terms & informed consent must be accepted" };
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: lead } = await supabase.from("leads").select("name, phone").eq("id", id).maybeSingle();
   if (!lead?.name) return { ok: false, error: "Lead not found" };
 
@@ -973,7 +973,7 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
   const discount = Math.max(0, Number(formData.get("discount")) || 0);
   if (!client_id || !package_id) return { ok: false, error: "Missing client or package" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pkg } = await supabase.from("packages")
     .select("name, price, sessions, is_facility, validity").eq("id", package_id).maybeSingle();
   if (!pkg) return { ok: false, error: "Package not found" };
@@ -1050,7 +1050,7 @@ export async function voidClientPackage(formData: FormData): Promise<{ ok: boole
   const client_id = String(formData.get("client_id") || "");
   if (!rowId) return { ok: false, error: "Missing package" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("client_packages")
     .select("package_name, category, package_id, status").eq("id", rowId).maybeSingle();
   if (!row) return { ok: false, error: "Package not found" };
@@ -1132,7 +1132,7 @@ export async function renewPackage(formData: FormData): Promise<{ ok: boolean; e
   const package_id = String(formData.get("package_id") || "");
   if (!client_id || !package_id) return { ok: false, error: "Missing client or package" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pkg } = await supabase.from("packages")
     .select("name, price, validity, is_facility").eq("id", package_id).maybeSingle();
   if (!pkg) return { ok: false, error: "Package not found" };
@@ -1187,7 +1187,7 @@ export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok
   const count = Math.min(24, Math.max(1, Number(formData.get("count")) || 12));
   if (!client_id || !trainer_id) return { ok: false, error: "Pick a trainer" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: existing } = await supabase.from("sessions").select("id").eq("client_id", client_id).eq("status", "scheduled").limit(1);
   if (existing && existing.length) return { ok: false, error: "This client already has scheduled sessions. Reschedule the existing ones instead." };
 
@@ -1220,7 +1220,7 @@ export async function approveComprehensive(formData: FormData) {
   if (!p || !canEmr(p.role)) return;
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: cons } = await supabase.from("consultations").select("kind, status").eq("client_id", client_id);
   const done = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
   if (!(done.has("Doctor") && done.has("Diet") && done.has("Trainer"))) return; // not ready
@@ -1243,7 +1243,7 @@ export async function createConsultation(formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim() || null;
   if (!client_id || !kind) return;
   if (!ownsConsultKind(p.role, kind)) return; // only the owning discipline
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("consultations").insert({
     client_id, kind, notes, status: "scheduled", by_name: p.name, by_role: p.role,
   });
@@ -1260,7 +1260,7 @@ export async function startConsult(formData: FormData) {
   const kind = String(formData.get("kind"));
   if (!client_id || !kind) return;
   if (!ownsConsultKind(p.role, kind)) return; // only the owning discipline
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("consultations").insert({
     client_id, kind, status: "scheduled", by_name: p.name, by_role: p.role, started_at: new Date().toISOString(),
   }).select("id").maybeSingle();
@@ -1293,7 +1293,7 @@ export async function startConsultFromAppointment(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const appointment_id = String(formData.get("appointment_id") || "");
   if (!appointment_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: appt } = await supabase.from("appointments")
     .select("id, client_id, lead_id, provider_id, status").eq("id", appointment_id).maybeSingle();
@@ -1343,7 +1343,7 @@ export async function markConsultDone(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const appointment_id = String(formData.get("appointment_id") || "");
   if (!appointment_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: appt } = await supabase.from("appointments")
     .select("id, client_id, lead_id, provider_id, status").eq("id", appointment_id).maybeSingle();
@@ -1396,7 +1396,7 @@ export async function saveConsultSession(formData: FormData) {
   // gender here is what keeps the two in step; consultQ alone would shift the
   // indices for any client whose questions were filtered.
   const { consultQFor } = await import("@/lib/consult-questions");
-  const supabaseQ = createClient();
+  const supabaseQ = await createClient();
   const { data: qc } = await supabaseQ.from("consultations").select("client_id, flags").eq("id", id).maybeSingle();
   const qClientId = (qc as { client_id: string | null } | null)?.client_id ?? null;
   // What the team has already been alerted about. Captured BEFORE the update so
@@ -1437,7 +1437,7 @@ export async function saveConsultSession(formData: FormData) {
       .filter((f) => f && f.text && f.text.trim())
       .map((f) => ({ text: String(f.text).trim(), severity: String(f.severity || "info") }));
   } catch { flags = []; }
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("consultations").update({
     answers, summary, flags, ...(complete ? { status: "completed", completed_at: new Date().toISOString() } : {}), ...(duration ? { duration_min: duration } : {}),
   }).eq("id", id);
@@ -1565,7 +1565,7 @@ export async function autosaveConsult(
   if (!p || !canConsult(p.role)) return { error: "Not authorized." };
   if (!id) return { error: "Missing consultation." };
   if (!ownsConsultKind(p.role, kind)) return { error: "Not your discipline." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Don't reopen or overwrite a finished consultation.
   const { data: row } = await supabase.from("consultations").select("status, client_id").eq("id", id).maybeSingle();
@@ -1633,7 +1633,7 @@ export async function completeConsultation(formData: FormData) {
   // "no" is a fact, an unanswered null is not a breach.
   const rxRaw = formData.get("prescription_needed");
   const rxNeeded = rxRaw == null ? null : String(rxRaw) === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("consultations").select("kind, appointment_id").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   // Starts this clinician's 24h sign-off clock, and — once all three
@@ -1667,7 +1667,7 @@ export async function toggleConsultFlag(formData: FormData) {
   const field = String(formData.get("field")); // "approved" | "shared"
   const value = String(formData.get("value")) === "true";
   if (field !== "approved" && field !== "shared") return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("consultations").select("kind").eq("id", id).maybeSingle();
   if (!row || !ownsConsultKind(p.role, row.kind)) return; // only the owning discipline
   const next = !value;
@@ -1696,7 +1696,7 @@ export async function toggleConsultFlag(formData: FormData) {
 async function consultLifecycleGuard(id: string) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return null;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase
     .from("consultations")
     .select("id, kind, status, client_id, summary, ai_summary, answers, flags, draft, completed_at")
@@ -1808,7 +1808,7 @@ export async function deleteEmptyConsultation(formData: FormData) {
  * are skipped if a matching open one already exists.
  */
 async function startBlueprintJourney(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   clientId: string,
   clientName: string,
   actor: string,
@@ -1891,7 +1891,7 @@ export async function toggleBlueprintHold(formData: FormData) {
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const note = String(formData.get("note") ?? "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: bp } = await supabase.from("blueprints")
     .select("hold_since, hold_ms").eq("client_id", client_id).maybeSingle();
@@ -1935,7 +1935,7 @@ export async function toggleBlueprintHold(formData: FormData) {
  * the same title already exists.
  */
 async function startComprehensiveJourney(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   clientId: string,
   clientName: string,
   startDate: string,
@@ -2007,7 +2007,7 @@ async function startComprehensiveJourney(
  * tasks are skipped when an open one with the same title already exists.
  */
 async function startPTJourney(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   clientId: string,
   clientName: string,
   startDate: string,
@@ -2064,7 +2064,7 @@ export async function toggleComprehensiveHold(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const note = String(formData.get("note") ?? "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: row } = await supabase.from("care_protocols")
     .select("id, hold_since, hold_ms")
@@ -2094,7 +2094,7 @@ export async function toggleComprehensiveHold(formData: FormData) {
  *  close the oldest outstanding one — that's the one they were asked for
  *  first. Staff can correct it from the BluePrint page. */
 async function markEarliestPanelReceived(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   clientId: string,
 ) {
   const { data } = await supabase.from("blood_requests")
@@ -2115,7 +2115,7 @@ async function markEarliestPanelReceived(
 export async function getComprehensiveView(clientId: string) {
   const p = await getProfile();
   if (!p || !canSee(p.role, "/clients")) return null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: proto } = await supabase.from("care_protocols")
     .select("start_date, consolidated_at, approved_at, hold_since, hold_ms, hold_note")
@@ -2165,7 +2165,7 @@ export async function getComprehensiveView(clientId: string) {
 export async function getPTView(clientId: string) {
   const p = await getProfile();
   if (!p || !canSee(p.role, "/clients")) return null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: proto } = await supabase.from("care_protocols")
     .select("start_date, hold_since, hold_ms, hold_note")
@@ -2205,7 +2205,7 @@ export async function togglePTHold(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const note = String(formData.get("note") ?? "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: row } = await supabase.from("care_protocols")
     .select("id, hold_since, hold_ms")
@@ -2242,7 +2242,7 @@ export async function repairClientJourney(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: c } = await supabase.from("clients").select("id, name, package_id, joined").eq("id", client_id).maybeSingle();
   if (!c) return;
@@ -2303,7 +2303,7 @@ export async function bookExperienceSession(
   if (!lead_id || !date) return { error: "Pick a date." };
   if (kind !== "assessment" && kind !== "training") return { error: "Unknown session type." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: lead } = await supabase.from("leads").select("name, stage").eq("id", lead_id).maybeSingle();
   if (!lead) return { error: "Lead not found." };
 
@@ -2357,7 +2357,7 @@ export async function setExperienceStatus(formData: FormData) {
   const status = String(formData.get("status") || "");
   if (!id || !["completed", "cancelled", "no_show"].includes(status)) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const table = kind === "training" ? "sessions" : "appointments";
   // `sessions` has no no_show state; treat it as cancelled there so the row
   // stays truthful rather than inventing a status the table doesn't have.
@@ -2387,7 +2387,7 @@ export async function markExperienceOutcome(formData: FormData): Promise<void> {
   if (!id || !["completed", "no_show"].includes(status)) return;
   if (kind !== "assessment" && kind !== "training") return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const table = kind === "training" ? "sessions" : "appointments";
   const ownerCol = kind === "training" ? "trainer_id" : "provider_id";
 
@@ -2417,7 +2417,7 @@ export async function markExperienceOutcome(formData: FormData): Promise<void> {
  * would start at payment rather than at their first real visit.
  */
 async function carryExperienceToClient(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   leadId: string,
   clientId: string,
 ) {
@@ -2455,7 +2455,7 @@ export async function addLeadRemark(
   const outcome = String(formData.get("outcome") || "note") as RemarkOutcome;
   if (!lead_id || !body) return { error: "Write what happened." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: lead } = await supabase.from("leads").select("name, fde").eq("id", lead_id).maybeSingle();
   if (!lead) return { error: "Lead not found." };
 
@@ -2489,7 +2489,7 @@ export async function setLeadFollowup(formData: FormData) {
   const lead_id = String(formData.get("lead_id") || "");
   const date = String(formData.get("next_follow_up") || "").trim() || null;
   if (!lead_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("leads").update({
     next_follow_up: date, follow_up_owner: date ? p.name : null,
   }).eq("id", lead_id);
@@ -2513,7 +2513,7 @@ export async function setLeadFollowup(formData: FormData) {
  *  They were derived at render and thrown away, which made "who moved from
  *  COLD to HOT this week" unanswerable. */
 async function restoreLeadScore(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   leadId: string,
 ) {
   const { data } = await supabase.from("leads")
@@ -2539,7 +2539,7 @@ export async function setLeadOpportunity(
   const close = String(formData.get("expected_close") || "").trim() || null;
   if (!lead_id) return { error: "Lead not found." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   let value: number | null = rawValue ? Number(rawValue) : null;
   if (value != null && (!Number.isFinite(value) || value < 0)) {
     return { error: "Expected value must be a positive number." };
@@ -2576,7 +2576,7 @@ export async function disqualifyLead(formData: FormData) {
   const reason = String(formData.get("reason") || "").trim();
   if (!lead_id || !reason) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("leads").update({
     disqualified_at: new Date().toISOString(),
     disqualified_reason: reason,
@@ -2598,7 +2598,7 @@ export async function requalifyLead(formData: FormData) {
   if (!p || !canWrite(p.role)) return;
   const lead_id = String(formData.get("lead_id") || "");
   if (!lead_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("leads").update({
     disqualified_at: null, disqualified_reason: null, disqualified_by: null,
   }).eq("id", lead_id);
@@ -2612,7 +2612,7 @@ export async function requestBlood(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   // Panel from the form so front desk can request either report set; defaults
   // to the BluePrint panel.
   const panel = String(formData.get("panel") ?? BP_PANEL);
@@ -2637,7 +2637,7 @@ export async function nudgeClinician(formData: FormData) {
   const staff_id = String(formData.get("staff_id") || "");
   const label = String(formData.get("label") || "a deliverable").trim();
   if (!staff_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   // Deep-link straight into the drafting screen for the deliverable, pre-focused
   // on this client, so the clinician lands where they actually do the work.
@@ -2671,7 +2671,7 @@ export async function nudgeRole(formData: FormData) {
   const href = String(formData.get("href") || "").trim() || undefined;
   const client_id = String(formData.get("client_id") || "").trim() || undefined;
   if (!roles.length) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   let who = "";
   if (client_id) {
     const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
@@ -2691,7 +2691,7 @@ export async function markBloodReceived(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageBlueprint(p.role)) return;
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   // Panel comes from the form so front desk can receive either report set;
   // defaults to the BluePrint panel, which is what every existing row is.
   const panel = String(formData.get("panel") ?? BP_PANEL);
@@ -2716,7 +2716,7 @@ export async function saveBlueprintScores(formData: FormData) {
       if (!Number.isNaN(n)) scores[s.key] = n;
     }
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("blueprints").upsert({ client_id, scores, updated_at: new Date().toISOString() });
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Blueprint scores updated", c?.name, `${Object.keys(scores).length}/9 scores`);
@@ -2727,7 +2727,7 @@ export async function saveBlueprintScores(formData: FormData) {
 // ---- file uploads (Supabase Storage) ---------------------------------------
 
 async function storeFile(clientId: string, kind: string, file: File, uploadedBy: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${clientId}/${crypto.randomUUID()}-${safe}`;
   const { error } = await supabase.storage.from("client-files").upload(path, file, {
@@ -2759,7 +2759,7 @@ export async function uploadClientFile(_prev: UploadState, formData: FormData): 
   if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
   const r = await storeFile(clientId, kind, file, me.name);
   if (r.error) return { error: r.error };
-  const supabase = createClient();
+  const supabase = await createClient();
   if (kind === "blood_report") {
     // The same rule the portal already applied: a report received is a panel
     // satisfied. Without this, front desk filing a report the client brought in
@@ -2775,7 +2775,7 @@ export async function uploadClientFile(_prev: UploadState, formData: FormData): 
 
 // client uploads from the portal (their own files)
 export async function uploadPortalFile(_prev: UploadState, formData: FormData): Promise<UploadState> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Not signed in." };
   const { data: prof } = await supabase.from("profiles").select("client_id, name").eq("id", user.id).maybeSingle();
@@ -2798,7 +2798,7 @@ export async function uploadPortalFile(_prev: UploadState, formData: FormData): 
 
 // client marks their own blood report submitted (portal)
 export async function submitBloodSelf() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id, role, name").eq("id", user.id).maybeSingle();
@@ -2823,7 +2823,7 @@ export async function saveConsolidatedSummary(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const consolidated = String(formData.get("consolidated") ?? "").trim() || null;
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("blueprints").upsert({ client_id, consolidated, updated_at: new Date().toISOString() });
   await logAudit(p, "Consolidated summary saved", await clientName(supabase, client_id), null);
   revalidatePath("/workspace");
@@ -2846,7 +2846,7 @@ export async function signoffConsolidated(formData: FormData) {
   const disc = adminish ? String(formData.get("discipline") || "") : (BP_ROLE_TO_DISC[p.role] ?? "");
   if (!disc || !BP_DISC_TO_KIND[disc]) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Must be on this client's care team (admins may sign any).
   const { data: asg } = await supabase.from("client_assignments").select("discipline").eq("client_id", client_id);
   const assigned = new Set(((asg ?? []) as { discipline: string }[]).map((a) => a.discipline).filter((d) => BP_DISC_TO_KIND[d]));
@@ -2905,7 +2905,7 @@ export async function createClass(formData: FormData) {
   const hour = Number(formData.get("hour")) || 9;
   const capacity = Number(formData.get("capacity")) || 12;
   if (!room_id || !date) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("classes").insert({ room_id, title, trainer_id, date, hour, capacity });
   await logAudit(p, "Class created", title, `${date} ${hour}:00`);
   revalidatePath("/classes");
@@ -2915,12 +2915,12 @@ export async function deleteClass(formData: FormData) {
   const p = await getProfile();
   if (!p || !canClasses(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("classes").delete().eq("id", id);
   revalidatePath("/classes");
 }
 
-async function classHasRoom(supabase: ReturnType<typeof createClient>, classId: string) {
+async function classHasRoom(supabase: Awaited<ReturnType<typeof createClient>>, classId: string) {
   const { data: cls } = await supabase.from("classes").select("capacity").eq("id", classId).maybeSingle();
   if (!cls) return false;
   const { count } = await supabase.from("class_bookings").select("id", { count: "exact", head: true }).eq("class_id", classId);
@@ -2933,7 +2933,7 @@ export async function bookClientStaff(formData: FormData) {
   const class_id = String(formData.get("class_id"));
   const client_id = String(formData.get("client_id"));
   if (!class_id || !client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   if (!(await classHasRoom(supabase, class_id))) return;
   await supabase.from("class_bookings").insert({ class_id, client_id });
   revalidatePath("/classes");
@@ -2943,14 +2943,14 @@ export async function cancelBookingStaff(formData: FormData) {
   const p = await getProfile();
   if (!p || !canClasses(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("class_bookings").delete().eq("id", id);
   revalidatePath("/classes");
 }
 
 // portal: client books / cancels their own class
 export async function bookClassSelf(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
@@ -2962,7 +2962,7 @@ export async function bookClassSelf(formData: FormData) {
 }
 
 export async function cancelClassSelf(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
@@ -2981,14 +2981,14 @@ export async function sendMessageStaff(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!client_id || !body) return;
   const channel = String(formData.get("channel") || "WhatsApp");
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("messages").insert({ client_id, sender: "staff", sender_name: p.name, body, channel });
   revalidatePath("/messages");
   revalidatePath(`/messages/${client_id}`);
 }
 
 export async function sendMessageSelf(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id, name").eq("id", user.id).maybeSingle();
@@ -3002,14 +3002,14 @@ export async function sendMessageSelf(formData: FormData) {
 export async function markThreadRead(clientId: string) {
   const p = await getProfile();
   if (!p || !canMessage(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("messages").update({ read: true }).eq("client_id", clientId).eq("sender", "client").eq("read", false);
   revalidatePath("/messages");
 }
 
 // ---- billing / invoices ----------------------------------------------------
 
-async function nextInvoiceNum(supabase: ReturnType<typeof createClient>) {
+async function nextInvoiceNum(supabase: Awaited<ReturnType<typeof createClient>>) {
   // Race-safe: a Postgres sequence (next_invoice_num) hands out each number
   // exactly once, so two concurrent conversions can't collide. Falls back to
   // max()+1 when the DB function isn't present yet (i.e. before the migration
@@ -3020,7 +3020,7 @@ async function nextInvoiceNum(supabase: ReturnType<typeof createClient>) {
   return ((row?.num as number | null) ?? 0) + 1;
 }
 
-async function nextClientCode(supabase: ReturnType<typeof createClient>) {
+async function nextClientCode(supabase: Awaited<ReturnType<typeof createClient>>) {
   // Same idea for the CUR-### code — a sequence avoids collisions and the reuse
   // that count()+1 caused when a client was deleted. Falls back pre-migration.
   const { data, error } = await supabase.rpc("next_client_code");
@@ -3036,7 +3036,7 @@ export async function createInvoice(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || "Invoice";
   const amount = Number(formData.get("amount")) || 0;
   const method = String(formData.get("method") ?? "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
   const num = await nextInvoiceNum(supabase);
   await supabase.from("invoices").insert({
     num, client_id, description, amount, method, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
@@ -3063,7 +3063,7 @@ export async function raiseInvoiceForClient(formData: FormData) {
   if (!p || !canManageInvoices(p.role)) return;
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: c } = await supabase.from("clients").select("id, name, email, package_id").eq("id", client_id).maybeSingle();
   if (!c?.package_id) return;
@@ -3094,7 +3094,7 @@ export async function markInvoicePaid(formData: FormData) {
   if (!p || !canRecordPayment(p.role)) return;
   const id = String(formData.get("id"));
   const method = String(formData.get("method") ?? "").trim() || "Cash";
-  const supabase = createClient();
+  const supabase = await createClient();
   // Read first so we can (a) avoid double-posting a receipt if it was already
   // Paid and (b) build the matching cash-book entry from the invoice details.
   const { data: inv } = await supabase.from("invoices")
@@ -3129,7 +3129,7 @@ export async function refundInvoice(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageInvoices(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: inv } = await supabase.from("invoices")
     .select("num, amount, status, method, client_id").eq("id", id).maybeSingle();
   const row = inv as { num: number | null; amount: number; status: string; method: string | null; client_id: string | null } | null;
@@ -3174,7 +3174,7 @@ export async function createSubscription(formData: FormData) {
   const package_id = String(formData.get("package_id"));
   const auto_renew = String(formData.get("auto_renew") ?? "true") === "true";
   if (!client_id || !package_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pkg } = await supabase.from("packages").select("price, validity, name").eq("id", package_id).maybeSingle();
   const interval = pkg?.validity ?? 30;
   const start = todayISO();
@@ -3192,7 +3192,7 @@ export async function setSubStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["active", "paused", "cancelled"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("subscriptions").update({ status }).eq("id", id);
   await logAudit(p, "Subscription " + status, null, null);
   revalidatePath("/subscriptions");
@@ -3203,12 +3203,12 @@ export async function toggleAutoRenew(formData: FormData) {
   if (!p || !canBill(p.role)) return;
   const id = String(formData.get("id"));
   const value = String(formData.get("value")) === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("subscriptions").update({ auto_renew: !value }).eq("id", id);
   revalidatePath("/subscriptions");
 }
 
-async function renewOne(supabase: ReturnType<typeof createClient>, sub: { id: string; client_id: string; package_id: string | null; amount: number; interval_days: number; renews_on: string | null }, actor: string) {
+async function renewOne(supabase: Awaited<ReturnType<typeof createClient>>, sub: { id: string; client_id: string; package_id: string | null; amount: number; interval_days: number; renews_on: string | null }, actor: string) {
   const num = await nextInvoiceNum(supabase);
   const { data: pkg } = await supabase.from("packages").select("name").eq("id", sub.package_id ?? "").maybeSingle();
   await supabase.from("invoices").insert({
@@ -3223,7 +3223,7 @@ export async function renewNow(formData: FormData) {
   const p = await getProfile();
   if (!p || !canBill(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: sub } = await supabase.from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on").eq("id", id).maybeSingle();
   if (sub) { await renewOne(supabase, sub, p.name); await logAudit(p, "Subscription renewed (manual)", null, null); }
   revalidatePath("/subscriptions");
@@ -3232,7 +3232,7 @@ export async function renewNow(formData: FormData) {
 export async function processDueRenewals() {
   const p = await getProfile();
   if (!p || !canBill(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: due } = await supabase
     .from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on")
     .eq("status", "active").eq("auto_renew", true).lte("renews_on", todayISO());
@@ -3256,7 +3256,7 @@ async function emrGuard() {
   if (!p || !canEmr(p.role)) return null;
   return p;
 }
-async function clientName(supabase: ReturnType<typeof createClient>, id: string) {
+async function clientName(supabase: Awaited<ReturnType<typeof createClient>>, id: string) {
   const { data } = await supabase.from("clients").select("name").eq("id", id).maybeSingle();
   return data?.name ?? null;
 }
@@ -3266,7 +3266,7 @@ export async function addProblem(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const description = emrText(formData, "description");
   if (!client_id || !description) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("problems").insert({
     client_id, description, code: emrText(formData, "code"),
     onset_date: emrText(formData, "onset_date"), status: "active", noted_by: p.name,
@@ -3280,7 +3280,7 @@ export async function resolveProblem(formData: FormData) {
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
   const to = String(formData.get("to") || "resolved");
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("problems").update({
     status: to, resolved_date: to === "resolved" ? todayISO() : null,
   }).eq("id", id);
@@ -3293,7 +3293,7 @@ export async function addAllergy(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const substance = emrText(formData, "substance");
   if (!client_id || !substance) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("allergies").insert({
     client_id, substance, reaction: emrText(formData, "reaction"),
     severity: String(formData.get("severity") || "moderate"), noted_by: p.name,
@@ -3306,7 +3306,7 @@ export async function deleteAllergy(formData: FormData) {
   const p = await emrGuard(); if (!p) return;
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("allergies").delete().eq("id", id);
   await logAudit(p, "Allergy removed (entered in error)", null, null);
   revalidatePath(`/emr/${client_id}`);
@@ -3317,7 +3317,7 @@ export async function addMedication(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const name = emrText(formData, "name");
   if (!client_id || !name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("medications").insert({
     client_id, name, dose: emrText(formData, "dose"), frequency: emrText(formData, "frequency"),
     route: String(formData.get("route") || "oral"), start_date: emrText(formData, "start_date") ?? todayISO(),
@@ -3331,7 +3331,7 @@ export async function stopMedication(formData: FormData) {
   const p = await emrGuard(); if (!p) return;
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("medications").update({ status: "stopped", end_date: todayISO() }).eq("id", id);
   await logAudit(p, "Medication stopped", null, null);
   revalidatePath(`/emr/${client_id}`);
@@ -3341,7 +3341,7 @@ export async function addVitals(formData: FormData) {
   const p = await emrGuard(); if (!p) return;
   const client_id = String(formData.get("client_id"));
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const date = String(formData.get("date") || todayISO());
   const vals = {
     systolic: emrNum(formData, "systolic"), diastolic: emrNum(formData, "diastolic"),
@@ -3368,7 +3368,7 @@ export async function addEncounter(formData: FormData) {
   const p = await emrGuard(); if (!p) return;
   const client_id = String(formData.get("client_id"));
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("encounters").insert({
     client_id, date: String(formData.get("date") || todayISO()),
     type: String(formData.get("type") || "Office visit"),
@@ -3389,7 +3389,7 @@ export async function recordCheckin(formData: FormData) {
   const client_id = String(formData.get("client_id") || "") || null;
   const guest_name = String(formData.get("guest_name") ?? "").trim() || null;
   if (!client_id && !guest_name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("checkins").insert({
     client_id, guest_name,
     method: String(formData.get("method") || "manual"),
@@ -3411,7 +3411,7 @@ export async function submitTabletIntake(formData: FormData) {
   const phone = String(formData.get("phone") ?? "").trim();
   if (!first) return;
   const goals = formData.getAll("goals").map((g) => String(g)).filter(Boolean);
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("tablet_submissions").insert({
     first_name: first,
     last_name: String(formData.get("last_name") ?? "").trim() || null,
@@ -3448,7 +3448,7 @@ export async function addOnboarding(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("onboarding").insert({
     name, role: String(formData.get("role") ?? "").trim() || null,
     joining_date: String(formData.get("joining_date") || "") || null,
@@ -3466,7 +3466,7 @@ export async function addOffboarding(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("onboarding").insert({
     name, role: String(formData.get("role") ?? "").trim() || null,
     joining_date: String(formData.get("joining_date") || "") || null, kind: "offboarding",
@@ -3483,7 +3483,7 @@ export async function addHrUpdate(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("hr_updates").insert({ author: p.name, body });
   revalidatePath("/hr");
 }
@@ -3493,7 +3493,7 @@ export async function toggleMonthTask(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("hr_month_tasks").update({ status: status === "done" ? "pending" : "done" }).eq("id", id);
   revalidatePath("/hr");
 }
@@ -3511,7 +3511,7 @@ export async function generatePayslip(formData: FormData) {
   const deductions = Number(formData.get("deductions")) || pf;
   const perDay = base / 30;
   const net = Math.max(0, base - lop_days * perDay - deductions);
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("payroll").upsert({ staff_id, month, base, lop_days, pf, net, payslip: true }, { onConflict: "staff_id,month" });
   await logAudit(p, "Payslip generated", null, month);
   revalidatePath("/hr");
@@ -3522,7 +3522,7 @@ export async function addCommission(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("hr_commissions").insert({
     name, kind: String(formData.get("kind") || "Commission"),
     amount: Number(formData.get("amount")) || 0, tds: Number(formData.get("tds")) || 0,
@@ -3533,7 +3533,7 @@ export async function addCommission(formData: FormData) {
 export async function fileStatutory(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("hr_statutory").update({ status: "filed" }).eq("id", String(formData.get("id")));
   await logAudit(p, "Statutory filed", null, null);
   revalidatePath("/hr");
@@ -3546,7 +3546,7 @@ export async function advanceCandidate(formData: FormData) {
   const id = String(formData.get("id"));
   const stage = String(formData.get("stage"));
   const next = CAND_STAGES[Math.min(CAND_STAGES.length - 1, CAND_STAGES.indexOf(stage) + 1)];
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("hr_candidates").update({ stage: next }).eq("id", id);
   revalidatePath("/hr");
 }
@@ -3554,7 +3554,7 @@ export async function advanceCandidate(formData: FormData) {
 export async function setPurchaseStatus(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("hr_purchases").update({ status: String(formData.get("status")) }).eq("id", String(formData.get("id")));
   revalidatePath("/hr");
 }
@@ -3564,7 +3564,7 @@ export async function toggleOnboardingStep(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("id"));
   const idx = Number(formData.get("idx"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("onboarding").select("steps").eq("id", id).maybeSingle();
   const steps = ((data?.steps as { label: string; done: boolean }[] | null) ?? []).map((s, i) => i === idx ? { ...s, done: !s.done } : s);
   const status = steps.length && steps.every((s) => s.done) ? "complete" : "in_progress";
@@ -3575,7 +3575,7 @@ export async function toggleOnboardingStep(formData: FormData) {
 export async function removeOnboarding(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("onboarding").delete().eq("id", String(formData.get("id")));
   revalidatePath("/hr");
 }
@@ -3583,7 +3583,7 @@ export async function removeOnboarding(formData: FormData) {
 // ---- in-app notifications --------------------------------------------------
 
 export async function markNotificationRead(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase.from("notifications").update({ read: true }).eq("id", String(formData.get("id"))).eq("user_id", user.id);
@@ -3591,7 +3591,7 @@ export async function markNotificationRead(formData: FormData) {
 }
 
 export async function markAllNotificationsRead() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
@@ -3600,7 +3600,7 @@ export async function markAllNotificationsRead() {
 
 // mark one read, then go to its target
 export async function openNotification(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const me = await getProfile();
   const id = String(formData.get("id"));
   const fallbackHref = String(formData.get("href") || "");
@@ -3626,7 +3626,7 @@ export async function markAttendance(formData: FormData) {
   const staff_id = String(formData.get("staff_id"));
   const status = String(formData.get("status"));
   if (!staff_id || !["present", "absent", "leave", "half"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("attendance").upsert(
     { staff_id, date: String(formData.get("date") || todayISO()), status, marked_by: p.name },
     { onConflict: "staff_id,date" }
@@ -3645,7 +3645,7 @@ export async function saveLeaveType(formData: FormData) {
   const code = String(formData.get("code") || "").trim().toUpperCase();
   if (!code) return;
   const days = Math.max(0, Number(formData.get("annual_days")) || 0);
-  const supabase = createClient();
+  const supabase = await createClient();
   if (canApproveLeaveType(p.role)) {
     // Approver → applies directly and clears any pending proposal.
     await supabase.from("leave_types").update({ annual_days: days, pending_days: null, pending_by: null, pending_at: null }).eq("code", code);
@@ -3670,7 +3670,7 @@ export async function decideLeaveType(formData: FormData) {
   const code = String(formData.get("code") || "").trim().toUpperCase();
   const decision = String(formData.get("decision") || "");
   if (!code || !["approve", "reject"].includes(decision)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: lt } = await supabase.from("leave_types").select("pending_days, pending_by").eq("code", code).maybeSingle();
   const row = lt as { pending_days: number | null; pending_by: string | null } | null;
   if (!row || row.pending_days === null) return;
@@ -3694,7 +3694,7 @@ export async function addHoliday(formData: FormData) {
   const date = String(formData.get("date") || "");
   const name = String(formData.get("name") || "").trim();
   if (!date || !name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("holidays").upsert(
     { date, name, kind: String(formData.get("kind") || "Public"), created_by: p.name },
     { onConflict: "date,name", ignoreDuplicates: true },
@@ -3708,7 +3708,7 @@ export async function deleteHoliday(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("holidays").delete().eq("id", id);
   revalidatePath("/hr");
 }
@@ -3718,7 +3718,7 @@ export async function updateStaffEmployment(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("staff_id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("staff").update({
     date_of_joining: String(formData.get("date_of_joining") || "") || null,
     gender: String(formData.get("gender") || "") || null,
@@ -3739,7 +3739,7 @@ export async function saveAppSettings(payload: string): Promise<{ ok?: boolean; 
   if (!p || !["Administrator", "Super Admin"].includes(p.role)) return { error: "Not authorized." };
   let data: unknown;
   try { data = JSON.parse(payload); } catch { return { error: "Invalid data." }; }
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("app_settings").upsert({ id: 1, data, updated_by: p.name, updated_at: new Date().toISOString() }, { onConflict: "id" });
   if (error) return { error: error.message };
   await logAudit(p, "Templates & branding updated", null, null);
@@ -3769,7 +3769,7 @@ export async function uploadDocTemplate(formData: FormData): Promise<{ url?: str
   if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return { error: "Use a PNG, JPG or WebP image of the full A4 sheet." };
   if (file.size > 5_000_000) return { error: "Design too large — keep it under 5 MB." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Cache-busting name: replacing a design must not leave the old artwork in a
   // CDN cache on a public bucket.
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
@@ -3804,7 +3804,7 @@ export async function saveCoachAssessment(formData: FormData) {
   const band = forceBad ? "Positive" : (b?.label ?? null);
   let detail: unknown = null;
   try { const d = String(formData.get("detail") || ""); if (d) detail = JSON.parse(d); } catch { detail = null; }
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("coach_assessments").insert({
     client_id, marker, score, band, tone, note, detail, assessed_by: p.name,
   });
@@ -3827,7 +3827,7 @@ type PunchResult = { ok?: boolean; name?: string; action?: "in" | "out" | "alrea
 // Toggle today's in/out for a staff member. First punch = check-in (present);
 // second = check-out + work hours; third is ignored.
 async function doPunch(staffId: string, staffName: string, mode: string): Promise<PunchResult> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const now = new Date().toISOString();
   const { data: row } = await supabase.from("attendance")
@@ -3856,7 +3856,7 @@ export async function punchByBadge(code: string): Promise<PunchResult> {
   if (!p) return { error: "Kiosk not signed in." };
   const c = (code || "").trim();
   if (!c) return { error: "No badge scanned." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: s } = await supabase.from("staff").select("id, name").eq("badge_code", c).maybeSingle();
   const st = s as { id: string; name: string } | null;
   if (!st) return { error: "Badge not recognised." };
@@ -3867,7 +3867,7 @@ export async function punchByBadge(code: string): Promise<PunchResult> {
 export async function punchByPin(staffId: string, pin: string): Promise<PunchResult> {
   const p = await getProfile();
   if (!p) return { error: "Kiosk not signed in." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: s } = await supabase.from("staff").select("id, name, pin").eq("id", staffId).maybeSingle();
   const st = s as { id: string; name: string; pin: string | null } | null;
   if (!st) return { error: "Staff not found." };
@@ -3881,7 +3881,7 @@ export async function setStaffBadge(formData: FormData): Promise<{ ok?: boolean;
   if (!p || !canHr(p.role)) return { error: "Not authorized." };
   const staff_id = String(formData.get("staff_id") || "");
   if (!staff_id) return { error: "Missing staff." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const badge = "CURB" + Math.random().toString(36).slice(2, 10).toUpperCase();
   const pin = String(Math.floor(1000 + Math.random() * 9000));
   const { error } = await supabase.from("staff").update({ badge_code: badge, pin }).eq("id", staff_id);
@@ -3897,7 +3897,7 @@ export async function saveSalaryStructure(formData: FormData) {
   const staff_id = String(formData.get("staff_id") || "");
   if (!staff_id) return;
   const num = (k: string) => Math.max(0, Number(formData.get(k)) || 0);
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("salary_structures").upsert({
     staff_id, basic: num("basic"), hra: num("hra"), allowances: num("allowances"), gst: num("gst"),
     pf: num("pf"), esi: num("esi"), pt: num("pt"), tds: num("tds"),
@@ -3918,7 +3918,7 @@ export async function uploadEmployeeDoc(_prev: UploadState, formData: FormData):
   if (!staff_id) return { error: "Pick an employee." };
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file." };
   if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${staff_id}/${crypto.randomUUID()}-${safe}`;
   const { error } = await supabase.storage.from("hr-files").upload(path, file, { contentType: file.type || undefined, upsert: false });
@@ -3934,7 +3934,7 @@ export async function deleteEmployeeDoc(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: d } = await supabase.from("employee_documents").select("path").eq("id", id).maybeSingle();
   if ((d as { path: string } | null)?.path) await supabase.storage.from("hr-files").remove([(d as { path: string }).path]);
   await supabase.from("employee_documents").delete().eq("id", id);
@@ -3948,7 +3948,7 @@ export async function addLeave(formData: FormData) {
   const from_date = String(formData.get("from_date") || "");
   const to_date = String(formData.get("to_date") || from_date);
   if (!staff_id || !from_date) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("leaves").insert({
     staff_id, from_date, to_date,
     type: String(formData.get("type") || "Casual"),
@@ -3966,7 +3966,7 @@ export async function setLeaveStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["pending", "approved", "rejected"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("leaves").update({ status, decided_by: p.name }).eq("id", id);
   await logAudit(p, `Leave ${status}`, null, null);
   revalidatePath("/hr");
@@ -3985,7 +3985,7 @@ export async function grantCompOff(formData: FormData) {
   if (!staff_id || !earned_on || !reason) return { error: "Staff, date and reason are all needed." };
 
   const { compOffExpiry } = await import("@/lib/roster");
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("comp_offs").insert({
     staff_id, earned_on, reason,
     // Stored, not computed on read: changing the policy later must not
@@ -4012,7 +4012,7 @@ export async function cancelCompOff(formData: FormData) {
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("comp_offs")
     .update({ status: "cancelled", note: String(formData.get("note") ?? "").trim() || null })
     .eq("id", id).eq("status", "available");
@@ -4033,7 +4033,7 @@ export async function takeCompOff(formData: FormData) {
   const staff_id = String(formData.get("staff_id") || "");
   const date = String(formData.get("date") || "");
   if (!staff_id || !date) return { error: "Staff and date are needed." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const today = todayISO();
   const { data: credits } = await supabase.from("comp_offs")
@@ -4067,7 +4067,7 @@ export async function setRosterShift(formData: FormData) {
   const date = String(formData.get("date") || "");
   const shift = String(formData.get("shift") || "");
   if (!staff_id || !date) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   if (!shift) {
     await supabase.from("roster").delete().eq("staff_id", staff_id).eq("date", date);
@@ -4097,7 +4097,7 @@ export async function copyRosterWeek(formData: FormData) {
   const from = String(formData.get("from_week") || "");
   const to = String(formData.get("to_week") || "");
   if (!from || !to) return { error: "Both weeks are needed." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { weekDates, addDays } = await import("@/lib/roster");
   const src = weekDates(from), dst = weekDates(to);
@@ -4130,7 +4130,7 @@ export async function upsertPayroll(formData: FormData) {
   const lop_days = Number(formData.get("lop_days")) || 0;
   if (!staff_id) return;
   const net = Math.max(0, Math.round(base - (base / 30) * lop_days));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("payroll").upsert(
     { staff_id, month, base, lop_days, net, status: "pending" },
     { onConflict: "staff_id,month" }
@@ -4142,7 +4142,7 @@ export async function payPayroll(formData: FormData) {
   const p = await getProfile();
   if (!p || !canHr(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("payroll").update({ status: "paid", paid_date: todayISO() }).eq("id", id);
   await logAudit(p, "Payroll paid", null, null);
   revalidatePath("/hr");
@@ -4155,7 +4155,7 @@ export async function addTask(formData: FormData) {
   if (!p || !canManageTasks(p.role)) return; // Admin / Manager / HR
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("tasks").insert({
     title,
     assignee_id: String(formData.get("assignee_id") || "") || null,
@@ -4177,7 +4177,7 @@ export async function setTaskStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["todo", "doing", "blocked", "done"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("tasks").update({ status }).eq("id", id);
   revalidatePath("/tasks");
 }
@@ -4187,7 +4187,7 @@ export async function remindTask(formData: FormData) {
   const p = await getProfile();
   if (!p || !isStaffRole(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: t } = await supabase.from("tasks").select("title, staff:assignee_id(name)").eq("id", id).maybeSingle();
   const title = (t as { title?: string } | null)?.title ?? "task";
   const who = (t as { staff?: { name: string } | null } | null)?.staff?.name;
@@ -4201,7 +4201,7 @@ export async function deleteTask(formData: FormData) {
   // Deleting is narrower than closing: it destroys the record that the work
   // was ever owed.
   if (!p || !canManageTasks(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("tasks").delete().eq("id", String(formData.get("id")));
   revalidatePath("/tasks");
 }
@@ -4213,7 +4213,7 @@ export async function addExercise(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("exercises").insert({
     name, mode: String(formData.get("mode") || "Offline"), type: String(formData.get("type") || "Strength"),
   });
@@ -4224,7 +4224,7 @@ export async function addExercise(formData: FormData) {
 export async function toggleExercise(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("exercises").update({ active: String(formData.get("to") || "true") === "true" }).eq("id", String(formData.get("id")));
   revalidatePath("/exlib");
 }
@@ -4235,7 +4235,7 @@ export async function assignWorkout(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const template_id = String(formData.get("template_id"));
   if (!client_id || !template_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: tpl } = await supabase.from("workout_templates").select("name, mode, type, items").eq("id", template_id).maybeSingle();
   if (!tpl) return;
   await supabase.from("client_workouts").insert({
@@ -4251,7 +4251,7 @@ export async function removeWorkout(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return;   // same table, same guard as the planner
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("client_workouts").delete().eq("id", id);
   await logAudit(p, "Workout removed", null, null);
   revalidatePath(`/clients/${client_id}`);
@@ -4276,7 +4276,7 @@ export async function addWorkoutPlan(formData: FormData) {
     .map((exercise, i) => ({ exercise, sets: sets[i] ?? "", reps: reps[i] ?? "", rest: rest[i] ?? "" }))
     .filter((it) => it.exercise);
   if (items.length === 0) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { count } = await supabase.from("client_workouts").select("id", { count: "exact", head: true }).eq("client_id", client_id);
   await supabase.from("client_workouts").insert({
     client_id, name, mode, type, items, status: "Draft",
@@ -4294,7 +4294,7 @@ export async function publishWorkoutPlan(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("client_workouts").update({ status: "Published" }).eq("id", id);
   await logAudit(p, "Workout plan published", id, null);
   revalidatePath("/workspace");
@@ -4305,7 +4305,7 @@ export async function deleteWorkoutPlan(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteFitness(p.role)) return; // trainer-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("client_workouts").delete().eq("id", id);
   await logAudit(p, "Workout plan deleted", id, null);
   revalidatePath("/workspace");
@@ -4319,7 +4319,7 @@ export async function addTemplate(formData: FormData) {
   let items: { exercise: string; sets?: string; reps?: string; rest?: string }[] = [];
   try { items = JSON.parse(String(formData.get("items") || "[]")); } catch { items = []; }
   items = items.filter((i) => i.exercise && i.exercise.trim());
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("workout_templates").insert({
     name, mode: String(formData.get("mode") || "Offline"), type: String(formData.get("type") || "Strength"),
     items, created_by: p.name,
@@ -4335,7 +4335,7 @@ export async function addPayable(formData: FormData) {
   if (!p || !canFinanceOps(p.role)) return; // Admin / Manager / Finance
   const vendor = String(formData.get("vendor") ?? "").trim();
   if (!vendor) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("payables").insert({
     vendor, item: String(formData.get("item") ?? "").trim() || null,
     amount: Number(formData.get("amount")) || 0,
@@ -4349,7 +4349,7 @@ export async function addPayable(formData: FormData) {
 export async function payPayable(formData: FormData) {
   const p = await getProfile();
   if (!p || !canFinanceOps(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("payables").update({ status: "Paid" }).eq("id", String(formData.get("id")));
   await logAudit(p, "Payable paid", null, null);
   revalidatePath("/finsheets");
@@ -4360,7 +4360,7 @@ export async function addEstimate(formData: FormData) {
   if (!p || !canFinanceOps(p.role)) return;
   const lead_name = String(formData.get("lead_name") ?? "").trim();
   if (!lead_name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("estimates").insert({
     lead_name, item: String(formData.get("item") ?? "").trim() || null,
     amount: Number(formData.get("amount")) || 0,
@@ -4376,7 +4376,7 @@ export async function setEstimateStatus(formData: FormData) {
   if (!p || !canFinanceOps(p.role)) return;
   const status = String(formData.get("status"));
   if (!["Draft", "Sent", "Accepted", "Expired"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("estimates").update({ status }).eq("id", String(formData.get("id")));
   await logAudit(p, `Estimate ${status}`, null, null);
   revalidatePath("/finsheets");
@@ -4388,7 +4388,7 @@ export async function addLedgerEntry(formData: FormData) {
   const account = String(formData.get("account") || "bank");
   const amount = Number(formData.get("amount")) || 0;
   if (!amount) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("ledger").insert({
     account, date: String(formData.get("date") || todayISO()),
     ref: String(formData.get("ref") ?? "").trim() || null,
@@ -4409,7 +4409,7 @@ export async function submitReimbursement(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const payee_name = String(formData.get("payee_name") ?? "").trim();
   if (!description || !payee_name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Optional receipt image → private finance bucket. A failed upload must not
   // sink the claim; the receipt is evidence, not the record.
@@ -4438,7 +4438,7 @@ export async function submitReimbursement(formData: FormData) {
 export async function approveReimbursement(formData: FormData) {
   const p = await getProfile();
   if (!p || !canReimburseApprove(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id"));
   // Only a Submitted claim can be approved.
   await supabase.from("reimbursements")
@@ -4451,7 +4451,7 @@ export async function approveReimbursement(formData: FormData) {
 export async function rejectReimbursement(formData: FormData) {
   const p = await getProfile();
   if (!p || !canReimburseApprove(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id"));
   await supabase.from("reimbursements")
     .update({ status: "Rejected", reject_reason: String(formData.get("reason") ?? "").trim() || null, approved_by: p.name, approved_at: new Date().toISOString() })
@@ -4463,7 +4463,7 @@ export async function rejectReimbursement(formData: FormData) {
 export async function payReimbursement(formData: FormData) {
   const p = await getProfile();
   if (!p || !canReimburseApprove(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const id = String(formData.get("id"));
   const account = String(formData.get("account") || "bank") === "cash" ? "cash" : "bank";
 
@@ -4507,7 +4507,7 @@ export async function setPettyFloat(formData: FormData) {
   if (!p || !canFinanceOps(p.role)) return;   // Admin / Manager / Finance
   const float_amount = Math.max(0, Number(formData.get("float_amount")) || 0);
   const low_threshold = Math.max(0, Number(formData.get("low_threshold")) || 0);
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("petty_cash_config")
     .update({ float_amount, low_threshold, updated_by: p.name, updated_at: new Date().toISOString() })
     .eq("id", true);
@@ -4522,7 +4522,7 @@ export async function addExpense(formData: FormData) {
   if (!p || !canBill(p.role)) return;
   const description = String(formData.get("description") ?? "").trim();
   if (!description) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("expenses").insert({
     description,
     category: String(formData.get("category") || "Other"),
@@ -4537,7 +4537,7 @@ export async function addExpense(formData: FormData) {
 export async function deleteExpense(formData: FormData) {
   const p = await getProfile();
   if (!p || !canBill(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("expenses").delete().eq("id", String(formData.get("id")));
   await logAudit(p, "Expense removed", null, null);
   revalidatePath("/expenses");
@@ -4550,7 +4550,7 @@ export async function addSop(formData: FormData) {
   if (!p || !canManageSops(p.role)) return;
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("sops").insert({
     title, category: String(formData.get("category") || "Operations"),
     content: String(formData.get("content") ?? "").trim() || null,
@@ -4563,7 +4563,7 @@ export async function addSop(formData: FormData) {
 export async function deleteSop(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSops(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("sops").delete().eq("id", String(formData.get("id")));
   await logAudit(p, "SOP removed", null, null);
   revalidatePath("/kb");
@@ -4578,7 +4578,7 @@ export async function addService(formData: FormData) {
   if (!name) return;
   const dayRaw = formData.get("day_offset");
   const day_offset = dayRaw && String(dayRaw).trim() !== "" ? Number(dayRaw) : null;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("services").insert({
     name, category: String(formData.get("category") || "General"),
     mode: String(formData.get("mode") || "Offline"),
@@ -4594,7 +4594,7 @@ export async function toggleService(formData: FormData) {
   if (!p || !canManageServices(p.role)) return;
   const id = String(formData.get("id"));
   const to = String(formData.get("to") || "true") === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("services").update({ active: to }).eq("id", id);
   await logAudit(p, `Service ${to ? "activated" : "deactivated"}`, null, null);
   revalidatePath("/services");
@@ -4606,7 +4606,7 @@ export async function setSalesTarget(formData: FormData) {
   const p = await getProfile();
   if (!p || !canSetTargets(p.role)) return; // Administrator only
   const month = String(formData.get("month") || todayISO().slice(0, 7));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("sales_targets").upsert({
     month,
     revenue_target: Number(formData.get("revenue_target")) || 0,
@@ -4623,7 +4623,7 @@ export async function setSalesTarget(formData: FormData) {
 export async function generateFollowups() {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // The milestone anchor is the package start, not the join date — see
   // lib/followups.ts. Length comes along so a multi-cycle plan repeats.
   const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }] = await Promise.all([
@@ -4665,7 +4665,7 @@ export async function completeFollowup(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWorkFollowups(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({
     status: "done", note: String(formData.get("note") ?? "").trim() || null,
     done_by: p.name, done_at: new Date().toISOString(),
@@ -4679,7 +4679,7 @@ export async function skipFollowup(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWorkFollowups(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ status: "skipped", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Follow-up skipped", null, null);
   revalidatePath("/followups");
@@ -4692,7 +4692,7 @@ export async function fuSendQuestionnaire(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
   const token = "QT-" + Math.random().toString(36).slice(2, 8).toUpperCase();
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ stage: "LINK_SENT", token, no_answer: false }).eq("id", id);
   await logAudit(p, "Follow-up questionnaire sent", null, token);
   revalidatePath("/followups");
@@ -4701,7 +4701,7 @@ export async function fuSendQuestionnaire(formData: FormData) {
 export async function fuSendReminder(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ reminder_sent: true }).eq("id", id);
   await logAudit(p, "Follow-up reminder sent", null, null);
   revalidatePath("/followups");
@@ -4710,7 +4710,7 @@ export async function fuSendReminder(formData: FormData) {
 export async function fuNoAnswer(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ no_answer: true }).eq("id", id);
   await logAudit(p, "Follow-up — no answer", null, null);
   revalidatePath("/followups");
@@ -4719,7 +4719,7 @@ export async function fuNoAnswer(formData: FormData) {
 export async function fuBookInPerson(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: fu } = await supabase.from("followups").select("client_id, category, label").eq("id", id).maybeSingle();
   await supabase.from("followups").update({ stage: "BOOKED", status: "done", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Follow-up booked in-person", null, null);
@@ -4745,7 +4745,7 @@ export async function fuBookInPerson(formData: FormData) {
 export async function fuNoConsult(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ stage: "NO_CONSULT", status: "skipped", done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Follow-up — no consultation", null, null);
   revalidatePath("/followups");
@@ -4754,7 +4754,7 @@ export async function fuNoConsult(formData: FormData) {
 export async function fuMarkReceived(formData: FormData) {
   const p = await fuGuard(); if (!p) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ stage: "PENDING_REVIEW" }).eq("id", id);
   await logAudit(p, "Follow-up answers received", null, null);
   revalidatePath("/followups");
@@ -4765,7 +4765,7 @@ export async function fuCompleteReview(formData: FormData) {
   const id = String(formData.get("id"));
   const summary = String(formData.get("summary") ?? "").trim();
   if (!summary) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").update({ stage: "COMPLETED", status: "done", summary, done_by: p.name, done_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Follow-up review completed", null, null);
   revalidatePath("/followups");
@@ -4779,7 +4779,7 @@ export async function addFollowup(formData: FormData) {
   const label = String(formData.get("label") ?? "").trim();
   const due_date = String(formData.get("due_date") || todayISO());
   if (!client_id || !label) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("followups").upsert(
     { client_id, kind: "custom", label, due_date, priority: String(formData.get("priority") || "normal"), created_by: p.name },
     { onConflict: "client_id,label", ignoreDuplicates: true }
@@ -4797,7 +4797,7 @@ export async function createTemplate(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   if (!name || !subject || !body) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("message_templates").insert({
     name, subject, body, channel: String(formData.get("channel") || "WhatsApp"),
     category: String(formData.get("category") || "General"), active: true, created_by: p.name,
@@ -4810,7 +4810,7 @@ export async function createTemplate(formData: FormData) {
 export async function archiveTemplate(formData: FormData) {
   const p = await getProfile();
   if (!p || !canCampaigns(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("message_templates").update({ active: false }).eq("id", String(formData.get("id")));
   await logAudit(p, "Template archived", null, null);
   revalidatePath("/campaigns");
@@ -4822,7 +4822,7 @@ export async function createCampaign(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const template_id = String(formData.get("template_id") || "") || null;
   if (!name || !template_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("campaigns").insert({
     name, template_id, audience: String(formData.get("audience") || "all"),
     status: "draft", created_by: p.name,
@@ -4832,7 +4832,7 @@ export async function createCampaign(formData: FormData) {
 }
 
 // Resolve an audience to recipient clients (id, name, email).
-async function resolveAudience(supabase: ReturnType<typeof createClient>, audience: string) {
+async function resolveAudience(supabase: Awaited<ReturnType<typeof createClient>>, audience: string) {
   const { data: clients } = await supabase.from("clients").select("id, name, email, package_id").not("email", "is", null);
   let list = ((clients ?? []) as { id: string; name: string; email: string | null; package_id: string | null }[]).filter((c) => c.email);
 
@@ -4854,7 +4854,7 @@ export async function sendCampaignNow(formData: FormData) {
   const p = await getProfile();
   if (!p || !canCampaigns(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: camp } = await supabase.from("campaigns").select("id, name, audience, status, template_id").eq("id", id).maybeSingle();
   if (!camp || camp.status === "sent") return;
   const { data: tpl } = await supabase.from("message_templates").select("subject, body").eq("id", camp.template_id ?? "").maybeSingle();
@@ -4896,7 +4896,7 @@ export async function addWearableReading(formData: FormData) {
     const x = Number(v);
     return Number.isNaN(x) ? null : Math.round(x);
   };
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("wearable_readings").upsert(
     { client_id, date: String(formData.get("date") || todayISO()), source: "manual",
       steps: n("steps"), resting_hr: n("resting_hr"), sleep_min: n("sleep_min"), active_min: n("active_min"), calories: n("calories") },
@@ -4913,7 +4913,7 @@ export async function setWearableConnection(formData: FormData) {
   const provider = String(formData.get("provider"));
   const status = String(formData.get("status") || "connected");
   if (!client_id || !provider) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("wearable_connections").upsert(
     { client_id, provider, status, connected_at: new Date().toISOString() },
     { onConflict: "client_id,provider" }
@@ -4930,7 +4930,7 @@ export async function createHabit(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const name = String(formData.get("name") ?? "").trim();
   if (!client_id || !name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("habits").insert({
     client_id, name,
     cadence: String(formData.get("cadence") || "daily"),
@@ -4947,7 +4947,7 @@ export async function archiveHabit(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("habits").update({ active: false }).eq("id", id);
   await logAudit(p, "Habit archived", null, null);
   revalidatePath(`/clients/${client_id}`);
@@ -4955,7 +4955,7 @@ export async function archiveHabit(formData: FormData) {
 
 // client checks a habit on/off for today (portal)
 export async function toggleHabitSelf(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
@@ -4980,7 +4980,7 @@ export async function createAppointment(formData: FormData): Promise<{ ok: boole
   const client_id = String(formData.get("client_id"));
   const date = String(formData.get("date") || "");
   if (!client_id || !date) return { ok: false, error: "Missing client or date" };
-  const supabase = createClient();
+  const supabase = await createClient();
   const provider_id = String(formData.get("provider_id") || "") || null;
 
   // The discipline this booking is for (from the provider's role) — used both to
@@ -5106,7 +5106,7 @@ export async function setAppointmentStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["scheduled", "completed", "cancelled", "no_show"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("appointments").update({ status }).eq("id", id);
   await logAudit(p, `Appointment → ${status}`, null, null);
   revalidatePath("/appointments");
@@ -5120,7 +5120,7 @@ export async function cancelBooking(formData: FormData) {
   if (!p || !canEditAppointments(p.role)) return;
   const id = String(formData.get("appt_id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: appt } = await supabase.from("appointments").select("client_id").eq("id", id).maybeSingle();
   await supabase.from("appointments").update({ status: "cancelled" }).eq("id", id);
   const cid = (appt as { client_id: string | null } | null)?.client_id ?? null;
@@ -5140,7 +5140,7 @@ export async function rescheduleAppointment(formData: FormData) {
   if (date) patch.date = date;
   if (!Number.isNaN(hour)) patch.hour = hour;
   if (Object.keys(patch).length === 0) return { ok: false, error: "Nothing to change" };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Don't reschedule into a clash: same provider or same client already booked
   // at the target date & time.
@@ -5171,7 +5171,7 @@ export async function rescheduleAppointment(formData: FormData) {
 // Best-effort notifier: sends via provider when configured, always logs the
 // attempt to email_log. Never throws — safe to call from other actions.
 async function notifyEmail(opts: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: Awaited<ReturnType<typeof createClient>>;
   to: string | null | undefined;
   clientId?: string | null;
   leadId?: string | null;
@@ -5202,7 +5202,7 @@ export async function sendTestEmail(formData: FormData) {
   const template = String(formData.get("template") || "welcome");
   const name = String(formData.get("name") ?? "there").trim() || "there";
   if (!to) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await notifyEmail({ supabase, to, template, tpl: renderChoice(template, name), actor: p.name });
   await logAudit(p, "Test email attempted", to, template);
   revalidatePath("/notifications");
@@ -5219,7 +5219,7 @@ export async function startInvoicePayment(formData: FormData) {
   if (!cfg.configured) return { configured: false as const };
 
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: inv } = await supabase.from("invoices").select("id, num, amount, status, description").eq("id", id).maybeSingle();
   if (!inv || inv.status !== "Unpaid") return { configured: true as const, ok: false, error: "Invoice not payable" };
 
@@ -5251,7 +5251,7 @@ export async function confirmInvoicePayment(formData: FormData) {
   if (!verifyCheckoutSignature(orderId, paymentId, signature)) {
     return { ok: false, error: "Signature verification failed" };
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("invoices").update({
     status: "Paid", paid_date: todayISO(), method: "Online",
     gateway: "razorpay", gateway_order_id: orderId, gateway_payment_id: paymentId,
@@ -5275,7 +5275,7 @@ export async function createForm(formData: FormData) {
   let fields: { label: string; kind: string }[] = [];
   try { fields = JSON.parse(String(formData.get("fields") || "[]")); } catch { fields = []; }
   fields = fields.filter((f) => f.label && f.label.trim());
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("forms").insert({
     name, type: String(formData.get("type") || "intake"), fields, active: true, created_by: p.name,
   });
@@ -5289,7 +5289,7 @@ export async function assignForm(formData: FormData) {
   const form_id = String(formData.get("form_id"));
   const client_id = String(formData.get("client_id"));
   if (!form_id || !client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("form_responses").insert({ form_id, client_id, answers: {}, status: "pending" });
   await logAudit(p, "Form assigned", await clientName(supabase, client_id), null);
   revalidatePath("/forms");
@@ -5297,7 +5297,7 @@ export async function assignForm(formData: FormData) {
 
 // staff- or client-submitted answers. answers is a JSON string of {label: value}.
 export async function submitFormResponse(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const id = String(formData.get("id"));
@@ -5320,7 +5320,7 @@ export async function createTelehealthSession(formData: FormData) {
   const cfg = telehealthConfig();
   const slug = "Cureocity-" + crypto.randomUUID().slice(0, 8);
   const room_url = `${cfg.baseUrl.replace(/\/$/, "")}/${slug}`;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("telehealth_sessions").insert({
     client_id, provider: cfg.provider, room_url, status: "scheduled",
     scheduled_for: String(formData.get("scheduled_for") || "") || null,
@@ -5336,7 +5336,7 @@ export async function setTelehealthStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["scheduled", "active", "ended"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch: Record<string, unknown> = { status };
   if (status === "active") patch.started_at = new Date().toISOString();
   if (status === "ended") patch.ended_at = new Date().toISOString();
@@ -5351,7 +5351,7 @@ export async function setClientIdentity(formData: FormData) {
   if (!p || !canCompliance(p.role)) return;
   const client_id = String(formData.get("client_id"));
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("clients").update({
     abha_id: String(formData.get("abha_id") ?? "").trim() || null,
     uhid: String(formData.get("uhid") ?? "").trim() || null,
@@ -5374,7 +5374,7 @@ export async function addConsent(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const type = String(formData.get("type") ?? "").trim();
   if (!client_id || !type) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("consents").insert({
     client_id, type, granted: true,
     method: String(formData.get("method") || "signed"),
@@ -5390,7 +5390,7 @@ export async function addConsent(formData: FormData) {
 export async function revokeConsent(formData: FormData) {
   const p = await complianceGuard(); if (!p) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("consents").update({ granted: false, revoked_date: todayISO() }).eq("id", id);
   await logAudit(p, "Consent revoked", null, null);
   revalidatePath("/compliance");
@@ -5400,7 +5400,7 @@ export async function addBreach(formData: FormData) {
   const p = await complianceGuard(); if (!p) return;
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("breach_incidents").insert({
     title,
     description: String(formData.get("description") ?? "").trim() || null,
@@ -5418,7 +5418,7 @@ export async function setBreachStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["open", "investigating", "contained", "closed"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch: Record<string, unknown> = { status };
   if (String(formData.get("report") || "") === "1") {
     patch.reported_to_authority = true;
@@ -5433,7 +5433,7 @@ export async function addRetentionPolicy(formData: FormData) {
   const p = await complianceGuard(); if (!p) return;
   const data_type = String(formData.get("data_type") ?? "").trim();
   if (!data_type) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("retention_policies").insert({
     data_type, retain_years: Number(formData.get("retain_years")) || 7,
     legal_basis: String(formData.get("legal_basis") ?? "").trim() || null,
@@ -5454,7 +5454,7 @@ export async function createPrescription(formData: FormData) {
   items = items.filter((i) => i.drug && i.drug.trim());
   if (items.length === 0) return { ok: false, error: "No drugs added" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const status = String(formData.get("status") || "signed"); // draft | signed
   const { data: rx } = await supabase.from("prescriptions").insert({
     client_id, status,
@@ -5483,7 +5483,7 @@ export async function setPrescriptionStatus(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const status = String(formData.get("status"));
   if (!["draft", "signed", "dispensed", "cancelled"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch: Record<string, unknown> = { status };
   if (status === "signed") patch.signed_date = todayISO();
   await supabase.from("prescriptions").update(patch).eq("id", id);
@@ -5496,7 +5496,7 @@ export async function createOrder(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const test = String(formData.get("test") ?? "").trim();
   if (!client_id || !test) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("orders").insert({
     client_id, test,
     // Which consultation advised this test, so the requisition can print every
@@ -5529,7 +5529,7 @@ export async function shareRxToPortal(formData: FormData): Promise<{ ok?: boolea
   const id = String(formData.get("id") || "");
   if (!id) return { error: "No prescription" };
   const undo = String(formData.get("undo") || "") === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: row } = await supabase.from("prescriptions").select("client_id, status").eq("id", id).maybeSingle();
   const rx = row as { client_id: string | null; status: string } | null;
@@ -5555,7 +5555,7 @@ export async function shareLabToPortal(formData: FormData): Promise<{ ok?: boole
   const consultationId = String(formData.get("consultation_id") || "");
   if (!consultationId) return { error: "No consultation" };
   const undo = String(formData.get("undo") || "") === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: rows } = await supabase.from("orders")
     .select("id, client_id").eq("consultation_id", consultationId).neq("status", "cancelled");
@@ -5580,7 +5580,7 @@ export async function setOrderStatus(formData: FormData) {
   const client_id = String(formData.get("client_id") || "");
   const status = String(formData.get("status"));
   if (!["ordered", "collected", "resulted", "cancelled"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch: Record<string, unknown> = { status };
   if (status === "resulted") {
     patch.result = String(formData.get("result") ?? "").trim() || null;
@@ -5599,7 +5599,7 @@ export async function sellPass(formData: FormData) {
   if (!p || !canPos(p.role)) return;
   const pass_type_id = String(formData.get("pass_type_id"));
   if (!pass_type_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pt } = await supabase.from("pass_types").select("name, price, valid_days, entries").eq("id", pass_type_id).maybeSingle();
   if (!pt) return;
   const client_id = String(formData.get("client_id") || "") || null;
@@ -5628,7 +5628,7 @@ export async function usePass(formData: FormData) {
   const p = await getProfile();
   if (!p || !canPos(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: pass } = await supabase.from("passes").select("entries_total, entries_used, status, valid_until, name").eq("id", id).maybeSingle();
   if (!pass || pass.status !== "active") return;
   if (pass.valid_until && pass.valid_until < todayISO()) {
@@ -5647,7 +5647,7 @@ export async function addProduct(formData: FormData) {
   if (!p || !canPos(p.role)) return;
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("products").insert({
     name,
     sku: String(formData.get("sku") ?? "").trim() || null,
@@ -5664,7 +5664,7 @@ export async function restockProduct(formData: FormData) {
   if (!p || !canPos(p.role)) return;
   const id = String(formData.get("id"));
   const delta = Number(formData.get("delta")) || 0;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: prod } = await supabase.from("products").select("stock, name").eq("id", id).maybeSingle();
   if (!prod) return;
   const next = Math.max(0, Number(prod.stock) + delta);
@@ -5682,7 +5682,7 @@ export async function recordSale(formData: FormData) {
   cart = cart.filter((l) => l.id && Number(l.qty) > 0);
   if (cart.length === 0) return { ok: false, error: "Cart is empty" };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: prods } = await supabase.from("products").select("id, name, price, stock").in("id", cart.map((l) => l.id));
   const byId = new Map((prods ?? []).map((pr) => [pr.id, pr]));
 
@@ -5734,7 +5734,7 @@ export async function recordNps(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const score = Math.max(0, Math.min(10, Number(formData.get("score"))));
   if (!client_id || Number.isNaN(score)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("nps_responses").insert({
     client_id, score,
     comment: String(formData.get("comment") ?? "").trim() || null,
@@ -5752,7 +5752,7 @@ export async function winbackOffer(formData: FormData) {
   if (!p || !canRetention(p.role)) return;
   const client_id = String(formData.get("client_id"));
   if (!client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("messages").insert({
     client_id, sender: "staff", sender_name: p.name, channel: "WhatsApp",
     body: "We miss you at Cureocity! Here's 15% off your next package this month — reply to claim. 💚",
@@ -5768,7 +5768,7 @@ export async function sendNpsSurvey(formData: FormData) {
   if (!p || !canRetention(p.role)) return;
   const audience = String(formData.get("audience") || "all");
   const channel = String(formData.get("channel") || "WhatsApp");
-  const supabase = createClient();
+  const supabase = await createClient();
   let ids: string[] = [];
   if (audience === "all") {
     const { data } = await supabase.from("clients").select("id");
@@ -5790,7 +5790,7 @@ export async function awardLoyalty(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const pts = Number(formData.get("points")) || 0;
   if (!client_id || !pts) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: cur } = await supabase.from("loyalty").select("points").eq("client_id", client_id).maybeSingle();
   const next = Math.max(0, (cur?.points ?? 0) + pts);
   await supabase.from("loyalty").upsert({ client_id, points: next, updated_by: p.name, updated_at: new Date().toISOString() });
@@ -5802,7 +5802,7 @@ export async function redeemLoyalty(formData: FormData) {
   const p = await getProfile();
   if (!p || !canRetention(p.role)) return;
   const client_id = String(formData.get("client_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: cur } = await supabase.from("loyalty").select("points").eq("client_id", client_id).maybeSingle();
   const have = cur?.points ?? 0;
   if (have < 100) return;
@@ -5819,7 +5819,7 @@ export async function createReferral(formData: FormData) {
   const referred_name = String(formData.get("referred_name") ?? "").trim();
   if (!referred_name) return;
   const referrer_id = String(formData.get("referrer_id") || "") || null;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("referrals").insert({
     referrer_id, referred_name,
     referred_phone: String(formData.get("referred_phone") ?? "").trim() || null,
@@ -5838,7 +5838,7 @@ export async function setReferralStatus(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["invited", "joined", "rewarded"].includes(status)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch: Record<string, unknown> = { status };
   if (status === "rewarded") {
     const reward = Number(formData.get("reward_amount"));
@@ -5861,7 +5861,7 @@ export async function addMeasurement(formData: FormData) {
     const n = Number(v);
     return Number.isNaN(n) ? null : n;
   };
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("measurements").insert({
     client_id,
     date: String(formData.get("date") || todayISO()),
@@ -5889,7 +5889,7 @@ export async function logMealContact(formData: FormData) {
   // outcome — positive (replied / reached / met) or negative (not_replied /
   // no_answer / refused). no_response kept for legacy rows.
   const OK = ["sent", "called", "visited", "replied", "reached", "met", "not_replied", "no_answer", "no_response", "refused"];
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_contacts").insert({
     client_id, date: String(formData.get("date") || todayISO()),
     channel, outcome: OK.includes(outcome) ? outcome : "no_response",
@@ -5906,7 +5906,7 @@ export async function undoMealContact(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_contacts").delete().eq("id", id);
   await logAudit(p, "Meal-monitoring contact undone", null, id);
   revalidatePath("/meals");
@@ -5917,7 +5917,7 @@ export async function undoMealContact(formData: FormData) {
 
 // client logs a meal / asks a question (portal)
 export async function saveMealSelf(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id").eq("id", user.id).maybeSingle();
@@ -5939,7 +5939,7 @@ export async function reviewMeal(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const meal = String(formData.get("meal"));
   const review = String(formData.get("review") ?? "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_logs").upsert(
     { client_id, date: todayISO(), meal, review, updated_at: new Date().toISOString() },
     { onConflict: "client_id,date,meal" }
@@ -5956,7 +5956,7 @@ export async function logMealByStaff(formData: FormData) {
   const meal = String(formData.get("meal"));
   const description = String(formData.get("description") ?? "").trim();
   if (!client_id || !meal || !description) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_logs").upsert(
     { client_id, date: todayISO(), meal, description, nudged: false, updated_at: new Date().toISOString() },
     { onConflict: "client_id,date,meal" }
@@ -5973,7 +5973,7 @@ export async function nudgeMeal(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const meal = String(formData.get("meal"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_logs").upsert(
     { client_id, date: todayISO(), meal, nudged: true, updated_at: new Date().toISOString() },
     { onConflict: "client_id,date,meal" }
@@ -5990,7 +5990,7 @@ export async function answerMealDoubt(formData: FormData) {
   const client_id = String(formData.get("client_id"));
   const meal = String(formData.get("meal"));
   const answer = String(formData.get("answer") ?? "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_logs").update({ doubt_answer: answer, updated_at: new Date().toISOString() })
     .eq("client_id", client_id).eq("date", todayISO()).eq("meal", meal);
   revalidatePath("/meals");
@@ -6022,7 +6022,7 @@ function parseClientForm(formData: FormData) {
 export async function createClientRecord(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const c = parseClientForm(formData);
   if (!c.name) return;
 
@@ -6112,7 +6112,7 @@ export async function createClientRecord(formData: FormData) {
 export async function setClientOwner(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("clients").update({ owner: String(formData.get("owner") || "") || null }).eq("id", String(formData.get("id")));
   revalidatePath("/clients");
 }
@@ -6121,7 +6121,7 @@ export async function updateClientRecord(formData: FormData) {
   const p = await getProfile();
   if (!p || !canWrite(p.role)) return;
   const id = String(formData.get("id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   const c = parseClientForm(formData);
   await supabase.from("clients").update(c).eq("id", id);
   await logAudit(p, "Client updated", c.name, null);
@@ -6139,7 +6139,7 @@ export async function addConcern(formData: FormData) {
   const category = String(formData.get("category") || "").trim() || null;
   const body = String(formData.get("body") || "").trim();
   if (!body) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("concerns").insert({ client_id, role, category, body, raised_by: p.name, status: "Open" });
   await logAudit(p, "Concern raised", category ?? role, null);
   revalidatePath("/workspace");
@@ -6150,7 +6150,7 @@ export async function resolveConcern(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("concerns").update({ status: "Resolved", resolved_by: p.name, resolved_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Concern resolved", id, null);
   revalidatePath("/workspace");
@@ -6164,7 +6164,7 @@ export async function addMdtNote(formData: FormData) {
   if (!body) return;
   const escalated = String(formData.get("escalated") || "") === "on";
   const to_role = escalated ? (String(formData.get("to_role") || "").trim() || null) : null;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("mdt_notes").insert({
     client_id, author: p.name, body, escalated, to_role, status: escalated ? "Open" : null,
   });
@@ -6177,7 +6177,7 @@ export async function acknowledgeMdt(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("mdt_notes").update({ status: "Acknowledged" }).eq("id", id);
   await logAudit(p, "MDT escalation acknowledged", id, null);
   revalidatePath("/workspace");
@@ -6193,7 +6193,7 @@ export async function uploadResourceFile(_prev: UploadState, formData: FormData)
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file to upload." };
   if (file.size > 10 * 1024 * 1024) return { error: "File too large (max 10 MB)." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${role}/${crypto.randomUUID()}-${safe}`;
   const { error } = await supabase.storage.from("resources").upload(path, file, { contentType: file.type || undefined, upsert: false });
@@ -6209,7 +6209,7 @@ export async function deleteResourceFile(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: f } = await supabase.from("resource_files").select("path, name").eq("id", id).maybeSingle();
   if (f?.path) await supabase.storage.from("resources").remove([f.path]);
   await supabase.from("resource_files").delete().eq("id", id);
@@ -6228,7 +6228,7 @@ export async function addDietChart(formData: FormData) {
   const details = formData.getAll("meal_detail").map((v) => String(v).trim());
   const meals = labels.map((l, i) => [l, details[i] ?? ""]).filter(([l, d]) => l && d);
   if (meals.length === 0) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { count } = await supabase.from("diet_charts").select("id", { count: "exact", head: true }).eq("client_id", client_id);
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await supabase.from("diet_charts").insert({
@@ -6251,7 +6251,7 @@ export async function updateDietChart(formData: FormData) {
   if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
   if ((dc as { status: string } | null)?.status !== "Draft") return; // only drafts are editable
   const labels = formData.getAll("meal_label").map((v) => String(v).trim());
@@ -6275,7 +6275,7 @@ export async function submitDietChartForReview(formData: FormData) {
   if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: dc } = await supabase.from("diet_charts").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
   await supabase.from("diet_charts").update({ status: "In review", submitted_at: new Date().toISOString(), review_note: null }).eq("id", id);
   const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
@@ -6298,7 +6298,7 @@ export async function reviewDietChart(formData: FormData) {
   const decision = String(formData.get("decision") || "");
   if (!id || !["approve", "changes"].includes(decision)) return;
   const note = String(formData.get("note") || "").trim() || null;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: dc } = await supabase.from("diet_charts").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
   const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
   if (decision === "approve") {
@@ -6320,7 +6320,7 @@ export async function publishDietChart(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // Gate: a chart can only reach the client once the Super Admin approves it.
   const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
   if ((dc as { status: string } | null)?.status !== "Approved") return; // not approved → no-op
@@ -6346,7 +6346,7 @@ export async function publishDietChartDirect(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
   if ((dc as { status: string } | null)?.status === "Published") return; // already live
   await supabase.from("diet_charts").update({ status: "Published", published_at: new Date().toISOString() }).eq("id", id);
@@ -6359,7 +6359,7 @@ export async function deleteDietChart(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("diet_charts").delete().eq("id", id);
   await logAudit(p, "Diet chart deleted", id, null);
   revalidatePath("/workspace");
@@ -6380,7 +6380,7 @@ export async function aiInbodySummary(_prev: AiState, formData: FormData): Promi
   // The dietitian can paste the InBody report text (e.g. copied from the PDF)
   // into the box and hit Generate — the AI then summarises what they pasted.
   const pasted = String(formData.get("text") || "").trim();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("measurements")
     .select("id, date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr")
     .eq("client_id", client_id).order("date", { ascending: false }).limit(2);
@@ -6449,7 +6449,7 @@ export async function extractInbodySummary(_prev: AiState, formData: FormData): 
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return { error: "Pick a client first." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: f } = await supabase.from("files")
     .select("bucket, path, name").eq("client_id", client_id).eq("kind", "inbody")
@@ -6506,7 +6506,7 @@ export async function extractInbodySummary(_prev: AiState, formData: FormData): 
 // the AI. The summary lives on the file row (see migration 0116), because one
 // document has exactly one summary.
 
-async function reportFile(supabase: ReturnType<typeof createClient>, fileId: string) {
+async function reportFile(supabase: Awaited<ReturnType<typeof createClient>>, fileId: string) {
   const { data } = await supabase.from("files")
     .select("id, client_id, bucket, path, name, kind, report_label").eq("id", fileId).maybeSingle();
   return data as { id: string; client_id: string; bucket: string | null; path: string; name: string | null; kind: string | null; report_label: string | null } | null;
@@ -6518,7 +6518,7 @@ export async function extractReportSummary(_prev: AiState, formData: FormData): 
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const fileId = String(formData.get("file_id") || "");
   if (!fileId) return { error: "Pick a report first." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const f = await reportFile(supabase, fileId);
   if (!f) return { error: "Report not found." };
 
@@ -6547,13 +6547,13 @@ export async function aiReportSummary(_prev: AiState, formData: FormData): Promi
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const fileId = String(formData.get("file_id") || "");
   if (!fileId) return { error: "Pick a report first." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const f = await reportFile(supabase, fileId);
   if (!f) return { error: "Report not found." };
 
   const pasted = String(formData.get("text") || "").trim();
   const { pdfTextFromStorage } = await import("@/lib/pdf-text");
-  const text = pasted || await pdfTextFromStorage(supabase, f.bucket || "client-files", f.path);
+  const text = pasted || (await pdfTextFromStorage(supabase, f.bucket || "client-files", f.path));
   if (!text) return { error: "Nothing to summarise — the PDF has no readable text. Paste the values into the box." };
 
   let r = await openaiComplete(
@@ -6579,7 +6579,7 @@ export async function saveReportSummary(fileId: string, text: string): Promise<{
   const me = await getProfile();
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   if (!fileId) return { error: "Missing report." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const f = await reportFile(supabase, fileId);
   if (!f) return { error: "Report not found." };
   await supabase.from("files").update({ summary: text.trim() || null, summary_at: new Date().toISOString() }).eq("id", fileId);
@@ -6594,7 +6594,7 @@ export async function saveMeasurementSummary(client_id: string, text: string): P
   const me = await getProfile();
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   if (!client_id) return { error: "Missing client." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("measurements").select("id").eq("client_id", client_id).order("date", { ascending: false }).limit(1);
   const id = (data ?? [])[0]?.id as string | undefined;
   if (!id) return { error: "No InBody / measurement record to attach a summary to." };
@@ -6608,7 +6608,7 @@ export async function saveConsultationSummary(client_id: string, text: string): 
   const me = await getProfile();
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   if (!client_id) return { error: "Missing client." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("consultations").select("id").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1);
   const id = (data ?? [])[0]?.id as string | undefined;
   if (!id) return { error: "No consultation record to attach a summary to." };
@@ -6623,7 +6623,7 @@ export async function aiConsultSummary(_prev: AiState, formData: FormData): Prom
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return { error: "Pick a client first." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: cons }, { data: meas }, { data: cli }] = await Promise.all([
     // Every discipline's consult (doctor / dietitian / trainer / psychologist),
     // newest first — we keep the latest per discipline and use its questionnaire
@@ -6678,7 +6678,7 @@ export async function aiDietDraftStructured(client_id: string): Promise<DietDraf
   const me = await getProfile();
   if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
   if (!client_id) return { error: "Pick a client first." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: cons }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
     // Every discipline's consult, newest first — we keep the latest per kind and
     // use its saved summary (AI or manual) + questionnaire answers.
@@ -6738,7 +6738,7 @@ export async function aiDietDraft(_prev: AiState, formData: FormData): Promise<A
   if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return { error: "Pick a client first." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: cons }, { data: forms }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
     supabase.from("consultations").select("kind, summary, notes").eq("client_id", client_id).eq("status", "completed"),
     supabase.from("form_responses").select("answers").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
@@ -6769,7 +6769,7 @@ export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Pr
   const client_id = String(formData.get("client_id") || "");
   const date = String(formData.get("date") || todayISO());
   if (!client_id) return { error: "Pick a client first." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("meal_logs").select("meal, description, review, doubt, doubt_answer").eq("client_id", client_id).eq("date", date);
   const logs = (data ?? []) as { meal: string; description: string | null; review: string | null; doubt: string | null; doubt_answer: string | null }[];
   if (!logs.length) return { error: `No meals logged for ${date}.` };
@@ -6793,7 +6793,7 @@ export async function sendMealDaySummary(client_id: string, date?: string): Prom
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const day = date || todayISO();
   if (!client_id) return { error: "Missing client." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("meal_day_summaries").select("summary").eq("client_id", client_id).eq("date", day).maybeSingle();
   const summary = (row as { summary: string | null } | null)?.summary?.trim();
   if (!summary) return { error: "Write or generate the summary first, then send." };
@@ -6813,7 +6813,7 @@ export async function saveMealDaySummary(client_id: string, text: string, date?:
   if (!me || !canConsult(me.role)) return { error: "Not authorized." };
   const day = date || todayISO();
   if (!client_id) return { error: "Missing client." };
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("meal_day_summaries").upsert({ client_id, date: day, summary: text.trim() || null, updated_by: me.name, updated_at: new Date().toISOString() }, { onConflict: "client_id,date" });
   await logAudit(me, "Daily meal summary edited", client_id, day);
   return { ok: true };
@@ -6824,7 +6824,7 @@ export async function addRecipe(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const name = String(formData.get("name") || "").trim();
   if (!name) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("recipes").insert({
     week: String(formData.get("week") || "").trim() || null,
     name,
@@ -6842,7 +6842,7 @@ export async function toggleRecipe(formData: FormData) {
   const id = String(formData.get("id"));
   const published = String(formData.get("published") || "") === "true";
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("recipes").update({ published: !published }).eq("id", id);
   await logAudit(p, published ? "Recipe unpublished" : "Recipe published", id, null);
   revalidatePath("/workspace");
@@ -6853,7 +6853,7 @@ export async function deleteRecipe(formData: FormData) {
   if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
   const id = String(formData.get("id"));
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("recipes").delete().eq("id", id);
   await logAudit(p, "Recipe deleted", id, null);
   revalidatePath("/workspace");
@@ -6867,7 +6867,7 @@ export async function openWhiteboard(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const branch = String(formData.get("branch") ?? "") || p.branch || "Kochi";
   const date = String(formData.get("date") ?? "") || todayISO();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: existing } = await supabase.from("whiteboard_sessions")
     .select("id").eq("date", date).eq("branch", branch).maybeSingle();
@@ -6883,7 +6883,7 @@ export async function closeWhiteboard(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("session_id"));
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("whiteboard_sessions")
     .update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", id);
   await logAudit(p, "Whiteboard closed", id, null);
@@ -6898,7 +6898,7 @@ export async function addWhiteboardCard(formData: FormData) {
   const session_id = String(formData.get("session_id"));
   const client_id = String(formData.get("client_id"));
   if (!session_id || !client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: dupe } = await supabase.from("whiteboard_cards")
     .select("id").eq("session_id", session_id).eq("client_id", client_id).maybeSingle();
@@ -6918,7 +6918,7 @@ export async function addWhiteboardCard(formData: FormData) {
 export async function removeWhiteboardCard(formData: FormData) {
   const p = await getProfile();
   if (!p || !canConsult(p.role)) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("whiteboard_cards").delete().eq("id", String(formData.get("id")));
   revalidatePath("/whiteboard");
 }
@@ -6931,7 +6931,7 @@ export async function setWhiteboardCardStatus(formData: FormData) {
   const status = String(formData.get("status"));
   if (!["pending", "discussed", "deferred"].includes(status)) return;
   const headline = String(formData.get("headline") ?? "").trim();
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("whiteboard_cards")
     .update({ status, ...(headline ? { headline } : {}) }).eq("id", id);
   revalidatePath("/whiteboard");
@@ -6951,7 +6951,7 @@ export async function tweakWhiteboardScore(formData: FormData) {
 
   const raw = String(formData.get("score") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: card } = await supabase.from("whiteboard_cards")
     .select("score_tweaks").eq("id", id).maybeSingle();
@@ -6979,7 +6979,7 @@ export async function addWhiteboardNote(formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!card_id || !body) return;
   const kind = String(formData.get("kind") ?? "insight");
-  const supabase = createClient();
+  const supabase = await createClient();
 
   await supabase.from("whiteboard_notes").insert({
     card_id, body,
@@ -7009,7 +7009,7 @@ export async function toggleWhiteboardNote(formData: FormData) {
   if (!p || !canConsult(p.role)) return;
   const id = String(formData.get("id"));
   const done = String(formData.get("done")) === "true";
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("whiteboard_notes").update({ done: !done }).eq("id", id);
   revalidatePath("/whiteboard");
 }
@@ -7030,7 +7030,7 @@ export async function answerWhiteboardAlert(formData: FormData) {
   const why = String(formData.get("why") ?? "").trim();
   const solution = String(formData.get("solution") ?? "").trim();
   if (!why && !solution) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("whiteboard_alert_responses").upsert({
     session_id, client_id, alert_key,
     alert_label: String(formData.get("alert_label") ?? "") || null,
@@ -7050,7 +7050,7 @@ export async function markClientReviewed(formData: FormData) {
   const session_id = String(formData.get("session_id"));
   const client_id = String(formData.get("client_id"));
   if (!session_id || !client_id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   if (String(formData.get("undo")) === "true") {
     await supabase.from("whiteboard_reviews").delete().eq("session_id", session_id).eq("client_id", client_id);
   } else {
@@ -7075,7 +7075,7 @@ export async function getClientQuickView(clientId: string) {
   const p = await getProfile();
   if (!p || !canSee(p.role, "/clients")) return null;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
 
   const [
@@ -7153,7 +7153,7 @@ export async function togglePackageFreeze(formData: FormData) {
   const id = String(formData.get("client_id"));
   if (!id) return;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: c } = await supabase
     .from("clients").select("name, frozen, freeze_days").eq("id", id).maybeSingle();
   if (!c) return;
@@ -7202,7 +7202,7 @@ export async function createDietPlan(formData: FormData) {
   if (!client_id) return { error: "Missing client." };
   const consultation_id = String(formData.get("consultation_id") || "") || null;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { count } = await supabase.from("diet_plans").select("id", { count: "exact", head: true }).eq("client_id", client_id);
   const { data: plan, error } = await supabase.from("diet_plans").insert({
     client_id, consultation_id, version: (count ?? 0) + 1, status: "draft",
@@ -7241,7 +7241,7 @@ export async function saveDietPlan(
   const p = await planGuard();
   if (!p) return { error: "Not authorized." };
   if (!id) return { error: "Missing plan." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // A published plan is what a client is eating from — edits go to a new
   // version rather than silently changing the document under them.
@@ -7287,7 +7287,7 @@ export async function submitDietPlan(formData: FormData) {
   if (!p) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // The builder disables Submit while problems remain, but a disabled button is
   // a courtesy, not a control. Re-check here so a stale tab or a direct post
@@ -7324,7 +7324,7 @@ export async function reviewDietPlan(formData: FormData) {
   const id = String(formData.get("id") || "");
   const approve = String(formData.get("approve") || "") === "true";
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // Only a plan actually awaiting review can move. Without this, "Send back to
   // draft" would flip a PUBLISHED, shared plan back to draft in place — and
   // since shared_at was never cleared, editing and re-approving it would
@@ -7380,7 +7380,7 @@ export async function shareDietPlan(formData: FormData) {
   const id = String(formData.get("id") || "");
   const undo = String(formData.get("undo") || "") === "true";
   if (!id) return { error: "Missing plan." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("diet_plans").select("status, client_id").eq("id", id).maybeSingle();
   const r = row as { status: string; client_id: string } | null;
   if (!r) return { error: "Plan not found." };
@@ -7406,7 +7406,7 @@ export async function newDietPlanVersion(formData: FormData) {
   if (!p) return { error: "Not authorized." };
   const id = String(formData.get("id") || "");
   if (!id) return { error: "Missing plan." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: src } = await supabase.from("diet_plans").select("*").eq("id", id).maybeSingle();
   const s = src as Record<string, unknown> | null;
@@ -7478,7 +7478,7 @@ export async function renderDocument(formData: FormData): Promise<{ ok?: boolean
   const url = renderUrl(kind, id);
   if (!provider || !url) return { error: "PDF rendering isn't set up yet." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Who the document belongs to, and what to call the file. Each document type
   // reaches its client differently, so resolve it per kind rather than guessing.
@@ -7547,12 +7547,12 @@ export async function documentLink(formData: FormData): Promise<{ url?: string; 
   if (!docId) return { error: "Missing document." };
   // The document's own kind decides who may hand it over — see canDeliverDoc.
   {
-    const sb0 = createClient();
+    const sb0 = await createClient();
     const { data: k } = await sb0.from("issued_documents").select("kind").eq("id", docId).maybeSingle();
     const kind = (k as { kind: string } | null)?.kind ?? "";
     if (!canDeliverDoc(p.role, kind)) return { error: "Not authorized." };
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("issued_documents").select("path, file_name").eq("id", docId).maybeSingle();
   const r = data as { path: string; file_name: string } | null;
   if (!r) return { error: "Document not found." };
@@ -7575,7 +7575,7 @@ export async function sendDocumentWhatsApp(formData: FormData): Promise<{ ok?: b
   if (!docId) return { error: "Missing document." };
   // The document's own kind decides who may hand it over — see canDeliverDoc.
   {
-    const sb0 = createClient();
+    const sb0 = await createClient();
     const { data: k } = await sb0.from("issued_documents").select("kind").eq("id", docId).maybeSingle();
     const kind = (k as { kind: string } | null)?.kind ?? "";
     if (!canDeliverDoc(p.role, kind)) return { error: "Not authorized." };
@@ -7584,7 +7584,7 @@ export async function sendDocumentWhatsApp(formData: FormData): Promise<{ ok?: b
   const wati = watiReadiness();
   if (!wati.ready) return { error: `WhatsApp isn't set up — missing ${wati.missing.join(", ")}.` };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("issued_documents")
     .select("id, kind, path, file_name, client_id, sent_at, clients(name, phone)")
     .eq("id", docId).maybeSingle();
@@ -7648,7 +7648,7 @@ export async function createDietAssessment(formData: FormData): Promise<{ ok?: b
   const client_id = String(formData.get("client_id") || "");
   if (!client_id) return { error: "Missing client." };
   const consultation_id = String(formData.get("consultation_id") || "") || null;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [{ data: c }, { data: m }, { data: alg }, { data: consult }, { count }] = await Promise.all([
     supabase.from("clients").select("dob, gender, occupation, height, weight, conditions, goals").eq("id", client_id).maybeSingle(),
@@ -7687,7 +7687,7 @@ export async function saveDietAssessment(id: string, patch: Record<string, unkno
   const p = await planGuard();
   if (!p) return { error: "Not authorized." };
   if (!id) return { error: "Missing assessment." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: cur } = await supabase.from("diet_assessments").select("status").eq("id", id).maybeSingle();
   const status = (cur as { status: string } | null)?.status;
   if (!status) return { error: "Assessment not found." };
@@ -7724,7 +7724,7 @@ export async function newDietAssessmentVersion(formData: FormData): Promise<{ ok
   if (!p) return { error: "Not authorized." };
   const id = String(formData.get("id") || "");
   if (!id) return { error: "Missing assessment." };
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: src } = await supabase.from("diet_assessments").select("*").eq("id", id).maybeSingle();
   const s = src as Record<string, unknown> | null;
@@ -7749,7 +7749,7 @@ export async function submitDietAssessment(formData: FormData) {
   if (!p) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.from("diet_assessments").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
   // Only the Medical Director can approve these (canReviewDietChart), so only
   // they are told. A notification its recipient cannot act on is just noise —
@@ -7768,7 +7768,7 @@ export async function reviewDietAssessment(formData: FormData) {
   const id = String(formData.get("id") || "");
   const approve = String(formData.get("approve") || "") === "true";
   if (!id) return;
-  const supabase = createClient();
+  const supabase = await createClient();
   // Only a row actually awaiting review may move — same reasoning as the plan:
   // otherwise a published, shared document could be flipped back and rewritten
   // under a client who already has it.
@@ -7804,7 +7804,7 @@ export async function shareDietAssessment(formData: FormData): Promise<{ ok?: bo
   const id = String(formData.get("id") || "");
   const undo = String(formData.get("undo") || "") === "true";
   if (!id) return { error: "Missing assessment." };
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: row } = await supabase.from("diet_assessments").select("status, client_id").eq("id", id).maybeSingle();
   const r = row as { status: string; client_id: string } | null;
   if (!r) return { error: "Assessment not found." };

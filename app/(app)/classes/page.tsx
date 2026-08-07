@@ -17,7 +17,7 @@ export default async function ClassesPage() {
   if (!me || !canSee(me.role, "/classes")) redirect("/dashboard");
   const editable = canClasses(me.role);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: roomData }, { data: trainerData }, { data: classData }, { data: clientData }] = await Promise.all([
     supabase.from("rooms").select("id, name, capacity").order("id"),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),

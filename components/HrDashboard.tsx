@@ -15,7 +15,7 @@ const sectionTitle: React.CSSProperties = { fontSize: 11, fontWeight: 700, lette
 const qa: React.CSSProperties = { border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 11px", fontSize: 12.5, fontWeight: 600, textDecoration: "none", color: "var(--ink)" };
 
 export default async function HrDashboard({ name, role = "HR" }: { name: string; role?: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayISO();
   const month = today.slice(0, 7);
 

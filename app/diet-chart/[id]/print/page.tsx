@@ -9,10 +9,12 @@ export const dynamic = "force-dynamic";
 // Printable diet chart — a clean A4-style page the dietitian or client can save
 // as PDF via the browser. RLS gates access: staff see any chart; a client only
 // their own published one. No PDF library needed.
-export default async function DietChartPrintPage({
-  params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string } }) {
-  const supabase = createClient();
+export default async function DietChartPrintPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
+  const supabase = await createClient();
   const { data } = await supabase
     .from("diet_charts")
     .select("id, client_id, version, status, calories, protein, notes, summary, meals, by_name, created_at")

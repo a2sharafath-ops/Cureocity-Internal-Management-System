@@ -29,7 +29,7 @@ export default async function MealMonitoringSection({
   // Only accept a valid past/today date; never the future.
   const TODAY = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today ? date : today;
   const isToday = TODAY === today;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Diet clients = clients on an active Comprehensive / BluePrint package.
   const { data: cpRows } = await supabase

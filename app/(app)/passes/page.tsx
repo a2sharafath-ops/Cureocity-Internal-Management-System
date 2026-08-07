@@ -18,7 +18,7 @@ export default async function PassesPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/passes")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [clientsR, passTypesR, passesR] = await Promise.all([
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("pass_types").select("id, name, price, entries, valid_days").eq("active", true).order("price"),

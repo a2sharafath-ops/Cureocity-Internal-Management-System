@@ -17,14 +17,15 @@ export const dynamic = "force-dynamic";
 const PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
 const CATS = ["blueprint", "comprehensive", "training", "membership"] as const;
 
-export default async function OnboardingPage({ searchParams }: { searchParams: { cat?: string; done?: string } }) {
+export default async function OnboardingPage(props: { searchParams: Promise<{ cat?: string; done?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/onboarding")) redirect("/dashboard");
   // Overseers (Super Admin / Admin / Manager) chase the front desk to do the
   // booking rather than booking it themselves.
   const overseer = isBillingOverseer(me.role);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: clientsD }, { data: pkgsD }, { data: cpsD }, { data: invD }, { data: bloodD }, { data: bpD }, { data: consultD }, { data: sessD }, { data: staffD }, { data: apptD }, { data: assignD }] =
     await Promise.all([
       supabase.from("clients").select("id, name, package_id, pro_id, joined").limit(5000),

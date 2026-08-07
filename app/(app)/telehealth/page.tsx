@@ -19,7 +19,7 @@ export default async function TelehealthPage() {
   if (!me || !canSee(me.role, "/telehealth")) redirect("/dashboard");
 
   const th = telehealthStatus();
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: sessData }, { data: clientData }] = await Promise.all([
     supabase.from("telehealth_sessions").select("id, provider, room_url, status, scheduled_for, created_at, clients(id, name)").order("created_at", { ascending: false }).limit(80),
     supabase.from("clients").select("id, name").order("name"),

@@ -62,7 +62,7 @@ export default async function ReportsPage() {
   const me = await getProfile();
   if (!me || !canSee(me.role, "/reports")) redirect("/dashboard");
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const nowMs = Date.now();
   const days30Ago = new Date(nowMs - 30 * 86400000).toISOString().slice(0, 10);
   const [{ data: invData }, { data: leadData }, { data: clientData }, sessTotal, sessDone, { data: subData }, { data: recentSess }] = await Promise.all([

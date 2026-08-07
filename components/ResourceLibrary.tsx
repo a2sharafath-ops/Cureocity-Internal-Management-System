@@ -1,8 +1,8 @@
 "use client";
 import { IST } from "@/lib/datetime";
 
-import { useRef, useEffect } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useRef, useEffect } from "react";
+import { useFormStatus } from "react-dom";
 import { uploadResourceFile, deleteResourceFile, type UploadState } from "@/lib/actions";
 import { disciplineLabel } from "@/lib/disciplines";
 
@@ -32,7 +32,7 @@ function SubmitBtn() {
 }
 
 export default function ResourceLibrary({ role, roleLabel, files }: { role: string; roleLabel: string; files: ResourceRow[] }) {
-  const [state, formAction] = useFormState<UploadState, FormData>(uploadResourceFile, {});
+  const [state, formAction] = useActionState<UploadState, FormData>(uploadResourceFile, {});
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state.ok) ref.current?.reset(); }, [state.ok]);
 

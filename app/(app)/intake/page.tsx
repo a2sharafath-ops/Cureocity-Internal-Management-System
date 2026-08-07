@@ -13,7 +13,8 @@ const input: React.CSSProperties = { padding: "0 13px", border: "1px solid var(-
 const lbl: React.CSSProperties = { fontSize: 13, color: "var(--muted)", margin: "12px 0 5px", display: "block", fontWeight: 500 };
 const row2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 };
 
-export default async function IntakePage({ searchParams }: { searchParams: { done?: string } }) {
+export default async function IntakePage(props: { searchParams: Promise<{ done?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/intake")) redirect("/dashboard");
   const done = searchParams.done === "1";

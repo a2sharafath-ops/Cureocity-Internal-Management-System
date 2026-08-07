@@ -21,12 +21,14 @@ type OrderRow = {
  * orders placed before consultations were linked (and for a one-off order from
  * the worklist) an order id also works, and prints that order alone.
  */
-export default async function LabPrintPage({
-  params, searchParams,
-}: { params: { id: string }; searchParams: { auto?: string; doc_token?: string } }) {
+export default async function LabPrintPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string; doc_token?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // A renderer has no session, so a valid one-document token unlocks the
   // read. See lib/print-access.ts.
-  const supabase = printClient("lab", params.id, searchParams.doc_token);
+  const supabase = await printClient("lab", params.id, searchParams.doc_token);
 
   // Try the session first, then fall back to a single order.
   const { data: bySession } = await supabase

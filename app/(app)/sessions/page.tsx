@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
 
 const BASE_HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6am..9pm gym hours
 
-export default async function SessionsPage({ searchParams }: { searchParams: { week?: string } }) {
+export default async function SessionsPage(props: { searchParams: Promise<{ week?: string }> }) {
+  const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me || !canSee(me.role, "/sessions")) redirect("/dashboard");
   const writer = canManageSessions(me.role);
   const today = todayISO();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const [staffR, slotsR, clientsR, assessR, recovR, classesR] = await Promise.all([
     supabase.from("staff").select("id, name, color, is_trainer").order("name"),
