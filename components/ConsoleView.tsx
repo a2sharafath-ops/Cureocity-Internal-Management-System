@@ -422,7 +422,7 @@ export default function ConsoleView({
             <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 2 }}>{client.name}{client.code ? ` · ${client.code}` : ""} · {kind} consultation</div>
           </div>
           <span style={{ flex: 1 }} />
-          {status === "completed" && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
+          {status === "completed" &&<span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>}
         </div>
       </div>
 
@@ -628,6 +628,15 @@ export default function ConsoleView({
         </main>
 
         {/* ---- right rail: flags, summary, tools --------------------------- */}
+        {/* Nothing in this rail may shrink.
+            It is a flex column with a maxHeight, so when the contents are
+            taller than the screen flexbox starts shrinking children. Normally
+            `min-height: auto` stops an item collapsing below its own content —
+            but that protection is disabled for any item whose overflow is not
+            `visible`. The Session tools card sets `overflow: hidden` to clip
+            its collapsed rows, which made it the one card flexbox was allowed
+            to crush to zero height. It rendered, sat in the DOM, and was
+            invisible. `flexShrink: 0` here means the rail scrolls instead. */}
         <aside style={{ display: "flex", flexDirection: "column", gap: 12, position: "sticky", top: 12, maxHeight: "calc(100vh - 24px)", overflowY: "auto" }}>
 
           {/* Flags */}
@@ -675,56 +684,19 @@ export default function ConsoleView({
             </div>
           </div>
 
-          {/* Consultation summary + the two submits */}
-          <div style={{ ...box, padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-              <div style={{ fontWeight: 700 }}>Consultation summary</div>
-              <span style={{ flex: 1 }} />
-              {!client.isLead && (
-                <>
-                  {/* Compile = assemble from what's already recorded (no AI).
-                      Generate = ask the model. Both write into the same box, so
-                      autosave keeps whichever the clinician ends up with. */}
-                  <button type="button" onClick={compileSummary} title="Draft the summary from the health card, vitals, InBody, reports, flags, orders and prescription" style={{ ...ghost, padding: "5px 10px", fontSize: 12 }}>🧾 Compile</button>
-                  <button type="button" onClick={generateSummary} disabled={aiBusy} style={{ ...ghost, background: "var(--brand-tint)", color: "var(--brand-text)", padding: "5px 10px", fontSize: 12, cursor: aiBusy ? "default" : "pointer" }}>{aiBusy ? "Working…" : "✨ AI draft"}</button>
-                </>
-              )}
-            </div>
-            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>This becomes the shareable summary that feeds the BluePrint sign-off. Generate a draft from the client&apos;s data, or write your own.</div>
-            <textarea form={FORM} name="summary" rows={9} value={summaryText} onChange={(e) => setSummaryText(e.target.value)} placeholder="Session notes, findings, plan…" style={inp} />
-            {aiMsg && <div style={{ marginTop: 6, fontSize: 12, color: "var(--brand-text)" }}>{aiMsg}</div>}
-            {/* Autosave status — a long intake is only trustworthy if the
-                clinician can see it's being kept. */}
-            {status !== "completed" && (
-              <div style={{ fontSize: 11.5, color: autoErr ? "var(--red-text)" : "var(--muted)", marginTop: 8 }}>
-                {autoErr ? `Autosave failed — ${autoErr}` : saving ? "Saving…" : savedAt ? `Autosaved ${savedAt}` : "Autosave on"}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              <button form={FORM} type="submit" onClick={() => setComplete(false)} style={{ ...ghost, padding: "9px 14px", fontSize: 13 }}>Save draft</button>
-              <button form={FORM} type="submit" onClick={() => setComplete(true)} style={{ ...toolBtn, padding: "9px 16px", fontSize: 13 }}>✓ Complete &amp; summarize</button>
-            </div>
-            {!client.isLead && (
-              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
-                <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview PDF →</a> · reflects the last saved summary. Save first, review, edit if needed, then share from the consultations list.
-                {pdf && (
-                  <div style={{ marginTop: 8 }}>
-                    {/* Preview prints from your own browser and leaves nothing
-                        behind. This stores a file — what the client was actually
-                        given, frozen. Save first: it renders the SAVED summary. */}
-                    <RenderPdfButton kind="summary" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Session tools — Doctor console only. Each is its own form posting to
               its own action, so submitting one leaves the questionnaire alone.
               Collapsed by default: they're needed a few times a session, not
-              continuously, and open they crowd out the summary. */}
+              continuously, and open they crowd out the summary.
+
+              ABOVE the summary card on purpose. These are used DURING the
+              consultation; the summary is written at the end. Sitting below it,
+              the tools were off the bottom of the rail on a laptop screen, and
+              the Complete button — the thing that ends the consultation — came
+              before the vitals and orders you need to record first. */}
           {canTools && (
-            <div style={{ ...box, overflow: "hidden" }}>
+            // flexShrink: 0 is load-bearing. See the note on the <aside>.
+            <div style={{ ...box, overflow: "hidden", flexShrink: 0 }}>
               <div style={{ padding: "12px 16px 9px" }}>
                 <div style={{ fontWeight: 700, fontSize: 13 }}>Session tools</div>
                 <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Vitals · lab tests · prescription</div>
@@ -821,6 +793,50 @@ export default function ConsoleView({
               </ToolRow>
             </div>
           )}
+
+          {/* Consultation summary + the two submits */}
+          <div style={{ ...box, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700 }}>Consultation summary</div>
+              <span style={{ flex: 1 }} />
+              {!client.isLead && (
+                <>
+                  {/* Compile = assemble from what's already recorded (no AI).
+                      Generate = ask the model. Both write into the same box, so
+                      autosave keeps whichever the clinician ends up with. */}
+                  <button type="button" onClick={compileSummary} title="Draft the summary from the health card, vitals, InBody, reports, flags, orders and prescription" style={{ ...ghost, padding: "5px 10px", fontSize: 12 }}>🧾 Compile</button>
+                  <button type="button" onClick={generateSummary} disabled={aiBusy} style={{ ...ghost, background: "var(--brand-tint)", color: "var(--brand-text)", padding: "5px 10px", fontSize: 12, cursor: aiBusy ? "default" : "pointer" }}>{aiBusy ? "Working…" : "✨ AI draft"}</button>
+                </>
+              )}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>This becomes the shareable summary that feeds the BluePrint sign-off. Generate a draft from the client&apos;s data, or write your own.</div>
+            <textarea form={FORM} name="summary" rows={9} value={summaryText} onChange={(e) => setSummaryText(e.target.value)} placeholder="Session notes, findings, plan…" style={inp} />
+            {aiMsg && <div style={{ marginTop: 6, fontSize: 12, color: "var(--brand-text)" }}>{aiMsg}</div>}
+            {/* Autosave status — a long intake is only trustworthy if the
+                clinician can see it's being kept. */}
+            {status !== "completed" && (
+              <div style={{ fontSize: 11.5, color: autoErr ? "var(--red-text)" : "var(--muted)", marginTop: 8 }}>
+                {autoErr ? `Autosave failed — ${autoErr}` : saving ? "Saving…" : savedAt ? `Autosaved ${savedAt}` : "Autosave on"}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <button form={FORM} type="submit" onClick={() => setComplete(false)} style={{ ...ghost, padding: "9px 14px", fontSize: 13 }}>Save draft</button>
+              <button form={FORM} type="submit" onClick={() => setComplete(true)} style={{ ...toolBtn, padding: "9px 16px", fontSize: 13 }}>✓ Complete &amp; summarize</button>
+            </div>
+            {!client.isLead && (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
+                <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview PDF →</a> · reflects the last saved summary. Save first, review, edit if needed, then share from the consultations list.
+                {pdf && (
+                  <div style={{ marginTop: 8 }}>
+                    {/* Preview prints from your own browser and leaves nothing
+                        behind. This stores a file — what the client was actually
+                        given, frozen. Save first: it renders the SAVED summary. */}
+                    <RenderPdfButton kind="summary" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div style={{ ...box, padding: "11px 16px" }}>
             <Link href={client.isLead ? `/leads/${client.id}` : `/clients/${client.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>{client.isLead ? "Open lead record →" : "Open full client card →"}</Link>
