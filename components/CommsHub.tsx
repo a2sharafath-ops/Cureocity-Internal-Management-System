@@ -114,7 +114,10 @@ const inpControl: React.CSSProperties = { ...inp, padding: "0 10px", height: 36,
                   {thread.map((m) => {
                     const out = m.sender === "staff";
                     return (
-                      <div key={m.id} style={{ alignSelf: out ? "flex-end" : "flex-start", maxWidth: "76%", background: out ? "var(--brand-fill)" : "#fff", color: out ? "#fff" : "inherit", border: out ? "none" : "1px solid var(--border)", borderRadius: 12, padding: "8px 11px", fontSize: 13 }}>
+                      // flexShrink: 0 — capped scrolling flex column; see the
+                      // note in MessageThread. Safe today only because these
+                      // bubbles leave overflow visible.
+                      <div key={m.id} style={{ alignSelf: out ? "flex-end" : "flex-start", flexShrink: 0, maxWidth: "76%", background: out ? "var(--brand-fill)" : "#fff", color: out ? "#fff" : "inherit", border: out ? "none" : "1px solid var(--border)", borderRadius: 12, padding: "8px 11px", fontSize: 13 }}>
                         {m.body}
                         <div style={{ fontSize: 10, opacity: 0.75, marginTop: 3 }}>{out && m.sender_name ? `${m.sender_name} · ` : ""}{m.channel} · {when(m.created_at)}</div>
                       </div>

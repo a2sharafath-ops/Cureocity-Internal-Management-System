@@ -21,7 +21,11 @@ export default function MessageThread({ messages, viewer }: { messages: Msg[]; v
       {messages.map((m) => {
         const mine = m.sender === viewer;
         return (
-          <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+          // flexShrink: 0 — this is a capped, scrolling flex column, so a child
+          // is only safe from being squashed while its overflow stays visible.
+          // Adding an ellipsis or a clipped corner to a bubble would otherwise
+          // silently collapse it. (Cost us an invisible panel in ConsoleView.)
+          <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", flexShrink: 0 }}>
             <div
               style={{
                 maxWidth: "72%",
