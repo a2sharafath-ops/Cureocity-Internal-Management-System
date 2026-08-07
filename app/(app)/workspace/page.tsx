@@ -80,7 +80,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
   const roQuery = readOnly ? "?ro=1" : "";
 
   // Read-only cross-discipline view is limited to the client-detail tabs.
-  const RO_TABS = ["dash", "clients", "monitor"];
+  const RO_TABS = ["dash", "clients"];
   const baseTabs = readOnly ? WS_TABS[roleKey].filter((t) => RO_TABS.includes(t.key)) : WS_TABS[roleKey];
 
   // The reviewer's queue needs a home of its own. Sign-off lives in sections of
@@ -643,30 +643,6 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
     }));
   }
 
-  // Client Monitoring.
-  let monitorRows: MonitorRow[] = [];
-  if (tab === "monitor") {
-    const scopedIds = scoped.map((c) => c.id);
-    const { data: fu } = scopedIds.length
-      ? await supabase.from("followups").select("client_id, status").in("client_id", scopedIds).eq("status", "pending")
-      : { data: [] as { client_id: string; status: string }[] };
-    const fuCount = new Map<string, number>();
-    for (const f of (fu ?? []) as { client_id: string }[]) fuCount.set(f.client_id, (fuCount.get(f.client_id) ?? 0) + 1);
-    const conCount = new Map<string, number>();
-    for (const c of concerns) if (c.status === "Open" && c.client_id) conCount.set(c.client_id, (conCount.get(c.client_id) ?? 0) + 1);
-    const lastMdt = new Map<string, string>();
-    for (const m of mdtNotes) if (m.client_id && !lastMdt.has(m.client_id)) lastMdt.set(m.client_id, m.body);
-    monitorRows = scoped.map((c) => {
-      const cr = c as ClientRow;
-      return {
-        id: c.id, name: c.name, code: c.code, pkg: cr.packages?.name ?? c.package_id,
-        sessionsUsed: cr.used ?? 0, sessionsTotal: cr.packages?.sessions ?? 0,
-        openFollowups: fuCount.get(c.id) ?? 0, openConcerns: conCount.get(c.id) ?? 0,
-        conditions: c.conditions, goals: c.goals ?? [], lastMdt: lastMdt.get(c.id) ?? null,
-      };
-    });
-  }
-
   const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
   const fmtHour = (h: number | null) => {
     if (h == null) return "—";
@@ -862,7 +838,10 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
                   {roleKey === "diet" && <Link href="/meals" style={qa}>Meal Monitoring</Link>}
                   {roleKey === "trainer" && <Link href="/trainer" style={qa}>Session Board</Link>}
                   {roleKey === "coach" && <Link href="/followups" style={qa}>Follow-ups</Link>}
+                  {/* With /emr and /orders out of the sidebar, these quick
+                      actions are the doctor's front door to both. */}
                   {roleKey === "doctor" && <Link href="/emr" style={qa}>Client Records</Link>}
+                  {roleKey === "doctor" && <Link href="/orders" style={qa}>Orders &amp; Labs</Link>}
                 </div>
               </div>
               )}
@@ -893,9 +872,6 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
       {/* ---- WHITEBOARD ---- */}
       {tab === "whiteboard" && <WhiteboardSection me={me} />}
 
-      {/* ---- CARE TEAM HUB ---- */}
-      {tab === "team" && <CareTeamSection me={me} />}
-
       {/* ---- EXERCISE LIBRARY (trainer) ---- */}
       {tab === "exlib" && <ExerciseLibrarySection />}
 
@@ -916,9 +892,6 @@ export default async function WorkspacePage({ searchParams }: { searchParams: { 
 
       {/* ---- MDT BOARD ---- */}
       {tab === "board" && <MdtBoard notes={mdtNotes} clients={clientOpts} />}
-
-      {/* ---- CLIENT MONITORING ---- */}
-      {tab === "monitor" && <ClientMonitoring role={roleKey} rows={monitorRows} linkQuery={roQuery} />}
 
       {/* ---- RESOURCE LIBRARY ---- */}
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}

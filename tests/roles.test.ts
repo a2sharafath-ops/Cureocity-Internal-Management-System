@@ -278,9 +278,10 @@ describe("isAdminish", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Client Records and Orders & Labs were reachable only by going through a
-// specific client — a doctor had no "everything I've ordered" view. They now
-// have their own nav entries, gated the usual way.
+// Client Records and Orders & Labs no longer sit in the sidebar — charts open
+// from the Clients list / Client 360, and the orders worklist is a quick
+// action on the doctor workspace. The routes themselves are still gated the
+// usual way, which is what these tests pin down.
 // ---------------------------------------------------------------------------
 describe("clinical nav", () => {
   it("the Doctor and Medical Director can see both", () => {

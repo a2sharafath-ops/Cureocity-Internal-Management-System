@@ -27,18 +27,11 @@ const SECTIONS: NavSection[] = [
   // stays live — clinicians reach its tools via My Workspace, and the workspace
   // "Integrated Dashboard" tab + BackLinks still point at it.
   //
-  // Client Records and Orders & Labs went dark with it: they were only ever
-  // reachable by going through a specific client, so a doctor had no way to see
-  // "everything I have ordered" or open a chart without first remembering whose
-  // it was. They have their own entries now. Visibility is the usual NAV_ACCESS
-  // gate — Doctor, Medical Director, Administrator, Manager.
-  {
-    title: "Clinical",
-    items: [
-      { href: "/emr", label: "Client Records", icon: "🩺" },
-      { href: "/orders", label: "Orders & Labs", icon: "🧪" },
-    ],
-  },
+  // Client Records (/emr) and Orders & Labs (/orders) are also out of the nav.
+  // The pages stay live — charts open from the Clients list / Client 360
+  // ("Open chart →"), and the orders worklist is a quick action on the doctor
+  // workspace. Access is still the NAV_ACCESS gate — Doctor, Medical Director,
+  // Administrator, Manager.
   {
     title: "Front Desk",
     items: [
@@ -182,10 +175,9 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
             {section.items.map((item) => {
               // The whiteboard hangs off both hubs, so it highlights whichever
               // one this role actually reaches it from.
-              const WORKSPACE_ROUTES = ["/pro", "/trainer", "/meals", "/console", ...(clin ? ["/whiteboard"] : [])];
-              // /emr and /orders have their own nav entries now, so they must
-              // NOT also light up Care Team — two highlighted items at once
-              // reads as a bug.
+              // /emr and /orders have no nav entries of their own; clinicians
+              // reach both through My Workspace, so that's what stays lit.
+              const WORKSPACE_ROUTES = ["/pro", "/trainer", "/meals", "/console", ...(clin ? ["/whiteboard", "/emr", "/orders"] : [])];
               const CARETEAM_ROUTES = ["/blueprint", "/exlib", "/telehealth", ...(clin ? [] : ["/whiteboard"])];
               const active = pathname === item.href || pathname.startsWith(item.href + "/") ||
                 (item.href === "/workspace" && WORKSPACE_ROUTES.some((r) => pathname === r || pathname.startsWith(r + "/"))) ||
