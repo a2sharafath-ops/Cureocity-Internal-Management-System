@@ -162,6 +162,9 @@ export default function ConsoleView({
   // what "Save draft" / "Complete & summarize" submit (name="summary"), so there
   // is a single source of truth for the shareable summary.
   const [summaryText, setSummaryText] = useState(summary ?? "");
+  // Carries "am I completing or just saving" — see the note on the form below.
+  const completeRef = useRef<HTMLInputElement>(null);
+  const setComplete = (v: boolean) => { if (completeRef.current) completeRef.current.value = v ? "true" : "false"; };
 
   // Which right-rail tool is expanded. Only one at a time: they're each a form,
   // and three open at once pushed the summary off the screen.
@@ -380,7 +383,15 @@ export default function ConsoleView({
     <div style={{ maxWidth: 1440 }}>
       {/* The questionnaire form is declared once and empty; its controls live
           wherever they read best and associate through form="consult-form". */}
+      {/* The console has ONE form and every control attaches to it by id, to
+          avoid nesting forms inside forms. That has a sharp edge: a submit
+          button that is not a DESCENDANT of the form does not contribute its
+          name/value to the FormData React builds — so `name="complete"
+          value="true"` on the button below was silently dropped and every
+          press saved a draft. The consultation could not be completed at all.
+          The intent now rides on a hidden field the buttons set on click. */}
       <form id={FORM} action={saveConsultSession} />
+      <input ref={completeRef} form={FORM} type="hidden" name="complete" defaultValue="false" />
       <input form={FORM} type="hidden" name="id" value={id} />
       <input form={FORM} type="hidden" name="kind" value={kind} />
       {/* Only report a duration if the timer actually ran. It used to floor at 1
@@ -599,7 +610,7 @@ export default function ConsoleView({
                 <button type="button" onClick={copyQSummary} disabled={!answeredQA.length} style={{ ...ghost, background: copied ? "var(--green-bg)" : "#fff", color: copied ? "var(--green-text)" : "var(--ink)", cursor: answeredQA.length ? "pointer" : "default" }}>{copied ? "✓ Copied" : "Copy"}</button>
                 {/* Saves the questionnaire right here, without scrolling to the
                     summary panel. Same submit as the rail's "Save draft". */}
-                <button form={FORM} type="submit" name="complete" value="false" disabled={!answeredQA.length} title="Save these answers as a draft — the consultation stays open" style={{ ...ghost, cursor: answeredQA.length ? "pointer" : "default" }}>Save draft</button>
+                <button form={FORM} type="submit" onClick={() => setComplete(false)} disabled={!answeredQA.length} title="Save these answers as a draft — the consultation stays open" style={{ ...ghost, cursor: answeredQA.length ? "pointer" : "default" }}>Save draft</button>
               </div>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>The answered questionnaire, ready to copy &amp; paste. <b>Save draft</b> stores the answers and keeps the consultation open.</div>
               <textarea readOnly value={qSummaryText} rows={12} style={inp} />
@@ -681,8 +692,8 @@ export default function ConsoleView({
               </div>
             )}
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              <button form={FORM} type="submit" name="complete" value="false" style={{ ...ghost, padding: "9px 14px", fontSize: 13 }}>Save draft</button>
-              <button form={FORM} type="submit" name="complete" value="true" style={{ ...toolBtn, padding: "9px 16px", fontSize: 13 }}>✓ Complete &amp; summarize</button>
+              <button form={FORM} type="submit" onClick={() => setComplete(false)} style={{ ...ghost, padding: "9px 14px", fontSize: 13 }}>Save draft</button>
+              <button form={FORM} type="submit" onClick={() => setComplete(true)} style={{ ...toolBtn, padding: "9px 16px", fontSize: 13 }}>✓ Complete &amp; summarize</button>
             </div>
             {!client.isLead && (
               <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
