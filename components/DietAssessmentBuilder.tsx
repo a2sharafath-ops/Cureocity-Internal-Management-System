@@ -6,8 +6,7 @@ import {
   ACTIVITY_FACTORS, mifflinStJeor, estimateTee, bmiFrom, fatMassFrom, ageOn, assessmentGaps,
 } from "@/lib/diet-assessment";
 import { saveDietAssessment, submitDietAssessment, reviewDietAssessment, newDietAssessmentVersion } from "@/lib/actions";
-import DietAssessmentShare from "@/components/DietAssessmentShare";
-import RenderPdfButton from "@/components/RenderPdfButton";
+import DeliverButton from "@/components/DeliverButton";
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
@@ -253,10 +252,9 @@ export default function DietAssessmentBuilder({
                   <input type="hidden" name="id" value={id} />
                   <button style={darkBtn}>New version</button>
                 </form>
-                <DietAssessmentShare assessmentId={id} sharedAt={sharedAt} />
-                {/* Preview prints from your browser and leaves nothing behind;
-                    this stores the file that was actually issued. */}
-                <RenderPdfButton kind="assess" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} />
+                {/* One press: stores the file, shares it, sends it. */}
+                <DeliverButton kind="assess" id={id} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
+                  whatsappReady={Boolean(whatsapp?.ready)} alreadySent={sharedAt} />
               </>
             )}
           </>

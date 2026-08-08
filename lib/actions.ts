@@ -7653,6 +7653,80 @@ export async function documentLink(formData: FormData): Promise<{ url?: string; 
  * That also means the delivery record points at the exact bytes the client
  * received, which is the whole reason the table exists.
  */
+/**
+ * Give a document to the client — the whole errand, one press.
+ *
+ * The console used to expose the three mechanical steps separately: Generate
+ * PDF file, Share to portal, Send on WhatsApp. Every one of them was a real
+ * operation, but no clinician has ever wanted to do only one of them. The
+ * doctor's intention is "the patient should have this"; making them assemble it
+ * from three buttons meant documents routinely got rendered and then never
+ * delivered — which is exactly the state Test Client 1's diet plan was found in.
+ *
+ * The confirm lives in the UI, not here: this is the act itself.
+ *
+ * Partial success is reported honestly rather than swallowed. If WhatsApp fails
+ * the portal share still stands, and the clinician is told which half landed —
+ * silently claiming success would be worse than the three buttons were.
+ */
+export async function deliverDocument(formData: FormData): Promise<{
+  ok?: boolean; error?: string; url?: string; name?: string;
+  portal?: boolean; whatsapp?: boolean; note?: string;
+}> {
+  const kind = String(formData.get("kind") || "") as DocKind;
+  const id = String(formData.get("id") || "");
+
+  // 1. The file. Guards, role checks and readiness all live in renderDocument.
+  const rendered = await renderDocument(formData);
+  if (rendered.error) return { error: rendered.error };
+
+  // 2. The portal. Each document reaches the client through its own column, so
+  //    dispatch per kind rather than pretending there is one share.
+  const share = new FormData();
+  let portalErr: string | undefined;
+  if (kind === "rx") {
+    share.set("id", id);
+    portalErr = (await shareRxToPortal(share)).error;
+  } else if (kind === "lab") {
+    share.set("consultation_id", id);
+    portalErr = (await shareLabToPortal(share)).error;
+  } else if (kind === "plan") {
+    share.set("id", id);
+    await shareDietPlan(share);
+  } else if (kind === "assess") {
+    share.set("id", id);
+    portalErr = (await shareDietAssessment(share)).error;
+  } else if (kind === "summary") {
+    // A consultation summary is shared by its own flag, the same one the
+    // Summaries list toggles.
+    share.set("id", id);
+    share.set("field", "shared");
+    share.set("value", "false");   // current value — toggleConsultFlag inverts it
+    await toggleConsultFlag(share);
+  }
+
+  // 3. WhatsApp, if it is configured. Not an error when it isn't — plenty of
+  //    clinics run portal-only, and refusing to deliver at all would be wrong.
+  let whatsapp = false;
+  let waErr: string | undefined;
+  if (rendered.docId && watiReadiness().ready) {
+    const wa = new FormData();
+    wa.set("doc_id", rendered.docId);
+    const r = await sendDocumentWhatsApp(wa);
+    if (r.error) waErr = r.error; else whatsapp = true;
+  }
+
+  const note = [
+    portalErr ? `Portal: ${portalErr}` : "In the client portal",
+    waErr ? `WhatsApp: ${waErr}` : whatsapp ? "sent on WhatsApp" : null,
+  ].filter(Boolean).join(" · ");
+
+  return {
+    ok: true, url: rendered.url, name: rendered.name,
+    portal: !portalErr, whatsapp, note,
+  };
+}
+
 export async function sendDocumentWhatsApp(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   const p = await getProfile();
   if (!p) return { error: "Not authorized." };

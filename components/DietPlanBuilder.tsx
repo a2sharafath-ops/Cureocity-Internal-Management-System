@@ -6,8 +6,7 @@ import {
   mealHeading, planTotals, targetCheck, planProblems, resequence,
 } from "@/lib/diet-plan";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
-import DietPlanShare from "@/components/DietPlanShare";
-import RenderPdfButton from "@/components/RenderPdfButton";
+import DeliverButton from "@/components/DeliverButton";
 
 export type PlanMeta = { allergies: string | null; notes: string | null; issued_on: string | null };
 
@@ -170,10 +169,10 @@ export default function DietPlanBuilder({
           </label>
         )}
         <a href={`/diet-plan/${planId}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF →</a>
-        {/* Preview prints from the reader's browser and leaves nothing behind.
-            This makes a stored file — attachable, and a record of what was
-            issued, which the live print page can never be. */}
-        <RenderPdfButton kind="plan" id={planId} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} />
+        {/* One press: makes the stored file, puts it in the portal, sends it.
+            Preview above is just a look — it leaves nothing behind. */}
+        <DeliverButton kind="plan" id={planId} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
+          whatsappReady={Boolean(whatsapp?.ready)} alreadySent={initial.sharedAt} />
 
         {!readOnly && status === "draft" && (
           <>
@@ -213,7 +212,6 @@ export default function DietPlanBuilder({
               <input type="hidden" name="id" value={planId} />
               <button style={darkBtn}>New version</button>
             </form>
-            <DietPlanShare planId={planId} sharedAt={initial.sharedAt} />
           </>
         )}
       </div>

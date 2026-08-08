@@ -7,10 +7,9 @@ import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
 import { deriveFlags, labsFromAnswers } from "@/lib/auto-flags";
 import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
-import ShareToPortal from "@/components/ShareToPortal";
 import { sectionsFor, questionBody, answeredIn } from "@/lib/consult-sections";
 import AmbientScribe from "@/components/AmbientScribe";
-import RenderPdfButton from "@/components/RenderPdfButton";
+import DeliverButton from "@/components/DeliverButton";
 
 type Flag = { text: string; severity: string };
 
@@ -752,11 +751,9 @@ export default function ConsoleView({
                     </a>
                   )}
                   {orders.length > 0 && pdf && (
-                    <div style={{ marginTop: 6 }}>
-                      <RenderPdfButton kind="lab" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
-                    </div>
+                    <DeliverButton kind="lab" id={id} clientName={client.name} ready={pdf.ready} missing={pdf.missing}
+                      whatsappReady={Boolean(whatsapp?.ready)} alreadySent={labSharedAt ?? null} />
                   )}
-                  {orders.length > 0 && <ShareToPortal kind="lab" id={id} sharedAt={labSharedAt ?? null} label="Share to portal" />}
                 </form>
               </ToolRow>
 
@@ -786,11 +783,9 @@ export default function ConsoleView({
                     </a>
                   )}
                   {rxPrintId && pdf && (
-                    <div style={{ marginTop: 6 }}>
-                      <RenderPdfButton kind="rx" id={rxPrintId} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
-                    </div>
+                    <DeliverButton kind="rx" id={rxPrintId} clientName={client.name} ready={pdf.ready} missing={pdf.missing}
+                      whatsappReady={Boolean(whatsapp?.ready)} alreadySent={rxSharedAt ?? null} />
                   )}
-                  {rxPrintId && <ShareToPortal kind="rx" id={rxPrintId} sharedAt={rxSharedAt ?? null} label="Share to portal" />}
                   <Link href={`/emr/${client.id}`} style={{ display: "block", marginTop: 6, fontSize: 11.5, color: "var(--muted)", textDecoration: "none" }}>Full prescription in the client&apos;s record →</Link>
                 </form>
               </ToolRow>
@@ -828,13 +823,14 @@ export default function ConsoleView({
             </div>
             {!client.isLead && (
               <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--muted)" }}>
-                <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview PDF →</a> · reflects the last saved summary. Save first, review, edit if needed, then share from the consultations list.
+                <a href={`/consult/${id}/print`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Preview →</a> · shows the last SAVED summary, so save before sending.
                 {pdf && (
                   <div style={{ marginTop: 8 }}>
                     {/* Preview prints from your own browser and leaves nothing
                         behind. This stores a file — what the client was actually
                         given, frozen. Save first: it renders the SAVED summary. */}
-                    <RenderPdfButton kind="summary" id={id} ready={pdf.ready} missing={pdf.missing} whatsapp={whatsapp} label="Generate PDF file" />
+                    <DeliverButton kind="summary" id={id} clientName={client.name} ready={pdf.ready} missing={pdf.missing}
+                      whatsappReady={Boolean(whatsapp?.ready)} />
                   </div>
                 )}
               </div>
