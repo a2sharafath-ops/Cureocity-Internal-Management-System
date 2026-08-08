@@ -63,6 +63,27 @@ export async function updateSession(request: NextRequest) {
   // session and (to show an "expired link" message) without one.
   const isReset = path === "/reset-password";
 
+  // ---- printable documents fetched by the PDF renderer ----------------------
+  //
+  // The renderer is an outside machine with no cookie. Without this it was
+  // redirected to /login, and the "PDF" it produced was a photograph of the
+  // sign-in screen — which is exactly what the first live render came back as.
+  //
+  // Middleware deliberately does NOT verify the token here. It only declines to
+  // redirect, and lets the page decide. Every print page already resolves its
+  // data through printClient(), which unlocks a service-role read ONLY for a
+  // token that matches this document's kind and id and is under ten minutes
+  // old; anything else falls back to the ordinary session client, which for a
+  // caller with no session returns nothing and renders "not found".
+  //
+  // So a wrong or missing token costs an attacker a 404, not a document, and
+  // the secret stays out of the edge runtime.
+  const isPrintDoc = /^\/(diet-plan|rx|lab|consult|diet-assessment)\/[^/]+\/print$/.test(path);
+  const hasDocToken = Boolean(request.nextUrl.searchParams.get("doc_token"));
+  if (!user && isPrintDoc && hasDocToken) {
+    return response;
+  }
+
   if (!user && !isLogin && !isReset) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
