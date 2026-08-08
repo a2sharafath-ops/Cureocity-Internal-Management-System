@@ -35,8 +35,27 @@ export type TimelineEvent = {
 };
 
 /** Date-only values become midday so they sort inside their own day. */
-export const atDay = (d: string | null | undefined): string | null =>
-  d ? `${d}T12:00:00Z` : null;
+/**
+ * Normalise a date for the timeline: midday UTC, so a date-only column can't
+ * drift across a day boundary when rendered in IST.
+ *
+ * It has to cope with BOTH shapes the app stores, and it didn't. Most columns
+ * are date-only ("2026-08-07"), but a few are full timestamps
+ * ("2026-08-07T04:41:15.218496+00:00"). Appending "T12:00:00Z" to a timestamp
+ * produced "…+00:00T12:00:00Z", which Date.parse rejects — and buildTimeline
+ * silently drops anything unparseable.
+ *
+ * The visible symptom: CONSULTATIONS never appeared on a client's Journey
+ * timeline. `consultations.created_at` is a timestamp; packages, invoices,
+ * prescriptions and blood requests are all date-only, so everything else showed
+ * up and only the consultations were missing. Nothing errored, nothing logged.
+ */
+export const atDay = (d: string | null | undefined): string | null => {
+  if (!d) return null;
+  // Already a timestamp (has a time part) — take the calendar day from it.
+  const day = d.length > 10 ? d.slice(0, 10) : d;
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? `${day}T12:00:00Z` : null;
+};
 
 export const KIND_ICON: Record<TimelineKind, string> = {
   remark: "🗒", call: "📞", email: "✉️", message: "💬",
