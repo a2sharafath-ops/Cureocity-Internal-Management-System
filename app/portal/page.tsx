@@ -22,7 +22,6 @@ import { mealHeading, type PlanMeal, type PlanOption } from "@/lib/diet-plan";
 
 export const dynamic = "force-dynamic";
 
-const TODAY = todayISO();
 
 function fmtHour(h: number | null) {
   if (h == null) return "—";
@@ -48,6 +47,13 @@ function AssessmentStat({ label, value }: { label: string; value: string | null 
 }
 
 export default async function PortalHome() {
+  // NOT at module scope. `export const dynamic = "force-dynamic"` re-runs the
+  // component on every request, but module initialisation happens ONCE per warm
+  // lambda — so a module-level `const TODAY = todayISO()` froze at whatever the
+  // date was on cold start, and the page kept serving that day's rows until the
+  // instance recycled. Refreshing did not help, which is what made it look like
+  // a data problem rather than a caching one.
+  const TODAY = todayISO();
   const supabase = await createClient();
 
   // RLS scopes these to the logged-in client only

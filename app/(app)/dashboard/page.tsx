@@ -22,7 +22,6 @@ import { todayISO } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
 
-const TODAY = todayISO();
 
 function addDays(iso: string, days: number) {
   const d = new Date(iso + "T00:00:00Z");
@@ -53,6 +52,13 @@ function Kpi({ label, value, sub, href }: { icon?: string; iconBg?: string; icon
 }
 
 export default async function DashboardPage() {
+  // NOT at module scope. `export const dynamic = "force-dynamic"` re-runs the
+  // component on every request, but module initialisation happens ONCE per warm
+  // lambda — so a module-level `const TODAY = todayISO()` froze at whatever the
+  // date was on cold start, and the whole page kept serving that day's
+  // appointments, sessions and "due today" work until the instance recycled.
+  // Refreshing did not help, which is what made it look like a data problem.
+  const TODAY = todayISO();
   const me = await getProfile();
   const { effective } = await getViewRole();
 

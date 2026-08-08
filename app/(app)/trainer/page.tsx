@@ -12,7 +12,6 @@ import { todayISO, todayLabel } from "@/lib/today";
 
 export const dynamic = "force-dynamic";
 
-const TODAY = todayISO();
 
 function fmtHour(h: number | null) {
   if (h == null) return "—";
@@ -32,6 +31,13 @@ function initials(name: string) {
 }
 
 export default async function TrainerPage() {
+  // NOT at module scope. `export const dynamic = "force-dynamic"` re-runs the
+  // component on every request, but module initialisation happens ONCE per warm
+  // lambda — so a module-level `const TODAY = todayISO()` froze at whatever the
+  // date was on cold start, and the page kept serving that day's rows until the
+  // instance recycled. Refreshing did not help, which is what made it look like
+  // a data problem rather than a caching one.
+  const TODAY = todayISO();
   const me = await getProfile();
   if (!me || !canSee(me.role, "/trainer")) redirect("/dashboard");
 
