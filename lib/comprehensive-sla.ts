@@ -42,9 +42,12 @@ export type ComprehensiveInput = {
   /** package validity in days; decides how many 28-day cycles run */
   validityDays?: number | null;
   consults: ConsultRow[];
-  /** care_protocols consolidated gates */
-  consolidatedAt: string | null;
-  approvedAt: string | null;
+  // consolidatedAt / approvedAt used to live here, for a 48h "consolidated
+  // summary approved" gate. The gate was removed; the fields stayed, accepted
+  // by every caller and read by nothing, and approveComprehensive — the only
+  // thing that could have written them — never got a button. BluePrint's
+  // three-discipline sign-off is the real one. Removed rather than left as a
+  // plausible-looking hook that does nothing.
   /** diet_charts.drafted_at — earliest draft for this client */
   dietDraftedAt: string | null;
   /** client_workouts — earliest plan of at least a week */

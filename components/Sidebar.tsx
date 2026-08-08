@@ -42,6 +42,10 @@ const SECTIONS: NavSection[] = [
       { href: "/appointments", label: "Appointment Calendar", icon: "📅" },
       { href: "/sessions", label: "Training Schedule", icon: "🏋" },
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },
+      // Forms & Consent existed as a complete module — build, assign, sign —
+      // with nothing linking to it. Given a door rather than deleted: it is how
+      // consents stop being paper, and signing is properly gated now.
+      { href: "/forms", label: "Forms & Consent", icon: "📝" },
       { href: "/followups", label: "Follow-ups", icon: "📞" },
       { href: "/messages", label: "Communications", icon: "💬" },
       { href: "/retention", label: "Retention", icon: "💚" },

@@ -26,8 +26,6 @@ type View = {
   startDate: string;
   validityDays: number;
   consults: { kind: string; completedAt: string | null; approvedAt: string | null; prescriptionNeeded: boolean | null }[];
-  consolidatedAt: string | null;
-  approvedAt: string | null;
   dietDraftedAt: string | null;
   workoutPlannedAt: string | null;
   prescriptionSharedAt: string | null;

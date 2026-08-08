@@ -141,8 +141,6 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
       startDate: p.start_date,
       validityDays: validity.get(p.client_id) ?? 28,
       consults: byClient.get(p.client_id) ?? [],
-      consolidatedAt: p.consolidated_at,
-      approvedAt: p.approved_at,
       dietDraftedAt: draftAt.get(p.client_id) ?? null,
       workoutPlannedAt: planAt.get(p.client_id) ?? null,
       prescriptionSharedAt: rxAt.get(p.client_id) ?? null,

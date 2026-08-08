@@ -10,8 +10,6 @@ const base = {
   startDate: "2026-06-01",
   validityDays: 28,
   consults: [],
-  consolidatedAt: null,
-  approvedAt: null,
   dietDraftedAt: null,
   workoutPlannedAt: null,
   prescriptionSharedAt: null,

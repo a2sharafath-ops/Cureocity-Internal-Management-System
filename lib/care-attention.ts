@@ -37,7 +37,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("client_workouts").select("client_id"),
     sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
     sb.from("blueprints").select("client_id, generated"),
-    sb.from("care_protocols").select("client_id, start_date, approved_at").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
+    sb.from("care_protocols").select("client_id, start_date").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
     sb.from("concerns").select("client_id, body, created_at").eq("status", "Open"),
     sb.from("coach_assessments").select("client_id, marker, date, tone, band").order("date", { ascending: false }),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
@@ -139,7 +139,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     (bloodBy.get(b.client_id) ?? bloodBy.set(b.client_id, new Map()).get(b.client_id)!).set(b.panel ?? "blueprint", b.submitted);
   }
   const bpGen = new Set(((bp ?? []) as { client_id: string; generated: boolean }[]).filter((r) => r.generated).map((r) => r.client_id));
-  const protoBy = new Map(((protos ?? []) as { client_id: string; start_date: string | null; approved_at: string | null }[]).map((r) => [r.client_id, r]));
+  const protoBy = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r]));
   const apptsBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (appts ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push(a);

@@ -54,7 +54,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("diet_charts").select("id").eq("client_id", clientId).limit(1),
     sb.from("client_workouts").select("id").eq("client_id", clientId).limit(1),
     sb.from("blueprints").select("generated").eq("client_id", clientId).maybeSingle(),
-    sb.from("care_protocols").select("start_date, approved_at").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),
+    sb.from("care_protocols").select("start_date").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),
   ]);
 
   // The Day-2 "diet chart explanation" lives in the follow-ups system, not the

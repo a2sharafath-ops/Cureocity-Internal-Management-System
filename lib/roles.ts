@@ -393,9 +393,9 @@ export function accessAreas(role: string): number | "all" {
 
 // Capability flags per role (mirrors the prototype's RBAC capability set).
 export const ROLE_CAPS: Record<string, string[]> = {
-  "Super Admin":         ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
-  "Administrator":       ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
-  "Manager":             ["refund", "viewAudit", "config", "finance", "hr", "phi", "insurance"],
+  "Super Admin":         ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi"],
+  "Administrator":       ["refund", "manageUsers", "viewAudit", "config", "finance", "hr", "phi"],
+  "Manager":             ["refund", "viewAudit", "config", "finance", "hr", "phi"],
   "Medical Director":    ["phi", "viewAudit"],
   "Front Desk":          [],
   "Doctor":              ["phi"],
@@ -403,7 +403,7 @@ export const ROLE_CAPS: Record<string, string[]> = {
   "Fitness Trainer":     ["phi"],
   "Health Coach":        ["phi"],
   "Psychologist":        ["phi"],
-  "Finance":             ["refund", "finance", "viewAudit", "insurance"],
+  "Finance":             ["refund", "finance", "viewAudit"],
   "HR":                  ["hr"],
   "Staff":               [],
 };

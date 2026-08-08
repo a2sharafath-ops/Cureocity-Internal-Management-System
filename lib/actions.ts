@@ -1205,33 +1205,6 @@ export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok
   return { ok: true };
 }
 
-/**
- * Approve a Comprehensive client's consolidated summary — the doctor's sign-off
- * once all three initial consults (doctor, diet, trainer) are complete. Writes
- * care_protocols.consolidated_at + approved_at, which stops the 48h consolidated
- * clock (it otherwise has no writer and perpetually breaches).
- */
-export async function approveComprehensive(formData: FormData) {
-  const p = await getProfile();
-  // The comment below called this the doctor's sign-off while the guard let any
-  // role with canConsult approve it — a Health Coach or Fitness Trainer could
-  // sign the consolidated Comprehensive summary. canEmr is the doctor set
-  // (Doctor + Medical Director + admins), which is what the wording promised.
-  if (!p || !canEmr(p.role)) return;
-  const client_id = String(formData.get("client_id") || "");
-  if (!client_id) return;
-  const supabase = await createClient();
-  const { data: cons } = await supabase.from("consultations").select("kind, status").eq("client_id", client_id);
-  const done = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
-  if (!(done.has("Doctor") && done.has("Diet") && done.has("Trainer"))) return; // not ready
-  const now = new Date().toISOString();
-  await supabase.from("care_protocols")
-    .update({ consolidated_at: now, approved: true, approved_at: now, approved_by: p.name })
-    .eq("client_id", client_id).eq("protocol", "comprehensive").eq("status", "active");
-  await logAudit(p, "Comprehensive consolidated summary approved", await clientName(supabase, client_id), null);
-  revalidatePath(`/clients/${client_id}`);
-  revalidatePath("/", "layout");
-}
 
 // ---- consultations (professional workspace) --------------------------------
 
@@ -2145,8 +2118,6 @@ export async function getComprehensiveView(clientId: string) {
     validityDays: (cp?.package_id === "comp12" ? 84 : 28),
     consults: ((consults ?? []) as { kind: string; completed_at: string | null; approved_at: string | null; prescription_needed: boolean | null }[])
       .map((c) => ({ kind: c.kind, completedAt: c.completed_at, approvedAt: c.approved_at, prescriptionNeeded: c.prescription_needed })),
-    consolidatedAt: proto.consolidated_at as string | null,
-    approvedAt: proto.approved_at as string | null,
     dietDraftedAt: ((charts ?? [])[0] as { drafted_at: string | null } | undefined)?.drafted_at ?? null,
     workoutPlannedAt: plan?.created_at ?? null,
     prescriptionSharedAt: ((rx ?? [])[0] as { shared_at: string | null } | undefined)?.shared_at ?? null,
@@ -6811,19 +6782,6 @@ export async function saveMeasurementSummary(client_id: string, text: string): P
   return { ok: true };
 }
 
-export async function saveConsultationSummary(client_id: string, text: string): Promise<{ ok?: boolean; error?: string }> {
-  const me = await getProfile();
-  if (!me || !canConsult(me.role)) return { error: "Not authorized." };
-  if (!client_id) return { error: "Missing client." };
-  const supabase = await createClient();
-  const { data } = await supabase.from("consultations").select("id").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1);
-  const id = (data ?? [])[0]?.id as string | undefined;
-  if (!id) return { error: "No consultation record to attach a summary to." };
-  await supabase.from("consultations").update({ ai_summary: text.trim() || null, ai_summary_at: new Date().toISOString() }).eq("id", id);
-  await logAudit(me, "Consultation summary edited", client_id, null);
-  revalidatePath(`/clients/${client_id}`);
-  return { ok: true };
-}
 
 export async function aiConsultSummary(_prev: AiState, formData: FormData): Promise<AiState> {
   const me = await getProfile();
@@ -6940,35 +6898,6 @@ export async function aiDietDraftStructured(client_id: string): Promise<DietDraf
   }
 }
 
-export async function aiDietDraft(_prev: AiState, formData: FormData): Promise<AiState> {
-  const me = await getProfile();
-  if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
-  const client_id = String(formData.get("client_id") || "");
-  if (!client_id) return { error: "Pick a client first." };
-  const supabase = await createClient();
-  const [{ data: cons }, { data: forms }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
-    supabase.from("consultations").select("kind, summary, notes").eq("client_id", client_id).eq("status", "completed"),
-    supabase.from("form_responses").select("answers").eq("client_id", client_id).order("created_at", { ascending: false }).limit(3),
-    supabase.from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr").eq("client_id", client_id).order("date", { ascending: false }).limit(1),
-    supabase.from("clients").select("name, goals, conditions").eq("id", client_id).maybeSingle(),
-    supabase.from("client_workouts").select("name, type, mode, items").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1),
-  ]);
-  const c = cli as { name: string; goals: string[] | null; conditions: string | null } | null;
-  const parts: string[] = [];
-  if (c) parts.push(`Client: ${c.name}${c.goals?.length ? ` · goals: ${c.goals.join(", ")}` : ""}${c.conditions ? ` · conditions: ${c.conditions}` : ""}`);
-  const mrows = (meas ?? []) as MeasRow[];
-  if (mrows[0]) parts.push(`InBody — ${fmtMeas(mrows[0])}`);
-  for (const cn of ((cons ?? []) as { kind: string; summary: string | null; notes: string | null }[])) parts.push(`${cn.kind} consult: ${cn.summary ?? cn.notes ?? "—"}`);
-  for (const a of ((forms ?? []) as { answers: Record<string, unknown> }[])) parts.push(`Questionnaire: ${JSON.stringify(a.answers).slice(0, 1200)}`);
-  const w = (wk ?? [])[0] as { name: string; type: string; mode: string; items: unknown } | undefined;
-  if (w) parts.push(`Fitness plan: ${w.name} (${w.type}, ${w.mode})`);
-  if (parts.length <= 1) return { error: "Not enough client data yet (need consults / InBody / questionnaire)." };
-  return openaiComplete(
-    "You are an expert clinical dietitian. Draft a first-cut daily diet chart the dietitian will review and tweak. Use these meal slots in order: Early Morning, Breakfast, Mid-Morning, Lunch, Evening, Dinner. For each, give a concrete Indian-friendly suggestion with rough portions. Then add a line 'Calories: ~X kcal/day' and 'Protein target: ~X g'. Keep it practical and aligned to the goals, conditions, InBody and fitness plan given. Plain text.",
-    parts.join("\n"),
-    { maxTokens: 900 },
-  );
-}
 
 export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Promise<AiState> {
   const me = await getProfile();
@@ -7098,128 +7027,11 @@ export async function closeWhiteboard(formData: FormData) {
   revalidatePath("/workspace");
 }
 
-/** Put a client on today's board. */
-export async function addWhiteboardCard(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
-  const session_id = String(formData.get("session_id"));
-  const client_id = String(formData.get("client_id"));
-  if (!session_id || !client_id) return;
-  const supabase = await createClient();
 
-  const { data: dupe } = await supabase.from("whiteboard_cards")
-    .select("id").eq("session_id", session_id).eq("client_id", client_id).maybeSingle();
-  if (dupe) return; // already on the board today
 
-  const { count } = await supabase.from("whiteboard_cards")
-    .select("id", { count: "exact", head: true }).eq("session_id", session_id);
-  await supabase.from("whiteboard_cards").insert({
-    session_id, client_id,
-    reason: String(formData.get("reason") ?? "") || null,
-    origin: String(formData.get("origin") ?? "manual") === "flagged" ? "flagged" : "manual",
-    position: count ?? 0, added_by: p.name,
-  });
-  revalidatePath("/whiteboard");
-}
 
-export async function removeWhiteboardCard(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
-  const supabase = await createClient();
-  await supabase.from("whiteboard_cards").delete().eq("id", String(formData.get("id")));
-  revalidatePath("/whiteboard");
-}
 
-/** Mark a card discussed/deferred and record the meeting's takeaway. */
-export async function setWhiteboardCardStatus(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
-  const id = String(formData.get("id"));
-  const status = String(formData.get("status"));
-  if (!["pending", "discussed", "deferred"].includes(status)) return;
-  const headline = String(formData.get("headline") ?? "").trim();
-  const supabase = await createClient();
-  await supabase.from("whiteboard_cards")
-    .update({ status, ...(headline ? { headline } : {}) }).eq("id", id);
-  revalidatePath("/whiteboard");
-}
 
-/**
- * Adjust the team's working view of a BluePrint score. This never touches the
- * signed-off `blueprints` row — the baseline stays as agreed, and the tweak is
- * layered on top for this meeting.
- */
-export async function tweakWhiteboardScore(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
-  const id = String(formData.get("id"));
-  const key = String(formData.get("key"));
-  if (!id || !BP_SCORES.some((s) => s.key === key)) return;
-
-  const raw = String(formData.get("score") ?? "").trim();
-  const note = String(formData.get("note") ?? "").trim();
-  const supabase = await createClient();
-
-  const { data: card } = await supabase.from("whiteboard_cards")
-    .select("score_tweaks").eq("id", id).maybeSingle();
-  const tweaks = { ...((card?.score_tweaks ?? {}) as Record<string, unknown>) };
-
-  if (!raw && !note) {
-    delete tweaks[key]; // clearing both fields removes the adjustment
-  } else {
-    const n = Number(raw);
-    tweaks[key] = {
-      ...(raw !== "" && Number.isFinite(n) ? { score: Math.max(0, Math.min(100, n)) } : {}),
-      ...(note ? { note } : {}),
-    };
-  }
-
-  await supabase.from("whiteboard_cards").update({ score_tweaks: tweaks }).eq("id", id);
-  revalidatePath("/whiteboard");
-}
-
-/** Capture an insight, action or concern against a card. */
-export async function addWhiteboardNote(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
-  const card_id = String(formData.get("card_id"));
-  const body = String(formData.get("body") ?? "").trim();
-  if (!card_id || !body) return;
-  const kind = String(formData.get("kind") ?? "insight");
-  const supabase = await createClient();
-
-  await supabase.from("whiteboard_notes").insert({
-    card_id, body,
-    kind: ["insight", "action", "concern"].includes(kind) ? kind : "insight",
-    discipline: wsKeyForRole(p.role) ?? null,
-    owner_id: String(formData.get("owner_id") ?? "") || null,
-    due_date: String(formData.get("due_date") ?? "") || null,
-    author: p.name,
-  });
-
-  // a concern raised in the meeting becomes a real concern on the client's file
-  if (kind === "concern") {
-    const { data: card } = await supabase.from("whiteboard_cards").select("client_id").eq("id", card_id).maybeSingle();
-    if (card?.client_id) {
-      await supabase.from("concerns").insert({
-        client_id: card.client_id, role: wsKeyForRole(p.role) ?? "general",
-        category: "Whiteboard", body, raised_by: p.name, status: "Open",
-      });
-    }
-  }
-
-  revalidatePath("/whiteboard");
-}
-
-export async function toggleWhiteboardNote(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
-  const id = String(formData.get("id"));
-  const done = String(formData.get("done")) === "true";
-  const supabase = await createClient();
-  await supabase.from("whiteboard_notes").update({ done: !done }).eq("id", id);
-  revalidatePath("/whiteboard");
-}
 
 /**
  * Answer a major whiteboard alert: the assigned person records WHY it happened
@@ -7653,12 +7465,6 @@ export async function newDietPlanVersion(formData: FormData) {
 // for PDFShift is an environment change, not a code change.
 // ============================================================================
 
-/** What the UI needs to decide whether to offer a "Generate PDF" button. */
-export async function pdfStatus(): Promise<{ ready: boolean; provider: string | null; missing: string[] }> {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return { ready: false, provider: null, missing: [] };
-  return pdfReadiness();
-}
 
 /**
  * Render a document, store it, and record what was issued.
@@ -7905,12 +7711,6 @@ export async function sendDocumentWhatsApp(formData: FormData): Promise<{ ok?: b
   return res.ok ? { ok: true } : { error: res.error };
 }
 
-/** Readiness for the UI, so a Send button is offered only when it can work. */
-export async function whatsappStatus(): Promise<{ ready: boolean; missing: string[] }> {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role)) return { ready: false, missing: [] };
-  return watiReadiness();
-}
 
 // ============================================================================
 // Dietary Assessment Summary — the companion document to the diet plan.
