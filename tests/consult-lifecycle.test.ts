@@ -45,8 +45,24 @@ describe("deletable", () => {
     expect(deletable({ ...empty, flags: [{ text: "BP high", severity: "warning" }] }).deletable).toBe(false);
   });
 
-  it("refuses when the console autosaved unsaved work", () => {
+  it("refuses when the console autosaved real work", () => {
     expect(deletable({ ...empty, draft: { vitals: { systolic: "120" } } }).deletable).toBe(false);
+    expect(deletable({ ...empty, draft: { rx: { drug: "Metformin" } } }).deletable).toBe(false);
+    expect(deletable({ ...empty, draft: { transcript: "patient reports..." } }).deletable).toBe(false);
+  });
+
+  it("ignores an autosaved draft that holds nothing but defaults", () => {
+    // The console autosaves the moment it opens, so a consultation nobody typed
+    // into still gets {"order":{"priority":"routine"},"vitals":{}}. Treating
+    // that as work made the very row people want deleted undeletable.
+    expect(deletable({ ...empty, draft: { order: { priority: "routine" }, vitals: {} } }).deletable).toBe(true);
+    expect(deletable({ ...empty, draft: {} }).deletable).toBe(true);
+    expect(deletable({ ...empty, draft: { vitals: {}, rx: {}, order: {} } }).deletable).toBe(true);
+    expect(deletable({ ...empty, draft: { transcript: "   " } }).deletable).toBe(true);
+  });
+
+  it("a typed lab test still counts, even alongside the default priority", () => {
+    expect(deletable({ ...empty, draft: { order: { priority: "routine", test: "HbA1c" } } }).deletable).toBe(false);
   });
 
   it("refuses when lab orders point at it, and says how many", () => {

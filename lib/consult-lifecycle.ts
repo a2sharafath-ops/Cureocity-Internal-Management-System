@@ -51,6 +51,35 @@ const hasText = (s: string | null) => Boolean(s && s.trim());
 const hasRows = (a: unknown[] | null) => Array.isArray(a) && a.length > 0;
 
 /**
+ * Does the autosaved console draft actually contain anything?
+ *
+ * "Is the draft column non-null" was the wrong question. The console autosaves
+ * as soon as it opens, so a consultation nobody typed into still ends up with
+ * `{"order": {"priority": "routine"}, "vitals": {}}` — a dropdown's default and
+ * an empty object. That counted as "unsaved work" and made an otherwise-empty
+ * consultation undeletable, which is exactly the row a clinician wants gone.
+ *
+ * So look for a VALUE: any non-blank string or any number, at any depth. A
+ * default that the clinician never touched leaves nothing behind by this test,
+ * while a half-typed prescription or a single vitals reading does.
+ */
+function hasDraftContent(draft: unknown): boolean {
+  if (draft == null) return false;
+  if (typeof draft === "string") return draft.trim() !== "";
+  if (typeof draft === "number") return Number.isFinite(draft);
+  if (typeof draft === "boolean") return draft;
+  if (Array.isArray(draft)) return draft.some(hasDraftContent);
+  if (typeof draft === "object") {
+    return Object.entries(draft as Record<string, unknown>).some(([k, v]) =>
+      // `priority` defaults to "routine" the moment the lab-order panel renders.
+      // It is not evidence that anyone ordered anything.
+      k === "priority" ? false : hasDraftContent(v),
+    );
+  }
+  return false;
+}
+
+/**
  * May this consultation be destroyed outright?
  *
  * Returns the REASON when it may not, because "Delete" silently doing nothing
@@ -65,7 +94,7 @@ export function deletable(c: ConsultContent): DeletableVerdict {
   if (hasText(c.aiSummary)) return { deletable: false, reason: "an AI draft summary exists" };
   if (hasRows(c.answers)) return { deletable: false, reason: "questionnaire answers have been recorded" };
   if (hasRows(c.flags)) return { deletable: false, reason: "clinical flags were raised" };
-  if (c.draft != null) return { deletable: false, reason: "unsaved console work was autosaved to it" };
+  if (hasDraftContent(c.draft)) return { deletable: false, reason: "unsaved console work was autosaved to it" };
   if (c.orderCount > 0) {
     return { deletable: false, reason: `${c.orderCount} lab order${c.orderCount === 1 ? "" : "s"} were placed in it` };
   }

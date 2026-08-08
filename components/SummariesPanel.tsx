@@ -101,13 +101,26 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
           {cancelled ? (
-            // Undo is the only action on a cancelled row. Approving or sharing
-            // something that was called off would be a nonsense.
-            <form action={cancelConsultationForm}>
-              <input type="hidden" name="id" value={c.id} />
-              <input type="hidden" name="undo" value="true" />
-              <button style={btn}>Undo cancel</button>
-            </form>
+            // Undo, and — when nothing was ever recorded against it — remove.
+            //
+            // Approving or sharing something that was called off would be a
+            // nonsense, so those stay hidden. But a cancelled EMPTY row is
+            // exactly the thing people want gone: a booking that never happened,
+            // sitting in the list for ever. Offering only Undo left no way to
+            // get rid of it at all.
+            <>
+              <form action={cancelConsultationForm}>
+                <input type="hidden" name="id" value={c.id} />
+                <input type="hidden" name="undo" value="true" />
+                <button style={btn}>Undo cancel</button>
+              </form>
+              {c.canDelete && (
+                <button type="button" onClick={() => setConfirming((v) => !v)} title="Delete this cancelled consultation"
+                  style={{ ...btn, border: "none", background: "transparent", color: "var(--muted)", padding: "5px 8px" }}>
+                  {confirming ? "✕" : "Remove…"}
+                </button>
+              )}
+            </>
           ) : (
             <>
               <Link href={`/console/${c.id}`} style={{ ...btn, textDecoration: "none", color: "var(--ink)" }}>{c.status === "completed" ? "Open" : "▶ Console"}</Link>
@@ -131,6 +144,19 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
           )}
         </div>
       </div>
+
+      {confirming && cancelled && c.canDelete && (
+        <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--amber-bg)", borderRadius: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: "var(--amber-text)", flex: 1, minWidth: 220 }}>
+            Nothing was recorded against this one. Deleting removes it for good.
+          </span>
+          <form action={deleteEmptyConsultationForm}>
+            <input type="hidden" name="id" value={c.id} />
+            <button style={{ ...btn, border: "1px solid var(--red)", color: "var(--red)" }}>Delete permanently</button>
+          </form>
+          <button type="button" onClick={() => setConfirming(false)} style={btn}>Keep it</button>
+        </div>
+      )}
 
       {confirming && !cancelled && (
         <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--amber-bg)", borderRadius: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
