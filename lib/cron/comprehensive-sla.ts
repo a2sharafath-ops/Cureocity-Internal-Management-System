@@ -59,7 +59,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     supabase.from("diet_charts").select("client_id, drafted_at").in("client_id", ids),
     supabase.from("client_workouts").select("client_id, created_at, plan_weeks").in("client_id", ids),
     supabase.from("prescriptions").select("client_id, shared_at").in("client_id", ids),
-    supabase.from("sessions").select("client_id, status").in("client_id", ids).eq("status", "completed"),
+    supabase.from("sessions").select("client_id, status, date").in("client_id", ids).eq("status", "completed").order("date"),
     supabase.from("appointments").select("client_id, type, date, status").in("client_id", ids),
     supabase.from("client_packages")
       .select("client_id, package_id, start_date, status").in("client_id", ids).eq("status", "active"),
@@ -99,9 +99,13 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
   );
   const rxAt = earliest(rx as { client_id: string; shared_at: string | null }[], (r) => r.shared_at);
 
+  // Count AND dates: a session block is finished when the last session
+  // happened, not when the sweep ran. See comprehensiveSla().
   const sessCount = new Map<string, number>();
-  for (const s of (sessions ?? []) as { client_id: string }[]) {
+  const sessDates = new Map<string, string[]>();
+  for (const s of (sessions ?? []) as { client_id: string; date?: string | null }[]) {
     sessCount.set(s.client_id, (sessCount.get(s.client_id) ?? 0) + 1);
+    if (s.date) (sessDates.get(s.client_id) ?? sessDates.set(s.client_id, []).get(s.client_id)!).push(s.date);
   }
   // Resolve each booking's type to its service category so a manually-booked
   // service ("10th Day Diet Followup") counts against its milestone / SLA.
@@ -143,6 +147,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
       workoutPlannedAt: planAt.get(p.client_id) ?? null,
       prescriptionSharedAt: rxAt.get(p.client_id) ?? null,
       sessionsCompleted: sessCount.get(p.client_id) ?? 0,
+      sessionDates: sessDates.get(p.client_id) ?? [],
       appointments: apptsBy.get(p.client_id) ?? [],
       hold: { holdSince: p.hold_since, holdMs: Number(p.hold_ms ?? 0) },
     }, now);

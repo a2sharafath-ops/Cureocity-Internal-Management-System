@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { markInvoicePaid, refundInvoice, nudgeRole } from "@/lib/actions";
+import { useActionState, useState } from "react";
+import { markInvoicePaid, refundInvoice, nudgeRole, type PaidState } from "@/lib/actions";
 import { isBillingOverseer } from "@/lib/roles";
 import SubmitButton from "@/components/SubmitButton";
 
@@ -14,6 +14,10 @@ export default function InvoiceActions({
   id, status, role = "", canRefund = true, clientId, label,
 }: { id: string; status: string; role?: string; canRefund?: boolean; clientId?: string; label?: string }) {
   const [open, setOpen] = useState(false);
+  // Marking an invoice paid can now fail loudly: if the invoice update is
+  // rejected nothing is posted to the cash book, and the collector is told.
+  // Silently succeeding was how the books could go out of balance.
+  const [paidState, markPaid] = useActionState<PaidState, FormData>(markInvoicePaid, {});
 
   if (status === "Refunded") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
 
@@ -52,13 +56,16 @@ export default function InvoiceActions({
 
   // Collector (Front Desk / Finance) marks it paid.
   return open ? (
-    <form action={markInvoicePaid} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-      <input type="hidden" name="id" value={id} />
-      <select name="method" defaultValue="Cash" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 12 }}>
-        {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-      </select>
-      <SubmitButton pendingLabel="Saving…" doneLabel="✓ Paid" style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Confirm paid</SubmitButton>
-    </form>
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+      <form action={markPaid} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+        <input type="hidden" name="id" value={id} />
+        <select name="method" defaultValue="Cash" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "4px 8px", fontSize: 12 }}>
+          {METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <SubmitButton pendingLabel="Saving…" doneLabel="✓ Paid" style={{ border: "none", background: "var(--green)", color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>Confirm paid</SubmitButton>
+      </form>
+      {paidState.error && <span style={{ fontSize: 11.5, color: "var(--red-text)", maxWidth: 320 }}>{paidState.error}</span>}
+    </span>
   ) : (
     <button type="button" onClick={() => setOpen(true)} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
       Mark paid

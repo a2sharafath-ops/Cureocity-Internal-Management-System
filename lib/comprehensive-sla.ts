@@ -53,6 +53,14 @@ export type ComprehensiveInput = {
   prescriptionSharedAt: string | null;
   /** completed sessions and their dates, for the 12-in-4-weeks commitment */
   sessionsCompleted: number;
+  /**
+   * The DATE of each completed session, oldest first.
+   *
+   * Needed because a block of 12 is "done" when the 12th session happened, not
+   * when somebody happened to open the page. Optional so older callers keep
+   * working; without it the block falls back to the count alone.
+   */
+  sessionDates?: string[];
   /** appointments that actually happened, for milestone matching */
   appointments: { type: string | null; date: string | null; status: string }[];
   hold?: Hold;
@@ -162,15 +170,32 @@ export function comprehensiveSla(
   }));
 
   // ---- 12 strength sessions per cycle -------------------------------------
+  //
+  // `sessionDates` is sorted oldest-first, so the target-th session is simply
+  // the (target-1)th entry. Falls back to the old count-only behaviour when a
+  // caller hasn't supplied dates.
+  const sessDates = [...(input.sessionDates ?? [])].sort();
+  const doneAtFor = (target: number): string | null => {
+    if (input.sessionsCompleted < target) return null;
+    const hit = sessDates[target - 1];
+    return hit ? `${hit.slice(0, 10)}T12:00:00Z` : new Date(now).toISOString();
+  };
+
   for (let c = 1; c <= cycles; c++) {
     const target = PT_SESSIONS_PER_CYCLE * c;
     milestones.push({
       gate: cycles > 1 ? `pt_block#${c}` : "pt_block",
       label: cycles > 1 ? `${target} strength sessions (cycle ${c})` : `${target} strength sessions`,
       owner: "trainer",
+      // WHEN the block finished, not when we looked.
+      //
+      // This used to record `now` as the completion time, so from the day after
+      // the deadline a client who finished all 12 on day 20 flipped to "late,
+      // missed" — and the miss badge stayed on their protocol board for good.
+      // The date of the target-th session is the honest answer.
       clock: dateClock(
         ptDeadline(input.startDate, c),
-        input.sessionsCompleted >= target ? new Date(now).toISOString() : null,
+        doneAtFor(target),
         now, hold,
       ),
     });

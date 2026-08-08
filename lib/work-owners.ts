@@ -129,3 +129,17 @@ export const FOLLOWUP_QUEUE_OWNER: OwnerRoles = ["Front Desk"];
 
 /** Clinical sign-off on anything a client receives. */
 export const APPROVAL_OWNER: OwnerRoles = ["Medical Director"];
+
+// ---- money: what counts as settled ------------------------------------------
+
+/**
+ * Invoice statuses that are NOT outstanding.
+ *
+ * The client card treated Void / Cancelled / Refunded as done; the front-desk
+ * dashboard only skipped "Paid". So an invoice raised for a package that was
+ * later removed vanished from the client's card and nagged the front desk
+ * forever, with a growing overdue count nobody could clear.
+ *
+ * Lives here rather than in either engine so there is one answer.
+ */
+export const SETTLED_INVOICE = new Set(["Paid", "Void", "Cancelled", "Refunded"]);

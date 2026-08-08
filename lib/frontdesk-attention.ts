@@ -5,7 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { dueOn, waitingSince, fmtDay, daysBetweenISO } from "@/lib/due";
-import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, FOLLOWUP_QUEUE_OWNER } from "@/lib/work-owners";
+import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, FOLLOWUP_QUEUE_OWNER, SETTLED_INVOICE } from "@/lib/work-owners";
 
 const shift = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Payment terms: 7 days from issue. */
@@ -56,9 +56,16 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
   }
 
   // ---- overdue unpaid invoices ---------------------------------------------
+  // "Not Paid" is not the same as "outstanding". A voided or refunded invoice —
+  // the one raised for a package that was then removed — is settled, and used to
+  // sit here nagging the front desk to collect money nobody owes, for ever. The
+  // client card already knew this; the dashboard didn't. Same list, one place.
   for (const i of (inv ?? []) as { client_id: string | null; num: number | null; amount: number; status: string; issued_date: string | null }[]) {
-    if (i.status === "Paid") continue;
-    if ((i.issued_date ?? "9999-12-31") <= cut7) flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`, detail: `${nameOf(i.client_id)} · ${money(Number(i.amount))}`, href: "/billing", cta: "View",
+    if (SETTLED_INVOICE.has(i.status)) continue;
+    // A missing issue date used to mean "never chase" (9999). Treat it as due
+    // now instead: an invoice with no date is a data problem, and hiding it is
+    // how it stays one.
+    if ((i.issued_date ?? "0000-01-01") <= cut7) flags.push({ sev: "high", title: `INV-${String(i.num ?? 0).padStart(3, "0")} unpaid`, detail: `${nameOf(i.client_id)} · ${money(Number(i.amount))}`, href: "/billing", cta: "View",
       // Payment terms are 7 days from issue, so that is the due date.
       ...dueOn(i.issued_date ? fmtISOPlus(i.issued_date, 7) : null, today), chaseRole: { roles: INVOICE_CHASE_OWNER, who: "Front Desk", label: `Chase payment · INV-${String(i.num ?? 0).padStart(3, "0")}`, clientId: i.client_id ?? undefined, href: "/billing" } });
   }

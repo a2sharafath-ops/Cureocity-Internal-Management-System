@@ -29,7 +29,7 @@ const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 
 export async function careWorkFlags(today: string): Promise<Flag[]> {
   const sb = await createClient();
-  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: coachRows }, { data: appts }] = await Promise.all([
+  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: coachRows }, { data: appts }, { data: signoffs }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
     sb.from("consultations").select("client_id, kind, status, completed_at"),
@@ -41,6 +41,9 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("concerns").select("client_id, body, created_at").eq("status", "Open"),
     sb.from("coach_assessments").select("client_id, marker, date, tone, band").order("date", { ascending: false }),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
+    // The ACTUAL BluePrint sign-offs. The flag below used to infer them from
+    // completed consultations, which is a different thing entirely — see there.
+    sb.from("blueprint_signoffs").select("client_id, discipline, created_at"),
   ]);
 
   // Who owns each clinician deliverable, so ops can nudge them from the dashboard.
@@ -107,6 +110,16 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     if (!prev || c.completed_at < prev) per.set(c.kind, c.completed_at);
     completedAt.set(c.client_id, per);
   }
+  // When each discipline signed the consolidated summary, per client. Only a
+  // row here means somebody actually signed.
+  const signedAt = new Map<string, Map<string, string>>();
+  for (const s of (signoffs ?? []) as { client_id: string; discipline: string; created_at: string | null }[]) {
+    if (!s.created_at) continue;
+    const per = signedAt.get(s.client_id) ?? new Map<string, string>();
+    per.set(s.discipline, s.created_at);
+    signedAt.set(s.client_id, per);
+  }
+
   // When the comprehensive panel was asked for, so "awaiting" can say how long.
   const bloodAsked = new Map<string, string>();
   for (const b of (blood ?? []) as { client_id: string; panel: string | null; submitted: boolean; requested_at: string | null }[]) {
@@ -369,14 +382,23 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         // have signed, the document genuinely cannot be produced. Once they
         // have, GENERATION_MS is how long it may sit — previously nothing, so
         // this flag could never read as overdue no matter how long it waited.
-        const signed = ["Doctor", "Diet", "Trainer"]
-          .map((k) => completedAt.get(clientId)?.get(k))
+        // Sign-offs, not consultations.
+        //
+        // This used to read completedAt — the map of finished CONSULTATIONS —
+        // and call the result "sign-offs". Two consequences, both bad: the flag
+        // announced "all three sign-offs done" when nobody had signed anything,
+        // and the generation clock started at the last APPOINTMENT, so it read
+        // as overdue while the three clinicians were still inside their own
+        // sign-off windows. A clinician was being chased for lateness that had
+        // not happened yet.
+        const signed = ["doctor", "dietitian", "trainer"]
+          .map((d) => signedAt.get(clientId)?.get(d))
           .filter(Boolean) as string[];
         const allSigned = signed.length === 3 ? signed.sort().slice(-1)[0] : null;
         flags.push({
           sev: allSigned ? "high" : "med",
           title: `${who} — BluePrint not generated`,
-          detail: allSigned ? "Blood in · all three sign-offs done" : "Blood in · awaiting Health Professional sign-offs",
+          detail: allSigned ? "Blood in · all three sign-offs done" : `Blood in · awaiting sign-off (${signed.length}/3 signed)`,
           href: "/blueprint", cta: "Review",
           ...sla(allSigned, BP_GENERATION_MS),
           chaseRole: { roles: [...DELIVERY_OWNER.doctor, ...DELIVERY_OWNER.dietitian, ...DELIVERY_OWNER.trainer], who: "Health Professionals", label: "BluePrint sign-off", clientId, href: "/blueprint" },

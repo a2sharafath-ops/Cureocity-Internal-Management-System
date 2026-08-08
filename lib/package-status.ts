@@ -13,7 +13,7 @@ import { clock, formatLeft } from "@/lib/sla-clock";
 import { dueOn, waitingSince } from "@/lib/due";
 import { loadClientStatuses } from "@/lib/client-status";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
-import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners } from "@/lib/work-owners";
+import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners, SETTLED_INVOICE } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
 
@@ -85,7 +85,6 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // Only genuinely-outstanding invoices are an open item. Paid ones are done;
   // Void / Cancelled / Refunded ones are settled (e.g. an invoice for a removed
   // package) and must not sit in "open now" waiting to be actioned.
-  const SETTLED_INVOICE = new Set(["Paid", "Void", "Cancelled", "Refunded"]);
   for (const i of (inv ?? []) as { num: number | null; description: string | null; amount: number; status: string; issued_date: string | null }[]) {
     if (!SETTLED_INVOICE.has(i.status)) openNow.push({ label: `Invoice INV-${String(i.num ?? 0).padStart(3, "0")} ${i.status.toLowerCase()}`, detail: `${i.description ?? "Package"} · ₹${Number(i.amount).toLocaleString("en-IN")}`, href: "/billing", tone: "warn", chaseRoles: ["Front Desk", "Finance"], chaseWho: "Front Desk",
       // Payment terms are 7 days from issue — say so, rather than leaving the

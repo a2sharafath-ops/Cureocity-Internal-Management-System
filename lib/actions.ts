@@ -2132,7 +2132,7 @@ export async function getComprehensiveView(clientId: string) {
     supabase.from("diet_charts").select("drafted_at").eq("client_id", clientId).order("drafted_at").limit(1),
     supabase.from("client_workouts").select("created_at, plan_weeks").eq("client_id", clientId).order("created_at").limit(5),
     supabase.from("prescriptions").select("shared_at").eq("client_id", clientId).not("shared_at", "is", null).order("shared_at").limit(1),
-    supabase.from("sessions").select("status").eq("client_id", clientId).eq("status", "completed"),
+    supabase.from("sessions").select("status, date").eq("client_id", clientId).eq("status", "completed").order("date"),
     supabase.from("appointments").select("type, date, status").eq("client_id", clientId),
     supabase.from("client_packages").select("package_id").eq("client_id", clientId).eq("status", "active").maybeSingle(),
   ]);
@@ -2151,6 +2151,8 @@ export async function getComprehensiveView(clientId: string) {
     workoutPlannedAt: plan?.created_at ?? null,
     prescriptionSharedAt: ((rx ?? [])[0] as { shared_at: string | null } | undefined)?.shared_at ?? null,
     sessionsCompleted: (sessions ?? []).length,
+    // Dates too, so a block counts as finished when the last session HAPPENED.
+    sessionDates: ((sessions ?? []) as { date: string | null }[]).map((s) => s.date).filter(Boolean) as string[],
     appointments: normalizeApptTypes((appts ?? []) as { type: string | null; date: string | null; status: string }[], await loadCatOf(supabase)),
     hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
     holdNote: (proto.hold_note as string | null) ?? null,
@@ -2176,7 +2178,7 @@ export async function getPTView(clientId: string) {
   const [{ data: consults }, { data: workouts }, { data: sessions }, { data: appts }, { data: cp }] = await Promise.all([
     supabase.from("consultations").select("kind, completed_at, approved_at").eq("client_id", clientId).eq("kind", "Trainer"),
     supabase.from("client_workouts").select("created_at, plan_weeks").eq("client_id", clientId).order("created_at").limit(5),
-    supabase.from("sessions").select("status").eq("client_id", clientId).eq("status", "completed"),
+    supabase.from("sessions").select("status, date").eq("client_id", clientId).eq("status", "completed").order("date"),
     supabase.from("appointments").select("type, date, status").eq("client_id", clientId),
     supabase.from("client_packages").select("package_id").eq("client_id", clientId).eq("category", PT_CATEGORY).eq("status", "active").maybeSingle(),
   ]);
@@ -2193,6 +2195,8 @@ export async function getPTView(clientId: string) {
     fitnessApprovedAt: fit?.approved_at ?? null,
     workoutPlannedAt: plan?.created_at ?? null,
     sessionsCompleted: (sessions ?? []).length,
+    // Dates too, so a block counts as finished when the last session HAPPENED.
+    sessionDates: ((sessions ?? []) as { date: string | null }[]).map((s) => s.date).filter(Boolean) as string[],
     appointments: normalizeApptTypes((appts ?? []) as { type: string | null; date: string | null; status: string }[], await loadCatOf(supabase)),
     hold: { holdSince: proto.hold_since as string | null, holdMs: Number(proto.hold_ms ?? 0) },
     holdNote: (proto.hold_note as string | null) ?? null,
@@ -3106,9 +3110,11 @@ export async function raiseInvoiceForClient(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
-export async function markInvoicePaid(formData: FormData) {
+export type PaidState = { ok?: boolean; error?: string };
+
+export async function markInvoicePaid(_prev: PaidState, formData: FormData): Promise<PaidState> {
   const p = await getProfile();
-  if (!p || !canRecordPayment(p.role)) return;
+  if (!p || !canRecordPayment(p.role)) return { error: "Not permitted." };
   const id = String(formData.get("id"));
   const method = String(formData.get("method") ?? "").trim() || "Cash";
   const supabase = await createClient();
@@ -3119,7 +3125,17 @@ export async function markInvoicePaid(formData: FormData) {
   const row = inv as { num: number | null; amount: number; status: string; client_id: string | null } | null;
   const alreadyPaid = row?.status === "Paid";
 
-  await supabase.from("invoices").update({ status: "Paid", paid_date: todayISO(), method }).eq("id", id);
+  // The invoice update is CHECKED before any money is posted.
+  //
+  // It wasn't, and the failure mode was the worst kind: if the update was
+  // rejected — a policy, a constraint, a dropped connection — the cash book
+  // still got a receipt. The books would show money received against an invoice
+  // that was still Unpaid, and the same invoice would go on nagging the front
+  // desk to collect it. Nobody would question the ledger, because ledgers are
+  // what you check things against.
+  const { error: invErr } = await supabase
+    .from("invoices").update({ status: "Paid", paid_date: todayISO(), method }).eq("id", id);
+  if (invErr) return { error: `Couldn't mark the invoice paid — ${invErr.message}. Nothing was posted to the cash book.` };
   await logAudit(p, "Invoice marked paid", null, method);
 
   // Auto-post the received money into the cash book, so confirming a payment
@@ -3128,18 +3144,27 @@ export async function markInvoicePaid(formData: FormData) {
   // Paid, so re-confirming can't create a duplicate receipt.
   if (row && !alreadyPaid && Number(row.amount) > 0) {
     const account = method.trim().toLowerCase() === "cash" ? "cash" : "bank";
-    await supabase.from("ledger").insert({
+    const { error: ledErr } = await supabase.from("ledger").insert({
       account, date: todayISO(),
       ref: `INV-${String(row.num ?? 0).padStart(3, "0")}`,
       party: row.client_id ? await clientName(supabase, row.client_id) : null,
       kind: method, direction: "in",
       amount: Number(row.amount) || 0, created_by: p.name,
     });
+    // The invoice IS paid at this point, so this isn't a failure of the
+    // payment — but the cash book is now short by one entry and somebody has
+    // to know. Silence here is how a book goes quietly out of balance.
+    if (ledErr) {
+      await logAudit(p, "Cash-book entry FAILED", `INV-${String(row.num ?? 0).padStart(3, "0")}`, ledErr.message);
+      revalidatePath("/billing");
+      return { error: `Invoice marked paid, but the cash-book entry failed — ${ledErr.message}. Add the receipt manually in Finance Sheets.` };
+    }
   }
 
   revalidatePath("/billing");
   revalidatePath("/finsheets");
   revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function refundInvoice(formData: FormData) {
