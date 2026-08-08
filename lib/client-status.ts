@@ -6,11 +6,22 @@
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { packageCategory } from "@/lib/packages";
 import { disciplineLabel } from "@/lib/disciplines";
+import { BOOKING_DUE_DAYS } from "@/lib/comprehensive";
+import { addDaysISO } from "@/lib/pt";
 
 export type StatusTone = "neutral" | "info" | "warn" | "good" | "action";
 export type ClientStatus = { label: string; tone: StatusTone; href?: string };
 
-type DiscState = { booked: boolean; completed: boolean; when: string | null };
+type DiscState = {
+  booked: boolean;
+  completed: boolean;
+  /** "Fri 11am" — for display. */
+  when: string | null;
+  /** The booking's calendar date, so "booked" can become "missed". */
+  date: string | null;
+  /** When the protocol says this consult should have happened by. */
+  dueDate: string | null;
+};
 export type StatusInput = {
   category: string;                 // blueprint | comprehensive | training | membership | other
   membershipActive: boolean;
@@ -21,6 +32,8 @@ export type StatusInput = {
   bloodSubmitted: boolean;
   consults: Record<string, DiscState>;  // keys: doctor | dietitian | trainer | coach | psychologist
   journeySteps: { label: string; done: boolean }[];  // package-aware onboarding ladder
+  /** Today, IST — so a badge can tell "booked" from "missed" without a clock. */
+  today: string;
 };
 
 const ROLE_DISC: Record<string, string> = {
@@ -38,14 +51,42 @@ export function clientStatus(i: StatusInput | undefined, viewerDiscipline: strin
   if (!i) return { label: "—", tone: "neutral" };
 
   // Clinician: this client's state for the viewer's own discipline.
+  //
+  // Six states, not three. The badge used to say "Ready to start · Fri 11am"
+  // for any booking at all — which was wrong twice over. It read as "go now"
+  // when the appointment was a fortnight away, and it went on saying it for
+  // ever once the day passed and nobody held the consult. A no-show looked
+  // identical to an upcoming appointment.
+  //
+  // "Ready to start" now means what it says: it is today.
   if (viewerDiscipline) {
     const c = i.consults[viewerDiscipline];
     if (!c) return { label: "—", tone: "neutral" };
-    if (c.completed) return { label: `${disciplineLabel(viewerDiscipline)} consult done`, tone: "good" };
-    if (c.booked) return { label: c.when ? `Ready to start · ${c.when}` : "Ready to start", tone: "action", href: "/pro" };
+    const label = disciplineLabel(viewerDiscipline);
+
+    if (c.completed) return { label: `${label} consult done`, tone: "good" };
+
+    if (c.booked) {
+      // Undated booking (a consultation row with no appointment): all we can
+      // honestly say is that it is booked.
+      if (!c.date) return { label: "Booked", tone: "info", href: "/pro" };
+      if (c.date === i.today) {
+        return { label: c.when ? `Ready to start · ${c.when.split(" ").slice(1).join(" ")}` : "Ready to start", tone: "action", href: "/pro" };
+      }
+      if (c.date < i.today) {
+        // Booked, the day came and went, still not completed.
+        return { label: `Missed · was ${fmtDay(c.date)}`, tone: "warn", href: "/pro" };
+      }
+      return { label: `Booked · ${fmtDay(c.date)}${c.when ? `, ${c.when.split(" ").slice(1).join(" ")}` : ""}`, tone: "info", href: "/pro" };
+    }
+
+    // Nothing booked. Say whether that is already late.
+    if (c.dueDate && c.dueDate < i.today) {
+      return { label: `Overdue · due ${fmtDay(c.dueDate)}`, tone: "warn", href: "/pro" };
+    }
     if ((viewerDiscipline === "doctor" || viewerDiscipline === "dietitian") && i.bloodRequested && !i.bloodSubmitted)
       return { label: "Awaiting blood report", tone: "warn" };
-    return { label: "Awaiting booking", tone: "neutral" };
+    return { label: c.dueDate ? `Awaiting booking · due ${fmtDay(c.dueDate)}` : "Awaiting booking", tone: "neutral" };
   }
 
   // Ops: overall onboarding / membership state.
@@ -66,6 +107,15 @@ const ROLE_OF_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Die
 const PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
 const DISCS = ["doctor", "dietitian", "trainer", "coach", "psychologist"];
 
+/** "8 Aug" — short, unambiguous, and never a bare weekday. "Fri" alone was the
+ *  original sin here: it could mean tomorrow or three weeks out. */
+function fmtDay(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return Number.isFinite(d.getTime())
+    ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
+    : iso;
+}
+
 function whenLabel(date: string, hour: number): string {
   const d = new Date(date + "T00:00:00Z");
   const day = d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
@@ -82,7 +132,7 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
   const [{ data: clientsD }, { data: pkgsD }, { data: cpsD }, { data: invD }, { data: bloodD }, { data: bpD }, { data: consultD }, { data: sessD }, { data: apptD }, { data: staffD }] = await Promise.all([
     supabase.from("clients").select("id, name, package_id, frozen").in("id", ids),
     supabase.from("packages").select("id, name, is_facility"),
-    supabase.from("client_packages").select("client_id, category, package_name, status").in("client_id", ids).eq("status", "active"),
+    supabase.from("client_packages").select("client_id, category, package_name, status, start_date").in("client_id", ids).eq("status", "active"),
     supabase.from("invoices").select("client_id").in("client_id", ids),
     supabase.from("blood_requests").select("client_id, panel, submitted").in("client_id", ids),
     supabase.from("blueprints").select("client_id, generated").in("client_id", ids),
@@ -115,9 +165,14 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
 
   const catsByClient = new Map<string, string[]>();
   const cpName = new Map<string, string>();
-  for (const cp of (cpsD ?? []) as { client_id: string; category: string; package_name: string | null }[]) {
+  // Earliest active package start — the anchor the initial-consult deadline
+  // counts from, matching what the attention queues chase.
+  const pkgStart = new Map<string, string>();
+  for (const cp of (cpsD ?? []) as { client_id: string; category: string; package_name: string | null; start_date: string | null }[]) {
     (catsByClient.get(cp.client_id) ?? catsByClient.set(cp.client_id, []).get(cp.client_id)!).push(cp.category);
     if (cp.package_name) cpName.set(`${cp.client_id}|${cp.category}`, cp.package_name);
+    const prev = pkgStart.get(cp.client_id);
+    if (cp.start_date && (!prev || cp.start_date < prev)) pkgStart.set(cp.client_id, cp.start_date);
   }
 
   // consultation completion per client per kind
@@ -128,12 +183,12 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
     else (consultBooked.get(c.client_id) ?? consultBooked.set(c.client_id, new Set()).get(c.client_id)!).add(c.kind);
   }
   // non-cancelled appointments per client, by discipline (from provider role)
-  const apptByClient = new Map<string, { disc: string; when: string; status: string }[]>();
+  const apptByClient = new Map<string, { disc: string; when: string; date: string; status: string }[]>();
   for (const a of (apptD ?? []) as { client_id: string; provider_id: string | null; date: string; hour: number; status: string }[]) {
     const role = a.provider_id ? staffRole.get(a.provider_id) : null;
     const disc = Object.entries(ROLE_OF_DISC).find(([, r]) => r === role)?.[0] ?? null;
     if (!disc) continue;
-    (apptByClient.get(a.client_id) ?? apptByClient.set(a.client_id, []).get(a.client_id)!).push({ disc, when: whenLabel(a.date, a.hour), status: a.status });
+    (apptByClient.get(a.client_id) ?? apptByClient.set(a.client_id, []).get(a.client_id)!).push({ disc, when: whenLabel(a.date, a.hour), date: a.date, status: a.status });
   }
 
   for (const c of (clientsD ?? []) as { id: string; name: string; package_id: string | null; frozen: string | null }[]) {
@@ -167,6 +222,10 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
         completed: done.has(kind) || Boolean(completedAppt),
         booked: booked.has(kind) || Boolean(scheduledAppt),
         when: appt?.when ?? null,
+        date: appt?.date ?? null,
+        // The initial consults are expected within BOOKING_DUE_DAYS of the
+        // package starting — the same deadline the attention queues chase.
+        dueDate: pkgStart.get(c.id) ? addDaysISO(pkgStart.get(c.id)!, BOOKING_DUE_DAYS) : null,
       };
     }
 
@@ -194,6 +253,7 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
       onboardNext: tracked ? row.nextLabel : null,
       bloodRequested: requested, bloodSubmitted: submitted, consults,
       journeySteps: row.steps.map((s) => ({ label: s.label, done: s.done })),
+      today: todayISO,
     });
   }
   return out;
