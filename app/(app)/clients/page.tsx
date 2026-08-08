@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ClientsTable, { type ClientRow } from "@/components/ClientsTable";
 import { getProfile } from "@/lib/auth";
@@ -21,9 +22,15 @@ type Raw = {
 };
 
 export default async function ClientsPage() {
-  const supabase = await createClient();
+  // Nav access is not access control. `NAV_ACCESS` decides what appears in the
+  // sidebar; typing the URL bypasses it entirely, and RLS on `clients` is
+  // `is_staff()`, so Finance and HR could read the whole client list — names,
+  // codes, phone numbers — simply by knowing the address.
   const profile = await getProfile();
-  const writer = canWrite(profile?.role ?? "");
+  if (!profile || !canSee(profile.role, "/clients")) redirect("/dashboard");
+
+  const supabase = await createClient();
+  const writer = canWrite(profile.role);
 
   const [{ data, error }, { data: staffData }] = await Promise.all([
     supabase.from("clients").select("id, code, name, phone, email, used, branch, joined, dob, owner, package_id, packages(name, sessions, is_facility), staff:pro_id(name)").order("code", { ascending: true }),

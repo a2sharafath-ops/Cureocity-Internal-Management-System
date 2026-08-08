@@ -1,6 +1,6 @@
 
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
@@ -21,7 +21,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
 import VoidPackageButton from "@/components/VoidPackageButton";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee } from "@/lib/roles";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
@@ -125,6 +125,13 @@ export default async function ClientDetailPage(
   const tab = ["overview", "timeline", "card"].includes(searchParams.tab ?? "") ? searchParams.tab! : "overview";
   // Read-only view (reached from another discipline's workspace): hide all edits.
   const ro = searchParams.ro === "1";
+
+  // The card carries the client's whole clinical and financial life. Nav hid it
+  // from Finance and HR; the URL did not. Gate it on the same list that governs
+  // the clients section, before anything is fetched.
+  const gate = await getProfile();
+  if (!gate || !canSee(gate.role, "/clients")) redirect("/dashboard");
+
   const supabase = await createClient();
 
   const { data: client } = await supabase

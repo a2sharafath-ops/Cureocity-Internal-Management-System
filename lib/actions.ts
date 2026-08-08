@@ -3909,18 +3909,37 @@ export async function punchByBadge(code: string): Promise<PunchResult> {
   const { data: s } = await supabase.from("staff").select("id, name").eq("badge_code", c).maybeSingle();
   const st = s as { id: string; name: string } | null;
   if (!st) return { error: "Badge not recognised." };
+  // Same rule as the PIN path: your own badge, or HR running the kiosk. Badge
+  // codes are readable by every staff session, so possession of the CODE proves
+  // nothing — only possession of the physical badge does, and we can't see that.
+  if (!canHr(p.role) && p.staffId !== st.id) return { error: "You can only clock yourself in or out." };
   return doPunch(st.id, st.name, "kiosk");
+}
+
+/** Constant-time string compare, so a PIN can't be found a digit at a time. */
+function safeEqualStr(a: string, b: string): boolean {
+  const x = Buffer.from(a); const y = Buffer.from(b);
+  if (x.length !== y.length) return false;
+  return crypto.timingSafeEqual(x, y);
 }
 
 /** Kiosk: punch by name + PIN (manual identify). */
 export async function punchByPin(staffId: string, pin: string): Promise<PunchResult> {
   const p = await getProfile();
   if (!p) return { error: "Kiosk not signed in." };
+  // You may punch YOURSELF, or you may be HR working the kiosk.
+  //
+  // The guard was only "is anyone signed in", so any staff member could clock a
+  // colleague in or out — and that feeds payroll. The PIN was the only obstacle,
+  // and `staff.pin` is readable by every staff session, which makes it no
+  // obstacle at all. Ownership is the real check; the PIN stays as the kiosk's
+  // identify-yourself step.
+  if (!canHr(p.role) && p.staffId !== staffId) return { error: "You can only clock yourself in or out." };
   const supabase = await createClient();
   const { data: s } = await supabase.from("staff").select("id, name, pin").eq("id", staffId).maybeSingle();
   const st = s as { id: string; name: string; pin: string | null } | null;
   if (!st) return { error: "Staff not found." };
-  if (!st.pin || st.pin !== (pin || "").trim()) return { error: "Wrong PIN." };
+  if (!st.pin || !safeEqualStr(st.pin, (pin || "").trim())) return { error: "Wrong PIN." };
   return doPunch(st.id, st.name, "manual");
 }
 
@@ -5406,19 +5425,66 @@ export async function assignForm(formData: FormData) {
 }
 
 // staff- or client-submitted answers. answers is a JSON string of {label: value}.
-export async function submitFormResponse(formData: FormData) {
+/**
+ * Complete and sign an assigned form — an intake questionnaire or a consent.
+ *
+ * Two things were wrong, and the second is the serious one.
+ *
+ * It took an id from the form and wrote to that row after checking only that
+ * SOMEBODY was signed in. RLS confines a client to their own responses, so no
+ * client could touch another's — but the staff policy is `is_staff()`, so any
+ * role at all could overwrite a completed intake, or re-sign a consent with a
+ * name of their choosing. A signed consent whose signatory can be rewritten is
+ * not a consent.
+ *
+ * Now: the row must already be assigned to the caller (a client signing their
+ * own), or the caller must be staff who may write clinical records — and even
+ * then a form that is ALREADY signed can't be silently re-signed.
+ */
+export async function submitFormResponse(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) return { error: "Not signed in." };
   const id = String(formData.get("id"));
+  if (!id) return { error: "No form." };
+
+  const { data: prof } = await supabase.from("profiles").select("client_id, role, name").eq("id", user.id).maybeSingle();
+  const me = prof as { client_id: string | null; role: string | null; name: string | null } | null;
+
+  const { data: row } = await supabase
+    .from("form_responses").select("id, client_id, status, signed_by").eq("id", id).maybeSingle();
+  const fr = row as { client_id: string | null; status: string | null; signed_by: string | null } | null;
+  if (!fr) return { error: "Form not found." };
+
+  const isOwnClient = Boolean(me?.client_id) && fr.client_id === me?.client_id;
+  const isPermittedStaff = Boolean(me?.role) && canWrite(me!.role!);
+  if (!isOwnClient && !isPermittedStaff) return { error: "Not permitted." };
+
+  // A completed, signed form is a record. Re-opening it is a deliberate act
+  // with its own audit trail, not something a stray POST can do.
+  if (fr.status === "completed" && fr.signed_by) {
+    return { error: "This form is already signed. Assign a new one rather than overwriting it." };
+  }
+
   let answers: Record<string, string> = {};
   try { answers = JSON.parse(String(formData.get("answers") || "{}")); } catch { answers = {}; }
-  const signed_by = String(formData.get("signed_by") ?? "").trim() || null;
-  await supabase.from("form_responses").update({
+
+  // The signatory is WHO IS SIGNED IN, not whatever the form posted. A client
+  // signs as themselves; staff completing a paper form on someone's behalf are
+  // recorded as having done exactly that.
+  const signed_by = isOwnClient ? (me?.name ?? "Client") : `${me?.name ?? "Staff"} (on behalf)`;
+
+  const { error } = await supabase.from("form_responses").update({
     answers, status: "completed", signed_by, signed_at: new Date().toISOString(),
   }).eq("id", id);
+  if (error) return { error: error.message };
+
+  if (isPermittedStaff) {
+    await logAudit({ id: user.id, name: me?.name ?? undefined, role: me?.role ?? undefined }, "Form signed", fr.client_id, null);
+  }
   revalidatePath("/forms");
   revalidatePath("/portal");
+  return { ok: true };
 }
 
 // ---- telehealth video sessions ---------------------------------------------

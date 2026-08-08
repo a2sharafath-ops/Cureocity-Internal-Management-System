@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
+import { canMessage } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MessageThread, { type Msg } from "@/components/MessageThread";
 import MessageReply from "@/components/MessageReply";
@@ -13,6 +14,9 @@ export default async function ThreadPage(props: { params: Promise<{ id: string }
   const params = await props.params;
   const me = await getProfile();
   if (!me) redirect("/login");
+  // Same gate as the message list: a thread is the conversation itself, and
+  // /messages/<client-id> was readable by any staff role that guessed the URL.
+  if (!canMessage(me.role)) redirect("/dashboard");
 
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("id, name, code").eq("id", params.id).maybeSingle();

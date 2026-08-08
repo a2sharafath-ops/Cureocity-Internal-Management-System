@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bearerOk } from "@/lib/safe-equal";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const secret = process.env.WEARABLES_INGEST_SECRET;
   if (!secret) return NextResponse.json({ ok: false, error: "ingest-not-configured" }, { status: 503 });
-  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!bearerOk(req.headers.get("authorization"), secret)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

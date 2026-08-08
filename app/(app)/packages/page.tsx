@@ -1,6 +1,7 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canManagePackages } from "@/lib/roles";
+import { canManagePackages, canSee } from "@/lib/roles";
 import { BRANCHES } from "@/lib/branches";
 import PackageCatalog, { type CatPkg, type CatSvc } from "@/components/PackageCatalog";
 
@@ -22,7 +23,8 @@ function lineOf(id: string) {
 
 export default async function PackagesPage() {
   const me = await getProfile();
-  const canManage = canManagePackages(me?.role ?? "");
+  if (!me || !canSee(me.role, "/packages")) redirect("/dashboard");
+  const canManage = canManagePackages(me.role);
 
   const supabase = await createClient();
   const [pkgR, priceR, psR, clientR] = await Promise.all([

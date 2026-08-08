@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeEqual } from "@/lib/safe-equal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestLead, pickOwner, validate } from "@/lib/ingest-lead";
 import { verifySignature, parseLeadgenIds, mapFieldData, type FieldEntry } from "@/lib/meta-leads";
@@ -32,7 +33,7 @@ export async function GET(req: Request) {
   const challenge = url.searchParams.get("hub.challenge");
 
   const expected = process.env.META_VERIFY_TOKEN;
-  if (mode === "subscribe" && expected && token === expected) {
+  if (mode === "subscribe" && expected && safeEqual(token ?? "", expected)) {
     // Meta wants the raw challenge string echoed, not JSON.
     return new Response(challenge ?? "", { status: 200, headers: { "content-type": "text/plain" } });
   }

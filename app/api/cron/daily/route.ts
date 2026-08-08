@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { bearerOk } from "@/lib/safe-equal";
 import { runDaily } from "@/lib/cron/daily";
 
 export const dynamic = "force-dynamic";
@@ -8,10 +9,8 @@ export const dynamic = "force-dynamic";
 // <CRON_SECRET>". We require that secret so the endpoint can't be triggered by
 // anyone. Set CRON_SECRET in your Vercel project env.
 function authorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false; // fail closed until configured
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
+  // Constant-time, shared with the other secret-checked routes.
+  return bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET);
 }
 
 async function handle(req: Request) {

@@ -11,9 +11,14 @@ const AVATAR_COLORS = ["#e11f34", "var(--blue)", "var(--purple)", "#d97706", "#d
 
 export default async function MessagesPage() {
   const me = await getProfile();
-  // Communications is hidden from the nav (Super Admin only) but stays reachable
-  // via deep links (e.g. Retention "Reach out") for any staff member.
+  // Reachable by deep link (Retention "Reach out", a client card) rather than
+  // from the nav — but reachable is not the same as open to everyone. This page
+  // loads every client and the last 500 messages, so leaving it at "is anyone
+  // logged in" meant HR and Finance could read every client conversation in the
+  // clinic. canMessage is the same set that may reply, which is the right one:
+  // reading a client's messages is not a lesser act than answering them.
   if (!me) redirect("/login");
+  if (!canMessage(me.role)) redirect("/dashboard");
   const canMsg = canMessage(me.role);
   const canCamp = canCampaigns(me.role);
 

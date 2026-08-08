@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createForm, assignForm, submitFormResponse } from "@/lib/actions";
+import { useActionState } from "react";
 
 const input: React.CSSProperties = { padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13, background: "#fff", width: "100%" };
 // Same look, but a fixed height — an <input> and a <select> do not share
@@ -56,13 +57,19 @@ export function AssignForm({ formId, clients }: { formId: string; clients: { id:
   );
 }
 
+type FillState = { ok?: boolean; error?: string };
+
 export function FormFill({ responseId, name, type, fields }: { responseId: string; name: string; type: string; fields: Field[] }) {
   const [open, setOpen] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // Signing can now be refused — an already-signed consent, or a role that may
+  // not sign on someone's behalf. Saying so beats appearing to succeed.
+  const [state, submit] = useActionState<FillState, FormData>(
+    async (_prev, fd) => submitFormResponse(fd), {});
   if (!open) return <button type="button" onClick={() => setOpen(true)} style={{ border: "1px solid var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Fill</button>;
   const set = (label: string, v: string) => setAnswers((a) => ({ ...a, [label]: v }));
   return (
-    <form action={submitFormResponse} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginTop: 8, display: "grid", gap: 10, textAlign: "left" }}>
+    <form action={submit} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, marginTop: 8, display: "grid", gap: 10, textAlign: "left" }}>
       <input type="hidden" name="id" value={responseId} />
       <input type="hidden" name="answers" value={JSON.stringify(answers)} />
       <b style={{ fontSize: 14 }}>{name}</b>
@@ -76,8 +83,15 @@ export function FormFill({ responseId, name, type, fields }: { responseId: strin
         </div>
       ))}
       {type === "consent" && (
-        <div style={{ display: "grid", gap: 4 }}><label style={{ fontSize: 13 }}>Signature (type your full name)</label><input style={inputControl} name="signed_by" required placeholder="Full name" /></div>
+        <div style={{ display: "grid", gap: 4 }}>
+          <label style={{ fontSize: 13 }}>Signature (type your full name)</label>
+          <input style={inputControl} name="signed_by" required placeholder="Full name" />
+          {/* Typed for the client's own confirmation. The signatory RECORDED is
+              whoever is signed in — a typed name can be anyone's. */}
+          <span style={{ fontSize: 11, color: "var(--muted)" }}>Recorded against your login.</span>
+        </div>
       )}
+      {state.error && <div style={{ fontSize: 12, color: "var(--red-text)" }}>{state.error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="submit" style={primary}>Submit</button>
         <button type="button" onClick={() => setOpen(false)} style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 13, cursor: "pointer" }}>Cancel</button>
