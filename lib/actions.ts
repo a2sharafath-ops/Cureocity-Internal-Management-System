@@ -28,6 +28,7 @@ import { notifyRoles, notifyStaff, notifyClient } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { BOOKING_OWNER } from "@/lib/work-owners";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
+import { nextStageKey } from "@/lib/live-journey";
 import { leadScore } from "@/lib/leadscore";
 import {
   EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
@@ -7725,5 +7726,153 @@ export async function shareDietAssessment(formData: FormData): Promise<{ ok?: bo
   await logAudit(p, undo ? "Assessment withdrawn from portal" : "Assessment shared to portal", undefined, id);
   revalidatePath("/workspace");
   revalidatePath("/portal");
+  return { ok: true };
+}
+
+// ============================================================================
+// Live Journey — the D0 concierge board (SOP: Core Assessment Journey).
+// The Health Coach owns the walk-in's journey; Front Desk starts it, the
+// professionals ping the coach as their session ends, and the coach advances
+// the client at each handover. See supabase/0135_live_journey.sql and
+// lib/live-journey.ts (the pure stage/KPI logic).
+// ============================================================================
+
+async function logJourneyEvent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  journeyId: string,
+  kind: "stage_enter" | "notify_coach" | "handover" | "cancel" | "note",
+  stage: string | null,
+  byName: string,
+) {
+  await supabase.from("journey_events").insert({ journey_id: journeyId, kind, stage, by_name: byName });
+}
+
+// Front Desk registers a walk-in and starts the journey at the desk.
+export async function createWalkIn(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !isStaffRole(p.role)) return { ok: false, error: "Not permitted" };
+  const supabase = await createClient();
+
+  const client_id = String(formData.get("client_id") || "") || null;
+  const name = String(formData.get("name") || "").trim();
+  if (!client_id && !name) return { ok: false, error: "Enter a name or pick a client" };
+
+  // Default the coach to the on-duty Health Coach if the desk didn't choose one.
+  let coach_id = String(formData.get("coach_id") || "") || null;
+  if (!coach_id) {
+    const { data: coach } = await supabase.from("staff").select("id").eq("role", "Health Coach").limit(1).maybeSingle();
+    coach_id = (coach as { id?: string } | null)?.id ?? null;
+  }
+
+  const { data: row, error } = await supabase.from("journeys").insert({
+    client_id,
+    walk_in_name: name || null,
+    walk_in_phone: String(formData.get("phone") || "") || null,
+    goal: String(formData.get("goal") || "") || null,
+    source: String(formData.get("source") || "Walk-in") || "Walk-in",
+    concerns: String(formData.get("concerns") || "") || null,
+    coach_id,
+    branch: p.branch,
+    stage: "front_desk",
+    created_by: p.name,
+  }).select("id").single();
+  if (error) return { ok: false, error: error.message };
+
+  await logJourneyEvent(supabase, (row as { id: string }).id, "stage_enter", "front_desk", p.name);
+  revalidatePath("/journey");
+  return { ok: true };
+}
+
+// Front Desk hands the client to the Health Coach: captures the goal/source/
+// concerns and moves the journey from the desk to "Awaiting Coach".
+export async function journeyHandover(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
+  const id = String(formData.get("id") || "");
+  if (!id) return { ok: false, error: "Missing journey" };
+  const supabase = await createClient();
+
+  await supabase.from("journeys").update({
+    goal: String(formData.get("goal") || "") || null,
+    source: String(formData.get("source") || "") || null,
+    concerns: String(formData.get("concerns") || "") || null,
+    stage: "await_coach",
+    stage_entered_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }).eq("id", id).eq("stage", "front_desk");
+
+  await logJourneyEvent(supabase, id, "handover", "front_desk", p.name);
+  await logJourneyEvent(supabase, id, "stage_enter", "await_coach", p.name);
+  revalidatePath("/journey");
+  return { ok: true };
+}
+
+// The Health Coach advances the client to the next stage of the flow.
+export async function journeyAdvance(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
+  const id = String(formData.get("id") || "");
+  if (!id) return { ok: false, error: "Missing journey" };
+  const supabase = await createClient();
+
+  const { data: cur } = await supabase.from("journeys").select("stage").eq("id", id).maybeSingle();
+  const stage = (cur as { stage?: string } | null)?.stage;
+  if (!stage) return { ok: false, error: "Journey not found" };
+
+  const next = nextStageKey(stage);
+  if (next === stage) return { ok: true }; // already at the end
+  const patch: Record<string, unknown> = {
+    stage: next,
+    stage_entered_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (next === "done") patch.status = "done";
+
+  await supabase.from("journeys").update(patch).eq("id", id);
+  await logJourneyEvent(supabase, id, "stage_enter", next, p.name);
+  revalidatePath("/journey");
+  return { ok: true };
+}
+
+// A professional signals the coach that their session is ending. Any staff on
+// the floor can send it (the doctor/dietitian/trainer running the assessment).
+export async function journeyNotifyCoach(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !isStaffRole(p.role)) return { ok: false, error: "Not permitted" };
+  const id = String(formData.get("id") || "");
+  if (!id) return { ok: false, error: "Missing journey" };
+  const stage = String(formData.get("stage") || "") || null;
+  const supabase = await createClient();
+
+  await logJourneyEvent(supabase, id, "notify_coach", stage, p.name);
+
+  // Push a notification to the coach behind this journey, if there is one.
+  const { data: jr } = await supabase.from("journeys").select("coach_id, walk_in_name, client_id, clients(name)").eq("id", id).maybeSingle();
+  const j = jr as { coach_id?: string | null; walk_in_name?: string | null; clients?: { name?: string } | null } | null;
+  if (j?.coach_id) {
+    const who = j.clients?.name ?? j.walk_in_name ?? "A client";
+    try {
+      await notifyStaff(supabase, j.coach_id, {
+        title: "Session ending — please return",
+        body: `${who} is finishing their assessment. Return to escort them to the next one.`,
+        href: "/journey",
+        icon: "🔔",
+      });
+    } catch { /* notification is best-effort */ }
+  }
+  revalidatePath("/journey");
+  return { ok: true };
+}
+
+// Remove a walk-in from the board (left, or logged in error).
+export async function journeyCancel(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
+  const id = String(formData.get("id") || "");
+  if (!id) return { ok: false, error: "Missing journey" };
+  const supabase = await createClient();
+  await supabase.from("journeys").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
+  await logJourneyEvent(supabase, id, "cancel", null, p.name);
+  revalidatePath("/journey");
   return { ok: true };
 }

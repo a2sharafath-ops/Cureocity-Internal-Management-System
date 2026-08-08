@@ -39,6 +39,7 @@ const SECTIONS: NavSection[] = [
       { href: "/clients", label: "Clients", icon: "◉" },
       // Onboarding now lives as a tab inside the Clients section (see
       // components/ClientsTabs), so it's no longer a separate nav item.
+      { href: "/journey", label: "Live Journey", icon: "🧭" },
       { href: "/appointments", label: "Appointment Calendar", icon: "📅" },
       { href: "/sessions", label: "Training Schedule", icon: "🏋" },
       { href: "/intake", label: "Tablet Intake", icon: "🖊" },
