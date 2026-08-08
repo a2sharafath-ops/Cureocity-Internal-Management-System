@@ -6,13 +6,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { RingMeter } from "@/components/Meters";
-import { raiseInvoiceForClient, nudgeClinician, nudgeRole } from "@/lib/actions";
+import { raiseInvoiceForClient, nudgeClinician, nudgeRole, startConsultFromAppointment } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 
 export type Flag = {
   sev: "high" | "med" | "low"; title: string; detail: string; href: string;
   /** label for the View link (the deep-link to this item's own section). Defaults to "View". */
   cta?: string;
+  /** when set, the primary CTA opens (creates-if-needed) the consultation for this
+   *  appointment and lands the clinician in the console — instead of merely
+   *  navigating to `href`. Used for a clinician's own not-yet-conducted consult:
+   *  "Open" should drop them straight into the consultation, like the Start button.
+   *  A server action (form POST), so there is no link-prefetch side effect. */
+  startConsultAppointmentId?: string;
   /** when set, an extra button raises the client's invoice in one click */
   raiseInvoiceClientId?: string;
   /** chase a specific staff member (clinician-owed work) */
@@ -222,8 +228,19 @@ export default function AttentionPanel({
                   <SubmitButton pendingLabel="Raising…" doneLabel="✓ Raised" style={chaseBtn}>Raise invoice</SubmitButton>
                 </form>
               ) : null}
-              {/* View — deep-link to this item's own section */}
-              <Link href={f.href} style={viewBtn}>{f.cta ?? "View"} →</Link>
+              {/* Open — for a not-yet-conducted consult, drop straight into the
+                  console (create-or-resume the consult, then redirect). Otherwise
+                  a plain deep-link to this item's own section. */}
+              {f.startConsultAppointmentId ? (
+                <form action={startConsultFromAppointment} style={{ margin: 0 }}>
+                  <input type="hidden" name="appointment_id" value={f.startConsultAppointmentId} />
+                  <SubmitButton pendingLabel="Opening…" doneLabel="Opening…" style={{ ...viewBtn, border: "none", cursor: "pointer" }}>
+                    {f.cta ?? "Open"} →
+                  </SubmitButton>
+                </form>
+              ) : (
+                <Link href={f.href} style={viewBtn}>{f.cta ?? "View"} →</Link>
+              )}
             </div>
           </div>
         ))}

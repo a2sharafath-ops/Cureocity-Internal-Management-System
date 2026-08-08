@@ -51,7 +51,8 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("consultations").select("kind, status, completed_at").eq("client_id", clientId),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").eq("client_id", clientId).neq("status", "cancelled"),
     sb.from("sessions").select("status, date").eq("client_id", clientId).neq("status", "cancelled"),
-    sb.from("diet_charts").select("id").eq("client_id", clientId).limit(1),
+    // diet_charts is retired — the plan is the document now. See care-attention.
+    sb.from("diet_plans").select("id").eq("client_id", clientId).limit(1),
     sb.from("client_workouts").select("id").eq("client_id", clientId).limit(1),
     sb.from("blueprints").select("generated").eq("client_id", clientId).maybeSingle(),
     sb.from("care_protocols").select("start_date").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),

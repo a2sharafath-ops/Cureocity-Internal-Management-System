@@ -17,7 +17,6 @@ import ExerciseLibrarySection from "@/components/ExerciseLibrarySection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
-import DietCharts, { type DietChartRow } from "@/components/DietCharts";
 import DietPlanSection, { type DietPlanRow } from "@/components/DietPlanSection";
 import DietAssessmentSection, { type DietAssessmentRow } from "@/components/DietAssessmentSection";
 import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
@@ -26,7 +25,7 @@ import { watiReadiness } from "@/lib/wati";
 import { type PlanMeal, type PlanOption } from "@/lib/diet-plan";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
-import { getAppSettings } from "@/lib/settings";
+
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import { deletable } from "@/lib/consult-lifecycle";
@@ -190,15 +189,13 @@ export default async function WorkspacePage(
   // client waits on a document nobody can see is waiting. Shown on whichever
   // discipline they happen to be looking at, for that reason.
   if (canReviewDietChart(me.role)) {
-    const [{ data: qPlans }, { data: qCharts }, { data: qAssess }] = await Promise.all([
+    const [{ data: qPlans }, { data: qAssess }] = await Promise.all([
       supabase.from("diet_plans").select("id, clients(name)").eq("status", "in_review"),
-      supabase.from("diet_charts").select("id, clients(name)").eq("status", "In review"),
       supabase.from("diet_assessments").select("id, clients(name)").eq("status", "in_review"),
     ]);
     // All three documents are sections of the one "Diet charts" tab.
     const queue: [string, { clients: { name: string } | null }[]][] = [
       ["Diet plan", (qPlans ?? []) as never],
-      ["Diet chart", (qCharts ?? []) as never],
       ["Assessment summary", (qAssess ?? []) as never],
     ];
     for (const [label, rows] of queue) {
@@ -224,7 +221,7 @@ export default async function WorkspacePage(
     const [{ data: deRows }, { data: chartRows }] = await Promise.all([
       supabase.from("followups").select("client_id, label, day, due_date, stage, clients(name)")
         .in("client_id", scopedIds).eq("day", 2).lte("due_date", today),
-      supabase.from("diet_charts").select("client_id").in("client_id", scopedIds),
+      supabase.from("diet_plans").select("client_id").in("client_id", scopedIds),
     ]);
     // The explanation is only actionable once the dietitian's chart draft exists
     // — you can't explain a chart that hasn't been written.
@@ -332,6 +329,13 @@ export default async function WorkspacePage(
           detail: `Was due ${fmtOd(a.date)} · conduct or reschedule`,
           href: a.client_id ? `/clients/${a.client_id}${roQuery}` : "/appointments",
           cta: "Open",
+          // "Open" should drop the clinician straight INTO the consultation, not
+          // just onto the client page. When they can act (not a read-only cross-
+          // discipline view) and it's a real client booking, wire it to the same
+          // start-consult action the Start button uses — it creates-or-resumes the
+          // consult and redirects into /console/{id}. The href above stays as the
+          // fallback for read-only viewers.
+          startConsultAppointmentId: !readOnly && a.client_id ? a.id : undefined,
         });
       }
     }
@@ -398,15 +402,6 @@ export default async function WorkspacePage(
   }
 
   // Dietitian tools.
-  let dietCharts: DietChartRow[] = [];
-  if (tab === "charts" || tab === "approvals") {
-    const { data: dc } = await supabase.from("diet_charts").select("id, client_id, version, status, calories, protein, notes, summary, meals, by_name, created_at, review_note, reviewed_by, clients(name)").order("created_at", { ascending: false });
-    dietCharts = ((dc ?? []) as unknown as (DietChartRow & { clients: { name: string } | null })[]).map((r) => ({
-      id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
-      calories: r.calories, protein: r.protein, notes: r.notes, summary: r.summary ?? null, meals: (r.meals ?? []) as [string, string][], by_name: r.by_name, created_at: r.created_at,
-      review_note: r.review_note, reviewed_by: r.reviewed_by,
-    }));
-  }
   // The structured, multi-page diet plan (meal slots + numbered options),
   // alongside the flat diet chart above — same tab, a different document.
   let dietPlans: DietPlanRow[] = [];
@@ -655,12 +650,6 @@ export default async function WorkspacePage(
   // One flat queue across all three document types. Built here because the page
   // already holds the fetched rows; the component stays a dumb renderer.
   const approvalRows: ApprovalRow[] = tab !== "approvals" ? [] : [
-    ...dietCharts.filter((c) => c.status === "In review").map((c): ApprovalRow => ({
-      kind: "chart", id: c.id, clientId: c.client_id, clientName: c.client_name,
-      version: c.version, createdAt: c.created_at, author: c.by_name,
-      summary: [c.calories ? `${c.calories} kcal` : null, c.protein ? `${c.protein} protein` : null].filter(Boolean).join(" · ") || null,
-      readHref: `/diet-chart/${c.id}/print`,
-    })),
     ...dietPlans.filter((p) => p.status === "in_review").map((p): ApprovalRow => ({
       kind: "plan", id: p.id, clientId: p.client_id, clientName: p.client_name,
       version: p.version, createdAt: p.created_at, author: null,
@@ -682,18 +671,12 @@ export default async function WorkspacePage(
     })),
   ];
 
-  // Fetched here rather than inline in the JSX: the approvals block below is a
-  // plain (non-async) IIFE, so it cannot await.
-  const dietDefaultRows = (tab === "charts" || tab === "approvals")
-    ? (await getAppSettings()).diet.defaultRows
-    : undefined;
-
   // Tab bar — every tab renders in place.
   const tabItems = tabs.map((t) => ({ key: t.key, label: t.label, href: `/workspace?role=${roleKey}&tab=${t.key}` }));
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_charts", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
@@ -917,13 +900,13 @@ export default async function WorkspacePage(
       )}
 
       {/* ---- DIET CHARTS (dietitian) ---- */}
-      {tab === "charts" && <DietCharts charts={dietCharts} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={roleKey === "diet" && !readOnly} defaultRows={dietDefaultRows} />}
-
-      {/* ---- CUSTOMISED DIET PLAN BUILDER (dietitian) — the structured multi-page
-           document, separate from the flat diet chart above. Same role gate. ---- */}
+      {/* ---- DIET CHART (dietitian) ----
+           The structured multi-page document. It used to sit BELOW a flat
+           "diet chart" builder as "Customised diet plan"; that older document
+           is retired and this one carries the name the clinic actually uses. ---- */}
       {tab === "charts" && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Customised diet plan</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Diet chart</div>
           <DietPlanSection plans={dietPlans} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
         </div>
       )}

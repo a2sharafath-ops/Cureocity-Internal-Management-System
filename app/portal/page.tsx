@@ -111,7 +111,7 @@ export default async function PortalHome() {
   const messages = (msgRows ?? []) as Msg[];
 
   // read-only medical record (RLS scopes to own rows)
-  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }, { data: rxRows }, { data: labRows }, { data: chartRows }] = await Promise.all([
+  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }, { data: rxRows }, { data: labRows }] = await Promise.all([
     supabase.from("problems").select("description, status").eq("client_id", client.id).eq("status", "active"),
     supabase.from("allergies").select("substance, severity").eq("client_id", client.id),
     supabase.from("medications").select("name, dose, frequency").eq("client_id", client.id).eq("status", "active"),
@@ -128,12 +128,6 @@ export default async function PortalHome() {
       .select("id, test, category, priority, notes, provider, created_at, consultation_id, shared_at, status")
       .eq("client_id", client.id).not("shared_at", "is", null).neq("status", "cancelled")
       .order("created_at", { ascending: false }),
-    // Only published charts. RLS already restricts this, but saying it here
-    // means a draft can't leak through a future policy change either.
-    supabase.from("diet_charts")
-      .select("id, version, calories, protein, notes, meals, published_at, by_name")
-      .eq("client_id", client.id).eq("status", "Published")
-      .order("version", { ascending: false }).limit(1),
   ]);
   const myProblems = (emrProblems ?? []) as { description: string; status: string }[];
   const myAllergies = (emrAllergies ?? []) as { substance: string; severity: string }[];
@@ -148,11 +142,6 @@ export default async function PortalHome() {
     notes: string | null; provider: string | null; created_at: string;
     consultation_id: string | null; shared_at: string | null; status: string;
   }[];
-  const myChart = ((chartRows ?? []) as unknown as {
-    id: string; version: number; calories: number | null; protein: number | null;
-    notes: string | null; meals: { meal?: string; items?: string }[] | null;
-    published_at: string | null; by_name: string | null;
-  }[])[0] ?? null;
   const hasEmr = myProblems.length > 0 || myAllergies.length > 0 || myMeds.length > 0;
 
   // The customised diet plan — a different, richer document than the diet
@@ -257,7 +246,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","diet_charts","meal_day_summaries","diet_plans","diet_assessments"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","meal_day_summaries","diet_plans","diet_assessments"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -589,31 +578,6 @@ export default async function PortalHome() {
             </div>
           )}
 
-          {/* Published diet chart. Same story — RLS already allowed the client
-              to read published charts; nothing ever showed them one. */}
-          {myChart && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>Your diet chart</div>
-              <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: "var(--surface)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                  <b style={{ fontSize: 13 }}>Version {myChart.version}</b>
-                  {myChart.by_name && <span style={{ color: "var(--muted)", fontSize: 12 }}>by {myChart.by_name}</span>}
-                  <span style={{ flex: 1 }} />
-                  {myChart.calories != null && <span style={{ fontSize: 12 }}>{myChart.calories} kcal</span>}
-                  {myChart.protein != null && <span style={{ fontSize: 12, color: "var(--muted)" }}>· {myChart.protein}g protein</span>}
-                </div>
-                {(myChart.meals ?? []).map((m, i) => (
-                  <div key={i} style={{ fontSize: 13, padding: "3px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
-                    <b>{m.meal ?? `Meal ${i + 1}`}</b>{m.items ? ` — ${m.items}` : ""}
-                  </div>
-                ))}
-                {myChart.notes && <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{myChart.notes}</div>}
-                <div style={{ marginTop: 8 }}>
-                  <a href={`/diet-chart/${myChart.id}/print?auto=1`} target="_blank" rel="noopener" style={{ color: "var(--brand-text)", textDecoration: "none", fontSize: 12.5, fontWeight: 600 }}>⬇ Download PDF</a>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
 

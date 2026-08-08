@@ -33,7 +33,15 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
     sb.from("consultations").select("client_id, kind, status, completed_at"),
-    sb.from("diet_charts").select("client_id"),
+// The diet CHART became the diet PLAN.
+    //
+    // `diet_charts` is the retired flat document; `diet_plans` is the structured
+    // one the dietitian actually writes now. The obligation is the same — has
+    // this client been given their eating plan — so it has to watch the table
+    // that can still be satisfied. Left pointing at diet_charts, every
+    // Comprehensive client would read "diet chart pending" for ever, because
+    // nothing would ever create one again.
+    sb.from("diet_plans").select("client_id"),
     sb.from("client_workouts").select("client_id"),
     sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
     sb.from("blueprints").select("client_id, generated"),

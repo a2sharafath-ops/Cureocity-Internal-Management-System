@@ -116,14 +116,24 @@ async function sendReminders(supabase: Admin) {
 async function generateFollowups(supabase: Admin) {
   // The milestone anchor is the package start, not the join date — see
   // lib/followups.ts. Length comes along so a multi-cycle plan repeats.
-  const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }] = await Promise.all([
+  const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }, { data: shared }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
     supabase.from("client_packages").select("client_id, category, start_date, end_date").eq("status", "active"),
     // The protocol date is authoritative where one exists — protocolStartFor.
     supabase.from("care_protocols").select("client_id, start_date").eq("status", "active"),
+    // The Day-2 explanation call is only due once the plan has reached the
+    // client's portal — see the note in buildFollowupRows.
+    supabase.from("diet_plans").select("client_id, shared_at").not("shared_at", "is", null),
   ]);
   const protoOf = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
+  // Earliest share per client: the INITIAL plan is the one that gets explained.
+  const sharedOf = new Map<string, string>();
+  for (const s of (shared ?? []) as { client_id: string; shared_at: string | null }[]) {
+    if (!s.shared_at) continue;
+    const prev = sharedOf.get(s.client_id);
+    if (!prev || s.shared_at < prev) sharedOf.set(s.client_id, s.shared_at);
+  }
   // A client may hold several active packages; the care package governs, not
   // whichever row came back last. See governingPackage().
   const cpsByClient = new Map<string, { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[]>();
@@ -141,6 +151,7 @@ async function generateFollowups(supabase: Admin) {
         category: pk?.category ?? null,
         start: pk?.start_date ?? null,
         protocolStart: protoOf.get(c.id) ?? null,
+        planSharedAt: sharedOf.get(c.id) ?? null,
         days: dayspan(pk?.start_date ?? null, pk?.end_date ?? null),
       };
     }),

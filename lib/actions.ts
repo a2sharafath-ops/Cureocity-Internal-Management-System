@@ -2102,7 +2102,9 @@ export async function getComprehensiveView(clientId: string) {
   ] = await Promise.all([
     supabase.from("consultations")
       .select("kind, completed_at, approved_at, prescription_needed").eq("client_id", clientId),
-    supabase.from("diet_charts").select("drafted_at").eq("client_id", clientId).order("drafted_at").limit(1),
+    // The 24h "chart drafted" clock now runs against the diet PLAN, which is
+    // the document that gets written. `created_at` is when it was first saved.
+    supabase.from("diet_plans").select("created_at").eq("client_id", clientId).order("created_at").limit(1),
     supabase.from("client_workouts").select("created_at, plan_weeks").eq("client_id", clientId).order("created_at").limit(5),
     supabase.from("prescriptions").select("shared_at").eq("client_id", clientId).not("shared_at", "is", null).order("shared_at").limit(1),
     supabase.from("sessions").select("status, date").eq("client_id", clientId).eq("status", "completed").order("date"),
@@ -2118,7 +2120,7 @@ export async function getComprehensiveView(clientId: string) {
     validityDays: (cp?.package_id === "comp12" ? 84 : 28),
     consults: ((consults ?? []) as { kind: string; completed_at: string | null; approved_at: string | null; prescription_needed: boolean | null }[])
       .map((c) => ({ kind: c.kind, completedAt: c.completed_at, approvedAt: c.approved_at, prescriptionNeeded: c.prescription_needed })),
-    dietDraftedAt: ((charts ?? [])[0] as { drafted_at: string | null } | undefined)?.drafted_at ?? null,
+    dietDraftedAt: ((charts ?? [])[0] as { created_at: string | null } | undefined)?.created_at ?? null,
     workoutPlannedAt: plan?.created_at ?? null,
     prescriptionSharedAt: ((rx ?? [])[0] as { shared_at: string | null } | undefined)?.shared_at ?? null,
     sessionsCompleted: (sessions ?? []).length,
@@ -4754,14 +4756,24 @@ export async function generateFollowups() {
   const supabase = await createClient();
   // The milestone anchor is the package start, not the join date — see
   // lib/followups.ts. Length comes along so a multi-cycle plan repeats.
-  const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }] = await Promise.all([
+  const [{ data: clients }, { data: subs }, { data: cps }, { data: protos }, { data: shared }] = await Promise.all([
     supabase.from("clients").select("id, joined"),
     supabase.from("subscriptions").select("client_id, renews_on").eq("status", "active"),
     supabase.from("client_packages").select("client_id, category, start_date, end_date").eq("status", "active"),
     // The protocol date is authoritative where one exists — protocolStartFor.
     supabase.from("care_protocols").select("client_id, start_date").eq("status", "active"),
+    // The Day-2 explanation call is only due once the plan has reached the
+    // client's portal — see the note in buildFollowupRows.
+    supabase.from("diet_plans").select("client_id, shared_at").not("shared_at", "is", null),
   ]);
   const protoOf = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
+  // Earliest share per client: the INITIAL plan is the one that gets explained.
+  const sharedOf = new Map<string, string>();
+  for (const s of (shared ?? []) as { client_id: string; shared_at: string | null }[]) {
+    if (!s.shared_at) continue;
+    const prev = sharedOf.get(s.client_id);
+    if (!prev || s.shared_at < prev) sharedOf.set(s.client_id, s.shared_at);
+  }
   // A client may hold several active packages; the care package governs, not
   // whichever row came back last. See governingPackage().
   const cpsByClient = new Map<string, { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[]>();
@@ -4779,6 +4791,7 @@ export async function generateFollowups() {
         category: pk?.category ?? null,
         start: pk?.start_date ?? null,
         protocolStart: protoOf.get(c.id) ?? null,
+        planSharedAt: sharedOf.get(c.id) ?? null,
         days: dayspan(pk?.start_date ?? null, pk?.end_date ?? null),
       };
     }),
@@ -6397,151 +6410,19 @@ export async function deleteResourceFile(formData: FormData) {
 
 // ---- workspace: diet charts + recipes --------------------------------------
 
-export async function addDietChart(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
-  const client_id = String(formData.get("client_id") || "") || null;
-  if (!client_id) return;
-  const labels = formData.getAll("meal_label").map((v) => String(v).trim());
-  const details = formData.getAll("meal_detail").map((v) => String(v).trim());
-  const meals = labels.map((l, i) => [l, details[i] ?? ""]).filter(([l, d]) => l && d);
-  if (meals.length === 0) return;
-  const supabase = await createClient();
-  const { count } = await supabase.from("diet_charts").select("id", { count: "exact", head: true }).eq("client_id", client_id);
-  const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
-  await supabase.from("diet_charts").insert({
-    client_id, version: (count ?? 0) + 1, status: "Draft",
-    calories: Number(formData.get("calories")) || null,
-    protein: String(formData.get("protein") || "").trim() || null,
-    notes: String(formData.get("notes") || "").trim() || null,
-    summary: String(formData.get("summary") || "").trim() || null,
-    meals, by_name: p.name,
-  });
-  await logAudit(p, "Diet chart drafted", c?.name, `v${(count ?? 0) + 1}`);
-  revalidatePath("/workspace");
-}
 
 // Edit a Draft diet chart in place (same row/version). Only Drafts are editable —
 // once it's In review / Approved / Published it's locked, so a change goes back
 // through review. Used for the "request changes → edit → resubmit" loop.
-export async function updateDietChart(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
-  const id = String(formData.get("id") || "");
-  if (!id) return;
-  const supabase = await createClient();
-  const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
-  if ((dc as { status: string } | null)?.status !== "Draft") return; // only drafts are editable
-  const labels = formData.getAll("meal_label").map((v) => String(v).trim());
-  const details = formData.getAll("meal_detail").map((v) => String(v).trim());
-  const meals = labels.map((l, i) => [l, details[i] ?? ""]).filter(([l, d]) => l && d);
-  if (meals.length === 0) return;
-  await supabase.from("diet_charts").update({
-    meals,
-    calories: Number(formData.get("calories")) || null,
-    protein: String(formData.get("protein") || "").trim() || null,
-    notes: String(formData.get("notes") || "").trim() || null,
-    summary: String(formData.get("summary") || "").trim() || null,
-  }).eq("id", id);
-  await logAudit(p, "Diet chart edited", id, null);
-  revalidatePath("/workspace");
-}
 
 // Dietitian sends a draft to the Super Admin for review.
-export async function submitDietChartForReview(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canWriteNutrition(p.role)) return; // dietitian-owned
-  const id = String(formData.get("id"));
-  if (!id) return;
-  const supabase = await createClient();
-  const { data: dc } = await supabase.from("diet_charts").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
-  await supabase.from("diet_charts").update({ status: "In review", submitted_at: new Date().toISOString(), review_note: null }).eq("id", id);
-  const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
-  await logAudit(p, "Diet chart submitted for review", who, id);
-  // Only the Medical Director can approve these (canReviewDietChart), so only
-  // they are told. A notification its recipient cannot act on is just noise —
-  // the owner sees the waiting queue on their dashboard instead.
-  await notifyRoles(supabase, ["Medical Director"], {
-    title: "Diet chart awaiting review", body: `${who} · submitted by ${p.name}`,
-    href: "/workspace?tab=approvals", icon: "🥗",
-  });
-  revalidatePath("/workspace");
-}
 
 // Super Admin approves the chart, or sends it back to Draft with a note.
-export async function reviewDietChart(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canReviewDietChart(p.role)) return;
-  const id = String(formData.get("id"));
-  const decision = String(formData.get("decision") || "");
-  if (!id || !["approve", "changes"].includes(decision)) return;
-  const note = String(formData.get("note") || "").trim() || null;
-  const supabase = await createClient();
-  const { data: dc } = await supabase.from("diet_charts").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
-  const who = (dc as unknown as { clients: { name: string } | null } | null)?.clients?.name ?? "a client";
-  if (decision === "approve") {
-    await supabase.from("diet_charts").update({ status: "Approved", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: null }).eq("id", id);
-  } else {
-    await supabase.from("diet_charts").update({ status: "Draft", reviewed_by: p.name, reviewed_at: new Date().toISOString(), review_note: note }).eq("id", id);
-  }
-  await logAudit(p, decision === "approve" ? "Diet chart approved" : "Diet chart changes requested", who, note ?? id);
-  await notifyRoles(supabase, ["Dietitian"], {
-    title: `Diet chart ${decision === "approve" ? "approved" : "sent back"} — ${who}`,
-    body: decision === "approve" ? `Approved by ${p.name} · ready to publish` : `${p.name}: ${note ?? "changes requested"}`,
-    href: "/workspace?role=diet&tab=charts", icon: decision === "approve" ? "✅" : "✏️",
-  });
-  revalidatePath("/workspace");
-}
 
-export async function publishDietChart(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
-  const id = String(formData.get("id"));
-  if (!id) return;
-  const supabase = await createClient();
-  // Gate: a chart can only reach the client once the Super Admin approves it.
-  const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
-  if ((dc as { status: string } | null)?.status !== "Approved") return; // not approved → no-op
-  await supabase.from("diet_charts").update({ status: "Published" }).eq("id", id);
-  await logAudit(p, "Diet chart published", id, null);
-  revalidatePath("/workspace");
-}
 
 // Publish & share directly, skipping MD review — for charts that don't need it.
 // Dietitian-owned; works from Draft / In review / Approved.
-/**
- * Publish a diet chart to the client WITHOUT Medical Director review.
- *
- * DELIBERATE, reviewed Aug 2026. Yes, this lets the author bypass the reviewer,
- * and yes that is the person being reviewed. It is kept because the clinic
- * needs a way to get a chart to a client when the director is unreachable, and
- * it audits itself honestly as "published without review" so the bypass is
- * always visible after the fact. It applies to the flat diet chart only — the
- * diet PLAN and the assessment summary have no equivalent.
- */
-export async function publishDietChartDirect(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
-  const id = String(formData.get("id"));
-  if (!id) return;
-  const supabase = await createClient();
-  const { data: dc } = await supabase.from("diet_charts").select("status").eq("id", id).maybeSingle();
-  if ((dc as { status: string } | null)?.status === "Published") return; // already live
-  await supabase.from("diet_charts").update({ status: "Published", published_at: new Date().toISOString() }).eq("id", id);
-  await logAudit(p, "Diet chart shared (published without review)", id, null);
-  revalidatePath("/workspace");
-}
 
-export async function deleteDietChart(formData: FormData) {
-  const p = await getProfile();
-  if (!p || !canConsult(p.role) || !canWriteNutrition(p.role)) return; // dietitian-owned
-  const id = String(formData.get("id"));
-  if (!id) return;
-  const supabase = await createClient();
-  await supabase.from("diet_charts").delete().eq("id", id);
-  await logAudit(p, "Diet chart deleted", id, null);
-  revalidatePath("/workspace");
-}
 
 // ---- AI assist (OpenAI) — dietitian summaries & drafts ----------------------
 // All read structured data already in Cureocity (no PDF upload) and return text
@@ -6839,64 +6720,6 @@ export async function aiConsultSummary(_prev: AiState, formData: FormData): Prom
 // Structured first-draft plan for the diet-chart maker (fills the fields, not
 // copy-paste). Returns meal rows + calories/protein/notes as JSON.
 export type DietDraft = { meals?: [string, string][]; calories?: number | null; protein?: string | null; notes?: string | null; error?: string };
-export async function aiDietDraftStructured(client_id: string): Promise<DietDraft> {
-  const me = await getProfile();
-  if (!me || !canWriteNutrition(me.role)) return { error: "Not authorized." };
-  if (!client_id) return { error: "Pick a client first." };
-  const supabase = await createClient();
-  const [{ data: cons }, { data: meas }, { data: cli }, { data: wk }] = await Promise.all([
-    // Every discipline's consult, newest first — we keep the latest per kind and
-    // use its saved summary (AI or manual) + questionnaire answers.
-    supabase.from("consultations").select("kind, summary, ai_summary, answers, created_at").eq("client_id", client_id).order("created_at", { ascending: false }),
-    supabase.from("measurements").select("date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr, ai_summary").eq("client_id", client_id).order("date", { ascending: false }).limit(1),
-    supabase.from("clients").select("name, goals, conditions").eq("id", client_id).maybeSingle(),
-    supabase.from("client_workouts").select("name, type, mode").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1),
-  ]);
-  const c = cli as { name: string; goals: string[] | null; conditions: string | null } | null;
-  const parts: string[] = [];
-  if (c) parts.push(`Client: ${c.name}${c.goals?.length ? ` · goals: ${c.goals.join(", ")}` : ""}${c.conditions ? ` · conditions: ${c.conditions}` : ""}`);
-
-  // InBody summary (dietitian's saved/AI summary) — the body-composition picture.
-  const mrows = (meas ?? []) as (MeasRow & { ai_summary?: string | null })[];
-  if (mrows[0]?.ai_summary) parts.push(`InBody summary:\n${mrows[0].ai_summary}`);
-  else if (mrows[0]) parts.push(`InBody — ${fmtMeas(mrows[0])}`);
-
-  // Latest consult per discipline (dietitian, doctor, trainer, psychologist):
-  // prefer the saved summary, else compile the questionnaire answers.
-  const seenKind = new Set<string>();
-  for (const cn of ((cons ?? []) as { kind: string; summary: string | null; ai_summary: string | null; answers: [string, string][] | null }[])) {
-    if (seenKind.has(cn.kind)) continue;
-    seenKind.add(cn.kind);
-    const qa = Array.isArray(cn.answers) && cn.answers.length ? cn.answers.map(([q, a]) => `${q}: ${a}`).join("; ") : null;
-    const body = cn.ai_summary || cn.summary || qa;
-    if (body) parts.push(`${cn.kind} questionnaire summary:\n${body.slice(0, 1500)}`);
-  }
-
-  const w = (wk ?? [])[0] as { name: string; type: string; mode: string } | undefined;
-  if (w) parts.push(`Fitness plan: ${w.name} (${w.type}, ${w.mode})`);
-  if (parts.length <= 1) return { error: "Not enough client data yet (need consults / InBody / questionnaire)." };
-  const r = await openaiComplete(
-    'You are an expert clinical dietitian. Return ONLY a JSON object shaped as {"meals":[["Early Morning","..."],["Breakfast","..."],["Mid-Morning","..."],["Lunch","..."],["Evening","..."],["Dinner","..."]],"calories":<number kcal/day>,"protein":"<e.g. 72 g>","notes":"<short guidance for the client>"}. Each meal detail should be a concrete Indian-friendly suggestion with rough portions, aligned to the goals, conditions, InBody and fitness plan given.',
-    parts.join("\n"),
-    { json: true, maxTokens: 900 },
-  );
-  if (r.error) return { error: r.error };
-  try {
-    const parsed = JSON.parse(r.text ?? "{}") as { meals?: unknown; calories?: unknown; protein?: unknown; notes?: unknown };
-    const meals = Array.isArray(parsed.meals)
-      ? (parsed.meals as unknown[]).map((m) => Array.isArray(m) ? [String(m[0] ?? ""), String(m[1] ?? "")] as [string, string] : null).filter((x): x is [string, string] => Boolean(x && x[0]))
-      : [];
-    if (!meals.length) return { error: "The model didn't return a usable plan — try again." };
-    return {
-      meals,
-      calories: typeof parsed.calories === "number" ? parsed.calories : (Number(parsed.calories) || null),
-      protein: parsed.protein != null ? String(parsed.protein) : null,
-      notes: parsed.notes != null ? String(parsed.notes) : null,
-    };
-  } catch {
-    return { error: "Couldn't parse the AI plan — try again." };
-  }
-}
 
 
 export async function aiDailyMealSummary(_prev: AiState, formData: FormData): Promise<AiState> {

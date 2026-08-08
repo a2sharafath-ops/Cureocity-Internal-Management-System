@@ -32,7 +32,8 @@ const pillOf = (status: string) => {
 
 /**
  * Picks a client, lists their diet-plan versions, and opens DietPlanBuilder
- * for the chosen one — or starts a new draft. Sits alongside DietCharts on
+ * for the chosen one — or starts a new draft. This IS the diet chart now:
+ * the old flat chart builder was retired and this took its name. Sits on
  * the "charts" tab: same tab, a different (richer, structured) document.
  */
 export default function DietPlanSection({

@@ -101,15 +101,13 @@ export default async function OwnerDashboard({ name }: { name: string }) {
   // fact about the clinic, not a document-level one, so it is raised once and
   // loudly instead of being repeated per waiting document.
   const REVIEW_HREF = "/workspace?role=diet&tab=charts";
-  const [{ data: revPlans }, { data: revCharts }, { data: revAssess }, { data: directors }] = await Promise.all([
+  const [{ data: revPlans }, { data: revAssess }, { data: directors }] = await Promise.all([
     supabase.from("diet_plans").select("id, clients(name)").eq("status", "in_review"),
-    supabase.from("diet_charts").select("id, clients(name)").eq("status", "In review"),
     supabase.from("diet_assessments").select("id, clients(name)").eq("status", "in_review"),
     supabase.from("profiles").select("id").eq("role", "Medical Director").limit(1),
   ]);
   const reviewQueue: [string, { clients: { name: string } | null }[]][] = [
     ["Diet plan", (revPlans ?? []) as never],
-    ["Diet chart", (revCharts ?? []) as never],
     ["Assessment summary", (revAssess ?? []) as never],
   ];
   const waiting = reviewQueue.reduce((n, [, rows]) => n + rows.length, 0);

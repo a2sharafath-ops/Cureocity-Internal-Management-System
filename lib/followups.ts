@@ -35,6 +35,16 @@ export type ProtocolClient = {
   days?: number | null;
   /** care_protocols.start_date, where one exists — see protocolStartFor. */
   protocolStart?: string | null;
+  /**
+   * When the client's diet plan reached their portal, if it has.
+   *
+   * The Day-2 explanation call is gated on this. It used to be generated from
+   * the package start alone, so the Health Coach was asked to walk a client
+   * through a plan that might not exist yet — and would then sit overdue while
+   * everyone waited for the dietitian. The call is only real once the client
+   * can open the document.
+   */
+  planSharedAt?: string | null;
 };
 
 /**
@@ -109,20 +119,32 @@ export function buildFollowupRows(
     const start = protocolStart(c);
     if (!start) continue;
 
-    // Day 2 — explaining the diet chart. Comprehensive only: a PT client has
-    // no dietitian and no chart to explain.
+    // Day 2 — explaining the diet plan. Comprehensive only: a PT client has
+    // no dietitian and no plan to explain.
+    //
+    // Gated on the plan actually reaching the client. Generated from the
+    // package start alone, this asked the Health Coach to talk someone through
+    // a document that might not exist, and then sat overdue while everyone
+    // waited on the dietitian — the coach chased for someone else's delay.
+    //
+    // Due on day 2, or the day the plan was shared if that came later. Sharing
+    // on day 9 makes the call due on day 9, not instantly nine days overdue.
     //
     // Once per PACKAGE, not once per cycle — deliberate, reviewed Aug 2026.
-    // It explains the INITIAL chart; a comp12 client gets three diet cycles but
+    // It explains the INITIAL plan; a comp12 client gets three diet cycles but
     // one explanation, because the later cycles adjust a plan the client has
     // already had walked through. Note this sits outside the milestone loop
     // below, which is what makes that true.
-    if (!isPt(c)) rows.push({
-      client_id: c.id, kind: "onboarding", label: "Day 2 diet chart explanation",
-      due_date: addDaysUTC(start, EXPLANATION_OFFSET), priority: "mandatory", created_by: createdBy,
-      category: "Diet Consultation", day: EXPLANATION_OFFSET, mode: "Offline",
-      stage: "PENDING_CALL", milestone_key: "explain_2",
-    });
+    const shared = c.planSharedAt ? c.planSharedAt.slice(0, 10) : null;
+    if (!isPt(c) && shared) {
+      const dueDay = addDaysUTC(start, EXPLANATION_OFFSET);
+      rows.push({
+        client_id: c.id, kind: "onboarding", label: "Day 2 diet plan explanation",
+        due_date: shared > dueDay ? shared : dueDay, priority: "mandatory", created_by: createdBy,
+        category: "Diet Consultation", day: EXPLANATION_OFFSET, mode: "Offline",
+        stage: "PENDING_CALL", milestone_key: "explain_2",
+      });
+    }
 
     // Everything else comes straight off the care plan, so the call and the
     // booking gate can never be due on different days again.

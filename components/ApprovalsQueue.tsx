@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { reviewDietChart, reviewDietPlan, reviewDietAssessment } from "@/lib/actions";
+import { reviewDietPlan, reviewDietAssessment } from "@/lib/actions";
 
 /**
  * The Medical Director's sign-off queue.
@@ -18,7 +18,9 @@ import { reviewDietChart, reviewDietPlan, reviewDietAssessment } from "@/lib/act
  * client up.
  */
 
-export type ApprovalKind = "chart" | "plan" | "assess";
+// "chart" is gone — the flat diet chart was retired and the plan took its
+// name. Two document kinds reach this queue now.
+export type ApprovalKind = "plan" | "assess";
 
 export type ApprovalRow = {
   kind: ApprovalKind;
@@ -37,8 +39,7 @@ export type ApprovalRow = {
 };
 
 const LABEL: Record<ApprovalKind, string> = {
-  chart: "Diet chart",
-  plan: "Diet plan",
+  plan: "Diet chart",
   assess: "Assessment summary",
 };
 
@@ -91,16 +92,9 @@ function Row({ row }: { row: ApprovalRow }) {
 
   // The chart and the two newer documents take different field names — the
   // chart predates them. Normalised here so one form serves all three.
-  const action =
-    row.kind === "chart" ? reviewDietChart
-      : row.kind === "plan" ? reviewDietPlan
-        : reviewDietAssessment;
-  const approveFields = row.kind === "chart"
-    ? <input type="hidden" name="decision" value="approve" />
-    : <input type="hidden" name="approve" value="true" />;
-  const backFields = row.kind === "chart"
-    ? <input type="hidden" name="decision" value="changes" />
-    : <input type="hidden" name="approve" value="false" />;
+  const action = row.kind === "plan" ? reviewDietPlan : reviewDietAssessment;
+  const approveFields = <input type="hidden" name="approve" value="true" />;
+  const backFields = <input type="hidden" name="approve" value="false" />;
 
   return (
     <div style={{ ...box, padding: "14px 16px", marginBottom: 10 }}>

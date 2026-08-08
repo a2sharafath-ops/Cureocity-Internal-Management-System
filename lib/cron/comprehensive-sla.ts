@@ -56,7 +56,9 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     supabase.from("clients").select("id, name").in("id", ids),
     supabase.from("blueprint_sla_events")
       .select("client_id, gate, kind").eq("protocol", COMPREHENSIVE_CATEGORY).in("client_id", ids),
-    supabase.from("diet_charts").select("client_id, drafted_at").in("client_id", ids),
+    // The plan is the document now; diet_charts is retired. `created_at` is
+    // when the dietitian first saved it — the equivalent of the old drafted_at.
+    supabase.from("diet_plans").select("client_id, created_at").in("client_id", ids),
     supabase.from("client_workouts").select("client_id, created_at, plan_weeks").in("client_id", ids),
     supabase.from("prescriptions").select("client_id, shared_at").in("client_id", ids),
     supabase.from("sessions").select("client_id, status, date").in("client_id", ids).eq("status", "completed").order("date"),
@@ -90,7 +92,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     byClient.set(c.client_id, list);
   }
 
-  const draftAt = earliest(charts as { client_id: string; drafted_at: string | null }[], (r) => r.drafted_at);
+  const draftAt = earliest(charts as { client_id: string; created_at: string | null }[], (r) => r.created_at);
   // A plan only counts once it covers at least a week — that's the commitment.
   const planAt = earliest(
     ((workouts ?? []) as { client_id: string; created_at: string; plan_weeks: number | null }[])

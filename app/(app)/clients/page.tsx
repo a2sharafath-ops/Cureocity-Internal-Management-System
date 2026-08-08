@@ -50,7 +50,7 @@ export default async function ClientsPage() {
     loadClientStatuses(supabase, ids, today),
     supabase.from("client_packages").select("client_id, package_name, category, status, start_date, end_date").in("client_id", ids),
     supabase.from("client_assignments").select("client_id, discipline, staff_id").in("client_id", ids),
-    supabase.from("diet_charts").select("client_id").in("client_id", ids),
+    supabase.from("diet_plans").select("client_id").in("client_id", ids),
     supabase.from("client_workouts").select("client_id").in("client_id", ids),
     supabase.from("care_protocols").select("client_id, approved_at").eq("protocol", "comprehensive").eq("status", "active").in("client_id", ids),
     supabase.from("sessions").select("client_id, status").in("client_id", ids),
