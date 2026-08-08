@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { todayISO } from "@/lib/today";
 import { sendEmail } from "@/lib/email/send";
 import { tplAppointmentReminder } from "@/lib/email/templates";
-import { buildFollowupRows } from "@/lib/followups";
+import { buildFollowupRows, governingPackage } from "@/lib/followups";
 import { notifyRoles } from "@/lib/notify";
 import { runBlueprintSla } from "@/lib/cron/blueprint-sla";
 import { runComprehensiveSla } from "@/lib/cron/comprehensive-sla";
@@ -124,10 +124,13 @@ async function generateFollowups(supabase: Admin) {
     supabase.from("care_protocols").select("client_id, start_date").eq("status", "active"),
   ]);
   const protoOf = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
-  const packOf = new Map(
-    ((cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[])
-      .map((r) => [r.client_id, r]),
-  );
+  // A client may hold several active packages; the care package governs, not
+  // whichever row came back last. See governingPackage().
+  const cpsByClient = new Map<string, { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[]>();
+  for (const r of (cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[]) {
+    (cpsByClient.get(r.client_id) ?? cpsByClient.set(r.client_id, []).get(r.client_id)!).push(r);
+  }
+  const packOf = new Map(Array.from(cpsByClient, ([id, rows]) => [id, governingPackage(rows)!]));
   const dayspan = (a: string | null, b: string | null) =>
     a && b ? Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) : null;
   const rows = buildFollowupRows(

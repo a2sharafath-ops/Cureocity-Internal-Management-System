@@ -38,6 +38,30 @@ export type ProtocolClient = {
 };
 
 /**
+ * Which of a client's active packages governs their care.
+ *
+ * A client can hold several at once — Comprehensive plus a gym membership is
+ * the common case. Both follow-up generators used to build a Map keyed by
+ * client id straight from the query, so the LAST row Postgres happened to
+ * return won. If that was the membership, `onProtocol()` returned false and the
+ * client got no follow-ups at all: no day-2 explanation, no day-10/21/28 calls.
+ * Non-deterministic between runs, and completely silent.
+ *
+ * Same order as PRIORITY in lib/client-status.ts, which had this right: care
+ * packages outrank a facility membership, and the richest care package wins.
+ */
+export const PACKAGE_PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
+
+export function governingPackage<T extends { category: string | null }>(rows: T[]): T | null {
+  if (!rows.length) return null;
+  for (const p of PACKAGE_PRIORITY) {
+    const hit = rows.find((r) => (r.category ?? "").toLowerCase() === p);
+    if (hit) return hit;
+  }
+  return rows[0];
+}
+
+/**
  * Which packages have a follow-up ladder.
  *
  * PT was excluded, so a training client's fitness reassessment — a real

@@ -18,7 +18,7 @@ import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, M
 import { getPersona } from "@/lib/personas";
 import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
 import { deletable, statusAfterUndo, CANCELLED } from "@/lib/consult-lifecycle";
-import { buildFollowupRows } from "@/lib/followups";
+import { buildFollowupRows, governingPackage } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
 import { assignCareTeam } from "@/lib/care-team";
 import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
@@ -4658,10 +4658,13 @@ export async function generateFollowups() {
     supabase.from("care_protocols").select("client_id, start_date").eq("status", "active"),
   ]);
   const protoOf = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
-  const packOf = new Map(
-    ((cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[])
-      .map((r) => [r.client_id, r]),
-  );
+  // A client may hold several active packages; the care package governs, not
+  // whichever row came back last. See governingPackage().
+  const cpsByClient = new Map<string, { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[]>();
+  for (const r of (cps ?? []) as { client_id: string; category: string | null; start_date: string | null; end_date: string | null }[]) {
+    (cpsByClient.get(r.client_id) ?? cpsByClient.set(r.client_id, []).get(r.client_id)!).push(r);
+  }
+  const packOf = new Map(Array.from(cpsByClient, ([id, rows]) => [id, governingPackage(rows)!]));
   const dayspan = (a: string | null, b: string | null) =>
     a && b ? Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000) : null;
   const rows = buildFollowupRows(
