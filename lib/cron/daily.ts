@@ -147,8 +147,51 @@ async function generateFollowups(supabase: Admin) {
     (subs ?? []) as { client_id: string; renews_on: string | null }[],
     "auto",
   );
-  if (rows.length) {
-    await supabase.from("followups").upsert(rows, { onConflict: "client_id,milestone_key", ignoreDuplicates: true });
+  // ---- writing the rows ----------------------------------------------------
+  //
+  // Two different keys, needing two different behaviours, and treating them the
+  // same is what broke renewals.
+  //
+  // A MILESTONE key is unique per cycle ("diet_10#2"), so `ignoreDuplicates`
+  // is right: once the row exists, leave it alone — re-creating it would undo
+  // whoever worked it.
+  //
+  // The RENEWAL key is the constant string "renewal", one row per client for
+  // ever. With `ignoreDuplicates` that row was written once and then frozen:
+  // its due date and label stayed on the first cycle, so it sat permanently
+  // overdue and inflated the front desk's counter — and once somebody closed
+  // it, no renewal was ever chased again. Migration 0122 says the row should
+  // "update as the cycle advances"; this is the code finally doing that.
+  const renewals = rows.filter((r) => r.milestone_key === "renewal");
+  const milestones = rows.filter((r) => r.milestone_key !== "renewal");
+
+  if (milestones.length) {
+    await supabase.from("followups").upsert(milestones, { onConflict: "client_id,milestone_key", ignoreDuplicates: true });
+  }
+
+  if (renewals.length) {
+    const { data: existing } = await supabase
+      .from("followups")
+      .select("id, client_id, due_date")
+      .eq("milestone_key", "renewal")
+      .in("client_id", renewals.map((r) => r.client_id));
+    const byClient = new Map(((existing ?? []) as { id: string; client_id: string; due_date: string | null }[])
+      .map((r) => [r.client_id, r]));
+
+    const fresh = renewals.filter((r) => !byClient.has(r.client_id));
+    if (fresh.length) await supabase.from("followups").insert(fresh);
+
+    for (const r of renewals) {
+      const prev = byClient.get(r.client_id);
+      // Same due date = same cycle. Leave it exactly as it is, closed or not:
+      // reopening a renewal somebody already handled would be worse than the
+      // bug we're fixing.
+      if (!prev || prev.due_date === r.due_date) continue;
+      await supabase.from("followups").update({
+        due_date: r.due_date, label: r.label,
+        status: "pending", stage: "PENDING_CALL",
+      }).eq("id", prev.id);
+    }
   }
   return rows.length;
 }
