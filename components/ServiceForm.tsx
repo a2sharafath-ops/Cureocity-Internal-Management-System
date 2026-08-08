@@ -13,8 +13,8 @@ export default function ServiceForm() {
     <form action={addService} onSubmit={() => setTimeout(() => setOpen(false), 50)} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, marginBottom: 16, display: "grid", gridTemplateColumns: "1.8fr 1.4fr 1fr 0.9fr auto auto", gap: 10, alignItems: "end" }}>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Service name</label><input style={input} name="name" required /></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Category</label>
+        {/* datalist lives on the page, so the edit rows can use it too */}
         <input style={input} name="category" list="svc-cats" defaultValue="General" />
-        <datalist id="svc-cats"><option value="Doctor Consultation" /><option value="Diet Consultation" /><option value="Fitness Services" /><option value="Assessment" /></datalist>
       </div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Mode</label><select style={input} name="mode" defaultValue="Offline"><option>Offline</option><option>Online</option></select></div>
       <div style={{ display: "grid", gap: 3 }}><label style={lbl}>Day offset</label><input style={input} name="day_offset" type="number" placeholder="—" /></div>

@@ -4613,6 +4613,64 @@ export async function addService(formData: FormData) {
   revalidatePath("/services");
 }
 
+/**
+ * Edit a service that already exists.
+ *
+ * The catch, and the reason this is more than an UPDATE: a service's NAME is
+ * its identity everywhere else. Appointments store the service name in
+ * `appointments.type`, and the milestone engine matches on it
+ * (`milestoneSatisfied` compares `a.type === service`). Rename "10th Day Diet
+ * Followup" and every appointment ever booked under the old name stops
+ * satisfying its milestone — the whole protocol board would light up as
+ * overdue, retroactively, for every client.
+ *
+ * So a rename carries through to the bookings. Not a foreign key, because the
+ * catalogue post-dates the appointments table and plenty of rows carry bare
+ * category names that are not services at all.
+ */
+export type ServiceEditState = { ok?: boolean; error?: string; note?: string };
+
+export async function updateService(_prev: ServiceEditState, formData: FormData): Promise<ServiceEditState> {
+  const p = await getProfile();
+  if (!p || !canManageServices(p.role)) return { error: "Not permitted" };
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!id || !name) return { error: "Name is required" };
+
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("services").select("name").eq("id", id).maybeSingle();
+  const oldName = (before as { name: string } | null)?.name ?? null;
+
+  const dayRaw = formData.get("day_offset");
+  const dayNum = dayRaw && String(dayRaw).trim() !== "" ? Number(dayRaw) : null;
+
+  const { error } = await supabase.from("services").update({
+    name,
+    category: String(formData.get("category") || "General"),
+    mode: String(formData.get("mode") || "Offline"),
+    slot_based: String(formData.get("slot_based") || "") === "on",
+    day_offset: dayNum != null && Number.isFinite(dayNum) ? dayNum : null,
+  }).eq("id", id);
+  if (error) return { error: error.message };
+
+  let renamed = 0;
+  if (oldName && oldName !== name) {
+    const { count } = await supabase
+      .from("appointments")
+      .update({ type: name }, { count: "exact" })
+      .eq("type", oldName);
+    renamed = count ?? 0;
+  }
+
+  const note = oldName && oldName !== name
+    ? `Renamed from “${oldName}”. ${renamed} booking${renamed === 1 ? "" : "s"} re-pointed.`
+    : undefined;
+  await logAudit(p, "Service updated", name, note ?? null);
+  revalidatePath("/services");
+  revalidatePath("/", "layout");
+  return { ok: true, note };
+}
+
 export async function toggleService(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageServices(p.role)) return;
