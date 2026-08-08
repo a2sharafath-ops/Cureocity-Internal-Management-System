@@ -10,6 +10,7 @@
 // Computed live from bulk reads. Read-only helpers only; actions live in
 // lib/actions (markSessionComplete etc.).
 
+import { FOLLOWUP_CLOSED_SQL } from "@/lib/work-owners";
 import { createClient } from "@/lib/supabase/server";
 import { COMPREHENSIVE_CATEGORY, milestoneDates as compMilestones, cyclesFor as compCycles } from "@/lib/comprehensive";
 import { PT_CATEGORY, milestoneDates as ptMilestones, cyclesFor as ptCycles } from "@/lib/pt";
@@ -63,7 +64,9 @@ export async function todayAgenda(today: string, viewerStaffId?: string | null):
   const [{ data: apptRows }, { data: sessRows }, { data: fuRows }, { data: cps }, { data: clients }, { data: protos }] = await Promise.all([
     sb.from("appointments").select("id, type, hour, date, status, provider_id, staff:provider_id(name), clients(id, name)").eq("date", today).neq("status", "cancelled").order("hour"),
     sb.from("sessions").select("id, hour, date, status, client_id, trainer_id, staff:trainer_id(name), clients(id, name)").eq("date", today).order("hour"),
-    sb.from("followups").select("id, client_id, label, due_date, status, clients(id, name)").lte("due_date", today).neq("status", "done").order("due_date"),
+    // "not done" also caught 'skipped', so a follow-up the client declined
+    // showed here as overdue for ever. FOLLOWUP_CLOSED is the shared answer.
+    sb.from("followups").select("id, client_id, label, due_date, status, clients(id, name)").lte("due_date", today).not("status", "in", FOLLOWUP_CLOSED_SQL).order("due_date"),
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active").in("category", [COMPREHENSIVE_CATEGORY, PT_CATEGORY]),
     sb.from("clients").select("id, name"),
     sb.from("care_protocols").select("client_id, start_date, status").eq("status", "active"),

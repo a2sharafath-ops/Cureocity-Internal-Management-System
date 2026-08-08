@@ -26,10 +26,11 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
   }
 
   const [{ data: cl }, { data: asmt }] = await Promise.all([
-    clientIds.length ? supabase.from("clients").select("id, name, code").in("id", clientIds).order("name") : Promise.resolve({ data: [] }),
+    // gender comes along for AUDIT-C, which uses a lower cut-off for women.
+    clientIds.length ? supabase.from("clients").select("id, name, code, gender").in("id", clientIds).order("name") : Promise.resolve({ data: [] }),
     clientIds.length ? supabase.from("coach_assessments").select("client_id, marker, score, band, tone, date").in("client_id", clientIds).order("date", { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
-  const clients = (cl ?? []) as { id: string; name: string; code: string | null }[];
+  const clients = (cl ?? []) as { id: string; name: string; code: string | null; gender: string | null }[];
   // latest assessment per (client, marker)
   const latest = new Map<string, { score: number | null; band: string | null; tone: string | null; date: string }>();
   for (const a of (asmt ?? []) as { client_id: string; marker: string; score: number | null; band: string | null; tone: string | null; date: string }[]) {
@@ -94,7 +95,7 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
                         <span style={{ flex: 1 }} />
                         <span style={{ fontSize: 10.5, fontWeight: 600, color: dueBad ? "var(--amber-text)" : "var(--muted)" }}>{dueLabel}</span>
                       </div>
-                      <MarkerAssessment clientId={c.id} marker={m.key} tool={m.tool} range={m.range} />
+                      <MarkerAssessment clientId={c.id} marker={m.key} tool={m.tool} range={m.range} gender={c.gender} />
                     </div>
                   );
                 })}

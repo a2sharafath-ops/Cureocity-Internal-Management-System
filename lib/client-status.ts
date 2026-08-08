@@ -84,7 +84,7 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
     supabase.from("packages").select("id, name, is_facility"),
     supabase.from("client_packages").select("client_id, category, package_name, status").in("client_id", ids).eq("status", "active"),
     supabase.from("invoices").select("client_id").in("client_id", ids),
-    supabase.from("blood_requests").select("client_id, submitted").in("client_id", ids),
+    supabase.from("blood_requests").select("client_id, panel, submitted").in("client_id", ids),
     supabase.from("blueprints").select("client_id, generated").in("client_id", ids),
     supabase.from("consultations").select("client_id, kind, status").in("client_id", ids),
     supabase.from("sessions").select("client_id, status").in("client_id", ids).eq("status", "scheduled"),
@@ -95,9 +95,21 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
   const pkgById = new Map(((pkgsD ?? []) as { id: string; name: string; is_facility: boolean }[]).map((p) => [p.id, p]));
   const staffRole = new Map(((staffD ?? []) as { id: string; role: string }[]).map((s) => [s.id, s.role]));
   const hasInvoice = new Set(((invD ?? []) as { client_id: string | null }[]).map((r) => r.client_id).filter(Boolean) as string[]);
-  const blood = new Map<string, boolean>();
+  // Blood panels, kept apart by PANEL.
+  //
+  // This ignored the panel column and let the last row win, so a client holding
+  // both a BluePrint and a Comprehensive request had "report received" flip
+  // depending on the order Postgres returned them. That answer feeds the client
+  // card, the Onboarding page and two attention engines. The other engines
+  // filter by panel; this was the one that didn't.
+  const bloodByPanel = new Map<string, Map<string, boolean>>();
   const bloodReq = new Set<string>();
-  for (const b of (bloodD ?? []) as { client_id: string; submitted: boolean }[]) { bloodReq.add(b.client_id); blood.set(b.client_id, Boolean(b.submitted)); }
+  for (const b of (bloodD ?? []) as { client_id: string; panel: string | null; submitted: boolean }[]) {
+    bloodReq.add(b.client_id);
+    const per = bloodByPanel.get(b.client_id) ?? new Map<string, boolean>();
+    per.set((b.panel ?? "blueprint").toLowerCase(), Boolean(b.submitted));
+    bloodByPanel.set(b.client_id, per);
+  }
   const bpGen = new Set(((bpD ?? []) as { client_id: string; generated: boolean }[]).filter((b) => b.generated).map((b) => b.client_id));
   const sessSched = new Set(((sessD ?? []) as { client_id: string | null }[]).map((s) => s.client_id).filter(Boolean) as string[]);
 
@@ -129,7 +141,14 @@ export async function loadClientStatuses(supabase: Sb, clientIds: string[], toda
     const legacy = c.package_id ? packageCategory(c.package_id, pkgById.get(c.package_id)?.is_facility ?? false) : "other";
     const category = PRIORITY.find((p) => cats.includes(p)) ?? (PRIORITY.includes(legacy) ? legacy : cats[0] ?? legacy);
     const membershipActive = category === "membership" || cats.includes("membership") || (pkgById.get(c.package_id ?? "")?.is_facility ?? false);
-    const submitted = blood.get(c.id) ?? false;
+    // Which panel THIS client's care actually depends on: a Comprehensive
+    // client is waiting on the comprehensive panel, whatever else is on file.
+    const panels = bloodByPanel.get(c.id);
+    const wantPanel = category === "comprehensive" ? "comprehensive" : "blueprint";
+    const submitted = panels?.get(wantPanel)
+      // No row for the panel we care about — fall back to any panel rather than
+      // claiming a report is missing when the client has one on file.
+      ?? (panels ? Array.from(panels.values()).some(Boolean) : false);
     const requested = bloodReq.has(c.id);
 
     const done = consultDone.get(c.id) ?? new Set<string>();

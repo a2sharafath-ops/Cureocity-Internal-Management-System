@@ -3087,22 +3087,48 @@ export async function raiseInvoiceForClient(formData: FormData) {
   const supabase = await createClient();
 
   const { data: c } = await supabase.from("clients").select("id, name, email, package_id").eq("id", client_id).maybeSingle();
-  if (!c?.package_id) return;
 
   const { data: existing } = await supabase.from("invoices").select("id").eq("client_id", client_id).limit(1);
   if (existing && existing.length) { revalidatePath("/dashboard"); return; }
 
-  const { data: pkg } = await supabase.from("packages").select("name, price").eq("id", c.package_id).maybeSingle();
-  if (!pkg) return;
+  // Bill the package the FLAG is talking about.
+  //
+  // This read `clients.package_id` — the legacy single-package column — while
+  // the front-desk flag that offers the button reads `client_packages`, which
+  // is where purchasePackage actually writes. For a Comprehensive client who
+  // also holds a gym membership the two disagreed: the flag said "Comprehensive
+  // ₹45,000", the click either did nothing (no legacy id) or raised a
+  // membership-priced invoice. Any negotiated discount was discarded too,
+  // because `packages.price` is the list price and `client_packages.price` is
+  // what the client was actually sold.
+  const { data: cps } = await supabase
+    .from("client_packages")
+    .select("category, package_name, price, package_id")
+    .eq("client_id", client_id).eq("status", "active");
+  const governing = governingPackage(
+    ((cps ?? []) as { category: string | null; package_name: string | null; price: number | null; package_id: string | null }[]),
+  );
 
-  const amount = Number(pkg.price ?? 0);
-  const description = `${pkg.name} package`;
+  let amount: number;
+  let description: string;
+  if (governing) {
+    amount = Number(governing.price ?? 0);
+    description = `${governing.package_name ?? governing.category ?? "Package"} package`;
+  } else {
+    // No client_packages row at all — an older client. Fall back to the legacy
+    // column rather than refusing to bill them.
+    if (!c?.package_id) return;
+    const { data: pkg } = await supabase.from("packages").select("name, price").eq("id", c.package_id).maybeSingle();
+    if (!pkg) return;
+    amount = Number(pkg.price ?? 0);
+    description = `${pkg.name} package`;
+  }
   const num = await nextInvoiceNum(supabase);
   await supabase.from("invoices").insert({
     num, client_id, description, amount, status: "Unpaid", issued_date: todayISO(), created_by: p.name,
   });
   await logAudit(p, "Invoice raised", description, `₹${amount}`);
-  if (c.email) {
+  if (c?.email) {
     await notifyEmail({ supabase, to: c.email, clientId: client_id, template: "invoice", tpl: tplInvoiceCreated(c.name ?? "there", `INV-${String(num).padStart(3, "0")}`, amount, description), actor: p.name });
   }
   revalidatePath("/dashboard");
@@ -3844,7 +3870,12 @@ export async function saveCoachAssessment(formData: FormData) {
   if (!client_id || !m) return;
   const score = Number(formData.get("score"));
   if (!Number.isFinite(score)) return;
-  const b = bandFor(marker as never, score);
+  // Gender matters for AUDIT-C (≥3 for women, ≥4 for men). Read it from the
+  // record rather than trusting the form — the banding is a clinical decision.
+  const sbGender = await createClient();
+  const { data: cg } = await sbGender.from("clients").select("gender").eq("id", client_id).maybeSingle();
+  const gender = (cg as { gender: string | null } | null)?.gender ?? null;
+  const b = bandFor(marker as never, score, gender);
   const note = String(formData.get("note") || "").trim() || null;
   // The instrument may override the band (e.g. DAST-10 ≥3 makes substance use
   // "positive" even when AUDIT-C alone is low).

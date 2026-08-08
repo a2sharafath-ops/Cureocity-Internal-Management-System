@@ -5,7 +5,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { dueOn, waitingSince, fmtDay, daysBetweenISO } from "@/lib/due";
-import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, FOLLOWUP_QUEUE_OWNER, SETTLED_INVOICE } from "@/lib/work-owners";
+import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, FOLLOWUP_QUEUE_OWNER, SETTLED_INVOICE, FOLLOWUP_CLOSED_SQL } from "@/lib/work-owners";
 
 const shift = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Payment terms: 7 days from issue. */
@@ -25,7 +25,9 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
     sb.from("clients").select("id, name"),
     sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
     sb.from("tablet_submissions").select("id, first_name, last_name, created_at").eq("status", "pending"),
-    sb.from("followups").select("id, due_date, status, day, label").eq("status", "pending"),
+    // Anything not closed, not just the literal 'pending' — a row parked in
+    // another open state was silently invisible to the front desk.
+    sb.from("followups").select("id, due_date, status, day, label").not("status", "in", FOLLOWUP_CLOSED_SQL),
   ]);
 
   const nameOf = (id: string | null) => (id && ((clients ?? []) as { id: string; name: string }[]).find((c) => c.id === id)?.name) || "Client";

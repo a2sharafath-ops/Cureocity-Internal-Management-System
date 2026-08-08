@@ -143,3 +143,22 @@ export const APPROVAL_OWNER: OwnerRoles = ["Medical Director"];
  * Lives here rather than in either engine so there is one answer.
  */
 export const SETTLED_INVOICE = new Set(["Paid", "Void", "Cancelled", "Refunded"]);
+
+// ---- follow-ups: what counts as closed --------------------------------------
+
+/**
+ * Follow-up statuses that mean "no longer outstanding".
+ *
+ * Three readers, three different answers, was the situation:
+ *   • front desk asked for status = 'pending'
+ *   • Today's agenda asked for status <> 'done'
+ *   • the client card went by the pipeline STAGE instead
+ *
+ * `fuNoConsult` writes status 'skipped' (the client declined a consult). Under
+ * those rules the row vanished from the front desk, counted as closed on the
+ * card, and sat on Today's agenda as overdue for ever — one row, three stories.
+ */
+export const FOLLOWUP_CLOSED = new Set(["done", "skipped", "cancelled"]);
+
+/** The same rule as a Postgrest filter value: `.not("status", "in", …)`. */
+export const FOLLOWUP_CLOSED_SQL = `(${[...FOLLOWUP_CLOSED].map((s) => `"${s}"`).join(",")})`;

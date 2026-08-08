@@ -90,10 +90,36 @@ export const MARKERS: Marker[] = [
 export const MARKER_BY_KEY: Record<MarkerKey, Marker> = Object.fromEntries(MARKERS.map((m) => [m.key, m])) as Record<MarkerKey, Marker>;
 
 /** The band a score falls into for a marker. */
-export function bandFor(key: MarkerKey, score: number): Band | null {
+/**
+ * AUDIT-C is scored differently for women.
+ *
+ * The threshold is ≥4 for men and ≥3 for women — which the `referral` text on
+ * the substance marker has said all along, while `bandFor` took no gender and
+ * used the male cut-off for everyone. A woman scoring 3 was banded "Low risk",
+ * so `markerNeedsReferral` stayed false and the referral flag never fired. The
+ * code and its own documented protocol disagreed, and the code was winning.
+ *
+ * Applied here rather than by editing MARKERS, because the band table is also
+ * what the UI renders as the scale, and that scale is genuinely 0–12 for both.
+ */
+const FEMALE_CUTOFF: Partial<Record<MarkerKey, number>> = { substance: 3 };
+
+export function bandFor(key: MarkerKey, score: number, gender?: string | null): Band | null {
   const m = MARKER_BY_KEY[key];
   if (!m) return null;
+
+  const cutoff = FEMALE_CUTOFF[key];
+  if (cutoff != null && isFemale(gender) && score >= cutoff) {
+    // Same band the male scale gives at its own cut-off — the "positive" one.
+    return m.bands[m.bands.length - 1];
+  }
   return m.bands.find((b) => score >= b.min && score <= b.max) ?? m.bands[m.bands.length - 1];
+}
+
+/** Gender is free text on the client record, so be generous about spelling. */
+function isFemale(gender?: string | null): boolean {
+  const g = (gender ?? "").trim().toLowerCase();
+  return g === "f" || g === "female" || g === "woman";
 }
 
 export const TONE_STYLE: Record<Band["tone"], { bg: string; text: string }> = {

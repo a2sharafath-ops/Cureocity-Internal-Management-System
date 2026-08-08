@@ -7,7 +7,7 @@ import { INSTRUMENTS } from "@/lib/coach-instruments";
 
 // Coach assessment form for one marker. Uses the validated instrument (auto-
 // scores from item responses) or a manual score when none is defined.
-export default function MarkerAssessment({ clientId, marker, tool, range }: { clientId: string; marker: MarkerKey; tool: string; range: string }) {
+export default function MarkerAssessment({ clientId, marker, tool, range, gender }: { clientId: string; marker: MarkerKey; tool: string; range: string; gender?: string | null }) {
   const inst = INSTRUMENTS[marker];
   const [open, setOpen] = useState(false);
   const [ans, setAns] = useState<Record<string, number>>({});
@@ -19,7 +19,9 @@ export default function MarkerAssessment({ clientId, marker, tool, range }: { cl
   const score = inst ? computed!.score : Number(manual);
   const forceBad = inst ? Boolean(computed!.forceBad) : false;
   const hasScore = inst ? Object.keys(ans).length > 0 : manual.trim() !== "";
-  const b = Number.isFinite(score) ? bandFor(marker, score) : null;
+  // Same gender-aware banding the server applies, so the preview and the
+  // saved record can never disagree.
+  const b = Number.isFinite(score) ? bandFor(marker, score, gender) : null;
   const tone = forceBad ? "bad" : b?.tone ?? null;
   const bandLabel = forceBad ? "Positive / refer" : b?.label ?? "—";
   const ts = tone && TONE_STYLE[tone as keyof typeof TONE_STYLE] ? TONE_STYLE[tone as keyof typeof TONE_STYLE] : { bg: "var(--neutral-bg)", text: "var(--muted)" };
