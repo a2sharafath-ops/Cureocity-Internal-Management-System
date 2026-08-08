@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { buildFollowupRows, protocolStart } from "@/lib/followups";
 
+// `planSharedAt` is set by default because the Day-2 explanation call only
+// exists once the client can actually open their diet chart. Tests that care
+// about the gate itself override it.
 const comp = (over: Record<string, unknown> = {}) => ({
   id: "c1", joined: "2026-03-01", category: "comprehensive",
-  start: "2026-06-01", days: 30, ...over,
+  start: "2026-06-01", days: 30, planSharedAt: "2026-06-01T09:00:00Z", ...over,
 });
 
 describe("buildFollowupRows — anchored to the package, not the join date", () => {
@@ -18,7 +21,7 @@ describe("buildFollowupRows — anchored to the package, not the join date", () 
 
   it("falls back to the join date when no package start is recorded", () => {
     expect(protocolStart(comp({ start: null }))).toBe("2026-03-01");
-    const rows = buildFollowupRows([comp({ start: null })], [], "test");
+    const rows = buildFollowupRows([comp({ start: null, planSharedAt: "2026-03-01T09:00:00Z" })], [], "test");
     expect(rows.find((r) => r.milestone_key === "explain_2")?.due_date).toBe("2026-03-03");
   });
 
@@ -44,5 +47,32 @@ describe("buildFollowupRows — anchored to the package, not the join date", () 
 
   it("skips a client with no anchor date at all", () => {
     expect(buildFollowupRows([comp({ start: null, joined: null })], [], "test")).toHaveLength(0);
+  });
+});
+
+describe("the Day-2 explanation waits for the chart to reach the client", () => {
+  const keyOf = (c: Record<string, unknown>) =>
+    buildFollowupRows([comp(c)], [], "test").find((r) => r.milestone_key === "explain_2");
+
+  it("does not queue the call while no chart has been shared", () => {
+    // It used to be dated from the package start alone, so the coach was asked
+    // to walk someone through a document that did not exist yet — and the row
+    // sat overdue while everyone waited on the dietitian.
+    expect(keyOf({ planSharedAt: null })).toBeUndefined();
+    expect(keyOf({ planSharedAt: undefined })).toBeUndefined();
+  });
+
+  it("keeps day 2 when the chart was shared early", () => {
+    expect(keyOf({ planSharedAt: "2026-06-01T09:00:00Z" })?.due_date).toBe("2026-06-03");
+  });
+
+  it("moves the call to the share date when the chart was late", () => {
+    // Shared on day 9 makes the call due on day 9 — not instantly nine days
+    // overdue for a delay that was not the coach's.
+    expect(keyOf({ planSharedAt: "2026-06-10T14:00:00Z" })?.due_date).toBe("2026-06-10");
+  });
+
+  it("never queues it for a PT client — there is no chart to explain", () => {
+    expect(keyOf({ category: "training", planSharedAt: "2026-06-01T09:00:00Z" })).toBeUndefined();
   });
 });
