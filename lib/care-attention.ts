@@ -347,7 +347,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         const dated = isPt
           ? ptMilestoneDates(start, ptCyclesFor(span))
           : milestoneDates(start, cyclesFor(span));
-        for (const m of unsatisfiedMilestones(clientId, dated, apptsBy.get(clientId) ?? [], services)) {
+        for (const m of unsatisfiedMilestones(clientId, dated, apptsBy.get(clientId) ?? [], services, today)) {
           if (today <= m.dueDate) continue; // dashboard shows only overdue milestones
           // A missed milestone is two failures wearing one label: nobody booked
           // it, or it was booked and not held. MILESTONES records the

@@ -61,15 +61,30 @@ describe("serviceForMilestone", () => {
 
 describe("milestoneSatisfied", () => {
   const catOf = makeCatOf(SERVICES);
-  const base = { category: "Diet Consultation", fromDate: "2026-08-05", service: "10th Day Diet Followup", catOf };
+  // "today" matters now: a scheduled booking in the past is a no-show.
+  const base = { category: "Diet Consultation", fromDate: "2026-08-05", service: "10th Day Diet Followup", catOf, today: "2026-07-25" };
 
-  it("counts a service-named booking regardless of date (early booking)", () => {
+  it("counts a service-named booking made a few days early", () => {
     const appts = [{ type: "10th Day Diet Followup", date: "2026-07-29", status: "scheduled" }];
     expect(milestoneSatisfied(appts, base)).toBe(true);
+  });
+  it("does NOT count one booked long before the window opens", () => {
+    // Beyond MILESTONE_EARLY_GRACE_DAYS — on a repeating protocol that booking
+    // belongs to the previous cycle, not this one.
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-07-01", status: "completed" }];
+    expect(milestoneSatisfied(appts, base)).toBe(false);
+  });
+  it("does NOT count one on/after the next cycle's start", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-09-02", status: "completed" }];
+    expect(milestoneSatisfied(appts, { ...base, toDate: "2026-09-02" })).toBe(false);
   });
   it("counts a legacy category booking within the date window", () => {
     const appts = [{ type: "Diet Consultation", date: "2026-08-06", status: "completed" }];
     expect(milestoneSatisfied(appts, base)).toBe(true);
+  });
+  it("treats a past 'scheduled' booking as a no-show, not a hit", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-08-06", status: "scheduled" }];
+    expect(milestoneSatisfied(appts, { ...base, today: "2026-08-20" })).toBe(false);
   });
   it("does NOT count a legacy category booking before the window", () => {
     const appts = [{ type: "Diet Consultation", date: "2026-07-20", status: "scheduled" }];

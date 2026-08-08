@@ -76,12 +76,22 @@ export function unsatisfiedMilestones(
   dated: MilestoneLike[],
   appts: ApptMatchRow[],
   services: ServiceRow[],
+  today: string,
 ): (MilestoneLike & { bookHref: string })[] {
   const catOf = makeCatOf(services);
   const out: (MilestoneLike & { bookHref: string })[] = [];
   for (const m of dated) {
     const svc = serviceForMilestone(m.apptType, m.from, services);
-    if (milestoneSatisfied(appts, { category: m.apptType, fromDate: m.fromDate, service: svc, catOf })) continue;
+    // The upper bound of this milestone's window: the same milestone one cycle
+    // later. On comp12 the day-10 diet follow-up recurs at day 38 and 66 under
+    // an identical service name, so without this a single booking satisfied all
+    // three. `dated` is the full milestone list, so the next occurrence is just
+    // the next entry with the same appointment type and day offset.
+    const next = dated.find((o) => o.apptType === m.apptType && o.from === m.from && o.fromDate > m.fromDate);
+    if (milestoneSatisfied(appts, {
+      category: m.apptType, fromDate: m.fromDate, toDate: next?.fromDate ?? null,
+      service: svc, catOf, today,
+    })) continue;
     out.push({ ...m, bookHref: milestoneBookHref(clientId, m.apptType, m.from, services) });
   }
   return out;

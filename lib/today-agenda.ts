@@ -118,7 +118,7 @@ export async function todayAgenda(today: string, viewerStaffId?: string | null):
       ? ptMilestones(start, ptCycles(spanDays))
       : compMilestones(start, compCycles(spanDays));
     // Shared satisfied-check + Book link; we only surface milestones due *today*.
-    for (const m of unsatisfiedMilestones(cp.client_id, dated, clientAppts, services)) {
+    for (const m of unsatisfiedMilestones(cp.client_id, dated, clientAppts, services, today)) {
       if (m.dueDate !== today) continue;
       deadlines.push({
         id: `${cp.client_id}-${m.gate}`, kind: "deadline", clientId: cp.client_id, clientName: nameOf.get(cp.client_id) ?? "—",

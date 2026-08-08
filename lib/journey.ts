@@ -47,8 +47,15 @@ export function buildFullJourney(s: JourneySignals): JStep[] {
       if (s.startDate) {
         const catOf = makeCatOf(s.services);
         const span = s.endDate ? Math.max(28, daysBetween(s.startDate, s.endDate)) : 28;
-        for (const m of milestoneDates(s.startDate, cyclesFor(span))) {
-          const done = milestoneSatisfied(s.appts, { category: m.apptType, fromDate: m.fromDate, service: serviceForMilestone(m.apptType, m.from, s.services), catOf });
+        const dated = milestoneDates(s.startDate, cyclesFor(span));
+        for (const m of dated) {
+          // Bound each milestone by the next occurrence of the same one, so a
+          // cycle-1 booking can't tick cycle 2 and 3 off the journey too.
+          const next = dated.find((o) => o.apptType === m.apptType && o.from === m.from && o.fromDate > m.fromDate);
+          const done = milestoneSatisfied(s.appts, {
+            category: m.apptType, fromDate: m.fromDate, toDate: next?.fromDate ?? null,
+            service: serviceForMilestone(m.apptType, m.from, s.services), catOf, today: s.today,
+          });
           steps.push({ label: m.label, done });
         }
       }

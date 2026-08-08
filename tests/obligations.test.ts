@@ -110,28 +110,94 @@ const SVC = [
   { name: "10th Day Diet Followup", category: "Diet Consultation", day_offset: 10 },
   { name: "Day 28 doctor review", category: "Doctor Consultation", day_offset: 28 },
 ];
+// Fixed "today" for the no-show rule: a scheduled booking in the past is a
+// missed appointment, not a met milestone.
+const TODAY = "2026-08-20";
 const ms = (over: Partial<MilestoneLike>): MilestoneLike =>
   ({ apptType: "Diet Consultation", from: 10, fromDate: "2026-08-10", dueDate: "2026-08-10", label: "Day 10 diet follow-up", gate: "diet_10", ...over });
 
 describe("unsatisfiedMilestones", () => {
   it("keeps a milestone with no matching booking, and attaches a Book link", () => {
-    const out = unsatisfiedMilestones("c1", [ms({})], [], SVC);
+    const out = unsatisfiedMilestones("c1", [ms({})], [], SVC, TODAY);
     expect(out).toHaveLength(1);
     expect(out[0].bookHref).toContain("c1");
   });
   it("drops a milestone already satisfied by a booking on/after fromDate", () => {
-    const appts = [{ type: "Diet Consultation", date: "2026-08-12", status: "scheduled" }];
-    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC)).toHaveLength(0);
+    // `completed`, not `scheduled`: a booking left scheduled in the PAST is now
+    // read as a no-show rather than a met milestone. The pending-booking case
+    // has its own test under "no-shows" below.
+    const appts = [{ type: "Diet Consultation", date: "2026-08-12", status: "completed" }];
+    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC, TODAY)).toHaveLength(0);
   });
   it("does not count a cancelled booking as satisfying the milestone", () => {
     const appts = [{ type: "Diet Consultation", date: "2026-08-12", status: "cancelled" }];
-    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC)).toHaveLength(1);
+    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC, TODAY)).toHaveLength(1);
   });
   it("preserves the input order of unsatisfied milestones", () => {
     const out = unsatisfiedMilestones("c1", [
       ms({ gate: "diet_10", dueDate: "2026-08-10" }),
       ms({ gate: "doctor_28", apptType: "Doctor Consultation", from: 28, fromDate: "2026-08-28", dueDate: "2026-08-28", label: "Day 28 doctor review" }),
-    ], [], SVC);
+    ], [], SVC, TODAY);
     expect(out.map((m) => m.gate)).toEqual(["diet_10", "doctor_28"]);
+  });
+});
+
+// ---- the cycle bug ----------------------------------------------------------
+// On comp12 the day-10 diet follow-up recurs at day 10, 38 and 66 under one
+// service name. A single booking used to satisfy all three for the life of the
+// package, because the service-name branch ignored the date entirely — while
+// the nightly SLA cron, which checks dates, breached cycles 2 and 3 and chased
+// the dietitian. The client got one follow-up in twelve weeks instead of three.
+describe("unsatisfiedMilestones — repeating cycles", () => {
+  const cycles = [
+    ms({ gate: "diet_10#1", fromDate: "2026-08-10", dueDate: "2026-08-10" }),
+    ms({ gate: "diet_10#2", fromDate: "2026-09-07", dueDate: "2026-09-07" }),
+    ms({ gate: "diet_10#3", fromDate: "2026-10-05", dueDate: "2026-10-05" }),
+  ];
+
+  it("a cycle-1 booking satisfies ONLY cycle 1", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-08-11", status: "completed" }];
+    const out = unsatisfiedMilestones("c1", cycles, appts, SVC, TODAY);
+    expect(out.map((m) => m.gate)).toEqual(["diet_10#2", "diet_10#3"]);
+  });
+
+  it("each cycle is satisfied by its own booking", () => {
+    const appts = [
+      { type: "10th Day Diet Followup", date: "2026-08-11", status: "completed" },
+      { type: "10th Day Diet Followup", date: "2026-09-08", status: "completed" },
+    ];
+    const out = unsatisfiedMilestones("c1", cycles, appts, SVC, TODAY);
+    expect(out.map((m) => m.gate)).toEqual(["diet_10#3"]);
+  });
+
+  it("still allows booking a week early — that was the point of the old rule", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-09-02", status: "scheduled" }];
+    const out = unsatisfiedMilestones("c1", cycles, appts, SVC, "2026-09-01");
+    expect(out.map((m) => m.gate)).not.toContain("diet_10#2");
+  });
+
+  it("does not let a booking count for a cycle it is far too early for", () => {
+    // Booked 5 weeks before cycle 3 opens — that is cycle 2's appointment.
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-09-08", status: "completed" }];
+    const out = unsatisfiedMilestones("c1", cycles, appts, SVC, TODAY);
+    expect(out.map((m) => m.gate)).toContain("diet_10#3");
+  });
+});
+
+// ---- no-shows ---------------------------------------------------------------
+describe("unsatisfiedMilestones — no-shows", () => {
+  it("a booking still ahead of us counts", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-08-25", status: "scheduled" }];
+    expect(unsatisfiedMilestones("c1", [ms({ fromDate: "2026-08-20", dueDate: "2026-08-20" })], appts, SVC, TODAY)).toHaveLength(0);
+  });
+
+  it("a booking left 'scheduled' in the past does NOT — it was never held", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-08-11", status: "scheduled" }];
+    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC, TODAY)).toHaveLength(1);
+  });
+
+  it("but a completed booking in the past does", () => {
+    const appts = [{ type: "10th Day Diet Followup", date: "2026-08-11", status: "completed" }];
+    expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC, TODAY)).toHaveLength(0);
   });
 });

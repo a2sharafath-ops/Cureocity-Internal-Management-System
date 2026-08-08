@@ -97,17 +97,65 @@ export function milestoneBookHref(
   return `/appointments?${params.toString()}`;
 }
 
-/** Is a milestone satisfied by an existing booking? A booking counts when either
- *  its type is the milestone's specific service (any date — an early booking
- *  still counts), or it's a legacy category-typed appointment falling within the
- *  milestone's date window. `catOf` resolves service names to their category. */
+/** How far BEFORE a milestone opens a booking may sit and still count for it.
+ *  Clients book the day-10 follow-up when they're in the clinic on day 6; that
+ *  should satisfy it, but not from an arbitrary distance. */
+export const MILESTONE_EARLY_GRACE_DAYS = 7;
+
+const shiftISO = (iso: string, days: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Is a milestone satisfied by an existing booking?
+ *
+ * Two rules here, and both used to be wrong in ways that made the app say a
+ * client owed nothing when they did:
+ *
+ * 1. WINDOW. A service-named booking used to count at ANY date. On a comp12
+ *    client the day-10 diet follow-up recurs three times (day 10, 38, 66) and
+ *    the names are identical, so one booking in cycle 1 marked cycles 2 and 3
+ *    satisfied for the life of the package — while the nightly SLA cron, which
+ *    checks the date properly, breached them and chased the dietitian. The
+ *    booking must now fall inside this milestone's own window: from a week
+ *    before it opens, up to (not including) the next cycle's `toDate`.
+ *
+ * 2. NO-SHOWS. `scheduled` used to count regardless of date, so a booking the
+ *    client never attended and nobody cancelled satisfied the milestone
+ *    forever. A `scheduled` appointment now only counts while it is still
+ *    ahead — from the day after it was due, it is evidence of a missed
+ *    appointment, not a met one. `completed` always counts.
+ *
+ * `catOf` resolves service names to their category, for legacy
+ * category-typed appointments that predate the service catalogue.
+ */
 export function milestoneSatisfied(
   appts: { type: string | null; date: string | null; status: string }[],
-  opts: { category: string; fromDate: string; service: string | null; catOf: CatOf },
+  opts: {
+    category: string;
+    fromDate: string;
+    /** Exclusive upper bound — the next cycle's `fromDate`, or null if last. */
+    toDate?: string | null;
+    service: string | null;
+    catOf: CatOf;
+    /** Today, IST. Used only to tell a pending booking from a no-show. */
+    today: string;
+  },
 ): boolean {
+  const earliest = shiftISO(opts.fromDate, -MILESTONE_EARLY_GRACE_DAYS);
   return appts.some((a) => {
-    if (a.status !== "completed" && a.status !== "scheduled") return false;
+    if (!a.date) return false;
+    if (a.status === "completed") {
+      // held, so it counts — provided it was this cycle's
+    } else if (a.status === "scheduled") {
+      if (a.date < opts.today) return false;   // due and never held → no-show
+    } else {
+      return false;                             // cancelled, no-show, anything else
+    }
+    if (a.date < earliest) return false;
+    if (opts.toDate && a.date >= opts.toDate) return false;
+    // Either the specific service, or a legacy appointment typed with the bare
+    // category — those predate the service catalogue and still exist.
     if (opts.service && a.type === opts.service) return true;
-    return opts.catOf(a.type) === opts.category && !!a.date && a.date >= opts.fromDate;
+    return opts.catOf(a.type) === opts.category;
   });
 }

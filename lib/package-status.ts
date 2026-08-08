@@ -261,7 +261,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       const dated = isComp
         ? milestoneDates(start, cyclesFor(spanDays))
         : ptMilestoneDates(start, ptCyclesFor(spanDays));
-      for (const m of unsatisfiedMilestones(clientId, dated, (appts ?? []) as ApptMatchRow[], services)) {
+      for (const m of unsatisfiedMilestones(clientId, dated, (appts ?? []) as ApptMatchRow[], services, today)) {
         // Booked by the coach, held by the Health Professional whose discipline
         // MILESTONES names — so chase both rather than inventing one owner.
         const chase = { chaseRoles: [...BOOKING_OWNER, ...(DELIVERY_OWNER[m.owner] ?? [])], chaseWho: "Health Coach" };
