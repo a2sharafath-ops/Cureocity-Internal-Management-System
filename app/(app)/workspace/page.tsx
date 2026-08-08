@@ -13,7 +13,6 @@ import WorkspaceClients, { type WsClientRow } from "@/components/WorkspaceClient
 import MealMonitoringSection from "@/components/MealMonitoringSection";
 import BlueprintSection from "@/components/BlueprintSection";
 import WhiteboardSection from "@/components/WhiteboardSection";
-import CareTeamSection from "@/components/CareTeamSection";
 import ExerciseLibrarySection from "@/components/ExerciseLibrarySection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
@@ -31,7 +30,6 @@ import { getAppSettings } from "@/lib/settings";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import { deletable } from "@/lib/consult-lifecycle";
-import ClientMonitoring, { type MonitorRow } from "@/components/ClientMonitoring";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
 import TrialOutcomeActions from "@/components/TrialOutcomeActions";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
@@ -97,9 +95,10 @@ export default async function WorkspacePage(
     ? [...baseTabs, { key: "approvals", label: "Approvals", live: true }]
     : baseTabs;
 
-  // Resolve active tab — only in-workspace tabs (live or stub) are selectable here.
-  const inWs = tabs.filter((t) => !t.href);
-  const tab = inWs.find((t) => t.key === searchParams.tab) ? searchParams.tab! : "dash";
+  // Resolve active tab. An unknown ?tab= falls back to Today rather than
+  // rendering nothing — which is also why a tab branch with no entry here is
+  // unreachable even by typing the URL.
+  const tab = tabs.find((t) => t.key === searchParams.tab) ? searchParams.tab! : "dash";
 
   const supabase = await createClient();
   const today = todayISO();
@@ -689,9 +688,8 @@ export default async function WorkspacePage(
     ? (await getAppSettings()).diet.defaultRows
     : undefined;
 
-  // Tab bar — live/stub tabs stay in the workspace, href tabs bridge to existing pages.
-  const tabItems = tabs.map((t) => ({ key: t.key, label: t.label, href: t.href ?? `/workspace?role=${roleKey}&tab=${t.key}` }));
-  const stubDef = tabs.find((t) => t.key === tab && !t.live && !t.href);
+  // Tab bar — every tab renders in place.
+  const tabItems = tabs.map((t) => ({ key: t.key, label: t.label, href: `/workspace?role=${roleKey}&tab=${t.key}` }));
 
   return (
     <div style={{ maxWidth: 1160 }}>
@@ -946,13 +944,6 @@ export default async function WorkspacePage(
       {/* ---- RECIPES (dietitian) ---- */}
       {tab === "recipes" && <RecipeLibrary recipes={recipes} />}
 
-      {/* ---- STUB TABS (later phases) ---- */}
-      {stubDef && (
-        <div style={{ ...box, padding: "40px 20px", textAlign: "center" }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{stubDef.label}</div>
-          <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6, maxWidth: 420, marginLeft: "auto", marginRight: "auto" }}>{stubDef.note}</div>
-        </div>
-      )}
     </div>
   );
 }

@@ -96,7 +96,9 @@ export default async function FinsheetsPage(props: { searchParams: Promise<{ tab
 
   return (
     <div style={{ maxWidth: 1040 }}>
-      <RealtimeRefresh tables={["payables", "estimates", "ledger", "invoices", "reimbursements"]} />
+      {/* reimbursements left the realtime publication in 0133 (it carries staff
+          claim amounts); subscribing to an unpublished table is a silent no-op. */}
+      <RealtimeRefresh tables={["payables", "estimates", "ledger", "invoices"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, margin: 0 }}>Finance Sheets</h1>
         <span style={{ flex: 1 }} />

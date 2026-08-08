@@ -1,8 +1,6 @@
-// Professional role workspaces (prototype "role cockpit" model).
-// Four disciplines, each with its own tab set. Tabs are either:
-//   • live  — rendered inside the workspace now (Phase 1: dash, clients)
-//   • href  — bridges to an existing standalone page until embedded
-//   • stub  — a module slated for a later phase (Concerns, MDT, etc.)
+// Professional role workspaces (the "role cockpit" model).
+// Five disciplines, each with its own tab set. Every tab renders inside the
+// workspace — there are no stubs and no bridges to standalone pages any more.
 
 export type WsRoleKey = "doctor" | "diet" | "trainer" | "coach" | "psych";
 
@@ -84,28 +82,30 @@ export function roleFromStaffRole(role: string | null | undefined): WsRoleKey | 
   }
 }
 
+// `live`, `href` and `note` were Phase-1 scaffolding: a tab could be a stub
+// with a "coming later" note, or a bridge to a standalone page. Every tab is
+// now rendered in-place, so all three were dead — the stub renderer could never
+// match, and no tab ever set an href. Removed along with the two tab branches
+// (`team`, `monitor`) that were rendered but listed in no workspace.
 export type WsTab = {
   key: string;
   label: string;
-  live?: boolean;   // rendered inside the workspace now
-  href?: string;    // bridges to an existing page (Phase 1)
-  note?: string;    // shown on stub tabs
 };
 
 // Tabs shared by every workspace (order matters).
 function commonTabs(): WsTab[] {
   return [
-    { key: "dash", label: "Today", live: true },
-    { key: "clients", label: "My clients", live: true },
-    { key: "appts", label: "Appointments", live: true },
-    { key: "summaries", label: "Summaries", live: true },
-    { key: "bp", label: "BluePrint", live: true },
+    { key: "dash", label: "Today" },
+    { key: "clients", label: "My clients" },
+    { key: "appts", label: "Appointments" },
+    { key: "summaries", label: "Summaries" },
+    { key: "bp", label: "BluePrint" },
     // The daily team meeting — every discipline takes part, so it sits in the
     // common set rather than any one workspace's role tabs.
-    { key: "whiteboard", label: "Whiteboard", live: true },
-    { key: "concerns", label: "Concerns", live: true },
-    { key: "library", label: "Resource library", live: true },
-    { key: "board", label: "MDT board", live: true },
+    { key: "whiteboard", label: "Whiteboard" },
+    { key: "concerns", label: "Concerns" },
+    { key: "library", label: "Resource library" },
+    { key: "board", label: "MDT board" },
   ];
 }
 
@@ -122,26 +122,26 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   // Diet uses an explicit order (role tabs are interleaved with the common set,
   // so the shared withRoleTabs insertion point can't express it).
   diet: [
-    { key: "dash", label: "Today", live: true },
-    { key: "clients", label: "My clients", live: true },
-    { key: "appts", label: "Appointments", live: true },
-    { key: "summaries", label: "Summaries", live: true },
-    { key: "bp", label: "BluePrint", live: true },
-    { key: "charts", label: "Diet charts", live: true },
-    { key: "meals", label: "Meal monitoring", live: true },
-    { key: "whiteboard", label: "Whiteboard", live: true },
-    { key: "concerns", label: "Concerns", live: true },
-    { key: "board", label: "MDT board", live: true },
-    { key: "recipes", label: "Recipes", live: true },
-    { key: "library", label: "Resource library", live: true },
+    { key: "dash", label: "Today" },
+    { key: "clients", label: "My clients" },
+    { key: "appts", label: "Appointments" },
+    { key: "summaries", label: "Summaries" },
+    { key: "bp", label: "BluePrint" },
+    { key: "charts", label: "Diet charts" },
+    { key: "meals", label: "Meal monitoring" },
+    { key: "whiteboard", label: "Whiteboard" },
+    { key: "concerns", label: "Concerns" },
+    { key: "board", label: "MDT board" },
+    { key: "recipes", label: "Recipes" },
+    { key: "library", label: "Resource library" },
   ],
   trainer: withRoleTabs([
-    { key: "planner", label: "Workout planner", live: true },
-    { key: "exlib", label: "Exercise library", live: true },
+    { key: "planner", label: "Workout planner" },
+    { key: "exlib", label: "Exercise library" },
   ]),
   coach: withRoleTabs([
-    { key: "coaching", label: "Health coaching", live: true },
-    { key: "followups", label: "Follow-ups", live: true },
+    { key: "coaching", label: "Health coaching" },
+    { key: "followups", label: "Follow-ups" },
   ]),
 };
 

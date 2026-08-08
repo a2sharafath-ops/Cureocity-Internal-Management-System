@@ -38,13 +38,18 @@ export default async function PayslipPrintPage(
 
   const month = searchParams.month || new Date().toISOString().slice(0, 7); // YYYY-MM
   const supabase = await createClient();
-  const [{ data: s }, { data: sal }, { data: pay }] = await Promise.all([
-    supabase.from("staff").select("id, name, designation, role, department, work_location, date_of_joining, emp_code, bank_name, bank_account, ifsc").eq("id", params.staff).maybeSingle(),
+  // Bank details are a separate, HR-only table (migration 0133) — RLS is
+  // row-level, so they could not be hidden as columns on `staff`, which every
+  // screen reads for names. This page is already canHr-gated above.
+  const [{ data: s }, { data: sal }, { data: pay }, { data: bank }] = await Promise.all([
+    supabase.from("staff").select("id, name, designation, role, department, work_location, date_of_joining, emp_code").eq("id", params.staff).maybeSingle(),
     supabase.from("salary_structures").select("basic, hra, allowances, gst, pf, esi, pt, tds").eq("staff_id", params.staff).maybeSingle(),
     supabase.from("payroll").select("lop_days").eq("staff_id", params.staff).eq("month", month).maybeSingle(),
+    supabase.from("staff_bank_details").select("bank_name, bank_account, ifsc").eq("staff_id", params.staff).maybeSingle(),
   ]);
   if (!s) notFound();
-  const st = s as { name: string; designation: string | null; role: string; department: string | null; work_location: string | null; date_of_joining: string | null; emp_code: string | null; bank_name: string | null; bank_account: string | null; ifsc: string | null };
+  const bk = (bank ?? {}) as { bank_name?: string | null; bank_account?: string | null; ifsc?: string | null };
+  const st = { ...(s as { name: string; designation: string | null; role: string; department: string | null; work_location: string | null; date_of_joining: string | null; emp_code: string | null }), bank_name: bk.bank_name ?? null, bank_account: bk.bank_account ?? null, ifsc: bk.ifsc ?? null };
   const sr = (sal ?? {}) as { basic?: number; hra?: number; allowances?: number; gst?: number; pf?: number; esi?: number; pt?: number; tds?: number };
 
   const settings = await getAppSettings();

@@ -23,7 +23,7 @@ import { weekDates } from "@/lib/roster";
 export const dynamic = "force-dynamic";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; bank_name?: string | null; bank_account?: string | null; ifsc?: string | null; badge_code?: string | null; pin?: string | null };
+type Staff = { id: string; name: string; designation: string | null; department: string | null; role: string; leave_balance: number | null; date_of_joining: string | null; gender: string | null; created_at: string | null; emp_code?: string | null; work_location?: string | null; badge_code?: string | null; pin?: string | null };
 
 export default async function HrPage(
   props: { searchParams: Promise<{ tab?: string; month?: string; emp?: string; week?: string }> }
@@ -45,8 +45,9 @@ export default async function HrPage(
     { data: staffData }, { data: attData }, { data: leaveData }, { data: payData }, { data: obData },
     { data: updData }, { data: mtData }, { data: comData }, { data: statData }, { data: candData }, { data: docData }, { data: purData },
     { data: ltData }, { data: holData }, { data: monthAttData }, { data: yearLeaveData }, { data: empDocData }, { data: salData },
+    { data: bankData },
   ] = await Promise.all([
-    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at, emp_code, work_location, bank_name, bank_account, ifsc, badge_code, pin").order("name"),
+    supabase.from("staff").select("id, name, designation, department, role, leave_balance, date_of_joining, gender, created_at, emp_code, work_location, badge_code, pin").order("name"),
     supabase.from("attendance").select("staff_id, status").eq("date", today),
     supabase.from("leaves").select("id, staff_id, from_date, to_date, type, reason, status, staff(name, department)").order("created_at", { ascending: false }).limit(60),
     supabase.from("payroll").select("staff_id, base, lop_days, pf, net, status, payslip").eq("month", month),
@@ -64,6 +65,8 @@ export default async function HrPage(
     supabase.from("leaves").select("staff_id, type, from_date, to_date, status").eq("status", "approved").gte("from_date", `${year}-01-01`).lte("from_date", `${year}-12-31`),
     supabase.from("employee_documents").select("id, staff_id, title, kind, name, created_at").order("created_at", { ascending: false }),
     supabase.from("salary_structures").select("staff_id, basic, hra, allowances, gst, pf, esi, pt, tds, effective_from"),
+    // Separate HR-only table since 0133 — see the migration for why.
+    supabase.from("staff_bank_details").select("staff_id, bank_name, bank_account, ifsc"),
   ]);
 
   // ---- roster + comp-off ---------------------------------------------------
@@ -123,6 +126,7 @@ export default async function HrPage(
   };
   const holidays = (holData ?? []) as { id: string; date: string; name: string; kind: string }[];
   const empDocs = (empDocData ?? []) as { id: string; staff_id: string; title: string; kind: string; name: string | null; created_at: string }[];
+  const banks = new Map(((bankData ?? []) as { staff_id: string; bank_name: string | null; bank_account: string | null; ifsc: string | null }[]).map((b) => [b.staff_id, b]));
   const salaries = new Map(((salData ?? []) as { staff_id: string; basic: number; hra: number; allowances: number; gst: number; pf: number; esi: number; pt: number; tds: number; effective_from: string | null }[]).map((s) => [s.staff_id, s]));
 
   // Monthly attendance sheet: staff_id → (day-of-month → status).
@@ -161,7 +165,10 @@ export default async function HrPage(
 
   return (
     <div style={{ maxWidth: 1220 }}>
-      <RealtimeRefresh tables={["attendance", "leaves", "payroll", "hr_updates", "hr_candidates", "hr_purchases", "onboarding", "leave_types", "holidays", "employee_documents", "salary_structures"]} />
+      {/* payroll / salary / documents / attendance / leaves were dropped from the
+          realtime publication in 0133 — there is no reason to broadcast payroll,
+          and subscribing to a table that no longer publishes is a silent no-op. */}
+      <RealtimeRefresh tables={["hr_updates", "hr_candidates", "hr_purchases", "onboarding", "leave_types", "holidays"]} />
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
         <div>
           <h1 style={{ fontSize: 20, margin: "0 0 2px" }}>HR</h1>
@@ -425,9 +432,9 @@ export default async function HrPage(
                     <label style={{ fontSize: 12, color: "var(--muted)" }}>Gender<br /><select name="gender" defaultValue={selectedEmp.gender ?? ""} style={{ ...inp, marginTop: 4 }}><option value="">—</option><option value="female">Female</option><option value="male">Male</option></select></label>
                     <label style={{ fontSize: 12, color: "var(--muted)" }}>Work location<br /><input name="work_location" defaultValue={selectedEmp.work_location ?? ""} placeholder="Kochi" style={{ ...inp, marginTop: 4, width: 120 }} /></label>
                     <span style={{ width: "100%", height: 0 }} />
-                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Bank name<br /><input name="bank_name" defaultValue={selectedEmp.bank_name ?? ""} placeholder="SBI" style={{ ...inp, marginTop: 4, width: 120 }} /></label>
-                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Bank A/c No<br /><input name="bank_account" defaultValue={selectedEmp.bank_account ?? ""} placeholder="38334927412" style={{ ...inp, marginTop: 4, width: 160 }} /></label>
-                    <label style={{ fontSize: 12, color: "var(--muted)" }}>IFSC<br /><input name="ifsc" defaultValue={selectedEmp.ifsc ?? ""} placeholder="SBIN0070425" style={{ ...inp, marginTop: 4, width: 140 }} /></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Bank name<br /><input name="bank_name" defaultValue={banks.get(selectedEmp.id)?.bank_name ?? ""} placeholder="SBI" style={{ ...inp, marginTop: 4, width: 120 }} /></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>Bank A/c No<br /><input name="bank_account" defaultValue={banks.get(selectedEmp.id)?.bank_account ?? ""} placeholder="38334927412" style={{ ...inp, marginTop: 4, width: 160 }} /></label>
+                    <label style={{ fontSize: 12, color: "var(--muted)" }}>IFSC<br /><input name="ifsc" defaultValue={banks.get(selectedEmp.id)?.ifsc ?? ""} placeholder="SBIN0070425" style={{ ...inp, marginTop: 4, width: 140 }} /></label>
                     <button style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Save</button>
                     <span style={{ fontSize: 11, color: "var(--muted)" }}>Bank &amp; ID appear on the payslip. DOJ drives EL (after 1 yr) &amp; ML (female) eligibility.</span>
                   </form>

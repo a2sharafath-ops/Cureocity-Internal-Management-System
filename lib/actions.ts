@@ -2803,7 +2803,24 @@ export async function submitBloodSelf() {
   if (!user) return;
   const { data: prof } = await supabase.from("profiles").select("client_id, role, name").eq("id", user.id).maybeSingle();
   if (!prof?.client_id) return;
-  await supabase.from("blood_requests").update({ submitted: true, submitted_date: todayISO() }).eq("client_id", prof.client_id);
+  // ONE panel, not all of them. A client can hold a BluePrint panel and a
+  // Comprehensive panel at once; closing both from a single portal tap cleared
+  // an obligation with no report on file. Close the oldest still-open request —
+  // the same rule markEarliestPanelReceived uses on the staff side.
+  const { data: open } = await supabase
+    .from("blood_requests")
+    .select("panel, requested_at")
+    .eq("client_id", prof.client_id)
+    .eq("submitted", false)
+    .order("requested_at", { ascending: true, nullsFirst: true })
+    .limit(1);
+  const panel = ((open ?? [])[0] as { panel: string | null } | undefined)?.panel ?? null;
+  if (!panel) return;   // nothing outstanding — don't reopen or re-stamp anything
+  await supabase
+    .from("blood_requests")
+    .update({ submitted: true, submitted_date: todayISO() })
+    .eq("client_id", prof.client_id)
+    .eq("panel", panel);
   await logAudit({ id: user.id, name: prof.name ?? undefined, role: prof.role ?? undefined }, "Blood report submitted (portal)", prof.name, null);
   revalidatePath("/portal");
 }
@@ -3724,10 +3741,17 @@ export async function updateStaffEmployment(formData: FormData) {
     gender: String(formData.get("gender") || "") || null,
     emp_code: String(formData.get("emp_code") || "").trim() || null,
     work_location: String(formData.get("work_location") || "").trim() || null,
+  }).eq("id", id);
+  // Bank details live in their own HR-only table (migration 0133). RLS is
+  // row-level, so three sensitive columns could not be hidden on `staff` — a
+  // table every screen reads for names.
+  await supabase.from("staff_bank_details").upsert({
+    staff_id: id,
     bank_name: String(formData.get("bank_name") || "").trim() || null,
     bank_account: String(formData.get("bank_account") || "").trim() || null,
     ifsc: String(formData.get("ifsc") || "").trim().toUpperCase() || null,
-  }).eq("id", id);
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "staff_id" });
   await logAudit(p, "Employment details updated", id, null);
   revalidatePath("/hr");
 }
