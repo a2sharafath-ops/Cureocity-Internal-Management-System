@@ -465,6 +465,31 @@ export default function ConsoleView({
         disabled={status === "completed"}
       />
 
+      {/* ---- bloods not back yet -------------------------------------------
+          A doctor's consultation on a Comprehensive or BluePrint client is
+          largely a reading of the blood panel. The panel is requested the day
+          the package is sold, but nothing stopped the consultation happening
+          before the results came back — and "Blood report: Awaiting report"
+          sat as one quiet line inside a collapsed health card, which is not
+          where you notice something that makes the session worth rescheduling.
+
+          A warning, never a block. Plenty of legitimate reasons to see the
+          client anyway — symptoms, a first meeting, results due within the
+          hour — and a clinician who has decided to proceed should not have to
+          argue with the software. Doctor only: the other disciplines do not
+          read the panel, so for them it would be noise. */}
+      {kind === "Doctor" && health?.bloodStatus === "Awaiting report" && (
+        <div style={{
+          ...box, marginBottom: 12, padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
+          flexWrap: "wrap", background: "var(--amber-bg)", borderColor: "var(--amber-text)",
+        }}>
+          <b style={{ fontSize: 13, color: "var(--amber-text)" }}>⚠ Blood results are not back yet</b>
+          <span style={{ fontSize: 12.5, color: "var(--amber-text)", flex: 1, minWidth: 220 }}>
+            The panel was requested but no report has been received. If this consultation depends on it, it may be worth rescheduling.
+          </span>
+        </div>
+      )}
+
       {/* ---- client context — one line, expandable ------------------------ */}
       {health && (
         <div style={{ ...box, marginBottom: 12 }}>
