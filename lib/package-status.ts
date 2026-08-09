@@ -15,7 +15,8 @@ import { loadClientStatuses } from "@/lib/client-status";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners, SETTLED_INVOICE } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
-import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow, type ApptMatchRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, type AssignRow, type ApptOwnerRow, type ApptMatchRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
+import { makeCatOf } from "@/lib/appt-match";
 
 export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; ownerCta?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string; dueLabel?: string; overdue?: boolean };
 
@@ -44,7 +45,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   const sb = await createClient();
   const today = todayISO();
 
-  const [{ data: cps }, { data: inv }, { data: blood }, { data: cons }, { data: appts }, { data: sess }, { data: charts }, { data: workouts }, { data: bp }, { data: proto }] = await Promise.all([
+  const [{ data: cps }, { data: inv }, { data: blood }, { data: cons }, { data: appts }, { data: sess }, { data: charts }, { data: workouts }, { data: bp }, { data: proto }, { data: svcAll }] = await Promise.all([
     sb.from("client_packages").select("package_id, package_name, category, status, start_date, end_date").eq("client_id", clientId),
     sb.from("invoices").select("num, description, amount, status, issued_date").eq("client_id", clientId),
     sb.from("blood_requests").select("panel, submitted, requested_at").eq("client_id", clientId),
@@ -56,6 +57,9 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("client_workouts").select("id").eq("client_id", clientId).limit(1),
     sb.from("blueprints").select("generated").eq("client_id", clientId).maybeSingle(),
     sb.from("care_protocols").select("start_date").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),
+    // The catalogue, so an appointment booked by service name ("Initial Diet
+    // Consultation") resolves to its discipline.
+    sb.from("services").select("name, category"),
   ]);
 
   // The Day-2 "diet chart explanation" lives in the follow-ups system, not the
@@ -156,7 +160,14 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   }
 
   // ---- clinician deliverables the onboarding ladder doesn't track ----------
-  const doneKinds = new Set(((cons ?? []) as { kind: string; status: string }[]).filter((c) => c.status === "completed").map((c) => c.kind));
+  // One definition of "the consult happened", shared with the client card — a
+  // held session recorded only as a completed appointment used to leave the
+  // diet chart and workout plan permanently un-owed. See consultDoneKinds.
+  const doneKinds = consultDoneKinds(
+    (cons ?? []) as DoneConsultRow[],
+    (appts ?? []) as unknown as DoneApptRow[],
+    makeCatOf((svcAll ?? []) as { name: string; category: string }[]),
+  );
   // Earliest completion per consult kind — the trigger the turnaround SLA counts
   // from (diet chart owed 24h after the diet consult; workout plan 24h after the
   // fitness assessment). Lets the client card show the real deadline, not just

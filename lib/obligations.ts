@@ -99,6 +99,80 @@ export function unsatisfiedMilestones(
 
 export type DeliverableKey = "compblood" | "dietchart" | "workout";
 
+// ---- did the consult actually happen? --------------------------------------
+//
+// There were two answers to this, and they disagreed in a way that lost work
+// silently.
+//
+// lib/client-status.ts counted a COMPLETED APPOINTMENT with a provider in that
+// discipline as the consult being done — reasonable, because Front Desk marking
+// the diary is how a held session most often gets recorded. The deliverable
+// engine below counted only a `consultations` row with status "completed".
+//
+// So: the dietitian sees the client, Front Desk marks the appointment completed
+// from the calendar, and no `consultations` row is ever written. The client card
+// says the diet consultation is done and drops the booking step — while the
+// diet chart never becomes outstanding, because THIS engine still thinks the
+// consult hasn't happened. The 24-hour turnaround clock never starts either, so
+// no breach fires. The client never receives a plan and no screen in the app
+// says anything is missing.
+//
+// One definition now, used by both. It is deliberately the generous one: a
+// consult that happened without paperwork is still a consult, and the cost of
+// being wrong is a chart nobody needed rather than a client with no plan.
+
+/** Consultation kinds, as stored on `consultations.kind`. */
+const KIND_OF_ROLE: Record<string, string> = {
+  "Doctor": "Doctor",
+  "Dietitian": "Diet",
+  "Fitness Trainer": "Trainer",
+  "Health Coach": "Coach",
+  "Psychologist": "Psychologist",
+};
+
+/** Appointment CATEGORY → the consultation kind it represents. */
+const KIND_OF_CATEGORY: Record<string, string> = {
+  "Doctor Consultation": "Doctor",
+  "Diet Consultation": "Diet",
+  "Fitness Services": "Trainer",
+  "Coaching": "Coach",
+  "Counselling": "Psychologist",
+};
+
+export type DoneConsultRow = { kind: string; status: string };
+export type DoneApptRow = {
+  type: string | null;
+  status: string;
+  /** The provider's staff role, where the appointment names one. */
+  staff?: { role?: string | null } | null;
+};
+
+/**
+ * Which consultation kinds are complete for a client.
+ *
+ * `catOf` resolves an appointment's `type` (which may be a specific service
+ * name like "Initial Diet Consultation") to its category. Without it only exact
+ * category names match, which is the safe degradation rather than a wrong one.
+ */
+export function consultDoneKinds(
+  consults: DoneConsultRow[],
+  appts: DoneApptRow[] = [],
+  catOf?: (type: string | null) => string | null,
+): Set<string> {
+  const done = new Set<string>();
+  for (const c of consults) if (c.status === "completed") done.add(c.kind);
+  for (const a of appts) {
+    if (a.status !== "completed") continue;
+    // The provider's role is the stronger signal: it says who was in the room.
+    const byRole = KIND_OF_ROLE[String(a.staff?.role ?? "")];
+    if (byRole) { done.add(byRole); continue; }
+    const category = catOf ? catOf(a.type) : a.type;
+    const byCategory = KIND_OF_CATEGORY[String(category ?? "")];
+    if (byCategory) done.add(byCategory);
+  }
+  return done;
+}
+
 export function outstandingDeliverables(x: {
   isComp: boolean;
   isPt: boolean;

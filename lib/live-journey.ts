@@ -96,16 +96,47 @@ export const CONSULT_DONE_STAGE: Record<string, JourneyStageKey> = {
   Trainer: "transition_med",
   Doctor: "transition_diet",
   Diet: "review",
-  // The coach's own consult IS the closing review, so finishing it ends the journey.
-  Coach: "done",
+  // Coach is absent on purpose — see stageForConsult. The coach appears TWICE
+  // in the flow and the kind alone cannot say which visit this is.
 };
 
 /**
  * The stage a consultation event implies, or null when that kind should leave
  * the board untouched. Stages are SET, not incremented, so the flow survives
  * professionals being seen out of order (which the SOP explicitly allows).
+ *
+ * The coach is the exception, and it mattered: their kind was mapped to
+ * "briefing" on start and "done" on completion, so finishing the OPENING
+ * briefing marked the visit handed back and closed the journey. The client was
+ * still in the building waiting for fitness, medical and diet; because the row
+ * was no longer active, every later consult was a silent no-op and the journey
+ * could never move again. It also inflated "Completed today".
+ *
+ * So the coach's stage is read from where the client already is: before the
+ * assessments it is the briefing, after them it is the closing review. A coach
+ * consult opened in the middle of the flow moves nothing — walking a client
+ * between rooms is not an assessment, and guessing would send the board
+ * backwards.
  */
-export function stageForConsult(kind: string, phase: "start" | "complete"): JourneyStageKey | null {
+export function stageForConsult(
+  kind: string,
+  phase: "start" | "complete",
+  currentStage?: string | null,
+): JourneyStageKey | null {
+  if (kind === "Coach") {
+    const at = stageIndex(currentStage ?? "front_desk");
+    const atReview = at >= stageIndex("review");
+    const beforeAssessments = at <= stageIndex("briefing");
+    if (phase === "start") {
+      if (atReview) return "review";
+      return beforeAssessments ? "briefing" : null;
+    }
+    if (atReview) return "done";
+    // The briefing ended: the client goes on to the first assessment. Setting it
+    // here rather than waiting for the trainer to open their console keeps the
+    // board honest about where the client actually is.
+    return beforeAssessments ? "fitness" : null;
+  }
   const map = phase === "start" ? CONSULT_START_STAGE : CONSULT_DONE_STAGE;
   return map[kind] ?? null;
 }

@@ -7828,15 +7828,19 @@ async function syncJourneyFromConsult(
   actor: string,
 ) {
   if (!clientId) return;
-  const stage = stageForConsult(kind, phase);
-  if (!stage) return; // e.g. a Psychologist consult — not one of the three assessments
 
+  // The journey is read BEFORE the stage is decided: a Coach consult means the
+  // opening briefing or the closing review depending on where the client
+  // already is, and the kind alone cannot tell them apart.
   const since = new Date(Date.now() - AUTO_WINDOW_DAYS * 86_400_000).toISOString();
   const { data: rows } = await supabase
     .from("journeys").select("id, stage").eq("client_id", clientId).eq("status", "active")
     .gte("created_at", since).order("created_at", { ascending: false }).limit(1);
   const j = ((rows ?? []) as { id: string; stage: string }[])[0];
-  if (!j || j.stage === stage) return; // nothing open, or already there
+  if (!j) return;                       // nothing open — consults outside a coached visit
+
+  const stage = stageForConsult(kind, phase, j.stage);
+  if (!stage || j.stage === stage) return;  // not a board-moving kind, or already there
 
   await supabase.from("journeys").update({
     stage,

@@ -11,7 +11,8 @@ import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 import { GENERATION_MS as BP_GENERATION_MS } from "@/lib/blueprint-sla";
-import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, type AssignRow, type ApptOwnerRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, type AssignRow, type ApptOwnerRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
+import { makeCatOf } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
 import { MARKERS, markerOverdueDays, markerNeedsReferral, type MarkerState } from "@/lib/coach-markers";
 import {
@@ -135,10 +136,22 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     bloodAsked.set(b.client_id, b.requested_at);
   }
 
-  const doneKinds = new Map<string, Set<string>>();
+  // One definition of "the consult happened", shared with the client card and
+  // the client badge. A session held and recorded only as a completed
+  // appointment used to leave the diet chart and the workout plan un-owed for
+  // ever, with no screen saying anything was missing. See consultDoneKinds.
+  const catOf = makeCatOf(services);
+  const consBy = new Map<string, DoneConsultRow[]>();
   for (const c of (cons ?? []) as { client_id: string; kind: string; status: string }[]) {
-    if (c.status !== "completed") continue;
-    (doneKinds.get(c.client_id) ?? doneKinds.set(c.client_id, new Set()).get(c.client_id)!).add(c.kind);
+    (consBy.get(c.client_id) ?? consBy.set(c.client_id, []).get(c.client_id)!).push(c);
+  }
+  const apptDoneBy = new Map<string, DoneApptRow[]>();
+  for (const a of (appts ?? []) as unknown as ({ client_id: string } & DoneApptRow)[]) {
+    (apptDoneBy.get(a.client_id) ?? apptDoneBy.set(a.client_id, []).get(a.client_id)!).push(a);
+  }
+  const doneKinds = new Map<string, Set<string>>();
+  for (const id of new Set([...consBy.keys(), ...apptDoneBy.keys()])) {
+    doneKinds.set(id, consultDoneKinds(consBy.get(id) ?? [], apptDoneBy.get(id) ?? [], catOf));
   }
   const hasChart = new Set(((charts ?? []) as { client_id: string }[]).map((r) => r.client_id));
   const hasWorkout = new Set(((workouts ?? []) as { client_id: string }[]).map((r) => r.client_id));

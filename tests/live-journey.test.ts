@@ -138,7 +138,7 @@ describe("stageForConsult", () => {
     expect(stageForConsult("Trainer", "start")).toBe("fitness");
     expect(stageForConsult("Doctor", "start")).toBe("medical");
     expect(stageForConsult("Diet", "start")).toBe("diet");
-    expect(stageForConsult("Coach", "start")).toBe("briefing");
+    expect(stageForConsult("Coach", "start", "await_coach")).toBe("briefing");
   });
 
   it("hands back to the coach when the consult ends", () => {
@@ -147,8 +147,42 @@ describe("stageForConsult", () => {
     expect(stageForConsult("Diet", "complete")).toBe("review");
   });
 
-  it("ends the journey when the coach's own consult completes", () => {
-    expect(stageForConsult("Coach", "complete")).toBe("done");
+  describe("the coach appears twice, so their stage is read from where the client is", () => {
+    // The bug this replaced: Coach was mapped to "briefing" on start and "done"
+    // on completion, so finishing the OPENING briefing closed the journey while
+    // the client was still waiting for fitness, medical and diet — and because
+    // the row was no longer active, nothing could move it again.
+    it("treats a coach consult before the assessments as the briefing", () => {
+      expect(stageForConsult("Coach", "start", "front_desk")).toBe("briefing");
+      expect(stageForConsult("Coach", "start", "await_coach")).toBe("briefing");
+      expect(stageForConsult("Coach", "start", "briefing")).toBe("briefing");
+    });
+
+    it("sends the client on to fitness when the briefing ends — not home", () => {
+      expect(stageForConsult("Coach", "complete", "briefing")).toBe("fitness");
+      expect(stageForConsult("Coach", "complete", "await_coach")).toBe("fitness");
+    });
+
+    it("treats a coach consult after the diet assessment as the closing review", () => {
+      expect(stageForConsult("Coach", "start", "review")).toBe("review");
+      expect(stageForConsult("Coach", "complete", "review")).toBe("done");
+    });
+
+    it("moves nothing when the coach opens a consult mid-flow", () => {
+      // Walking a client between rooms is not an assessment, and guessing would
+      // send the board backwards past work already done.
+      for (const at of ["fitness", "transition_med", "medical", "transition_diet", "diet"]) {
+        expect(stageForConsult("Coach", "start", at), at).toBeNull();
+        expect(stageForConsult("Coach", "complete", at), at).toBeNull();
+      }
+    });
+
+    it("never closes the journey from the opening briefing, at any stage", () => {
+      for (const s of JOURNEY_STAGES.map((x) => x.key)) {
+        const started = stageForConsult("Coach", "start", s);
+        if (started === "briefing") expect(stageForConsult("Coach", "complete", s)).not.toBe("done");
+      }
+    });
   });
 
   it("leaves the board untouched for kinds outside the three assessments", () => {
@@ -167,15 +201,19 @@ describe("stageForConsult", () => {
 
   it("maps every kind forward — a consult never sends the journey backwards", () => {
     const order = JOURNEY_STAGES.map((s) => s.key);
-    for (const kind of Object.keys(CONSULT_START_STAGE)) {
+    for (const kind of Object.keys(CONSULT_DONE_STAGE)) {
       const from = CONSULT_START_STAGE[kind];
       const to = CONSULT_DONE_STAGE[kind];
       expect(order.indexOf(to)).toBeGreaterThan(order.indexOf(from));
     }
   });
 
-  it("covers the same kinds on both start and completion", () => {
-    expect(Object.keys(CONSULT_START_STAGE).sort()).toEqual(Object.keys(CONSULT_DONE_STAGE).sort());
+  it("covers the same kinds on both start and completion, bar the coach", () => {
+    // Coach is deliberately absent from the DONE map — it is resolved from the
+    // journey's current stage instead, because the kind alone cannot say which
+    // of the coach's two visits this is.
+    const start = Object.keys(CONSULT_START_STAGE).filter((k) => k !== "Coach").sort();
+    expect(start).toEqual(Object.keys(CONSULT_DONE_STAGE).sort());
   });
 
   it("keeps the auto-tracking window generous but bounded", () => {
