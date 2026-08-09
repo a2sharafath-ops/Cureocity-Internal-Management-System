@@ -158,8 +158,9 @@ describe("PT clients get a follow-up ladder", () => {
   it("does not give a PT client the diet-chart explanation — there is no chart", () => {
     const rows = buildFollowupRows([pt], [], "test");
     expect(rows.some((r) => /explanation/i.test(r.label))).toBe(false);
-    // …but a Comprehensive client still gets it.
-    expect(buildFollowupRows([comp], [], "test").some((r) => /explanation/i.test(r.label))).toBe(true);
+    // …but a Comprehensive client whose chart has reached them still gets it.
+    const shared = { ...comp, planSharedAt: "2026-06-01T09:00:00Z" };
+    expect(buildFollowupRows([shared], [], "test").some((r) => /explanation/i.test(r.label))).toBe(true);
   });
 
   it("does not give a PT client the diet and doctor milestones", () => {
