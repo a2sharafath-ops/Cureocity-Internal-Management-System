@@ -15,7 +15,7 @@ import {
   PT_CATEGORY, milestoneDates, cyclesFor, bookableNow, bookingTaskTitle,
   ptDeadline, PT_SESSIONS_PER_CYCLE, BOOKING_DUE_DAYS, CYCLE_DAYS, addDaysISO,
 } from "@/lib/pt";
-import { loadCatOf } from "@/lib/appt-match";
+import { loadCatOf, serviceForMilestone } from "@/lib/appt-match";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -60,9 +60,16 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
   // Resolve each booking's type to its service category so a manually-booked
   // service ("Fitness Reassessment") counts against its milestone.
   const catOf = await loadCatOf(supabase);
+  // The catalogue with day offsets, so each milestone can name the specific
+  // service it books — that is what stops the initial consultation and the
+  // day-21 review from closing the day-10 follow-up.
+  const { data: svcRows } = await supabase.from("services").select("name, category, day_offset");
+  const services = (svcRows ?? []) as { name: string; category: string; day_offset: number | null }[];
   const apptsBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (apptRows ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
-    (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push({ ...a, type: catOf(a.type) });
+    // RAW type, not the resolved category — the matcher needs the service name
+    // to tell a reassessment from the initial fitness consultation.
+    (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push({ ...a });
   }
   const doneSessions = new Map<string, number>();
   // Booked-or-not is a different question from done-or-not. The cycle breach
@@ -90,8 +97,11 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
     const cycles = cyclesFor(validityByClient.get(p.client_id) ?? 28);
 
     // ---- reassessment booking prompts (per cycle) -------------------------
-    for (const m of milestoneDates(p.start_date, cycles)) {
-      if (!bookableNow(m, today, appts)) continue;
+    const dated = milestoneDates(p.start_date, cycles);
+    for (const m of dated) {
+      const svc = serviceForMilestone(m.apptType, m.from, services);
+      const next = dated.find((o) => o.apptType === m.apptType && o.from === m.from && o.fromDate > m.fromDate);
+      if (!bookableNow(m, today, appts, { catOf, service: svc, toDate: next?.fromDate ?? null })) continue;
       const title = bookingTaskTitle(m, name);
       if (openTaskTitles.has(`${p.client_id}|${title}`)) continue;
       openTaskTitles.add(`${p.client_id}|${title}`);

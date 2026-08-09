@@ -19,6 +19,7 @@ import {
   type Clock, type Hold,
 } from "@/lib/sla-clock";
 import { DELIVERY_OWNER } from "@/lib/work-owners";
+import { milestoneMatch, serviceForMilestone, type CatOf } from "@/lib/appt-match";
 import {
   SIGNOFF_MS, DIET_DRAFT_MS, WORKOUT_PLAN_MS, PRESCRIPTION_MS,
   PT_SESSIONS_PER_CYCLE, DISCIPLINE_KINDS, KIND_LABEL,
@@ -66,6 +67,18 @@ export type ComprehensiveInput = {
   sessionDates?: string[];
   /** appointments that actually happened, for milestone matching */
   appointments: { type: string | null; date: string | null; status: string }[];
+  /**
+   * Service-name → category resolver, and the catalogue behind it.
+   *
+   * Optional so existing callers keep working, but supplying them is what lets
+   * a milestone be met by the specific service it books rather than by anything
+   * in the discipline — which is how an initial consultation used to close a
+   * later follow-up.
+   */
+  catOf?: CatOf;
+  services?: { name: string; category: string; day_offset: number | null }[];
+  /** Today, IST — tells a booking still to come from one that was missed. */
+  today?: string;
   hold?: Hold;
 };
 
@@ -155,17 +168,26 @@ export function comprehensiveSla(
   });
 
   // ---- calendar milestones -------------------------------------------------
+  // WHEN a milestone was met — the same rule the screens use to ask WHETHER it
+  // was. These were separate implementations: this one required an exact type
+  // match with no early grace, so a follow-up held a few days early was invisible
+  // here and breached, while the client card showed it done.
+  const allDated = milestoneDates(input.startDate, cycles);
+  const catOf: CatOf = input.catOf ?? ((t2) => t2 ?? null);
   const done = (m: DatedMilestone): string | null => {
-    // A milestone counts as met by the first completed appointment of the
-    // right type that falls on or after it became bookable.
-    const hit = input.appointments
-      .filter((a) => a.status === "completed" && a.type === m.apptType && a.date && a.date >= m.fromDate)
-      .map((a) => a.date!)
-      .sort()[0];
-    return hit ? `${hit}T12:00:00Z` : null;
+    const next = allDated.find((o) => o.apptType === m.apptType && o.from === m.from && o.fromDate > m.fromDate);
+    const hit = milestoneMatch(input.appointments, {
+      category: m.apptType, fromDate: m.fromDate, toDate: next?.fromDate ?? null,
+      service: input.services ? serviceForMilestone(m.apptType, m.from, input.services) : null,
+      catOf, today: input.today ?? new Date(now).toISOString().slice(0, 10),
+      // A booking in the diary means nothing to chase, but it cannot date a gate
+      // that has not happened yet.
+      heldOnly: true,
+    });
+    return hit?.date ? `${hit.date}T12:00:00Z` : null;
   };
 
-  const milestones: Gate[] = milestoneDates(input.startDate, cycles).map((m) => ({
+  const milestones: Gate[] = allDated.map((m) => ({
     gate: `milestone:${m.gate}`,
     label: cycles > 1 ? `${m.label} (cycle ${m.cycle})` : m.label,
     owner: m.owner,

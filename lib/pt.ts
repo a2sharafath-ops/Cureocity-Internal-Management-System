@@ -1,3 +1,4 @@
+import { milestoneSatisfied, type CatOf } from "@/lib/appt-match";
 // The Personal Training (PT) package protocol — the trainer-only track.
 //
 // PT is Comprehensive minus the medical/diet side: no blood panel, no doctor or
@@ -111,20 +112,26 @@ export function ptDeadline(startISO: string, cycle = 1): string {
 }
 
 /**
- * A milestone is bookable once `fromDate` arrives and no appointment of its
- * type has landed since (scheduled or completed).
+ * Is there a booking task to raise for this milestone?
+ *
+ * Delegates to `milestoneSatisfied` so the nightly sweep and the screens agree.
+ * They used to be separate: this file accepted a `scheduled` appointment at ANY
+ * date (so a no-show satisfied it for ever) and required an exact type match
+ * with no early grace (so a follow-up booked a few days early raised a booking
+ * task anyway, alongside a "deadline missed" alert for work already in the
+ * diary).
  */
 export function bookableNow(
   m: DatedMilestone,
   today: string,
   appointments: { type: string | null; date: string | null; status: string }[],
+  opts: { catOf: CatOf; service?: string | null; toDate?: string | null },
 ): boolean {
   if (today < m.fromDate) return false;
-  const satisfied = appointments.some(
-    (a) => a.type === m.apptType && a.date && a.date >= m.fromDate &&
-      (a.status === "completed" || a.status === "scheduled"),
-  );
-  return !satisfied;
+  return !milestoneSatisfied(appointments, {
+    category: m.apptType, fromDate: m.fromDate, toDate: opts.toDate ?? null,
+    service: opts.service ?? null, catOf: opts.catOf, today,
+  });
 }
 
 /** Task title for a milestone booking. Matched on to avoid duplicates, so

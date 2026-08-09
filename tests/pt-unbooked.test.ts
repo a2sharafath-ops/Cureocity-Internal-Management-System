@@ -3,7 +3,12 @@ import { runPtSla } from "@/lib/cron/pt-sla";
 import { BOOKING_DUE_DAYS, CYCLE_DAYS, addDaysISO } from "@/lib/pt";
 
 vi.mock("@/lib/notify", () => ({ notifyRoles: vi.fn(async () => {}) }));
-vi.mock("@/lib/appt-match", () => ({ loadCatOf: async () => (t: string | null) => t }));
+vi.mock("@/lib/appt-match", async (orig) => ({
+  // Only the catalogue load is stubbed — the matching rules are the real ones,
+  // so this suite keeps exercising them rather than a copy that can drift.
+  ...(await orig<typeof import("@/lib/appt-match")>()),
+  loadCatOf: async () => (t: string | null) => t,
+}));
 
 const START = "2026-07-01";
 

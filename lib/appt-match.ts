@@ -146,34 +146,93 @@ const shiftISO = (iso: string, days: number) =>
  * `catOf` resolves service names to their category, for legacy
  * category-typed appointments that predate the service catalogue.
  */
-export function milestoneSatisfied(
-  appts: { type: string | null; date: string | null; status: string }[],
-  opts: {
-    category: string;
-    fromDate: string;
-    /** Exclusive upper bound — the next cycle's `fromDate`, or null if last. */
-    toDate?: string | null;
-    service: string | null;
-    catOf: CatOf;
-    /** Today, IST. Used only to tell a pending booking from a no-show. */
-    today: string;
-  },
-): boolean {
+export type MilestoneApptRow = { type: string | null; date: string | null; status: string };
+
+export type MilestoneMatchOpts = {
+  category: string;
+  fromDate: string;
+  /** Exclusive upper bound — the next cycle's `fromDate`, or null if last. */
+  toDate?: string | null;
+  service: string | null;
+  catOf: CatOf;
+  /** Today, IST. Used only to tell a pending booking from a no-show. */
+  today: string;
+  /**
+   * Only count sessions actually HELD.
+   *
+   * "Has this been dealt with?" and "when was it met?" are different questions.
+   * A booking in the diary answers the first — there is nothing to chase — but
+   * cannot date the second, because it hasn't happened yet.
+   */
+  heldOnly?: boolean;
+};
+
+/**
+ * Does this appointment's type belong to this milestone?
+ *
+ * The old rule ended `return catOf(a.type) === category`, which ran even when
+ * the milestone named a specific service — so ANY appointment in the discipline
+ * closed it. Two things went wrong with that:
+ *
+ *   • an initial consult satisfied a later follow-up. Front desk has two days
+ *     just to book the initial diet consultation, so a day-3 initial sits
+ *     comfortably inside the day-10 follow-up's window and the follow-up
+ *     vanished from every screen — while the nightly sweep, which matches on
+ *     exact dates, still breached it and chased the dietitian for it;
+ *   • on a 12-week plan the day-21 review closed the day-10 follow-up, because
+ *     both resolve to "Diet Consultation" and the day-10 window runs to day 38.
+ *
+ * So the specific service wins where the milestone names one, a bare category
+ * still matches for rows that predate the catalogue, and an initial consult is
+ * never a follow-up.
+ */
+function typeBelongsTo(type: string | null, opts: MilestoneMatchOpts): boolean {
+  if (opts.service && type === opts.service) return true;
+  if (isInitialApptType(type)) return false;
+  // Rows booked before the service catalogue existed carry the bare category.
+  if (type === opts.category) return true;
+  // The milestone named a service and this row names a different one — that is
+  // a different piece of work, however similar the discipline.
+  if (opts.service) return false;
+  return opts.catOf(type) === opts.category;
+}
+
+/**
+ * The appointment that meets this milestone, earliest first, or null.
+ *
+ * Returns the row rather than a boolean so the SLA board can ask WHEN the gate
+ * was met from the same rule the attention panels use to ask WHETHER it was.
+ * Three separate implementations of this used to disagree: booking a day-10
+ * follow-up early, for day 8, dropped it from the client card while the nightly
+ * sweep still fired "deadline missed" at the dietitian and management, plus a
+ * duplicate "book it" task.
+ */
+export function milestoneMatch<T extends MilestoneApptRow>(
+  appts: T[],
+  opts: MilestoneMatchOpts,
+): T | null {
   const earliest = shiftISO(opts.fromDate, -MILESTONE_EARLY_GRACE_DAYS);
-  return appts.some((a) => {
+  const hits = appts.filter((a) => {
     if (!a.date) return false;
     if (a.status === "completed") {
       // held, so it counts — provided it was this cycle's
-    } else if (a.status === "scheduled") {
+    } else if (a.status === "scheduled" && !opts.heldOnly) {
       if (a.date < opts.today) return false;   // due and never held → no-show
     } else {
       return false;                             // cancelled, no-show, anything else
     }
     if (a.date < earliest) return false;
     if (opts.toDate && a.date >= opts.toDate) return false;
-    // Either the specific service, or a legacy appointment typed with the bare
-    // category — those predate the service catalogue and still exist.
-    if (opts.service && a.type === opts.service) return true;
-    return opts.catOf(a.type) === opts.category;
+    return typeBelongsTo(a.type, opts);
   });
+  hits.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return hits[0] ?? null;
+}
+
+/** Is there nothing left to chase for this milestone? */
+export function milestoneSatisfied(
+  appts: MilestoneApptRow[],
+  opts: MilestoneMatchOpts,
+): boolean {
+  return milestoneMatch(appts, opts) !== null;
 }

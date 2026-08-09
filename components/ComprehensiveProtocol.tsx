@@ -18,7 +18,8 @@ import { toggleComprehensiveHold, nudgeRole } from "@/lib/actions";
 import SubmitButton from "@/components/SubmitButton";
 import { comprehensiveSla, formatLeft, SLA_TONE, OWNER_ROLES, type Gate } from "@/lib/comprehensive-sla";
 import { MILESTONES } from "@/lib/comprehensive";
-import { milestoneBookHref } from "@/lib/appt-match";
+import { makeCatOf, milestoneBookHref } from "@/lib/appt-match";
+import { todayISO } from "@/lib/today";
 import type { Hold } from "@/lib/sla-clock";
 export type SvcRow = { name: string; category: string; day_offset: number | null };
 
@@ -85,7 +86,10 @@ const OWNER_DISC: Record<string, string> = { doctor: "Doctor", dietitian: "Dieti
 export default function ComprehensiveProtocol({
   clientId, view, canHold, canBook, overseer = false, services = [],
 }: { clientId: string; view: View; canHold: boolean; canBook?: boolean; overseer?: boolean; services?: SvcRow[] }) {
-  const r = comprehensiveSla(view);
+  // The catalogue goes in so a gate is met by the service it actually books,
+  // and today so a booking still to come is told from one that was missed —
+  // the same rule the client card and the nightly sweep use.
+  const r = comprehensiveSla({ ...view, services, catOf: makeCatOf(services), today: todayISO() });
   const held = Boolean(view.hold.holdSince);
 
   // Overseers (Super Admin / Admin / Manager) chase the person who owes the

@@ -15,7 +15,7 @@ import {
   COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, bookableNow,
   bookingTaskTitle, reassessmentOutOfOrder,
 } from "@/lib/comprehensive";
-import { loadCatOf } from "@/lib/appt-match";
+import { loadCatOf, serviceForMilestone } from "@/lib/appt-match";
 import { nudgeLink } from "@/lib/notification-target";
 import { notifyRoles } from "@/lib/notify";
 
@@ -112,10 +112,18 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
   // Resolve each booking's type to its service category so a manually-booked
   // service ("10th Day Diet Followup") counts against its milestone / SLA.
   const catOf = await loadCatOf(supabase);
+  // The catalogue with day offsets, so each milestone can name the specific
+  // service it books — that is what stops the initial consultation and the
+  // day-21 review from closing the day-10 follow-up.
+  const { data: svcRows } = await supabase.from("services").select("name, category, day_offset");
+  const services = (svcRows ?? []) as { name: string; category: string; day_offset: number | null }[];
   const apptsBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (appts ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     const list = apptsBy.get(a.client_id) ?? [];
-    list.push({ type: catOf(a.type), date: a.date, status: a.status });
+    // RAW type, not the resolved category: milestoneSatisfied needs the
+    // service name to tell a day-10 follow-up from a day-21 review, and to
+    // tell either from the initial consultation.
+    list.push({ type: a.type, date: a.date, status: a.status });
     apptsBy.set(a.client_id, list);
   }
   // comp4 = 28 days = 1 cycle; comp12 = 84 = 3. Read from the package the
@@ -140,6 +148,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
   for (const p of protos) {
     const name = nameOf.get(p.client_id) ?? "A client";
     const report = comprehensiveSla({
+      catOf, services, today,
       startDate: p.start_date,
       validityDays: validity.get(p.client_id) ?? 28,
       consults: byClient.get(p.client_id) ?? [],
@@ -189,8 +198,11 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     // couldn't be actioned anyway.
     const appts = apptsBy.get(p.client_id) ?? [];
     const cycles = cyclesFor(validity.get(p.client_id) ?? 28);
-    for (const m of milestoneDates(p.start_date, cycles)) {
-      if (!bookableNow(m, today, appts)) continue;
+    const dated = milestoneDates(p.start_date, cycles);
+    for (const m of dated) {
+      const svc = serviceForMilestone(m.apptType, m.from, services);
+      const next = dated.find((o) => o.apptType === m.apptType && o.from === m.from && o.fromDate > m.fromDate);
+      if (!bookableNow(m, today, appts, { catOf, service: svc, toDate: next?.fromDate ?? null })) continue;
       const title = bookingTaskTitle(m, name);
       if (taskSet.has(`${p.client_id}|${title}`)) continue;
       taskSet.add(`${p.client_id}|${title}`);

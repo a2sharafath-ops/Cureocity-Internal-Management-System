@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  makeCatOf, isInitialApptType, serviceForMilestone, milestoneSatisfied, milestoneBookHref,
+  makeCatOf, isInitialApptType, serviceForMilestone, milestoneSatisfied, milestoneMatch, milestoneBookHref,
 } from "@/lib/appt-match";
 
 // The real catalogue shape (name / category / day_offset).
@@ -127,5 +127,77 @@ describe("makeCatOf — a service name filed under two categories", () => {
   it("still resolves a name that only exists under an unknown category", () => {
     const only = [{ name: "Sound Bath", category: "Wellbeing" }];
     expect(makeCatOf(only)("Sound Bath")).toBe("Wellbeing");
+  });
+});
+
+describe("an initial consultation never closes a later follow-up", () => {
+  const services = [
+    { name: "Initial Diet Consultation", category: "Diet Consultation", day_offset: 0 },
+    { name: "10th Day Diet Followup", category: "Diet Consultation", day_offset: 10 },
+    { name: "21st Day Diet Followup", category: "Diet Consultation", day_offset: 21 },
+  ];
+  const catOf = makeCatOf(services);
+  // Day 10 of a package starting 1 Jan. Front desk has two days just to BOOK
+  // the initial consult, so it commonly lands on day 3 — inside the day-10
+  // milestone's early-grace window.
+  const day10 = { category: "Diet Consultation", fromDate: "2026-01-11", toDate: null,
+                  service: "10th Day Diet Followup", catOf, today: "2026-01-20" };
+
+  it("does not let a day-3 initial consult satisfy the day-10 follow-up", () => {
+    // The bug: it did, so the follow-up vanished from the client card and the
+    // dashboard while the nightly sweep still breached it and chased the
+    // dietitian for work it thought was late.
+    const appts = [{ type: "Initial Diet Consultation", date: "2026-01-04", status: "completed" }];
+    expect(milestoneSatisfied(appts, day10)).toBe(false);
+  });
+
+  it("does let the day-10 follow-up itself satisfy it", () => {
+    expect(milestoneSatisfied([{ type: "10th Day Diet Followup", date: "2026-01-11", status: "completed" }], day10)).toBe(true);
+  });
+
+  it("does not let the day-21 review satisfy the day-10 follow-up", () => {
+    // Both are Diet Consultation, and the day-10 window runs on past day 21.
+    expect(milestoneSatisfied([{ type: "21st Day Diet Followup", date: "2026-01-22", status: "completed" }], day10)).toBe(false);
+  });
+
+  it("still accepts a row typed with the bare category — those predate the catalogue", () => {
+    expect(milestoneSatisfied([{ type: "Diet Consultation", date: "2026-01-12", status: "completed" }], day10)).toBe(true);
+  });
+
+  it("keeps the early-booking grace for the right service", () => {
+    // Held on day 8 while the client was in the clinic — that counts.
+    expect(milestoneSatisfied([{ type: "10th Day Diet Followup", date: "2026-01-09", status: "completed" }], day10)).toBe(true);
+    // And a booking still ahead of today counts as nothing to chase.
+    expect(milestoneSatisfied([{ type: "10th Day Diet Followup", date: "2026-01-09", status: "scheduled" }],
+      { ...day10, today: "2026-01-08" })).toBe(true);
+  });
+});
+
+describe("milestoneMatch — whether, and when", () => {
+  const catOf = makeCatOf([{ name: "10th Day Diet Followup", category: "Diet Consultation" }]);
+  const opts = { category: "Diet Consultation", fromDate: "2026-01-11", toDate: null,
+                 service: "10th Day Diet Followup", catOf, today: "2026-01-12" };
+
+  it("returns the earliest qualifying appointment", () => {
+    const hit = milestoneMatch([
+      { type: "10th Day Diet Followup", date: "2026-01-15", status: "completed" },
+      { type: "10th Day Diet Followup", date: "2026-01-11", status: "completed" },
+    ], opts);
+    expect(hit?.date).toBe("2026-01-11");
+  });
+
+  it("counts a booking still to come as nothing to chase", () => {
+    expect(milestoneMatch([{ type: "10th Day Diet Followup", date: "2026-01-20", status: "scheduled" }], opts)).not.toBeNull();
+  });
+
+  it("but a booking cannot DATE a gate that has not happened", () => {
+    // heldOnly is what the turnaround board uses: "when was this met" cannot be
+    // answered by an appointment in the future.
+    expect(milestoneMatch([{ type: "10th Day Diet Followup", date: "2026-01-20", status: "scheduled" }],
+      { ...opts, heldOnly: true })).toBeNull();
+  });
+
+  it("returns null when nothing qualifies", () => {
+    expect(milestoneMatch([], opts)).toBeNull();
   });
 });
