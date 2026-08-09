@@ -38,7 +38,6 @@ export type DietAssessmentRow = {
 };
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-const inpControl: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", height: 34, fontSize: 13, background: "#fff", boxSizing: "border-box" };
 const darkBtn: React.CSSProperties = { background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 13, fontWeight: 600 };
 
 const pillOf = (status: string) => {
@@ -179,6 +178,59 @@ export default function DietChartSection({
   const setOpenId = view === "chart" ? setPlanId : setAssessId;
   const noun = view === "chart" ? "chart" : "assessment";
 
+  // The worklist.
+  //
+  // A dropdown hid the work: to find who was still owed a chart you had to open
+  // each client in turn. The list states where both documents stand up front and
+  // puts the unstarted ones first, so opening the tab answers "what do I owe?"
+  // without a click. A client is ranked by whichever of their two documents is
+  // furthest behind — a published chart with no assessment is still work.
+  const roster = useMemo(() => {
+    const latest = <T extends { client_id: string; version: number }>(rows: T[], cid: string) =>
+      rows.filter((r) => r.client_id === cid).sort((a, b) => b.version - a.version)[0] ?? null;
+    const rank = (s: string | null | undefined) =>
+      s == null ? 0 : s === "draft" ? 1 : s === "in_review" ? 2 : s === "published" ? 3 : 4;
+
+    // The dietitian's roster, PLUS anyone who already has a chart or assessment.
+    //
+    // Scoping to the roster alone silently hid a client who had a published
+    // chart but no dietitian on their care team — the author could no longer
+    // reach her own work. Existing paperwork is proof enough that the client
+    // belongs on this screen, whatever the care team happens to say.
+    const seen = new Set(clients.map((c) => c.id));
+    const extra: { id: string; name: string }[] = [];
+    for (const r of [...allPlans, ...allAssess]) {
+      if (seen.has(r.client_id)) continue;
+      seen.add(r.client_id);
+      extra.push({ id: r.client_id, name: r.client_name ?? "Unnamed client" });
+    }
+
+    return [...clients, ...extra]
+      .map((c) => {
+        const p = latest(allPlans, c.id);
+        const a = latest(allAssess, c.id);
+        return { ...c, plan: p, assess: a, order: Math.min(rank(p?.status), rank(a?.status)) };
+      })
+      .sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
+  }, [clients, allPlans, allAssess]);
+
+  /** One document's standing, as a pill. Absent is the loudest state — it's the work. */
+  const standing = (label: string, row: { status: string; sharedAt: string | null } | null) => {
+    if (!row) {
+      return (
+        <span style={{ background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>
+          No {label.toLowerCase()} yet
+        </span>
+      );
+    }
+    const pill = pillOf(row.status);
+    return (
+      <span style={{ background: pill.bg, color: pill.fg, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>
+        {label} · {pill.text}{row.status === "published" && row.sharedAt ? ` · sent ${fmtDate(row.sharedAt)}` : ""}
+      </span>
+    );
+  };
+
   const tabBtn = (key: View): React.CSSProperties => ({
     border: "none", background: "none", padding: "9px 2px", marginRight: 20, fontSize: 13.5,
     fontWeight: view === key ? 700 : 500, color: view === key ? "var(--ink)" : "var(--muted)",
@@ -189,27 +241,49 @@ export default function DietChartSection({
   return (
     <div>
       <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
-        One client, both halves of the write-up: the assessment records what was found, the chart is what they eat from.
+        Your clients, and where each one&apos;s write-up stands. Anything not started sits at the top. Open a client for both halves: the assessment records what was found, the chart is what they eat from.
       </div>
 
-      {/* Client picker — chosen once, shared by both halves. */}
-      <div style={{ ...box, padding: 14, marginBottom: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <select value={selectedClient} onChange={(e) => pickClient(e.target.value)} style={{ ...inpControl, minWidth: 220 }}>
-          <option value="">Select client…</option>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {selectedClient && canCompose && (
-          <button type="button" onClick={() => startNew(view)} disabled={creating}
-            style={{ ...darkBtn, cursor: creating ? "default" : "pointer", opacity: creating ? 0.6 : 1 }}>
-            {creating ? "Starting…" : view === "chart" ? "+ New chart" : "+ New assessment"}
-          </button>
+      {err && <div style={{ fontSize: 12, color: "var(--red-text)", marginBottom: 10 }}>{err}</div>}
+
+      <div style={{ ...box, overflow: "hidden" }}>
+        {roster.length === 0 && (
+          <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+            No clients on your list yet.
+          </div>
         )}
-        {err && <div style={{ fontSize: 12, color: "var(--red-text)" }}>{err}</div>}
-      </div>
+        {roster.map((c) => {
+          const open = selectedClient === c.id;
+          return (
+            <div key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
+              <button
+                type="button"
+                onClick={() => (open ? pickClient("") : pickClient(c.id))}
+                aria-expanded={open}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                  padding: "12px 14px", border: "none", background: open ? "var(--neutral-bg)" : "#fff",
+                  cursor: "pointer", textAlign: "left", font: "inherit",
+                }}
+              >
+                <b style={{ fontSize: 13.5 }}>{c.name}</b>
+                {standing("Assessment", c.assess)}
+                {standing("Chart", c.plan)}
+                <span style={{ flex: 1 }} />
+                <span style={{ color: "var(--muted)", fontSize: 12 }}>{open ? "Close ▲" : "Open ▼"}</span>
+              </button>
 
-      {selectedClient && (
-        <>
-          {/* The two halves. */}
+              {open && (
+                <div style={{ padding: "0 14px 16px" }}>
+                  {canCompose && (
+                    <div style={{ marginBottom: 12 }}>
+                      <button type="button" onClick={() => startNew(view)} disabled={creating}
+                        style={{ ...darkBtn, cursor: creating ? "default" : "pointer", opacity: creating ? 0.6 : 1 }}>
+                        {creating ? "Starting…" : view === "chart" ? "+ New chart" : "+ New assessment"}
+                      </button>
+                    </div>
+                  )}
+                  {/* The two halves. */}
           <div style={{ borderBottom: "1px solid var(--border)", marginBottom: 14, display: "flex", alignItems: "center" }}>
             <button type="button" onClick={() => setView("assessment")} style={tabBtn("assessment")}>
               Assessment{assessVersions.length ? ` (${assessVersions.length})` : ""}
@@ -275,14 +349,12 @@ export default function DietChartSection({
               readOnly={!canCompose}
             />
           )}
-        </>
-      )}
-
-      {!selectedClient && (
-        <div style={{ ...box, padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
-          Select a client to see their assessment and chart.
-        </div>
-      )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

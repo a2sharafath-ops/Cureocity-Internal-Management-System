@@ -902,12 +902,18 @@ export default async function WorkspacePage(
            One screen for a client's nutrition write-up. The assessment and the
            chart were two stacked sections with a client dropdown each, so you
            picked the same person twice and could leave them pointing at two
-           different clients. Now: pick once, switch halves. ---- */}
+           different clients. Now: pick once, switch halves.
+
+           Scoped to this dietitian's OWN roster — the same set the "My clients"
+           tab shows — not every client in the clinic. The old dropdown listed
+           all of them, so she scrolled past people she will never write a chart
+           for. ---- */}
       {tab === "charts" && (
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Diet chart</div>
           <DietChartSection
-            plans={dietPlans} assessments={dietAssessments} clients={clientOpts}
+            plans={dietPlans} assessments={dietAssessments}
+            clients={rosterRows.map((r) => ({ id: r.id, name: r.name }))}
             canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly}
             pdf={pdfReadiness()} whatsapp={watiReadiness()} />
         </div>
