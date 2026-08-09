@@ -126,6 +126,56 @@ export type JourneyRow = {
   stage_entered_at: string;
 };
 
+// ---- who is actually in the building ---------------------------------------
+//
+// A journey opens the moment a coached package is sold, but for Comprehensive
+// the client rarely arrives that day: Front Desk has two days just to BOOK the
+// assessments. So a purchase-day row would otherwise sit on the board reading
+// "Front Desk" for a week, inflating every live number with people who are not
+// in the building.
+//
+// Three groups instead, decided per row at read time (no background job):
+//
+//   here     — on the floor now. Either already handed over (past Front Desk),
+//              or still at the desk with an assessment booked for today.
+//   expected — sold, not here yet. Booked for a future day, or not booked at
+//              all, which is the one worth chasing.
+//   lapsed   — started moving, then nothing since before today. The client went
+//              home mid-flow and nobody closed them out.
+//
+// Only `here` feeds the KPIs. A lapsed journey must never keep counting against
+// the three-minute standard for a day it wasn't being measured on.
+
+export type JourneyGroup = "here" | "expected" | "lapsed";
+
+/** Local calendar day of an ISO timestamp — journeys are judged per clinic day. */
+function dayOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+export function journeyGroup(
+  row: { stage: string; status: string; stage_entered_at: string },
+  hasAppointmentToday: boolean,
+  now: number,
+): JourneyGroup {
+  const today = dayOf(new Date(now).toISOString());
+  const movedToday = dayOf(row.stage_entered_at) === today;
+
+  // Finished journeys stay with the day they finished on, so "Completed today"
+  // means today and yesterday's total doesn't follow the board around forever.
+  if (row.stage === "done" || row.status === "done") return movedToday ? "here" : "lapsed";
+
+  if (row.stage === "front_desk") {
+    // Never handed over. Here only if they're expected on the floor today.
+    if (hasAppointmentToday) return "here";
+    return movedToday ? "here" : "expected";
+  }
+
+  // Mid-flow: on the floor if something moved them today, otherwise abandoned.
+  return movedToday ? "here" : "lapsed";
+}
+
 export type JourneyEvent = {
   journey_id: string;
   kind: string;
@@ -185,7 +235,13 @@ export function journeyKpis(journeys: JourneyRow[], events: JourneyEvent[], now:
   }
 
   const inJourney = journeys.filter((j) => j.status === "active" && j.stage !== "done").length;
-  const done = journeys.filter((j) => j.stage === "done" || j.status === "done").length;
+  // "Completed TODAY" — it used to count every journey ever finished, so the
+  // number only ever climbed. A journey's stage_entered_at is stamped when it
+  // reaches "done", which is when it finished.
+  const today = dayOf(new Date(now).toISOString());
+  const done = journeys.filter(
+    (j) => (j.stage === "done" || j.status === "done") && dayOf(j.stage_entered_at) === today,
+  ).length;
   const avgWaitMs = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
   const coachPresentPct = closed ? Math.round((onTime / closed) * 100) : 100;
 

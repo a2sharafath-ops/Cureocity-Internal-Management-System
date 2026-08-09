@@ -3,6 +3,7 @@ import {
   JOURNEY_STAGES, MAX_WAIT_MS, nextStageKey, isWaitStage, assessmentOf,
   stageMeta, journeyKpis, isCoachNotified, fmtElapsed,
   stageForConsult, CONSULT_START_STAGE, CONSULT_DONE_STAGE, AUTO_WINDOW_DAYS,
+  journeyGroup,
   type JourneyRow, type JourneyEvent,
 } from "@/lib/live-journey";
 
@@ -182,5 +183,64 @@ describe("stageForConsult", () => {
     // follow-up months later can't reopen a stale journey.
     expect(AUTO_WINDOW_DAYS).toBeGreaterThan(1);
     expect(AUTO_WINDOW_DAYS).toBeLessThanOrEqual(30);
+  });
+});
+
+// ---- who is actually in the building ---------------------------------------
+// A journey opens the day the package is sold, but a Comprehensive client
+// usually arrives days later. These rules keep the sold-but-not-arrived and the
+// went-home-mid-visit out of the live numbers.
+
+describe("journeyGroup", () => {
+  const at = (iso: string) => Date.parse(iso);
+  const NOON = at("2026-08-09T12:00:00Z");
+  const todayAt = (t: string) => `2026-08-09T${t}:00Z`;
+  const yesterday = "2026-08-08T10:00:00Z";
+  const lastWeek = "2026-08-02T10:00:00Z";
+
+  it("counts someone mid-flow today as in the building", () => {
+    expect(journeyGroup({ stage: "fitness", status: "active", stage_entered_at: todayAt("11:30") }, false, NOON)).toBe("here");
+  });
+
+  it("counts a client still at the desk with a booking today as in the building", () => {
+    expect(journeyGroup({ stage: "front_desk", status: "active", stage_entered_at: lastWeek }, true, NOON)).toBe("here");
+  });
+
+  it("treats a package sold days ago with no booking today as expected, not here", () => {
+    // The Comprehensive case: bought last week, Front Desk still to book them in.
+    expect(journeyGroup({ stage: "front_desk", status: "active", stage_entered_at: lastWeek }, false, NOON)).toBe("expected");
+  });
+
+  it("counts a package sold today as in the building — they may be at the desk now", () => {
+    expect(journeyGroup({ stage: "front_desk", status: "active", stage_entered_at: todayAt("09:15") }, false, NOON)).toBe("here");
+  });
+
+  it("treats a client who went home mid-visit as lapsed", () => {
+    expect(journeyGroup({ stage: "diet", status: "active", stage_entered_at: yesterday }, false, NOON)).toBe("lapsed");
+  });
+
+  it("keeps a finished journey with the day it finished on", () => {
+    expect(journeyGroup({ stage: "done", status: "done", stage_entered_at: todayAt("10:00") }, false, NOON)).toBe("here");
+    expect(journeyGroup({ stage: "done", status: "done", stage_entered_at: yesterday }, false, NOON)).toBe("lapsed");
+  });
+
+  it("still reads lapsed mid-flow even with a booking today, until someone moves them", () => {
+    // Deliberate: a mid-flow row is judged on movement, not on the diary. If a
+    // client who stalled yesterday comes back, the first consultation started
+    // today moves them and they return to the floor on their own. Until then a
+    // stale timer must not be counted against the three-minute standard.
+    expect(journeyGroup({ stage: "medical", status: "active", stage_entered_at: yesterday }, true, NOON)).toBe("lapsed");
+  });
+});
+
+describe("Completed today counts only today", () => {
+  const NOON = Date.parse("2026-08-09T12:00:00Z");
+  it("ignores journeys finished on an earlier day", () => {
+    const rows: JourneyRow[] = [
+      { id: "a", stage: "done", status: "done", stage_entered_at: "2026-08-09T10:00:00Z" },
+      { id: "b", stage: "done", status: "done", stage_entered_at: "2026-08-08T10:00:00Z" },
+      { id: "c", stage: "done", status: "done", stage_entered_at: "2026-07-01T10:00:00Z" },
+    ];
+    expect(journeyKpis(rows, [], NOON).done).toBe(1);
   });
 });

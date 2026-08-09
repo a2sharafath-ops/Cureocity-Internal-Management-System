@@ -4,7 +4,14 @@ import { getProfile } from "@/lib/auth";
 import { canSee, canEditAppointments } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import LiveJourneyBoard, { type BoardRow } from "@/components/LiveJourneyBoard";
-import { journeyKpis, isCoachNotified, type JourneyEvent } from "@/lib/live-journey";
+import { journeyKpis, isCoachNotified, journeyGroup, type JourneyEvent } from "@/lib/live-journey";
+
+/** Today in the clinic's own date format, for matching appointment rows. */
+function todayISO(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +35,8 @@ export default async function JourneyPage() {
   if (!me || !canSee(me.role, "/journey")) redirect("/dashboard");
 
   const supabase = await createClient();
-  const [journeysR, eventsR, staffR] = await Promise.all([
+  const today = todayISO();
+  const [journeysR, eventsR, staffR, apptR] = await Promise.all([
     supabase
       .from("journeys")
       .select("id, client_id, walk_in_name, walk_in_phone, goal, source, concerns, coach_id, stage, status, stage_entered_at, clients(name, goals)")
@@ -36,6 +44,11 @@ export default async function JourneyPage() {
       .order("created_at", { ascending: true }),
     supabase.from("journey_events").select("journey_id, kind, stage, at"),
     supabase.from("staff").select("id, name, role").order("name"),
+    // Who is due on the floor. A client still at Front Desk counts as "here"
+    // only if an assessment is actually booked for today; otherwise they were
+    // sold a package and haven't come in yet.
+    supabase.from("appointments").select("client_id, date")
+      .neq("status", "cancelled").not("client_id", "is", null).gte("date", today),
   ]);
 
   const journeys = (journeysR.data ?? []) as unknown as JourneyDB[];
@@ -44,8 +57,30 @@ export default async function JourneyPage() {
   const staffName = new Map(staff.map((s) => [s.id, s.name]));
 
   const nowMs = Date.now();
+
+  // Clients with a booking today, and — for the ones who aren't here yet — the
+  // next date they ARE expected, so the board can say when rather than just
+  // "not today".
+  const appts = (apptR.data ?? []) as { client_id: string | null; date: string }[];
+  const dueToday = new Set<string>();
+  const nextVisit = new Map<string, string>();
+  for (const a of appts) {
+    if (!a.client_id) continue;
+    if (a.date === today) dueToday.add(a.client_id);
+    const seen = nextVisit.get(a.client_id);
+    if (!seen || a.date < seen) nextVisit.set(a.client_id, a.date);
+  }
+
+  const groupOf = (j: JourneyDB) =>
+    journeyGroup(j, j.client_id ? dueToday.has(j.client_id) : false, nowMs);
+
+  // Only the people actually on the floor are measured. A client who was sold a
+  // package last week, or who went home mid-flow, must not drag the
+  // three-minute standard down for a day they were never being served on.
   const kpis = journeyKpis(
-    journeys.map((j) => ({ id: j.id, stage: j.stage, status: j.status, stage_entered_at: j.stage_entered_at })),
+    journeys
+      .filter((j) => groupOf(j) === "here")
+      .map((j) => ({ id: j.id, stage: j.stage, status: j.status, stage_entered_at: j.stage_entered_at })),
     events,
     nowMs,
   );
@@ -54,6 +89,8 @@ export default async function JourneyPage() {
     id: j.id,
     name: j.clients?.name ?? j.walk_in_name ?? "Walk-in",
     phone: j.walk_in_phone,
+    group: groupOf(j),
+    expectedOn: j.client_id ? nextVisit.get(j.client_id) ?? null : null,
     // The goal the intake / CRM already captured on the client record. The
     // handover form falls back to this so the coach isn't retyping something
     // the client has already told us once. clients.goals is a list; the board

@@ -5,7 +5,8 @@ import Chip from "@/components/Chip";
 import SubmitButton from "@/components/SubmitButton";
 import { journeyHandover, journeyAdvance, journeyNotifyCoach, journeyCancel } from "@/lib/actions";
 import {
-  stageMeta, isWaitStage, assessmentOf, MAX_WAIT_MS, fmtElapsed, type JourneyKpis,
+  stageMeta, isWaitStage, assessmentOf, MAX_WAIT_MS, fmtElapsed,
+  type JourneyKpis, type JourneyGroup,
 } from "@/lib/live-journey";
 
 export type BoardRow = {
@@ -15,6 +16,10 @@ export type BoardRow = {
   goal: string | null;
   /** clients.goals, joined — what intake already knows. Used to seed the form. */
   clientGoal: string | null;
+  /** On the floor now, sold but not arrived, or went home mid-flow. */
+  group: JourneyGroup;
+  /** Next booked date, for the ones who aren't here yet. */
+  expectedOn: string | null;
   source: string | null;
   concerns: string | null;
   coachName: string | null;
@@ -23,6 +28,10 @@ export type BoardRow = {
   stageEnteredAt: string;
   notified: boolean;
 };
+
+/** "Mon 11 Aug" — a date is the right unit for someone who isn't here today. */
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" });
 
 const card: React.CSSProperties = {
   background: "var(--card)",
@@ -119,23 +128,43 @@ export default function LiveJourneyBoard({
         </div>
       </div>
 
-      {/* Board */}
-      <div style={{ ...card, overflow: "hidden" }}>
+      {/* Board — three groups.
+          A journey opens the day the package is sold, but a Comprehensive
+          client usually arrives days later (Front Desk has two days just to
+          book the assessments). Mixing those rows in with the people actually
+          on the floor made the live numbers meaningless, so they are separated
+          and only "In the building" is measured. */}
+      {(["here", "expected", "lapsed"] as const).map((group) => {
+        const groupRows = rows.filter((r) => r.group === group);
+        if (group !== "here" && groupRows.length === 0) return null;
+        const heading = group === "here" ? null
+          : group === "expected"
+            ? { title: "Expected — sold, not arrived yet", note: "Not counted in the numbers above. A client with no booking is the one worth chasing." }
+            : { title: "Lapsed — nothing since before today", note: "They went home mid-visit and were never closed out. Clear them with ✕." };
+        return (
+          <div key={group}>
+            {heading && (
+              <div style={{ margin: "4px 0 8px" }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{heading.title} · {groupRows.length}</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{heading.note}</div>
+              </div>
+            )}
+            <div style={{ ...card, overflow: "hidden", opacity: group === "here" ? 1 : 0.75 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              <th style={th}>Walk-in</th>
+              <th style={th}>Client</th>
               <th style={th}>Current stage</th>
               <th style={th}>With</th>
-              <th style={th}>Timer</th>
+              <th style={th}>{group === "expected" ? "Expected" : "Timer"}</th>
               <th style={{ ...th, textAlign: "right" }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
-              <tr><td style={td} colSpan={5}><span style={{ color: "var(--muted)" }}>Nobody in the journey right now — clients appear here automatically when a Comprehensive, PT or BluePrint package is sold.</span></td></tr>
+            {groupRows.length === 0 && (
+              <tr><td style={td} colSpan={5}><span style={{ color: "var(--muted)" }}>Nobody in the building right now — clients appear here automatically when a Comprehensive, PT or BluePrint package is sold.</span></td></tr>
             )}
-            {rows.map((r) => {
+            {groupRows.map((r) => {
               const meta = stageMeta(r.stage);
               const withWhom = meta.owner === "Health Coach" ? (r.coachName ?? "Health Coach") : meta.owner;
               const assess = assessmentOf(r.stage);
@@ -151,14 +180,24 @@ export default function LiveJourneyBoard({
                   <td style={td}>{stageChip(r)}</td>
                   <td style={td}><span style={{ fontSize: 12 }}>{withWhom}</span></td>
                   <td style={td}>
-                    {r.stage === "front_desk" || r.stage === "done"
-                      ? <span style={{ color: "var(--muted)" }}>—</span>
-                      : <Timer since={Date.parse(r.stageEnteredAt)} wait={isWaitStage(r.stage)} />}
+                    {/* A live timer only makes sense for someone on the floor.
+                        For the not-yet-arrived it's the date they're due; for a
+                        lapsed row it would otherwise read hours or days, which
+                        looks like a breach rather than an abandoned visit. */}
+                    {r.group === "expected"
+                      ? <span style={{ fontSize: 12, color: "var(--muted)" }}>{r.expectedOn ? fmtDay(r.expectedOn) : "Not booked yet"}</span>
+                      : r.group === "lapsed"
+                        ? <span style={{ fontSize: 12, color: "var(--muted)" }}>Since {fmtDay(r.stageEnteredAt)}</span>
+                        : r.stage === "front_desk" || r.stage === "done"
+                          ? <span style={{ color: "var(--muted)" }}>—</span>
+                          : <Timer since={Date.parse(r.stageEnteredAt)} wait={isWaitStage(r.stage)} />}
                   </td>
                   <td style={{ ...td, textAlign: "right" }}>
                     <div style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                      {/* Professional intimation on any assessment stage */}
-                      {assess && (r.notified
+                      {/* Professional intimation on any assessment stage.
+                          Only for someone on the floor — pinging a coach about
+                          a client who went home yesterday is noise. */}
+                      {r.group === "here" && assess && (r.notified
                         ? <Chip bg="var(--amber-bg)" color="var(--amber-text)">🔔 Coach notified</Chip>
                         : (
                           <form action={notifyAction}>
@@ -217,7 +256,10 @@ export default function LiveJourneyBoard({
             })}
           </tbody>
         </table>
-      </div>
+            </div>
+          </div>
+        );
+      })}
 
       <div style={{ fontSize: 12, color: "var(--muted)" }}>
         The Health Coach is the single point of contact. Professionals tap <b>🔔 Notify coach</b> before a session ends; the coach returns within <b>3 minutes</b> (the timer turns red past 3:00) and escorts the client to the next assessment.
