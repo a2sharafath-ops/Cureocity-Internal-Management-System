@@ -13,7 +13,10 @@
 // confirms; "diabetes" would be a call only they can make.
 
 export type Severity = "critical" | "warning" | "info";
-export type Suggestion = { text: string; severity: Severity; source: "Vitals" | "InBody" | "Labs" };
+/** Where a suggestion came from. Shown as a chip, so the clinician can see at a
+ *  glance whether it is a measurement or something the client said. */
+export type SuggestionSource = "Vitals" | "InBody" | "Labs" | "Intake";
+export type Suggestion = { text: string; severity: Severity; source: SuggestionSource };
 
 export type FlagInput = {
   vitals?: Partial<Record<"systolic" | "diastolic" | "pulse" | "spo2" | "temp_c", number | null>>;
