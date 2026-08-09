@@ -20,7 +20,7 @@ type JourneyDB = {
   stage: string;
   status: string;
   stage_entered_at: string;
-  clients: { name: string } | null;
+  clients: { name: string; goals: string[] | null } | null;
 };
 
 export default async function JourneyPage() {
@@ -31,7 +31,7 @@ export default async function JourneyPage() {
   const [journeysR, eventsR, staffR] = await Promise.all([
     supabase
       .from("journeys")
-      .select("id, client_id, walk_in_name, walk_in_phone, goal, source, concerns, coach_id, stage, status, stage_entered_at, clients(name)")
+      .select("id, client_id, walk_in_name, walk_in_phone, goal, source, concerns, coach_id, stage, status, stage_entered_at, clients(name, goals)")
       .neq("status", "cancelled")
       .order("created_at", { ascending: true }),
     supabase.from("journey_events").select("journey_id, kind, stage, at"),
@@ -54,6 +54,11 @@ export default async function JourneyPage() {
     id: j.id,
     name: j.clients?.name ?? j.walk_in_name ?? "Walk-in",
     phone: j.walk_in_phone,
+    // The goal the intake / CRM already captured on the client record. The
+    // handover form falls back to this so the coach isn't retyping something
+    // the client has already told us once. clients.goals is a list; the board
+    // shows it as one comma-separated line.
+    clientGoal: (j.clients?.goals ?? []).filter(Boolean).join(", ") || null,
     goal: j.goal,
     source: j.source,
     concerns: j.concerns,

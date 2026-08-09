@@ -13,6 +13,8 @@ export type BoardRow = {
   name: string;
   phone: string | null;
   goal: string | null;
+  /** clients.goals, joined — what intake already knows. Used to seed the form. */
+  clientGoal: string | null;
   source: string | null;
   concerns: string | null;
   coachName: string | null;
@@ -194,10 +196,16 @@ export default function LiveJourneyBoard({
                       <form action={handoverAction} style={{ marginTop: 10, textAlign: "left", background: "var(--brand-tint)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "grid", gap: 8 }}>
                         <div style={{ fontWeight: 700, fontSize: 13 }}>Handover to {r.coachName ?? "Health Coach"}</div>
                         <input type="hidden" name="id" value={r.id} />
-                        <div><label style={label}>Primary goal</label><input style={input} name="goal" defaultValue={r.goal ?? ""} /></div>
+                        {/* Seeded from the client record when the journey has no
+                            goal of its own, so the coach confirms what intake
+                            captured rather than typing it a second time. */}
+                        <div><label style={label}>Primary goal</label><input style={input} name="goal" defaultValue={r.goal ?? r.clientGoal ?? ""} /></div>
                         <div><label style={label}>Source</label><input style={input} name="source" defaultValue={r.source ?? ""} /></div>
                         <div><label style={label}>Concerns / urgency</label><input style={input} name="concerns" defaultValue={r.concerns ?? ""} /></div>
-                        <div style={{ fontSize: 11, color: "var(--muted)" }}>Shared to Fitness, Doctor &amp; Dietitian so the client never repeats their story.</div>
+                        <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                          The goal is saved to the client record, so Fitness, Doctor &amp; Dietitian see it in their console — the client never repeats their story.
+                          Concerns stay on this board.
+                        </div>
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
                           <SubmitButton style={btnPrimary}>Confirm handover</SubmitButton>
                         </div>

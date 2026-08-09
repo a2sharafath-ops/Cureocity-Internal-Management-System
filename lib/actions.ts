@@ -7873,14 +7873,36 @@ export async function journeyHandover(formData: FormData): Promise<{ ok: boolean
   if (!id) return { ok: false, error: "Missing journey" };
   const supabase = await createClient();
 
+  const goal = String(formData.get("goal") || "").trim();
+
   await supabase.from("journeys").update({
-    goal: String(formData.get("goal") || "") || null,
+    goal: goal || null,
     source: String(formData.get("source") || "") || null,
     concerns: String(formData.get("concerns") || "") || null,
     stage: "await_coach",
     stage_entered_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   }).eq("id", id).eq("stage", "front_desk");
+
+  // The goal belongs to the client, not to this one visit: the clinician
+  // console and the client portal both read clients.goals, so writing it back
+  // is what actually gets it in front of Fitness / Doctor / Dietitian.
+  //
+  // Only ever writes a non-empty value. A coach who clears the box, or a
+  // journey with no client (legacy walk-in rows), must not wipe what intake
+  // captured — losing the client's stated goal is far worse than a stale one.
+  if (goal) {
+    const { data: jrow } = await supabase
+      .from("journeys").select("client_id").eq("id", id).maybeSingle();
+    const cid = (jrow as { client_id?: string | null } | null)?.client_id ?? null;
+    if (cid) {
+      // clients.goals is text[]; the board edits it as one line. Comma-split so
+      // a coach typing "Fat loss, Sleep" round-trips as two goals, not one.
+      const goals = goal.split(",").map((g) => g.trim()).filter(Boolean);
+      await supabase.from("clients").update({ goals }).eq("id", cid);
+      revalidatePath(`/clients/${cid}`);
+    }
+  }
 
   await logJourneyEvent(supabase, id, "handover", "front_desk", p.name);
   await logJourneyEvent(supabase, id, "stage_enter", "await_coach", p.name);
