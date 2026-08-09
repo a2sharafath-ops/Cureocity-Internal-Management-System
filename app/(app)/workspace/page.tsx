@@ -17,8 +17,7 @@ import ExerciseLibrarySection from "@/components/ExerciseLibrarySection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
 import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
-import DietPlanSection, { type DietPlanRow } from "@/components/DietPlanSection";
-import DietAssessmentSection, { type DietAssessmentRow } from "@/components/DietAssessmentSection";
+import DietChartSection, { type DietPlanRow, type DietAssessmentRow } from "@/components/DietChartSection";
 import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
@@ -899,25 +898,18 @@ export default async function WorkspacePage(
         </>
       )}
 
-      {/* ---- DIET CHARTS (dietitian) ---- */}
       {/* ---- DIET CHART (dietitian) ----
-           The structured multi-page document. It used to sit BELOW a flat
-           "diet chart" builder as "Customised diet plan"; that older document
-           is retired and this one carries the name the clinic actually uses. ---- */}
+           One screen for a client's nutrition write-up. The assessment and the
+           chart were two stacked sections with a client dropdown each, so you
+           picked the same person twice and could leave them pointing at two
+           different clients. Now: pick once, switch halves. ---- */}
       {tab === "charts" && (
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Diet chart</div>
-          <DietPlanSection plans={dietPlans} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
-        </div>
-      )}
-
-      {/* ---- DIETARY ASSESSMENT SUMMARY (dietitian) — the companion document
-           to the diet plan: what was found, where the plan came from. Same tab,
-           same role gate. ---- */}
-      {tab === "charts" && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Dietary assessment summary</div>
-          <DietAssessmentSection assessments={dietAssessments} clients={clientOpts} canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />
+          <DietChartSection
+            plans={dietPlans} assessments={dietAssessments} clients={clientOpts}
+            canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly}
+            pdf={pdfReadiness()} whatsapp={watiReadiness()} />
         </div>
       )}
 
