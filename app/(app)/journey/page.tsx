@@ -5,13 +5,10 @@ import { canSee, canEditAppointments } from "@/lib/roles";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import LiveJourneyBoard, { type BoardRow } from "@/components/LiveJourneyBoard";
 import { journeyKpis, isCoachNotified, journeyGroup, type JourneyEvent } from "@/lib/live-journey";
+import { todayISO } from "@/lib/today";
 
-/** Today in the clinic's own date format, for matching appointment rows. */
-function todayISO(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+// `todayISO` comes from lib/today — this page had its own server-local copy,
+// which on Vercel is UTC and so ran the clinic day five and a half hours late.
 
 export const dynamic = "force-dynamic";
 

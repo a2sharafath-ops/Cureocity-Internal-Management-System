@@ -282,3 +282,54 @@ describe("Completed today counts only today", () => {
     expect(journeyKpis(rows, [], NOON).done).toBe(1);
   });
 });
+
+describe("the board counts only the people it is showing", () => {
+  const at = (h: number) => new Date(Date.UTC(2026, 7, 9, h - 5, 30 - 30)).toISOString();
+  const NOW = Date.parse("2026-08-09T06:00:00Z");   // 11:30 IST
+
+  it("ignores events belonging to a journey that is not on the board", () => {
+    // A client who went home mid-flow and was never closed out kept an open
+    // waiting stage growing 24h a day, counted as a breach for ever. The
+    // Breaches number could only climb and nothing the clinic did reduced it.
+    const live = { id: "live", stage: "transition_med", status: "active", stage_entered_at: at(11) };
+    const events = [
+      { journey_id: "live", kind: "stage_enter", stage: "transition_med", at: at(11) },
+      { journey_id: "abandoned", kind: "stage_enter", stage: "transition_med", at: "2026-07-01T06:00:00Z" },
+    ];
+    const withGhost = journeyKpis([live], events, NOW);
+    const withoutGhost = journeyKpis([live], events.slice(0, 1), NOW);
+    expect(withGhost).toEqual(withoutGhost);
+  });
+
+  it("counts nothing at all when no journey is on the board", () => {
+    const k = journeyKpis([], [
+      { journey_id: "abandoned", kind: "stage_enter", stage: "transition_med", at: "2026-07-01T06:00:00Z" },
+    ], NOW);
+    expect(k.breaches).toBe(0);
+  });
+});
+
+describe("the clinic day, not the server's", () => {
+  // Vercel runs in UTC, five and a half hours behind Kochi. Between midnight
+  // and 05:29 IST the board used to be built for the previous date: everyone at
+  // Front Desk read as "expected" rather than here, and "Completed today"
+  // showed yesterday's total.
+  const IST_0100 = Date.parse("2026-08-08T19:30:00Z");   // 01:00 IST on the 9th
+
+  it("treats 01:00 IST as the same clinic day as the handover just before it", () => {
+    const row = { stage: "transition_med", status: "active", stage_entered_at: "2026-08-08T19:00:00Z" };
+    expect(journeyGroup(row, false, IST_0100)).toBe("here");
+  });
+
+  it("still calls yesterday's abandoned journey lapsed", () => {
+    const row = { stage: "transition_med", status: "active", stage_entered_at: "2026-08-07T10:00:00Z" };
+    expect(journeyGroup(row, false, IST_0100)).toBe("lapsed");
+  });
+
+  it("keeps a late-evening handover on the day it happened", () => {
+    // 23:00 IST is 17:30 UTC — the same clinic day, not tomorrow.
+    const evening = Date.parse("2026-08-09T17:35:00Z");
+    const row = { stage: "diet", status: "active", stage_entered_at: "2026-08-09T17:30:00Z" };
+    expect(journeyGroup(row, false, evening)).toBe("here");
+  });
+});

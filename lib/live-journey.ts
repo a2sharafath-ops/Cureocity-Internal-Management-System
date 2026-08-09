@@ -5,6 +5,8 @@
 // page loads `journeys` + `journey_events` and hands them here; the server
 // actions in lib/actions.ts drive the transitions.
 
+import { IST } from "@/lib/datetime";
+
 export type JourneyStageKey =
   | "front_desk"
   | "await_coach"
@@ -179,10 +181,19 @@ export type JourneyRow = {
 
 export type JourneyGroup = "here" | "expected" | "lapsed";
 
-/** Local calendar day of an ISO timestamp — journeys are judged per clinic day. */
+/**
+ * The CLINIC day an instant falls on.
+ *
+ * Read from local calendar fields, which on Vercel means UTC — five and a half
+ * hours behind Kochi. Between midnight and 05:29 IST the board was built for
+ * the previous date, so everyone still at Front Desk read as "expected" rather
+ * than here, and "Completed today" showed yesterday's total. In the other
+ * direction, a handover at 19:00 IST is 13:30 UTC — fine — but anything after
+ * 23:30 IST landed on tomorrow. Naming the zone is the whole fix; see
+ * lib/today.ts, which says the same thing for the same reason.
+ */
 function dayOf(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: IST });
 }
 
 export function journeyGroup(
@@ -237,7 +248,15 @@ const ms = (iso: string) => new Date(iso).getTime();
  * waiting stages count toward the SOP standard.
  */
 export function journeyKpis(journeys: JourneyRow[], events: JourneyEvent[], now: number): JourneyKpis {
-  const enters = events.filter((e) => e.kind === "stage_enter");
+  // Only events belonging to the journeys handed in.
+  //
+  // The caller filters `journeys` to the ones actually on the floor, but passed
+  // every event — and the KPIs were built from the events alone. So a client
+  // who went home mid-flow and was never closed out kept an open waiting stage
+  // whose duration grew by 24 hours a day, counted as a breach for ever. The
+  // Breaches number could only climb, and nothing the clinic did reduced it.
+  const live = new Set(journeys.map((j) => j.id));
+  const enters = events.filter((e) => e.kind === "stage_enter" && live.has(e.journey_id));
   const byJourney = new Map<string, JourneyEvent[]>();
   for (const e of enters) {
     const arr = byJourney.get(e.journey_id);
