@@ -926,10 +926,12 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
       } else if (cat0 === PT_CATEGORY) {
         await startPTJourney(supabase, inserted.id, lead.name, joined, p.name);
       }
-      // The three coached packages hand the client to a Health Coach on day 0,
-      // so the purchase itself opens the Live Journey board. Facility-only and
-      // membership packages have no D0 concierge flow and are left out.
-      if (cat0 === "blueprint" || cat0 === COMPREHENSIVE_CATEGORY || cat0 === PT_CATEGORY) {
+      // BluePrint only. It is the one same-day product: the client comes in and
+      // does all three assessments in a single visit, which is exactly what the
+      // board exists to run. Comprehensive and PT were tried here and removed —
+      // Front Desk has two days just to BOOK their assessments, so those clients
+      // sat on the board for a week before ever walking in.
+      if (cat0 === "blueprint") {
         await startLiveJourney(supabase, inserted.id, p.name);
       }
     }
@@ -1030,8 +1032,9 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     if (cat === "blueprint") await startBlueprintJourney(supabase, client_id, who, p.name);
     else if (cat === COMPREHENSIVE_CATEGORY) await startComprehensiveJourney(supabase, client_id, who, start, p.name);
     else await startPTJourney(supabase, client_id, who, start, p.name);
-    // Same handover as conversion: a coached package opens the Live Journey.
-    await startLiveJourney(supabase, client_id, p.name);
+    // BluePrint only — see the note in convertLeadVerified. It is the one
+    // same-day product, so it is the only one the board can meaningfully track.
+    if (cat === "blueprint") await startLiveJourney(supabase, client_id, p.name);
   }
   await logAudit(p, "Package purchased", pkg.name, client_id);
   const { data: pcli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
@@ -7760,7 +7763,13 @@ export async function shareDietAssessment(formData: FormData): Promise<{ ok?: bo
 // ============================================================================
 
 /**
- * Open the Live Journey for a client who has just bought a coached package.
+ * Open the Live Journey for a client who has just bought BluePrint.
+ *
+ * BluePrint only, deliberately. It is the single-visit diagnostic product — the
+ * client comes in and does fitness, medical and diet in one day, which is the
+ * flow this board runs. Comprehensive and PT were included at first and taken
+ * out: their assessments are booked over the following days, so those clients
+ * appeared on the board on purchase day and sat there unarrived for a week.
  *
  * Starts at "Front Desk", not "Awaiting Coach". "Awaiting Coach" is a *wait*
  * stage: entering it starts the SOP's three-minute coach-present clock. The

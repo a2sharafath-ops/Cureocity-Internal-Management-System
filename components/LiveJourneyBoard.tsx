@@ -118,10 +118,10 @@ export default function LiveJourneyBoard({
       </div>
 
       {/* Header. There is deliberately no "add" control: the board is a
-          projection of work already logged in the CRM. A client joins it when a
-          coached package is sold, and moves as consultations start and finish.
-          Adding a second, manual registration path here is what let the board
-          drift out of step with the client record. */}
+          projection of work already logged in the CRM. A BluePrint client joins
+          it when the package is sold, and moves as consultations start and
+          finish. Adding a second, manual registration path here is what let the
+          board drift out of step with the client record. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontSize: 12, color: "var(--muted)" }}>
           Front Desk → Health Coach → Fitness · Medical · Diet → Review → Front Desk · the coach returns within 3 minutes at every handover.
@@ -162,7 +162,7 @@ export default function LiveJourneyBoard({
           </thead>
           <tbody>
             {groupRows.length === 0 && (
-              <tr><td style={td} colSpan={5}><span style={{ color: "var(--muted)" }}>Nobody in the building right now — clients appear here automatically when a Comprehensive, PT or BluePrint package is sold.</span></td></tr>
+              <tr><td style={td} colSpan={5}><span style={{ color: "var(--muted)" }}>Nobody in the building right now — BluePrint clients appear here automatically when the package is sold.</span></td></tr>
             )}
             {groupRows.map((r) => {
               const meta = stageMeta(r.stage);
