@@ -478,17 +478,29 @@ export default function ConsoleView({
           hour — and a clinician who has decided to proceed should not have to
           argue with the software. Doctor only: the other disciplines do not
           read the panel, so for them it would be noise. */}
-      {kind === "Doctor" && health?.bloodStatus === "Awaiting report" && (
-        <div style={{
-          ...box, marginBottom: 12, padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
-          flexWrap: "wrap", background: "var(--amber-bg)", borderColor: "var(--amber-text)",
-        }}>
-          <b style={{ fontSize: 13, color: "var(--amber-text)" }}>⚠ Blood results are not back yet</b>
-          <span style={{ fontSize: 12.5, color: "var(--amber-text)", flex: 1, minWidth: 220 }}>
-            The panel was requested but no report has been received. If this consultation depends on it, it may be worth rescheduling.
-          </span>
-        </div>
-      )}
+      {kind === "Doctor" && health?.bloodStatus === "Awaiting report" && (() => {
+        // Marking a panel received is a separate act by Front Desk; uploading
+        // the PDF here does not do it. So "no report" and "nobody ticked the
+        // box" are different situations and must not be told the same way — a
+        // doctor looking at the results on this very screen, being told they
+        // are missing, is how a warning gets ignored for good.
+        const onFile = reports.length;
+        return (
+          <div style={{
+            ...box, marginBottom: 12, padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
+            flexWrap: "wrap", background: "var(--amber-bg)", borderColor: "var(--amber-text)",
+          }}>
+            <b style={{ fontSize: 13, color: "var(--amber-text)" }}>
+              {onFile ? "⚠ Blood panel still open" : "⚠ Blood results are not back yet"}
+            </b>
+            <span style={{ fontSize: 12.5, color: "var(--amber-text)", flex: 1, minWidth: 220 }}>
+              {onFile
+                ? `The panel has not been marked as received, but ${onFile} report${onFile === 1 ? " is" : "s are"} on file below. If the results are among them, ask Front Desk to mark the panel received so this stops being chased.`
+                : "The panel was requested and no report has been received. If this consultation depends on it, it may be worth rescheduling."}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* ---- client context — one line, expandable ------------------------ */}
       {health && (
