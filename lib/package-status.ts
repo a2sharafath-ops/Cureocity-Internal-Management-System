@@ -13,7 +13,7 @@ import { clock, formatLeft } from "@/lib/sla-clock";
 import { dueOn, waitingSince } from "@/lib/due";
 import { loadClientStatuses } from "@/lib/client-status";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
-import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners, SETTLED_INVOICE } from "@/lib/work-owners";
+import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners, SETTLED_INVOICE, FOLLOWUP_CLOSED } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, type AssignRow, type ApptOwnerRow, type ApptMatchRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
 import { makeCatOf } from "@/lib/appt-match";
@@ -64,10 +64,19 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
 
   // The Day-2 "diet chart explanation" lives in the follow-ups system, not the
   // milestone set — pull it so the client card shows the whole plan.
-  const { data: fus } = await sb.from("followups").select("label, day, due_date, stage").eq("client_id", clientId);
-  const dietExplain = ((fus ?? []) as { label: string; day: number | null; due_date: string; stage: string }[])
+  //
+  // Read by STATUS, like every other reader of this queue.
+  //
+  // lib/work-owners was written to end, and which was still live here. Two of
+  // the ways a follow-up gets closed write only `status` and leave `stage`
+  // where it was, so a Day-2 diet chart explanation closed either of those ways
+  // kept reading "due" on the client card for ever, chased against the coach
+  // AND the dietitian, while the Follow-ups queue and Today's agenda showed it
+  // done. The buttons the team happens to use write both columns, which is the
+  // only reason this hasn't bitten yet.
+  const { data: fus } = await sb.from("followups").select("label, day, due_date, status").eq("client_id", clientId);
+  const dietExplain = ((fus ?? []) as { label: string; day: number | null; due_date: string; status: string }[])
     .find((f) => f.day === 2 && /explanation/i.test(f.label));
-  const FU_CLOSED = new Set(["BOOKED", "COMPLETED", "NO_CONSULT"]);
 
   // Who owns each clinician deliverable — the shared resolver (care-team
   // assignment, then the completed-consult provider as fallback), so ops roles
@@ -212,7 +221,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // follow-up row still goes overdue in the background. Hiding the item made
   // the client card look clean while the queue rotted, so the BLOCKAGE is now
   // what is shown, chased against the dietitian who owes the chart.
-  if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && !hasChart && dietExplain.due_date <= today) {
+  if (isComp && dietExplain && !FOLLOWUP_CLOSED.has(dietExplain.status) && !hasChart && dietExplain.due_date <= today) {
     openNow.push({
       label: "Diet chart explanation — blocked",
       detail: `Day 2 · was due ${fmt(dietExplain.due_date)} · no chart drafted to explain`,
@@ -221,7 +230,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       ...dueOn(dietExplain.due_date, today),
     });
   }
-  if (isComp && dietExplain && !FU_CLOSED.has(dietExplain.stage) && hasChart) {
+  if (isComp && dietExplain && !FOLLOWUP_CLOSED.has(dietExplain.status) && hasChart) {
     // Two people, as always: the coach SCHEDULES it, the dietitian DELIVERS it
     // (it is their chart being explained). Naming only the coach left the
     // dietitian unchased for a session she is the one who has to hold.

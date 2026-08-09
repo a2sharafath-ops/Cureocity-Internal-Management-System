@@ -28,7 +28,7 @@ import { notifyRoles, notifyStaff, notifyClient } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { BOOKING_OWNER } from "@/lib/work-owners";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
-import { nextStageKey, stageForConsult, AUTO_WINDOW_DAYS } from "@/lib/live-journey";
+import { nextStageKey, stageForConsult, AUTO_WINDOW_DAYS, JOURNEY_STAGES } from "@/lib/live-journey";
 import { leadScore } from "@/lib/leadscore";
 import {
   EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
@@ -7908,7 +7908,13 @@ export async function journeyHandover(formData: FormData): Promise<{ ok: boolean
     const { data: jrow } = await supabase
       .from("journeys").select("client_id").eq("id", id).maybeSingle();
     const cid = (jrow as { client_id?: string | null } | null)?.client_id ?? null;
-    if (cid) {
+    // Editing the client record is `canWrite`, which this action's own guard
+    // (canEditAppointments) is wider than — it includes the Health Coach, who
+    // cannot edit a client anywhere else in the app. And this REPLACES the
+    // goals captured at intake rather than adding to them. So the visit always
+    // records the goal; the client record is only rewritten by someone allowed
+    // to rewrite it.
+    if (cid && canWrite(p.role)) {
       // clients.goals is text[]; the board edits it as one line. Comma-split so
       // a coach typing "Fat loss, Sleep" round-trips as two goals, not one.
       const goals = goal.split(",").map((g) => g.trim()).filter(Boolean);
@@ -7954,10 +7960,19 @@ export async function journeyAdvance(formData: FormData): Promise<{ ok: boolean;
 // the floor can send it (the doctor/dietitian/trainer running the assessment).
 export async function journeyNotifyCoach(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const p = await getProfile();
-  if (!p || !isStaffRole(p.role)) return { ok: false, error: "Not permitted" };
+  // The people who can actually be at a handover: the clinician finishing a
+  // session, or the desk/coach running the board. It used to accept ANY staff
+  // account — HR and Finance included, neither of whom can even see the board.
+  // The cost was not data but noise: pings at a coach for a client they are not
+  // with, and a `notify_coach` row that makes the board read as though the coach
+  // had been summoned, which hides the three-minute breach.
+  if (!p || !(canConsult(p.role) || canEditAppointments(p.role))) return { ok: false, error: "Not permitted" };
   const id = String(formData.get("id") || "");
   if (!id) return { ok: false, error: "Missing journey" };
-  const stage = String(formData.get("stage") || "") || null;
+  // Free text from the form, and the board reads it back to decide whether the
+  // coach has been called for the stage the client is actually in.
+  const posted = String(formData.get("stage") || "");
+  const stage = JOURNEY_STAGES.some((s) => s.key === posted) ? posted : null;
   const supabase = await createClient();
 
   await logJourneyEvent(supabase, id, "notify_coach", stage, p.name);
