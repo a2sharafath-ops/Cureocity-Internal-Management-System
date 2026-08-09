@@ -71,6 +71,53 @@ export function assessmentOf(key: string): "fitness" | "medical" | "diet" | null
   return stageMeta(key).assessment ?? null;
 }
 
+// ---- auto-sync: consultations drive the board ------------------------------
+//
+// The board is a projection of work the team already logs, not a second data
+// entry. A clinician opening their consultation IS the client arriving at that
+// assessment; completing it IS the handover back to the coach. So each
+// consultation kind maps to a stage on start and another on completion, and the
+// gap between "completed" and the next "started" is exactly the transition wait
+// the SOP's three-minute standard measures.
+//
+// Psychologist is absent deliberately — it is not one of the three core
+// assessments, so a psychology consult never moves the journey.
+
+/** Consultation kind → the stage the client occupies while that consult runs. */
+export const CONSULT_START_STAGE: Record<string, JourneyStageKey> = {
+  Trainer: "fitness",
+  Doctor: "medical",
+  Diet: "diet",
+  Coach: "briefing",
+};
+
+/** Consultation kind → the stage the journey moves to when that consult ends. */
+export const CONSULT_DONE_STAGE: Record<string, JourneyStageKey> = {
+  Trainer: "transition_med",
+  Doctor: "transition_diet",
+  Diet: "review",
+  // The coach's own consult IS the closing review, so finishing it ends the journey.
+  Coach: "done",
+};
+
+/**
+ * The stage a consultation event implies, or null when that kind should leave
+ * the board untouched. Stages are SET, not incremented, so the flow survives
+ * professionals being seen out of order (which the SOP explicitly allows).
+ */
+export function stageForConsult(kind: string, phase: "start" | "complete"): JourneyStageKey | null {
+  const map = phase === "start" ? CONSULT_START_STAGE : CONSULT_DONE_STAGE;
+  return map[kind] ?? null;
+}
+
+/**
+ * How long after creation a journey keeps auto-tracking consultations. The D0
+ * visit is one day, but initial assessments are sometimes split across a couple
+ * of visits — so the window is generous while still preventing a stale journey
+ * from capturing a follow-up consult months later.
+ */
+export const AUTO_WINDOW_DAYS = 14;
+
 // ---- data shapes (a subset of the DB rows) --------------------------------
 export type JourneyRow = {
   id: string;

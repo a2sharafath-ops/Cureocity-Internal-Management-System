@@ -42,7 +42,6 @@ export default async function JourneyPage() {
   const events = (eventsR.data ?? []) as JourneyEvent[];
   const staff = (staffR.data ?? []) as { id: string; name: string; role: string | null }[];
   const staffName = new Map(staff.map((s) => [s.id, s.name]));
-  const coaches = staff.filter((s) => s.role === "Health Coach");
 
   const nowMs = Date.now();
   const kpis = journeyKpis(
@@ -74,7 +73,6 @@ export default async function JourneyPage() {
       <LiveJourneyBoard
         rows={rows}
         kpis={kpis}
-        coaches={coaches.map((c) => ({ id: c.id, name: c.name }))}
         canCoordinate={canEditAppointments(me.role)}
       />
     </>

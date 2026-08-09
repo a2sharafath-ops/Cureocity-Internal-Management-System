@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Chip from "@/components/Chip";
 import SubmitButton from "@/components/SubmitButton";
-import { createWalkIn, journeyHandover, journeyAdvance, journeyNotifyCoach, journeyCancel } from "@/lib/actions";
+import { journeyHandover, journeyAdvance, journeyNotifyCoach, journeyCancel } from "@/lib/actions";
 import {
   stageMeta, isWaitStage, assessmentOf, MAX_WAIT_MS, fmtElapsed, type JourneyKpis,
 } from "@/lib/live-journey";
@@ -80,21 +80,16 @@ function stageChip(row: BoardRow) {
 }
 
 export default function LiveJourneyBoard({
-  rows, kpis, coaches, canCoordinate,
+  rows, kpis, canCoordinate,
 }: {
   rows: BoardRow[];
   kpis: JourneyKpis;
-  coaches: { id: string; name: string }[];
   canCoordinate: boolean;
 }) {
-  const [showAdd, setShowAdd] = useState(false);
   const [handoverId, setHandoverId] = useState<string | null>(null);
-
-  const SOURCES = ["Walk-in", "Referral", "Instagram", "WhatsApp", "Phone Call", "Other"];
 
   // `<form action>` wants a void-returning action; our server actions return
   // { ok, error } (kept for typing + unit tests), so wrap each to drop the value.
-  const addAction = async (fd: FormData) => { await createWalkIn(fd); };
   const handoverAction = async (fd: FormData) => { await journeyHandover(fd); };
   const advanceAction = async (fd: FormData) => { await journeyAdvance(fd); };
   const notifyAction = async (fd: FormData) => { await journeyNotifyCoach(fd); };
@@ -111,35 +106,16 @@ export default function LiveJourneyBoard({
         <KpiCard label="Completed today" value={kpis.done} />
       </div>
 
-      {/* Header + add */}
+      {/* Header. There is deliberately no "add" control: the board is a
+          projection of work already logged in the CRM. A client joins it when a
+          coached package is sold, and moves as consultations start and finish.
+          Adding a second, manual registration path here is what let the board
+          drift out of step with the client record. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontSize: 12, color: "var(--muted)" }}>
           Front Desk → Health Coach → Fitness · Medical · Diet → Review → Front Desk · the coach returns within 3 minutes at every handover.
         </div>
-        <button style={btnPrimary} onClick={() => setShowAdd((v) => !v)}>{showAdd ? "Close" : "+ Walk-in"}</button>
       </div>
-
-      {/* Add walk-in form */}
-      {showAdd && (
-        <form action={addAction} style={{ ...card, padding: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, alignItems: "end" }}>
-          <div><label style={label}>Name</label><input style={input} name="name" placeholder="Walk-in name" /></div>
-          <div><label style={label}>Phone</label><input style={input} name="phone" placeholder="Phone" /></div>
-          <div><label style={label}>Primary goal</label><input style={input} name="goal" placeholder="e.g. Weight loss" /></div>
-          <div>
-            <label style={label}>Source</label>
-            <select style={input} name="source" defaultValue="Walk-in">{SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-          </div>
-          <div>
-            <label style={label}>Coach</label>
-            <select style={input} name="coach_id" defaultValue="">
-              <option value="">On-duty coach</option>
-              {coaches.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div><label style={label}>Concerns / urgency</label><input style={input} name="concerns" placeholder="Optional" /></div>
-          <SubmitButton style={btnPrimary}>Add to journey</SubmitButton>
-        </form>
-      )}
 
       {/* Board */}
       <div style={{ ...card, overflow: "hidden" }}>
@@ -155,7 +131,7 @@ export default function LiveJourneyBoard({
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td style={td} colSpan={5}><span style={{ color: "var(--muted)" }}>No walk-ins in the journey yet — add one with “+ Walk-in”.</span></td></tr>
+              <tr><td style={td} colSpan={5}><span style={{ color: "var(--muted)" }}>Nobody in the journey right now — clients appear here automatically when a Comprehensive, PT or BluePrint package is sold.</span></td></tr>
             )}
             {rows.map((r) => {
               const meta = stageMeta(r.stage);
