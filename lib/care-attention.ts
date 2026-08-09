@@ -11,7 +11,7 @@ import type { Flag } from "@/components/AttentionPanel";
 import { COMPREHENSIVE_CATEGORY, milestoneDates, cyclesFor, DIET_DRAFT_MS, WORKOUT_PLAN_MS, BOOKING_DUE_DAYS } from "@/lib/comprehensive";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 import { GENERATION_MS as BP_GENERATION_MS } from "@/lib/blueprint-sla";
-import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, type AssignRow, type ApptOwnerRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, currentTerm, type AssignRow, type ApptOwnerRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
 import { makeCatOf } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
 import { MARKERS, markerOverdueDays, markerNeedsReferral, type MarkerState } from "@/lib/coach-markers";
@@ -46,7 +46,10 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     sb.from("client_workouts").select("client_id"),
     sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
     sb.from("blueprints").select("client_id, generated"),
-    sb.from("care_protocols").select("client_id, start_date").eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active"),
+    // Every active protocol row, every protocol. Filtering to Comprehensive
+    // meant a PT client's clock came from a package date here while Today's
+    // agenda used their protocol row — the same client, two different day-10s.
+    sb.from("care_protocols").select("client_id, protocol, start_date").eq("status", "active"),
     sb.from("concerns").select("client_id, body, created_at").eq("status", "Open"),
     sb.from("coach_assessments").select("client_id, marker, date, tone, band").order("date", { ascending: false }),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
@@ -160,7 +163,13 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     (bloodBy.get(b.client_id) ?? bloodBy.set(b.client_id, new Map()).get(b.client_id)!).set(b.panel ?? "blueprint", b.submitted);
   }
   const bpGen = new Set(((bp ?? []) as { client_id: string; generated: boolean }[]).filter((r) => r.generated).map((r) => r.client_id));
-  const protoBy = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r]));
+  // ALL of a client's protocol rows, not the last one the database returned.
+  // A renewal adds a second, and keeping one arbitrarily is what made the
+  // number of follow-up cycles change between page loads.
+  const protoBy = new Map<string, { protocol?: string | null; start_date: string | null }[]>();
+  for (const r of (protos ?? []) as { client_id: string; protocol: string | null; start_date: string | null }[]) {
+    (protoBy.get(r.client_id) ?? protoBy.set(r.client_id, []).get(r.client_id)!).push(r);
+  }
   const apptsBy = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   for (const a of (appts ?? []) as { client_id: string; type: string | null; date: string | null; status: string }[]) {
     (apptsBy.get(a.client_id) ?? apptsBy.set(a.client_id, []).get(a.client_id)!).push(a);
@@ -291,7 +300,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
         // package has had time to start — MARKER_BASELINE_GRACE_DAYS — so a
         // client who joined this morning doesn't arrive with six red flags.
         const activeCp = rows.find((r) => r.category === (cats.has("comprehensive") ? "comprehensive" : "training"));
-        const start = protoBy.get(clientId)?.start_date ?? activeCp?.start_date ?? null;
+        const start = currentTerm(rows, protoBy.get(clientId) ?? [], today)?.anchor ?? activeCp?.start_date ?? null;
         const sinceStart = start ? Math.floor((Date.parse(today) - Date.parse(start)) / 86_400_000) : 0;
         if (!last && sinceStart < MARKER_BASELINE_GRACE_DAYS) continue;
 
@@ -314,7 +323,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     const st = statuses.get(clientId);
     if (st && ["blueprint", "comprehensive", "training", "membership"].includes(st.category)) {
       const activeCp = rows.find((r) => r.category === st.category);
-      const pkgStart = protoBy.get(clientId)?.start_date ?? activeCp?.start_date ?? null;
+      const pkgStart = currentTerm(rows, protoBy.get(clientId) ?? [], today)?.anchor ?? activeCp?.start_date ?? null;
       const input: ClientInput = {
         clientId, clientName: who, category: st.category,
         packageName: activeCp?.category ?? st.category,
@@ -351,7 +360,7 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     if (cats.has("comprehensive") || cats.has("training")) {
       if ((sessCount.get(clientId) ?? 0) === 0) {
         const cat = rows.find((r) => r.category === (cats.has("training") ? "training" : "comprehensive"));
-        const start = protoBy.get(clientId)?.start_date ?? cat?.start_date ?? null;
+        const start = currentTerm(rows, protoBy.get(clientId) ?? [], today)?.anchor ?? cat?.start_date ?? null;
         const due = start ? addDaysISO(start, BOOKING_DUE_DAYS) : null;
         if (due && today > due) {
           flags.push({
@@ -373,11 +382,12 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     // with nothing on any queue saying so.
     if (cats.has("comprehensive") || cats.has("training")) {
       const isPt = !cats.has("comprehensive") && cats.has("training");
-      const comp = rows.find((r) => r.category === (isPt ? "training" : "comprehensive"));
-      // Overdue calendar milestones (bookings that never got made).
-      const start = protoBy.get(clientId)?.start_date ?? comp?.start_date ?? null;
+      // Overdue calendar milestones (bookings that never got made). Same term
+      // and same anchor as the client card and Today's agenda.
+      const term = currentTerm(rows, protoBy.get(clientId) ?? [], today);
+      const start = term?.anchor ?? null;
       if (start) {
-        const span = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
+        const span = term?.spanDays ?? 28;
         const dated = isPt
           ? ptMilestoneDates(start, ptCyclesFor(span))
           : milestoneDates(start, cyclesFor(span));

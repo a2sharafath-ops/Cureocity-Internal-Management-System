@@ -210,3 +210,84 @@ export function protocolStartFor(
 ): string | null {
   return protocolStart ?? packageStart ?? joined ?? null;
 }
+
+// ---- which term is a client actually on? -----------------------------------
+//
+// A client can hold more than one active package at once, and renewing adds a
+// second row without closing the first. Every dated engine then picked one for
+// itself, and they picked differently:
+//
+//   • the client card asked for a single care-protocol row and got an error
+//     when there were two, so it silently fell back to a package date;
+//   • the dashboard built a map and kept whichever row the database returned
+//     last — an order nothing guarantees;
+//   • the length of the term came from an arbitrary one of the two, so how many
+//     follow-up cycles a client owed changed between page loads;
+//   • Today's agenda looped over every package row, so a renewed client's whole
+//     milestone set appeared twice.
+//
+// One answer, used everywhere.
+
+/** Same order as PRIORITY in lib/client-status.ts: care outranks facility. */
+export const PACKAGE_PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
+
+export type TermPackage = { category: string | null; start_date: string | null; end_date: string | null };
+export type TermProtocol = { protocol?: string | null; start_date: string | null };
+export type Term = {
+  category: string;
+  /** The date every milestone counts from. */
+  anchor: string;
+  /** Length of the term in days — how many cycles the client owes. */
+  spanDays: number;
+  endDate: string | null;
+};
+
+const cat = (c: string | null | undefined) => (c ?? "").toLowerCase();
+
+/**
+ * The package term covering `today`, and the date its clock starts from.
+ *
+ * Chooses the richest care package the client holds (a gym membership never
+ * governs care), then the term of THAT package which contains today. A client
+ * whose renewal has already started is measured against the new term; one whose
+ * terms have all expired keeps the most recent, because that is the work that
+ * was last owed.
+ *
+ * Returns null when there is nothing dated to measure — no active package, or
+ * one with no start date, which is a data problem rather than a schedule.
+ */
+export function currentTerm(
+  packages: TermPackage[],
+  protocols: TermProtocol[],
+  today: string,
+): Term | null {
+  const active = packages.filter((p) => p.start_date);
+  if (!active.length) return null;
+
+  const category = PACKAGE_PRIORITY.find((p) => active.some((a) => cat(a.category) === p))
+    ?? cat(active[0].category);
+  const mine = active.filter((a) => cat(a.category) === category);
+
+  // The term containing today; failing that, the one that started most
+  // recently — a lapsed client is still measured against their last term.
+  const covering = mine
+    .filter((m) => m.start_date! <= today && (!m.end_date || m.end_date >= today))
+    .sort((a, b) => b.start_date!.localeCompare(a.start_date!))[0];
+  const pkg = covering ?? [...mine].sort((a, b) => b.start_date!.localeCompare(a.start_date!))[0];
+
+  // The care-protocol row for this term, where one exists: the latest that
+  // started on or before the package did, so a renewal's protocol row doesn't
+  // re-anchor the term the client is currently living in.
+  const proto = protocols
+    .filter((r) => r.start_date && (!r.protocol || cat(r.protocol) === category))
+    .filter((r) => r.start_date! <= pkg.start_date!)
+    .sort((a, b) => b.start_date!.localeCompare(a.start_date!))[0];
+
+  const anchor = protocolStartFor(proto?.start_date, pkg.start_date);
+  if (!anchor) return null;
+
+  const days = pkg.end_date
+    ? Math.round((Date.parse(`${pkg.end_date}T00:00:00Z`) - Date.parse(`${anchor}T00:00:00Z`)) / 86_400_000)
+    : 28;
+  return { category, anchor, spanDays: Math.max(28, days), endDate: pkg.end_date ?? null };
+}

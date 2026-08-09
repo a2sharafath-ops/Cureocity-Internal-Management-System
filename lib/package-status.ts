@@ -15,7 +15,7 @@ import { loadClientStatuses } from "@/lib/client-status";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
 import { BOOKING_OWNER, RENEWAL_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners, SETTLED_INVOICE, FOLLOWUP_CLOSED } from "@/lib/work-owners";
 import { onboardingRow, type ClientInput } from "@/lib/onboarding";
-import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, type AssignRow, type ApptOwnerRow, type ApptMatchRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, currentTerm, type AssignRow, type ApptOwnerRow, type ApptMatchRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
 import { makeCatOf } from "@/lib/appt-match";
 
 export type StatusItem = { label: string; detail?: string; href?: string; tone: "warn" | "info" | "neutral"; ownerStaffId?: string; ownerName?: string; ownerCta?: string; chaseRoles?: string[]; chaseWho?: string; sortKey?: string; dueLabel?: string; overdue?: boolean };
@@ -56,7 +56,10 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     sb.from("diet_plans").select("id").eq("client_id", clientId).limit(1),
     sb.from("client_workouts").select("id").eq("client_id", clientId).limit(1),
     sb.from("blueprints").select("generated").eq("client_id", clientId).maybeSingle(),
-    sb.from("care_protocols").select("start_date").eq("client_id", clientId).eq("protocol", COMPREHENSIVE_CATEGORY).eq("status", "active").maybeSingle(),
+    // Every active protocol row, not one. Asking for a single row returned an
+    // ERROR the moment a client had two — a renewal, or Comprehensive plus PT —
+    // and the card silently fell back to a package date. See currentTerm.
+    sb.from("care_protocols").select("protocol, start_date").eq("client_id", clientId).eq("status", "active"),
     // The catalogue, so an appointment booked by service name ("Initial Diet
     // Consultation") resolves to its discipline.
     sb.from("services").select("name, category"),
@@ -122,12 +125,18 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
     if (prev == null || s.day_offset < prev) initialOffsets.set(s.category, s.day_offset);
   }
 
+  // The term this client is actually on, and the date its clock starts. One
+  // answer for the whole card — the anchor and the length used to be re-derived
+  // in three places from whichever row happened to come back first.
+  const protoRows = (proto ?? []) as { protocol?: string | null; start_date: string | null }[];
+  const term = currentTerm(active, protoRows, today);
+
   const st = (await loadClientStatuses(sb, [clientId], today)).get(clientId);
   const allSess = (sess ?? []) as { status: string; date: string }[];
   if (st && ["blueprint", "comprehensive", "training", "membership"].includes(st.category)) {
     const activeCp = active.find((c) => c.category === st.category);
     // The clock starts when the package starts, not when the row was created.
-    const pkgStart = proto?.start_date ?? activeCp?.start_date ?? null;
+    const pkgStart = term?.anchor ?? activeCp?.start_date ?? null;
     const input: ClientInput = {
       clientId, clientName: "", category: st.category,
       packageName: activeCp?.package_name ?? st.category,
@@ -251,8 +260,7 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
       // line needs `total > 0` to say anything, and the 28-day cycle breach only
       // fires once the whole window has run out. So a package could be paid for
       // and sit untouched for four weeks with nothing on any screen saying so.
-      const cat = active.find((c) => c.category === (isPt ? "training" : "comprehensive"));
-      const start = proto?.start_date ?? cat?.start_date ?? null;
+      const start = term?.anchor ?? null;
       const due = start ? addDaysISO(start, BOOKING_DUE_DAYS) : null;
       openNow.push({
         label: "No strength sessions booked",
@@ -269,15 +277,17 @@ export async function getPackageStatus(clientId: string): Promise<PackageStatus 
   // ---- comprehensive calendar milestones ---------------------------------
   // Same fix as the dashboard: PT has a milestone too, and it was invisible.
   if (isComp || isPt) {
-    const comp = active.find((c) => c.category === (isComp ? "comprehensive" : "training"));
-    const start = proto?.start_date ?? comp?.start_date ?? null;
+    // One answer to which term the client is on and when its clock started,
+    // shared with the dashboard and Today's agenda. A renewed client used to
+    // get a different answer on each.
+    const start = term?.anchor ?? null;
     if (start) {
       // Resolve each booking's type to its service category so a manually-booked
       // service ("10th Day Diet Followup") counts against its milestone; and use
       // the catalogue (name/category/day) to build a pre-filled Book link.
       const { data: svcData } = await sb.from("services").select("name, category, day_offset");
       const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
-      const spanDays = comp?.end_date ? Math.max(28, daysBetween(start, comp.end_date)) : 28;
+      const spanDays = term?.spanDays ?? 28;
       const dated = isComp
         ? milestoneDates(start, cyclesFor(spanDays))
         : ptMilestoneDates(start, ptCyclesFor(spanDays));

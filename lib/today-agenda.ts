@@ -14,7 +14,7 @@ import { FOLLOWUP_CLOSED_SQL } from "@/lib/work-owners";
 import { createClient } from "@/lib/supabase/server";
 import { COMPREHENSIVE_CATEGORY, milestoneDates as compMilestones, cyclesFor as compCycles } from "@/lib/comprehensive";
 import { PT_CATEGORY, milestoneDates as ptMilestones, cyclesFor as ptCycles } from "@/lib/pt";
-import { unsatisfiedMilestones } from "@/lib/obligations";
+import { unsatisfiedMilestones, currentTerm } from "@/lib/obligations";
 
 export type AgendaKind = "appointment" | "session" | "followup" | "deadline";
 
@@ -69,7 +69,7 @@ export async function todayAgenda(today: string, viewerStaffId?: string | null):
     sb.from("followups").select("id, client_id, label, due_date, status, clients(id, name)").lte("due_date", today).not("status", "in", FOLLOWUP_CLOSED_SQL).order("due_date"),
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active").in("category", [COMPREHENSIVE_CATEGORY, PT_CATEGORY]),
     sb.from("clients").select("id, name"),
-    sb.from("care_protocols").select("client_id, start_date, status").eq("status", "active"),
+    sb.from("care_protocols").select("client_id, protocol, start_date, status").eq("status", "active"),
   ]);
 
   const nameOf = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
@@ -99,7 +99,10 @@ export async function todayAgenda(today: string, viewerStaffId?: string | null):
 
   // ---- care milestones whose calendar date is today -------------------------
   // (Reassessments / review milestones that are due today but not yet booked.)
-  const protoStart = new Map(((protos ?? []) as { client_id: string; start_date: string | null }[]).map((r) => [r.client_id, r.start_date]));
+  const protoBy = new Map<string, { protocol?: string | null; start_date: string | null }[]>();
+  for (const r of (protos ?? []) as { client_id: string; protocol: string | null; start_date: string | null }[]) {
+    (protoBy.get(r.client_id) ?? protoBy.set(r.client_id, []).get(r.client_id)!).push(r);
+  }
   const milestoneClientIds = Array.from(new Set(((cps ?? []) as { client_id: string }[]).map((c) => c.client_id)));
   let apptsByClient = new Map<string, { type: string | null; date: string | null; status: string }[]>();
   if (milestoneClientIds.length) {
@@ -112,19 +115,28 @@ export async function todayAgenda(today: string, viewerStaffId?: string | null):
   const { data: svcData } = await sb.from("services").select("name, category, day_offset");
   const services = (svcData ?? []) as { name: string; category: string; day_offset: number | null }[];
   const deadlines: AgendaItem[] = [];
+  // ONE term per client, not one per package row.
+  //
+  // This looped over every active package, so a renewed client — whose old row
+  // stays active alongside the new one — had their entire milestone set listed
+  // twice on the agenda, dated from two different starts.
+  const pkgBy = new Map<string, { category: string; start_date: string | null; end_date: string | null }[]>();
   for (const cp of (cps ?? []) as { client_id: string; category: string; start_date: string | null; end_date: string | null }[]) {
-    const start = protoStart.get(cp.client_id) ?? cp.start_date;
-    if (!start) continue;
-    const clientAppts = apptsByClient.get(cp.client_id) ?? [];
-    const spanDays = cp.end_date ? Math.max(28, Math.round((Date.parse(`${cp.end_date}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000)) : 28;
-    const dated = cp.category === PT_CATEGORY
-      ? ptMilestones(start, ptCycles(spanDays))
-      : compMilestones(start, compCycles(spanDays));
+    (pkgBy.get(cp.client_id) ?? pkgBy.set(cp.client_id, []).get(cp.client_id)!).push(cp);
+  }
+  for (const [clientId, pkgs] of pkgBy) {
+    const term = currentTerm(pkgs, protoBy.get(clientId) ?? [], today);
+    if (!term) continue;
+    const start = term.anchor;
+    const clientAppts = apptsByClient.get(clientId) ?? [];
+    const dated = term.category === PT_CATEGORY
+      ? ptMilestones(start, ptCycles(term.spanDays))
+      : compMilestones(start, compCycles(term.spanDays));
     // Shared satisfied-check + Book link; we only surface milestones due *today*.
-    for (const m of unsatisfiedMilestones(cp.client_id, dated, clientAppts, services, today)) {
+    for (const m of unsatisfiedMilestones(clientId, dated, clientAppts, services, today)) {
       if (m.dueDate !== today) continue;
       deadlines.push({
-        id: `${cp.client_id}-${m.gate}`, kind: "deadline", clientId: cp.client_id, clientName: nameOf.get(cp.client_id) ?? "—",
+        id: `${clientId}-${m.gate}`, kind: "deadline", clientId, clientName: nameOf.get(clientId) ?? "—",
         label: `${m.label} due`, time: null, done: false, overdue: false,
         href: m.bookHref,
       });

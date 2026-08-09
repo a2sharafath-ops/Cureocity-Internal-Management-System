@@ -11,7 +11,7 @@
 
 import { MILESTONES, milestoneDates, cyclesFor } from "@/lib/comprehensive";
 import { milestoneDates as ptMilestoneDates, cyclesFor as ptCyclesFor } from "@/lib/pt";
-import { protocolStartFor } from "@/lib/obligations";
+import { protocolStartFor, PACKAGE_PRIORITY } from "@/lib/obligations";
 
 export const RENEWAL_LEAD_DAYS = 7;
 /** Kept for the Day-2 explanation, which is a call, not a milestone. */
@@ -60,7 +60,7 @@ export type ProtocolClient = {
  * Same order as PRIORITY in lib/client-status.ts, which had this right: care
  * packages outrank a facility membership, and the richest care package wins.
  */
-export const PACKAGE_PRIORITY = ["blueprint", "comprehensive", "training", "membership"];
+export { PACKAGE_PRIORITY } from "@/lib/obligations";
 
 export function governingPackage<T extends { category: string | null }>(rows: T[]): T | null {
   if (!rows.length) return null;
