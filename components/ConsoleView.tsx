@@ -11,6 +11,7 @@ import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
 import { sectionsFor, questionBody, answeredIn } from "@/lib/consult-sections";
 import { visibleQuestions, type QConditions } from "@/lib/consult-conditions";
 import { optionsOf, selectedOption, withOption, type QTypes } from "@/lib/answer-input";
+import { carriedAnswers } from "@/lib/shared-answers";
 import AmbientScribe from "@/components/AmbientScribe";
 import DeliverButton from "@/components/DeliverButton";
 
@@ -22,6 +23,25 @@ export type ConsoleHealth = {
   waist: number | null; hip: number | null; measuredOn: string | null;
   inbodySummary: string | null; inbodyPdfUrl: string | null;
   conditions: string | null; goals: string[]; allergies: string[]; bloodStatus: string | null;
+};
+
+/**
+ * Another discipline's completed consultation for this same client.
+ *
+ * Psychology is never among these — counselling notes are held to a different
+ * standard and stay with the psychologist (see supabase/0137).
+ */
+export type OtherConsult = {
+  id: string;
+  kind: string;
+  label: string;
+  icon: string;
+  byName: string | null;
+  completedAt: string | null;
+  summary: string | null;
+  flags: Flag[];
+  /** [question, answer] pairs — what that clinician actually asked. */
+  answers: [string, string][];
 };
 
 const SEVERITY: Record<string, { bg: string; fg: string; label: string }> = {
@@ -41,7 +61,7 @@ const createPrescriptionForm = async (formData: FormData) => {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, conditions, types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, conditions, types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [], otherConsults = [],
 }: {
   id: string;
   kind: string;
@@ -78,6 +98,8 @@ export default function ConsoleView({
   /** WhatsApp readiness — see lib/wati.ts. */
   whatsapp?: { ready: boolean; missing: string[] };
   reports?: ReportRow[];
+  /** This client's completed consultations from the OTHER disciplines. */
+  otherConsults?: OtherConsult[];
   orders?: { test: string; priority: string | null; created_at: string }[];
   prescriptions?: { drug: string; dose: string | null; frequency: string | null; duration: string | null }[];
 }) {
@@ -94,6 +116,12 @@ export default function ConsoleView({
   // Which follow-ups apply right now. Recomputed as the coach types, so
   // answering "yes" to the tobacco question opens the four that hang off it.
   const shown = useMemo(() => visibleQuestions(questions, ans, conditions), [questions, ans, conditions]);
+  // What the rest of the team was already told, matched question by question.
+  // Computed against THIS filtered list, because sex filtering shifts indexes.
+  const carried = useMemo(
+    () => carriedAnswers(questions, otherConsults.map((c) => ({ label: c.label, completedAt: c.completedAt, answers: c.answers }))),
+    [questions, otherConsults],
+  );
   // Counters describe what the coach can actually see. A hidden follow-up
   // sitting in the denominator makes an intake that IS complete read 74/86,
   // which is the kind of number people stop trusting.
@@ -400,6 +428,7 @@ export default function ConsoleView({
   const cap: React.CSSProperties = { fontSize: 10, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".3px" };
 
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [teamOpenId, setTeamOpenId] = useState<string | null>(null);
   const [repOpen, setRepOpen] = useState(reports.length > 0);
 
   // A one-line read of the client, always visible even when the full card is
@@ -498,6 +527,72 @@ export default function ConsoleView({
                 ? `The panel has not been marked as received, but ${onFile} report${onFile === 1 ? " is" : "s are"} on file below. If the results are among them, ask Front Desk to mark the panel received so this stops being chased.`
                 : "The panel was requested and no report has been received. If this consultation depends on it, it may be worth rescheduling."}
             </span>
+          </div>
+        );
+      })()}
+
+      {/* ---- what the rest of the team already found -----------------------
+          The client should not have to tell their history five times, and a
+          finding that shapes the programme should not stay in the workspace
+          that recorded it. So every other discipline's completed consultation
+          for this client is here, before the questionnaire.
+
+          Their FLAGS are shown expanded and unprompted. A summary can wait for
+          a click; "BP 180/110 — refer" cannot, and the whole point of putting
+          this above the intake is that it is read before the client sits down.
+
+          Psychology never appears — see supabase/0137. */}
+      {otherConsults.length > 0 && (() => {
+        const teamFlags = otherConsults.flatMap((c) =>
+          c.flags.filter((f) => f.severity !== "info").map((f) => ({ ...f, from: c.label })));
+        return (
+          <div style={{ ...box, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 16px", flexWrap: "wrap" }}>
+              <b style={{ fontSize: 13 }}>Already seen by the team</b>
+              <span style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, minWidth: 120 }}>
+                {otherConsults.map((c) => c.label).join(" · ")}
+              </span>
+            </div>
+
+            {teamFlags.length > 0 && (
+              <div style={{ padding: "0 16px 10px", display: "grid", gap: 6 }}>
+                {teamFlags.map((f, i) => {
+                  const sev = SEVERITY[f.severity] ?? SEVERITY.info;
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: sev.bg, borderRadius: 8, padding: "7px 11px" }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 800, color: sev.fg, letterSpacing: 0.3 }}>{sev.label.toUpperCase()}</span>
+                      <span style={{ fontSize: 12.5, color: sev.fg, flex: 1, minWidth: 160 }}>{f.text}</span>
+                      <span style={{ fontSize: 11, color: sev.fg, opacity: 0.8 }}>from {f.from}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {otherConsults.map((c) => {
+              const open = teamOpenId === c.id;
+              return (
+                <div key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
+                  <button type="button" onClick={() => setTeamOpenId(open ? null : c.id)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, background: "transparent", border: "none", padding: "10px 16px", cursor: "pointer", textAlign: "left", font: "inherit" }}>
+                    <span style={{ fontSize: 14 }}>{c.icon}</span>
+                    <b style={{ fontSize: 12.5 }}>{c.label}</b>
+                    <span style={{ fontSize: 11.5, color: "var(--muted)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.byName ?? "—"}{c.completedAt ? ` · ${new Date(c.completedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}` : ""}
+                      {c.summary ? ` · ${c.summary.replace(/\s+/g, " ").slice(0, 90)}` : " · no summary written"}
+                    </span>
+                    <span style={{ fontSize: 12, color: "var(--brand-text)", fontWeight: 600, flexShrink: 0 }}>{open ? "Hide" : "Read"}</span>
+                  </button>
+                  {open && (
+                    <div style={{ padding: "0 16px 14px" }}>
+                      {c.summary
+                        ? <div style={{ fontSize: 12.5, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{c.summary}</div>
+                        : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No summary was written for this consultation.</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         );
       })()}
@@ -690,6 +785,31 @@ export default function ConsoleView({
                           placeholder={types?.[q] ? "Add anything they said…" : undefined}
                           onChange={(e) => setAns((p) => { const n = [...p]; n[i] = e.target.value; return n; })}
                           style={{ ...inp, borderColor: empty ? "var(--amber-text)" : "var(--border)" }} />
+                        {/* What a colleague was already told about this.
+                            Offered, never written in: a pre-filled box gets
+                            submitted, and the record would then say this
+                            clinician heard something they never did. "Use this"
+                            is the clinician deciding it still holds — which is
+                            the part that cannot be automated, because answers
+                            like "quit smoking last month" go stale precisely
+                            where it matters most. */}
+                        {(carried.get(i) ?? []).map((c, ci) => (
+                          <div key={ci} style={{ marginTop: 5, display: "flex", alignItems: "flex-start", gap: 8, background: "var(--neutral-bg)", borderRadius: 8, padding: "6px 10px" }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                                {c.from}{c.at ? ` · ${new Date(c.at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}` : ""} asked “{c.asked}”
+                              </div>
+                              <div style={{ fontSize: 12.5, marginTop: 1 }}>{c.answer}</div>
+                            </div>
+                            {status !== "completed" && (
+                              <button type="button"
+                                onClick={() => setAns((p) => { const n = [...p]; n[i] = c.answer; return n; })}
+                                style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+                                Use this
+                              </button>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     );
                   })}

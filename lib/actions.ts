@@ -1370,6 +1370,7 @@ export async function markConsultDone(formData: FormData) {
   await logAudit(p, "Consultation completed", subjName, kind);
   // Closing out the consult is the handover back to the coach.
   await syncJourneyFromConsult(supabase, appt.client_id, kind, "complete", p.name);
+  await notifyCareTeamOfConsult(supabase, appt.client_id, kind, p.staffId ?? null, p.name);
   revalidatePath("/workspace");
   revalidatePath("/appointments");
   revalidatePath("/", "layout");
@@ -1643,6 +1644,7 @@ export async function completeConsultation(formData: FormData) {
   // Handover back to the coach — the console's own close-out path.
   const consultClientId = (row as { client_id?: string | null }).client_id ?? null;
   await syncJourneyFromConsult(supabase, consultClientId, row.kind, "complete", p.name);
+  await notifyCareTeamOfConsult(supabase, consultClientId, row.kind, p.staffId ?? null, p.name);
   revalidatePath("/pro");
   revalidatePath("/appointments");
   revalidatePath("/", "layout");
@@ -7814,6 +7816,66 @@ async function startLiveJourney(
     journey_id: jid, kind: "stage_enter", stage: "front_desk", by_name: actor,
   });
 }
+
+/**
+ * Tell the rest of this client's care team that a consultation has been closed.
+ *
+ * The point is timing, not record-keeping: the trainer seeing the client after
+ * the doctor should know what the doctor found BEFORE the client sits down, and
+ * the console now shows exactly that. Without a nudge nobody knows to look.
+ *
+ * Scoped to the people actually assigned to this client, not to everyone
+ * holding the role — a clinic with four trainers should not tell three of them
+ * about a client they have never met. A notification nobody needs is how people
+ * learn to ignore the bell.
+ *
+ * Psychology is excluded, in step with the read rules: counselling notes stay
+ * with the psychologist, so announcing them to the team would be worse than
+ * useless — it advertises the existence of something the team cannot read.
+ */
+async function notifyCareTeamOfConsult(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clientId: string | null,
+  kind: string,
+  actorStaffId: string | null,
+  actorName: string,
+) {
+  if (!clientId || kind === "Psychologist") return;
+
+  const [{ data: team }, { data: cli }] = await Promise.all([
+    supabase.from("client_assignments").select("discipline, staff_id").eq("client_id", clientId),
+    supabase.from("clients").select("name").eq("id", clientId).maybeSingle(),
+  ]);
+
+  const who = (cli as { name?: string } | null)?.name ?? "A client";
+  const label = CONSULT_LABEL[kind] ?? kind;
+
+  // One notification per person, never to the author, and never about the
+  // psychologist's own assignment slot.
+  const targets = new Set<string>();
+  for (const a of (team ?? []) as { discipline: string; staff_id: string | null }[]) {
+    if (!a.staff_id || a.discipline === "psychologist") continue;
+    if (actorStaffId && a.staff_id === actorStaffId) continue;
+    targets.add(a.staff_id);
+  }
+
+  for (const staffId of targets) {
+    await notifyStaff(supabase, staffId, {
+      title: `${label} done — ${who}`,
+      body: `${actorName} has completed the ${label.toLowerCase()}. Read the summary before your session.`,
+      href: `/clients/${clientId}?tab=timeline`,
+      icon: "🗒️",
+    });
+  }
+}
+
+/** Consultation kind → what a colleague would call it. */
+const CONSULT_LABEL: Record<string, string> = {
+  Doctor: "Medical consultation",
+  Diet: "Diet consultation",
+  Trainer: "Fitness assessment",
+  Coach: "Coach session",
+};
 
 /**
  * Move a client's open journey in step with their consultations. A no-op when

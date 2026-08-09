@@ -4,7 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { canConsult } from "@/lib/roles";
 import { consultQ, consultQFor } from "@/lib/consult-questions";
 import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
-import ConsoleView, { type ConsoleHealth } from "@/components/ConsoleView";
+import ConsoleView, { type ConsoleHealth, type OtherConsult } from "@/components/ConsoleView";
 import { todayISO } from "@/lib/today";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
@@ -180,6 +180,46 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
     rxList = ((rx ?? []) as unknown as { drug: string; dose: string | null; frequency: string | null; duration: string | null }[]);
   }
 
+  // What the rest of the care team already found for this client — shown above
+  // the questionnaire so a clinician reads the picture before the client sits
+  // down, rather than asking them to tell it again.
+  //
+  // Psychology is excluded here as well as in RLS. The policy would already
+  // block it for everyone but the psychologist and the doctor, but relying on
+  // that alone would mean a doctor opening a trainer's console saw counselling
+  // notes in a panel built for shared context. Two locks, one intent.
+  let otherConsults: OtherConsult[] = [];
+  if (row.client_id) {
+    const { data: others } = await supabase
+      .from("consultations")
+      .select("id, kind, summary, ai_summary, flags, answers, by_name, completed_at")
+      .eq("client_id", row.client_id)
+      .eq("status", "completed")
+      .neq("id", row.id)
+      .neq("kind", "Psychologist")
+      .order("completed_at", { ascending: false })
+      .limit(8);
+    const seen = new Set<string>();
+    for (const o of (others ?? []) as {
+      id: string; kind: string; summary: string | null; ai_summary: string | null;
+      flags: unknown; answers: unknown; by_name: string | null; completed_at: string | null;
+    }[]) {
+      // This clinician's own discipline is not "the rest of the team", and a
+      // client can hold several consultations of one kind over time — only the
+      // most recent of each is context; the rest is history.
+      if (o.kind === row.kind || seen.has(o.kind)) continue;
+      seen.add(o.kind);
+      const meta = consultQ(o.kind);
+      otherConsults.push({
+        id: o.id, kind: o.kind, label: meta.label, icon: meta.icon,
+        byName: o.by_name, completedAt: o.completed_at,
+        summary: o.summary ?? o.ai_summary ?? null,
+        flags: (o.flags ?? []) as OtherConsult["flags"],
+        answers: (o.answers ?? []) as [string, string][],
+      });
+    }
+  }
+
   // Vitals, lab orders and prescriptions write rows keyed to a real client. A
   // lead has no clients row, so these were quietly posting a lead id into the
   // clinical tables; every other clinical panel here is already gated the same
@@ -194,6 +234,7 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
       icon={q.icon}
       client={subject}
       questions={q.questions}
+      otherConsults={otherConsults}
       conditions={q.conditions}
       types={q.types}
       intros={q.intros}
