@@ -14,9 +14,27 @@ export const APPT_CATEGORIES = ["Doctor Consultation", "Diet Consultation", "Fit
 
 export type CatOf = (type: string | null | undefined) => string | null;
 
-/** Build a resolver from a services catalogue (name → category). */
+/**
+ * Build a resolver from a services catalogue (name → category).
+ *
+ * Two catalogue rows can share a name — the same service filed under two
+ * categories, which happens when someone adds it twice. The map used to take
+ * whichever row Postgres returned last, an order nothing guarantees, so the
+ * resolver could land on a category no milestone knows about and matching would
+ * silently stop working for that discipline.
+ *
+ * So a duplicate name resolves to the category the rest of the system actually
+ * uses, and only falls back to the arbitrary one when neither is recognised.
+ * This does not make a duplicated service correct — it stops one from breaking
+ * bookings while nobody has noticed it yet.
+ */
 export function makeCatOf(services: { name: string; category: string }[]): CatOf {
-  const byName = new Map(services.map((s) => [s.name, s.category]));
+  const known = new Set(APPT_CATEGORIES);
+  const byName = new Map<string, string>();
+  for (const s of services) {
+    const prev = byName.get(s.name);
+    if (prev === undefined || (!known.has(prev) && known.has(s.category))) byName.set(s.name, s.category);
+  }
   return (type) => (type ? byName.get(type) ?? type : null);
 }
 

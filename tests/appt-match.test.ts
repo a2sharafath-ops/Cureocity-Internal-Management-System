@@ -105,3 +105,27 @@ describe("milestoneBookHref", () => {
     expect(href).toContain("back=timeline");
   });
 });
+
+describe("makeCatOf — a service name filed under two categories", () => {
+  // Real case: "Initial Psychology Consultation" existed under both
+  // "Counselling" (the category milestones use) and "Psychology" (a stray).
+  // Whichever row came back last won, so psychology bookings could resolve to a
+  // category nothing matches on.
+  const dup = [
+    { name: "Initial Psychology Consultation", category: "Psychology" },
+    { name: "Initial Psychology Consultation", category: "Counselling" },
+  ];
+
+  it("prefers the category the rest of the system books against", () => {
+    expect(makeCatOf(dup)("Initial Psychology Consultation")).toBe("Counselling");
+  });
+
+  it("gives the same answer whichever order the rows arrive in", () => {
+    expect(makeCatOf([...dup].reverse())("Initial Psychology Consultation")).toBe("Counselling");
+  });
+
+  it("still resolves a name that only exists under an unknown category", () => {
+    const only = [{ name: "Sound Bath", category: "Wellbeing" }];
+    expect(makeCatOf(only)("Sound Bath")).toBe("Wellbeing");
+  });
+});
