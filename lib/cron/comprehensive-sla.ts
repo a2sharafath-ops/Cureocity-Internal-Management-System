@@ -16,6 +16,7 @@ import {
   bookingTaskTitle, reassessmentOutOfOrder,
 } from "@/lib/comprehensive";
 import { loadCatOf, serviceForMilestone } from "@/lib/appt-match";
+import { resolvableGates, closeResolvedGates, type OpenGate } from "@/lib/cron/sla-resolve";
 import { nudgeLink } from "@/lib/notification-target";
 import { notifyRoles } from "@/lib/notify";
 
@@ -27,6 +28,8 @@ export type SlaSweepResult = {
   booked: number;
   /** doctor reviews sitting ahead of an incomplete reassessment */
   outOfOrder: number;
+  /** alerts retired because the work behind them is now done */
+  resolved: number;
 };
 
 const MANAGEMENT = ["Manager", "Administrator", "Super Admin"];
@@ -43,7 +46,7 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     consolidated_at: string | null; approved_at: string | null;
     hold_since: string | null; hold_ms: number | null;
   }[];
-  if (!protos.length) return { scanned: 0, warnings: 0, breaches: 0, booked: 0, outOfOrder: 0 };
+  if (!protos.length) return { scanned: 0, warnings: 0, breaches: 0, booked: 0, outOfOrder: 0, resolved: 0 };
 
   const ids = protos.map((p) => p.client_id);
   const [
@@ -55,7 +58,10 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
       .select("client_id, kind, completed_at, approved_at, prescription_needed").in("client_id", ids),
     supabase.from("clients").select("id, name").in("id", ids),
     supabase.from("blueprint_sla_events")
-      .select("client_id, gate, kind").eq("protocol", COMPREHENSIVE_CATEGORY).in("client_id", ids),
+      // Only alerts still open. A gate that breaks again after being fixed is
+      // news, so a resolved row must not go on suppressing the notification.
+      .select("client_id, gate, kind").is("resolved_at", null)
+      .eq("protocol", COMPREHENSIVE_CATEGORY).in("client_id", ids),
     // The plan is the document now; diet_charts is retired. `created_at` is
     // when the dietitian first saved it — the equivalent of the old drafted_at.
     supabase.from("diet_plans").select("client_id, created_at").in("client_id", ids),
@@ -134,6 +140,11 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
   }
 
   const events: { client_id: string; protocol: string; gate: string; kind: string; due_at: string }[] = [];
+  // Gates this run found still late or still due. Everything already on the
+  // ledger and NOT in here is finished work, and gets retired below — without
+  // which the Whiteboard shows a chart that was an hour late as red for the
+  // rest of the package, and asks the coach to explain it daily.
+  const stillOpen: OpenGate[] = [];
   const newTasks: Record<string, unknown>[] = [];
   let warnings = 0, breaches = 0, booked = 0, outOfOrder = 0;
 
@@ -188,6 +199,8 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
     };
 
     for (const g of [...report.turnarounds, ...report.milestones]) {
+      const live = g.clock.status === "due_soon" || g.clock.status === "breached";
+      if (live) stillOpen.push({ client_id: p.client_id, gate: g.gate });
       if (g.clock.status === "due_soon") await fire(g, "warning");
       if (g.clock.status === "breached") await fire(g, "breach");
     }
@@ -236,10 +249,15 @@ export async function runComprehensiveSla(supabase: Sb, now: number = Date.now()
 
   if (newTasks.length) await supabase.from("tasks").insert(newTasks);
 
+  const resolved = await closeResolvedGates(
+    supabase,
+    resolvableGates((seen ?? []) as { client_id: string; gate: string }[], stillOpen),
+  );
+
   if (events.length) {
     await supabase.from("blueprint_sla_events")
       .upsert(events, { onConflict: "client_id,protocol,gate,kind", ignoreDuplicates: true });
   }
 
-  return { scanned: protos.length, warnings, breaches, booked, outOfOrder };
+  return { scanned: protos.length, warnings, breaches, booked, outOfOrder, resolved };
 }

@@ -16,11 +16,12 @@ import {
   ptDeadline, PT_SESSIONS_PER_CYCLE, BOOKING_DUE_DAYS, CYCLE_DAYS, addDaysISO,
 } from "@/lib/pt";
 import { loadCatOf, serviceForMilestone } from "@/lib/appt-match";
+import { resolvableGates, closeResolvedGates, type OpenGate } from "@/lib/cron/sla-resolve";
 import { notifyRoles } from "@/lib/notify";
 
 type Sb = { from: (t: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type PtSweepResult = { scanned: number; booked: number; overdueSessions: number; unbooked: number };
+export type PtSweepResult = { scanned: number; booked: number; overdueSessions: number; unbooked: number; resolved: number };
 
 const MANAGEMENT = ["Manager", "Administrator", "Super Admin"];
 
@@ -33,7 +34,7 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
     .eq("protocol", PT_CATEGORY)
     .eq("status", "active");
   const protos = (protoRows ?? []) as { client_id: string; start_date: string; hold_since: string | null }[];
-  if (!protos.length) return { scanned: 0, booked: 0, overdueSessions: 0, unbooked: 0 };
+  if (!protos.length) return { scanned: 0, booked: 0, overdueSessions: 0, unbooked: 0, resolved: 0 };
 
   const ids = protos.map((p) => p.client_id);
   const [{ data: clients }, { data: apptRows }, { data: sessRows }, { data: taskRows }, { data: cpRows }, { data: seenRows }] =
@@ -43,7 +44,7 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
       supabase.from("sessions").select("client_id, status").in("client_id", ids),
       supabase.from("tasks").select("client_id, title").in("client_id", ids).neq("status", "done"),
       supabase.from("client_packages").select("client_id, package_id").in("client_id", ids).eq("category", PT_CATEGORY),
-      supabase.from("blueprint_sla_events").select("client_id, gate, kind").eq("protocol", PT_CATEGORY).in("client_id", ids),
+      supabase.from("blueprint_sla_events").select("client_id, gate, kind").is("resolved_at", null).eq("protocol", PT_CATEGORY).in("client_id", ids),
     ]);
 
   const nameOf = new Map(((clients ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]));
@@ -83,6 +84,10 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
   }
   const openTaskTitles = new Set(((taskRows ?? []) as { client_id: string; title: string }[]).map((t) => `${t.client_id}|${t.title}`));
   const seen = new Set(((seenRows ?? []) as { client_id: string; gate: string; kind: string }[]).map((e) => `${e.client_id}|${e.gate}|${e.kind}`));
+  // Gates still behind after this run. Anything on the ledger and not in here
+  // is caught up, and is retired at the end — otherwise the Whiteboard keeps
+  // showing it red long after the sessions were done.
+  const stillOpen: OpenGate[] = [];
 
   const newTasks: Record<string, unknown>[] = [];
   const events: Record<string, unknown>[] = [];
@@ -121,6 +126,7 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
       if (today >= bookBy && !seen.has(`${p.client_id}|sessions_unbooked|breach`)) {
         seen.add(`${p.client_id}|sessions_unbooked|breach`);
         events.push({ client_id: p.client_id, protocol: PT_CATEGORY, gate: "sessions_unbooked", kind: "breach", due_at: `${bookBy}T00:00:00Z` });
+        stillOpen.push({ client_id: p.client_id, gate: "sessions_unbooked" });
         unbooked++;
         await notifyRoles(supabase, ["Front Desk", "Fitness Trainer", ...MANAGEMENT], {
           title: `No sessions booked — ${name}`,
@@ -138,6 +144,7 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
       if (today < deadline) break;                                  // future cycles not due yet
       if (done >= PT_SESSIONS_PER_CYCLE * cycle) continue;          // this cycle's quota met
       const gate = cycles > 1 ? `sessions#${cycle}` : "sessions";
+      stillOpen.push({ client_id: p.client_id, gate });
       if (seen.has(`${p.client_id}|${gate}|breach`)) continue;
       seen.add(`${p.client_id}|${gate}|breach`);
       events.push({ client_id: p.client_id, protocol: PT_CATEGORY, gate, kind: "breach", due_at: `${deadline}T00:00:00Z` });
@@ -157,5 +164,10 @@ export async function runPtSla(supabase: Sb, now: number = Date.now()): Promise<
       .upsert(events, { onConflict: "client_id,protocol,gate,kind", ignoreDuplicates: true });
   }
 
-  return { scanned: protos.length, booked, overdueSessions, unbooked };
+  const resolved = await closeResolvedGates(
+    supabase,
+    resolvableGates((seenRows ?? []) as { client_id: string; gate: string }[], stillOpen),
+  );
+
+  return { scanned: protos.length, booked, overdueSessions, unbooked, resolved };
 }

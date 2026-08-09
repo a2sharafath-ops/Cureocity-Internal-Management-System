@@ -40,7 +40,11 @@ export default async function WhiteboardSection({ me, heading = false }: { me: {
     supabase.from("client_packages").select("client_id, category, status").eq("status", "active"),
     supabase.from("client_assignments").select("client_id, discipline, staff_id"),
     supabase.from("staff").select("id, name, role"),
-    supabase.from("blueprint_sla_events").select("client_id, protocol").eq("kind", "breach"),
+    // Open alerts only. This read every breach ever recorded, so a chart
+    // written an hour late showed "Care turnaround overdue" in red for the
+    // rest of the package — and the board asks for a reason against each
+    // alert, in every new session, so the coach answered for it daily.
+    supabase.from("blueprint_sla_events").select("client_id, protocol").eq("kind", "breach").is("resolved_at", null),
   ]);
 
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; dob: string | null; gender: string | null; conditions: string | null; goals: string[] | null }[];

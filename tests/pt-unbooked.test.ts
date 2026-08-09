@@ -22,6 +22,10 @@ function fakeSb(tables: Record<string, unknown[]>, captured: Record<string, unkn
     const res = { data: tables[table] ?? [], error: null };
     const chain: Record<string, unknown> = {
       select: () => chain, eq: () => chain, in: () => chain, neq: () => chain,
+      is: () => chain, order: () => chain,
+      // The sweep now retires alerts whose work is done; record the update so a
+      // test can assert on it, and keep the chain going.
+      update: (patch: unknown) => { (captured[`${table}:update`] ??= []).push(patch); return chain; },
       insert: (rows: unknown[]) => { (captured[table] ??= []).push(...rows); return Promise.resolve({ error: null }); },
       upsert: (rows: unknown[]) => { (captured[table] ??= []).push(...rows); return Promise.resolve({ error: null }); },
       then: (ok: (v: unknown) => unknown) => Promise.resolve(res).then(ok),
