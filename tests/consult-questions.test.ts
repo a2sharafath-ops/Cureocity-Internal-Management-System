@@ -38,7 +38,9 @@ describe("sex-specific questionnaire filtering", () => {
   });
 
   it("leaves questionnaires with no sex-specific items untouched", () => {
-    for (const kind of ["Diet", "Trainer", "Coach", "Psychologist"]) {
+    // Coach is deliberately absent: it gained four cycle/menopause questions
+    // when the clinic's full coaching flow replaced the nine-question stub.
+    for (const kind of ["Diet", "Trainer", "Psychologist"]) {
       const base = consultQ(kind).questions;
       expect(consultQFor(kind, "Male").questions).toEqual(base);
       expect(consultQFor(kind, "Female").questions).toEqual(base);

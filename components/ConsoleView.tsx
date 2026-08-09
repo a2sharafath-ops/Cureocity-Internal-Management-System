@@ -6,8 +6,11 @@ import { saveConsultSession, addVitals, createOrder, createPrescription, aiInbod
 import FileUploadForm from "@/components/FileUploadForm";
 import SummaryEditor from "@/components/SummaryEditor";
 import { deriveFlags, labsFromAnswers } from "@/lib/auto-flags";
+import { coachSignals } from "@/lib/coach-signals";
 import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
 import { sectionsFor, questionBody, answeredIn } from "@/lib/consult-sections";
+import { visibleQuestions, type QConditions } from "@/lib/consult-conditions";
+import { optionsOf, selectedOption, withOption, type QTypes } from "@/lib/answer-input";
 import AmbientScribe from "@/components/AmbientScribe";
 import DeliverButton from "@/components/DeliverButton";
 
@@ -38,7 +41,7 @@ const createPrescriptionForm = async (formData: FormData) => {
 };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [],
+  id, kind, label, icon, client, questions, conditions, types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [],
 }: {
   id: string;
   kind: string;
@@ -46,6 +49,12 @@ export default function ConsoleView({
   icon: string;
   client: { id: string; name: string; code: string | null; isLead?: boolean };
   questions: string[];
+  /** Follow-ups that only apply once an earlier answer opens them. */
+  conditions?: QConditions;
+  /** Questions answered by tapping a chip rather than typing. */
+  types?: QTypes;
+  /** What the clinician says to open each section, keyed by heading. */
+  intros?: Record<string, string>;
   answers: [string, string][];
   flags: Flag[];
   summary: string | null;
@@ -82,7 +91,14 @@ export default function ConsoleView({
   const amap = new Map(answers.map(([q, a]) => [q, a]));
   // Controlled answers → live unfilled tracker.
   const [ans, setAns] = useState<string[]>(questions.map((q) => amap.get(q) ?? ""));
-  const filled = ans.filter((a) => a.trim()).length;
+  // Which follow-ups apply right now. Recomputed as the coach types, so
+  // answering "yes" to the tobacco question opens the four that hang off it.
+  const shown = useMemo(() => visibleQuestions(questions, ans, conditions), [questions, ans, conditions]);
+  // Counters describe what the coach can actually see. A hidden follow-up
+  // sitting in the denominator makes an intake that IS complete read 74/86,
+  // which is the kind of number people stop trusting.
+  const askable = shown.filter(Boolean).length;
+  const filled = ans.filter((a, i) => shown[i] && a.trim()).length;
 
   // Sections are derived from the question text ("Labs — Fasting glucose"), so
   // an 85-question intake becomes a dozen navigable groups without the question
@@ -146,12 +162,18 @@ export default function ConsoleView({
       const v = Number(t);
       return Number.isFinite(v) ? v : null;
     };
-    return deriveFlags({
+    const measured = deriveFlags({
       vitals: { systolic: num(vit.systolic), diastolic: num(vit.diastolic), pulse: num(vit.pulse), spo2: num(vit.spo2), temp_c: num(vit.temp_c) },
       inbody: { bmi: health?.bmi ?? null, bodyFat: health?.bodyFat ?? null, visceral: health?.visceral ?? null },
       labs: labsFromAnswers(answered),
       gender: health?.gender ?? null,
-    }).filter((s) => !fl.some((f) => f.text === s.text));   // hide once accepted
+    });
+    // What the coaching conversation itself raised — a PAR-Q positive, a sleep
+    // apnoea triad, which instruments this client actually needs. Coach only:
+    // the rules read the coaching question bank, so they say nothing useful
+    // about a doctor's or dietitian's intake.
+    const spoken = kind === "Coach" ? coachSignals(answered) : [];
+    return [...spoken, ...measured].filter((s) => !fl.some((f) => f.text === s.text));   // hide once accepted
   })();
 
   // Quick prescription (single drug) — Doctor tool. Both this and the lab-order
@@ -504,7 +526,7 @@ export default function ConsoleView({
         {/* Section rail — where am I, and what's left. */}
         {grouped && (
           <aside style={{ ...box, padding: "10px 8px", position: "sticky", top: 12, maxHeight: "calc(100vh - 24px)", overflowY: "auto" }}>
-            <div style={{ ...cap, padding: "2px 8px 8px" }}>{filled}/{questions.length} answered</div>
+            <div style={{ ...cap, padding: "2px 8px 8px" }}>{filled}/{askable} answered</div>
             {sections.map((s) => {
               const done = answeredIn(s, ans);
               const all = done === s.indices.length;
@@ -548,14 +570,15 @@ export default function ConsoleView({
           <div style={{ ...box, padding: "14px 18px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontWeight: 700 }}>Intake questionnaire</div>
             <span style={{ flex: 1 }} />
-            <span style={{ background: filled === questions.length ? "var(--green-bg)" : "var(--amber-bg)", color: filled === questions.length ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700 }}>
-              {filled}/{questions.length} answered
+            <span style={{ background: filled === askable ? "var(--green-bg)" : "var(--amber-bg)", color: filled === askable ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700 }}>
+              {filled}/{askable} answered
             </span>
           </div>
 
           {sections.map((s, si) => {
             const isOpen = !grouped || open[s.title];
-            const done = answeredIn(s, ans);
+            const askableHere = s.indices.filter((i) => shown[i]);
+            const done = askableHere.filter((i) => (ans[i] ?? "").trim()).length;
             return (
               <section key={s.title || "all"} id={`sec-${si}-${slug(s.title)}`} style={{ ...box, scrollMarginTop: 12 }}>
                 {grouped && (
@@ -563,19 +586,31 @@ export default function ConsoleView({
                     style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, background: "transparent", border: "none", padding: "12px 18px", cursor: "pointer", textAlign: "left" }}>
                     <span style={{ fontSize: 11, color: "var(--muted)", width: 10, flexShrink: 0 }}>{isOpen ? "▾" : "▸"}</span>
                     <b style={{ fontSize: 13.5, flex: 1, minWidth: 0 }}>{s.title}</b>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: done === s.indices.length ? "var(--green-text)" : "var(--muted)" }}>
-                      {done}/{s.indices.length}
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: done === askableHere.length ? "var(--green-text)" : "var(--muted)" }}>
+                      {done}/{askableHere.length}
                     </span>
                   </button>
                 )}
                 {/* Hidden, never unmounted: a collapsed section's textareas must
                     stay in the form or saving would blank those answers. */}
                 <div style={{ display: isOpen ? "block" : "none", padding: grouped ? "0 18px 14px" : "14px 18px" }}>
+                  {/* The line the clinician opens the section with. It is what
+                      turns "do you smoke" from an audit into a conversation, so
+                      it is shown, not buried in a handbook nobody reopens. */}
+                  {intros?.[s.title] && (
+                    <p style={{ margin: "0 0 12px", fontSize: 12.5, lineHeight: 1.55, color: "var(--muted)", fontStyle: "italic", borderLeft: "2px solid var(--border)", paddingLeft: 10 }}>
+                      “{intros[s.title]}”
+                    </p>
+                  )}
                   {s.indices.map((i) => {
                     const q = questions[i];
                     const empty = !ans[i]?.trim();
                     return (
-                      <div key={i} style={{ marginBottom: 12 }}>
+                      // Hidden rather than unmounted: the a_<n>/q_<n> pairs must
+                      // stay in the form (the server reads them in sequence),
+                      // and a follow-up already answered keeps its answer if the
+                      // parent later changes.
+                      <div key={i} style={{ marginBottom: 12, display: shown[i] ? "block" : "none" }}>
                         <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>
                           {i + 1}. {questionBody(q, s.title)}
                           {empty && <span style={{ color: "var(--amber-text)", fontWeight: 500 }}> · unfilled</span>}
@@ -587,7 +622,35 @@ export default function ConsoleView({
                             and saving — every answer silently attached to the
                             wrong question. */}
                         <input form={FORM} type="hidden" name={`q_${i}`} value={q} />
+                        {/* Chips write the first word of the answer; the box
+                            below stays free text, because "No, only socially"
+                            is the answer that matters and no button says it. */}
+                        {(() => {
+                          const ty = types?.[q];
+                          if (!ty) return null;
+                          const opts = optionsOf(ty);
+                          const sel = selectedOption(ans[i] ?? "", opts);
+                          return (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6 }}>
+                              {opts.map((o) => {
+                                const on = sel === o;
+                                return (
+                                  <button key={o} type="button"
+                                    onClick={() => setAns((p) => { const n = [...p]; n[i] = withOption(n[i] ?? "", opts, o); return n; })}
+                                    style={{
+                                      border: `1px solid ${on ? "var(--ink)" : "var(--border)"}`,
+                                      background: on ? "var(--ink)" : "#fff", color: on ? "#fff" : "var(--ink)",
+                                      borderRadius: 999, padding: ty.kind === "scale" ? "3px 0" : "3px 12px",
+                                      minWidth: ty.kind === "scale" ? 30 : undefined,
+                                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    }}>{o}</button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                         <textarea form={FORM} name={`a_${i}`} rows={2} value={ans[i]}
+                          placeholder={types?.[q] ? "Add anything they said…" : undefined}
                           onChange={(e) => setAns((p) => { const n = [...p]; n[i] = e.target.value; return n; })}
                           style={{ ...inp, borderColor: empty ? "var(--amber-text)" : "var(--border)" }} />
                       </div>
@@ -610,7 +673,7 @@ export default function ConsoleView({
               </>
             )}
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{answeredQA.length} answered · {questions.length - answeredQA.length} left</span>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{answeredQA.length} answered · {Math.max(0, askable - answeredQA.length)} left</span>
           </div>
 
           {qDone && (

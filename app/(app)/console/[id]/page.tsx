@@ -194,6 +194,9 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
       icon={q.icon}
       client={subject}
       questions={q.questions}
+      conditions={q.conditions}
+      types={q.types}
+      intros={q.intros}
       answers={(row.answers ?? []) as [string, string][]}
       // Vitals typed but never saved — restored so a reload doesn't lose them.
       draftVitals={((row.draft ?? null) as { vitals?: Record<string, string> } | null)?.vitals ?? null}
