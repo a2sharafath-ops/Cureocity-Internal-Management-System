@@ -457,10 +457,18 @@ export default function DietAssessmentBuilder({
           style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} />
       </div>
 
-      {/* ---- 9. GAPS ---- */}
+      {/* ---- 9. GAPS ----
+          Headed by the step this list is actually blocking, which depends on
+          where the document has got to. A reviewer told "before this can go for
+          review" is being described a step that already happened, and is left
+          to work out why their Approve button is greyed out. */}
       {gaps.length > 0 && (
         <div style={{ ...box, padding: 14, marginBottom: 12, background: "var(--red-bg)" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>Before this can go for review</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>
+            {status === "draft" ? "Before this can go for review"
+              : status === "in_review" ? "Before this can be approved"
+                : "Before this can be sent to the client"}
+          </div>
           <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red-text)", fontSize: 12.5 }}>
             {gaps.map((g, i) => <li key={i} style={{ marginBottom: 3 }}>{g}</li>)}
           </ul>

@@ -340,7 +340,13 @@ export default function DietPlanBuilder({
       {/* ---- PROBLEMS ---- */}
       {problems.length > 0 && (
         <div style={{ ...box, padding: 14, marginBottom: 12, background: "var(--red-bg)" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>Resolve before this chart can be approved or sent</div>
+          {/* Named by the step being blocked right now, rather than listing
+              every step it could block — the reader only has one next move. */}
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>
+            {status === "draft" ? "Resolve before this chart can go for review"
+              : status === "in_review" ? "Resolve before this chart can be approved"
+                : "Resolve before this chart can be sent to the client"}
+          </div>
           <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red-text)", fontSize: 12.5 }}>
             {problems.map((p, i) => <li key={i} style={{ marginBottom: 3 }}>{p}</li>)}
           </ul>
