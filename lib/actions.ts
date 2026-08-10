@@ -7191,6 +7191,95 @@ async function planProblemsFor(
   });
 }
 
+// ---------------------------------------------------------------------------
+// The dish library — costed recipes behind the diet chart.
+// ---------------------------------------------------------------------------
+
+/** Authoring a recipe is authoring nutrition: the same gate as the chart. */
+async function dishGuard() {
+  const p = await getProfile();
+  if (!p || !canWriteNutrition(p.role)) return null;
+  return p;
+}
+
+export async function saveDish(formData: FormData): Promise<{ error?: string; id?: string }> {
+  const p = await dishGuard();
+  if (!p) return { error: "Not authorized." };
+  const name = String(formData.get("name") || "").trim();
+  if (!name) return { error: "The dish needs a name." };
+
+  const num = (k: string) => {
+    const v = String(formData.get(k) || "").trim();
+    if (!v) return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  type Item = { food_code: string | null; name: string; raw_g: number | string };
+  let items: Item[] = [];
+  try {
+    items = (JSON.parse(String(formData.get("items") || "[]")) as Item[])
+      .filter((i) => i && String(i.name ?? "").trim());
+  } catch { return { error: "Could not read the ingredients." }; }
+
+  const supabase = await createClient();
+  const row = {
+    name,
+    cuisine: String(formData.get("cuisine") || "").trim() || null,
+    servings: num("servings"),
+    cooked_g: num("cooked_g"),
+    serving_label: String(formData.get("serving_label") || "").trim() || null,
+    notes: String(formData.get("notes") || "").trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const id = String(formData.get("id") || "");
+  let dishId = id;
+  if (id) {
+    const { error } = await supabase.from("dishes").update(row).eq("id", id);
+    if (error) return { error: error.message };
+    // Ingredients are replaced wholesale rather than diffed: a recipe is a
+    // single statement of what goes in, and a half-applied edit would be a
+    // recipe nobody wrote.
+    await supabase.from("dish_items").delete().eq("dish_id", id);
+  } else {
+    const { data, error } = await supabase.from("dishes")
+      .insert({ ...row, created_by: p.name }).select("id").single();
+    if (error) return { error: error.message };
+    dishId = (data as { id: string }).id;
+  }
+
+  if (items.length) {
+    const { error } = await supabase.from("dish_items").insert(items.map((i, seq) => ({
+      dish_id: dishId,
+      food_code: i.food_code || null,
+      name: String(i.name).trim(),
+      raw_g: Number(i.raw_g) || 0,
+      seq,
+    })));
+    if (error) return { error: error.message };
+  }
+
+  await logAudit(p, id ? "Dish updated" : "Dish created", name,
+    `${items.length} ingredient${items.length === 1 ? "" : "s"}`);
+  revalidatePath("/workspace");
+  return { id: dishId };
+}
+
+export async function deleteDish(formData: FormData) {
+  const p = await dishGuard();
+  if (!p) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const supabase = await createClient();
+  // The name is read before the row goes, so the audit line says which dish
+  // was removed rather than an id nobody can look up afterwards.
+  const { data: gone } = await supabase.from("dishes").select("name").eq("id", id).single();
+  await supabase.from("dishes").delete().eq("id", id);
+  await logAudit(p, "Dish deleted", (gone as { name?: string } | null)?.name ?? id, null);
+  revalidatePath("/workspace");
+}
+
 export async function submitDietPlan(formData: FormData) {
   const p = await planGuard();
   if (!p) return;

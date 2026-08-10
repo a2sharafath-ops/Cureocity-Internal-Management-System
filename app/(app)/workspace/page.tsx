@@ -26,6 +26,8 @@ import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner
 import { loadCatOf } from "@/lib/appt-match";
 
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
+import DishLibrary, { type DishRow } from "@/components/DishLibrary";
+import { type Food } from "@/lib/nutrition";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import { deletable } from "@/lib/consult-lifecycle";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
@@ -493,6 +495,29 @@ export default async function WorkspacePage(
     recipes = (rc ?? []) as RecipeRow[];
   }
 
+  // The dish library carries the whole food table with it: matching an
+  // ingredient has to happen as the dietitian types, and a round trip per
+  // keystroke would make that unusable. It is a few hundred rows of reference
+  // data, loaded only on the tab that needs it.
+  let dishes: DishRow[] = [];
+  let foods: Food[] = [];
+  if (tab === "dishes") {
+    const [{ data: dsh }, { data: fds }] = await Promise.all([
+      supabase.from("dishes")
+        .select("id, name, cuisine, cooked_g, servings, serving_label, notes, dish_items(food_code, name, raw_g, seq)")
+        .order("name"),
+      supabase.from("foods")
+        .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
+        .order("name"),
+    ]);
+    type Raw = Omit<DishRow, "items"> & { dish_items: DishRow["items"] | null };
+    dishes = ((dsh ?? []) as unknown as Raw[]).map(({ dish_items, ...d }) => ({
+      ...d,
+      items: [...(dish_items ?? [])].sort((a, b) => a.seq - b.seq),
+    }));
+    foods = (fds ?? []) as Food[];
+  }
+
   // Summaries + consolidated Blueprint sign-off.
   let consultSummaries: ConsultSummary[] = [];
   let consolidated: ConsolidatedRow[] = [];
@@ -675,7 +700,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
@@ -924,6 +949,11 @@ export default async function WorkspacePage(
 
       {/* ---- RECIPES (dietitian) ---- */}
       {tab === "recipes" && <RecipeLibrary recipes={recipes} />}
+
+      {/* ---- DISH LIBRARY (dietitian) ---- */}
+      {tab === "dishes" && (
+        <DishLibrary dishes={dishes} foods={foods} canEdit={!readOnly && canWriteNutrition(me.role)} />
+      )}
 
     </div>
   );

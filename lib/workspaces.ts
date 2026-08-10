@@ -133,6 +133,9 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
     { key: "concerns", label: "Concerns" },
     { key: "board", label: "MDT board" },
     { key: "recipes", label: "Recipes" },
+    // The costed recipe library: ingredients in grams against the ICMR food
+    // table, so a chart's calories are calculated rather than recalled.
+    { key: "dishes", label: "Dish library" },
     { key: "library", label: "Resource library" },
   ],
   trainer: withRoleTabs([
