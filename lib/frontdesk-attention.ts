@@ -81,10 +81,16 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
       detail: `${b.panel === "comprehensive" ? "Comprehensive" : "BluePrint"} panel · ${coach ? `follow-up owed by ${coach.name}` : "chase the client"}`,
       href: `/clients/${b.client_id}`, cta: "View",
       ...waitingSince(b.requested_at, today),
-      dedupeKey: `blood:${b.client_id}`,
+      // The PANEL belongs in the key. A client can owe a Comprehensive panel
+      // and a BluePrint panel at once, and the clinical queue raises its own
+      // `blood:<clientId>` for the comprehensive one. Keyed by client alone,
+      // the dashboard's dedupe kept whichever came first (care flags are merged
+      // ahead of these) and silently discarded the other — so the BluePrint
+      // panel was never chased for exactly the clients who owe both.
+      dedupeKey: `blood:${b.client_id}:${b.panel ?? "blueprint"}`,
       // Name the assigned coach when there is one; otherwise chase the role.
       nudge: coach ? { clientId: b.client_id, staffId: coach.id, label: "Blood report — awaiting client", who: coach.name } : undefined,
-      chaseRole: coach ? undefined : { roles: ["Health Coach"], who: "Health Coach", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` },
+      chaseRole: coach ? undefined : { roles: BLOOD_CHASE_OWNER, who: "Health Coach", label: "Blood report — awaiting client", clientId: b.client_id, href: `/clients/${b.client_id}` },
     });
   }
 

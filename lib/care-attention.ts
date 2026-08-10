@@ -231,7 +231,12 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       const o = ownerFor(clientId, "coach");
       flags.push({ sev: "med", title: `${who} — comprehensive blood report pending`, detail: o ? `Follow-up owed by ${o.name}` : "Requested, awaiting the client", href: bloodHref, cta: "Open reports",
         ...waitingSince(bloodAsked.get(clientId), today),
-        dedupeKey: `blood:${clientId}`,
+        // Keyed by panel, not just client. This flag is the COMPREHENSIVE
+        // panel; the front-desk queue raises one per outstanding panel. Keyed
+        // by client alone the two collapsed on the dashboard, and since care
+        // flags merge first, a client owing both panels had their BluePrint one
+        // silently dropped.
+        dedupeKey: `blood:${clientId}:comprehensive`,
         nudge: o ? { clientId, staffId: o.id, label: "Blood report — awaiting client", who: o.name } : undefined,
         chaseRole: o ? undefined : { roles: BLOOD_CHASE_OWNER, who: "Health Coach", label: "Blood report — awaiting client", clientId, href: bloodHref } });
     }
