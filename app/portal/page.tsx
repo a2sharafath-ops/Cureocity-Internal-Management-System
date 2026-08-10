@@ -165,7 +165,7 @@ export default async function PortalHome() {
     const dpMealIds = dpMeals.map((m) => m.id!).filter(Boolean);
     const { data: dpOptRows } = dpMealIds.length
       ? await supabase.from("diet_plan_options")
-          .select("id, meal_id, seq, food_items, qty, kcal, protein_g, micronutrients")
+          .select("id, meal_id, seq, food_items, qty, kcal, carb_g, protein_g, fat_g, fibre_g, micronutrients")
           .in("meal_id", dpMealIds).order("seq")
       : { data: [] as never[] };
     const dpOptsByMeal = new Map<string, PlanOption[]>();
@@ -622,9 +622,17 @@ export default async function PortalHome() {
                         <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700, marginBottom: 2 }}>Option {i + 1}</div>
                         <div style={{ fontWeight: 700, fontSize: 13.5 }}>{o.food_items}</div>
                         {o.qty && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{o.qty}</div>}
-                        {(o.kcal != null || o.protein_g != null) && (
+                        {/* The same five figures the printed chart carries, so
+                            the portal and the PDF a client holds agree. */}
+                        {[o.kcal, o.carb_g, o.protein_g, o.fat_g, o.fibre_g].some((v) => v != null) && (
                           <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>
-                            {[o.kcal != null ? `${o.kcal} kcal` : null, o.protein_g != null ? `${Number(o.protein_g)} g protein` : null].filter(Boolean).join(" · ")}
+                            {[
+                              o.kcal != null ? `${o.kcal} kcal` : null,
+                              o.carb_g != null ? `${Number(o.carb_g)} g carbs` : null,
+                              o.protein_g != null ? `${Number(o.protein_g)} g protein` : null,
+                              o.fat_g != null ? `${Number(o.fat_g)} g fat` : null,
+                              o.fibre_g != null ? `${Number(o.fibre_g)} g fibre` : null,
+                            ].filter(Boolean).join(" · ")}
                           </div>
                         )}
                         {o.micronutrients && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>{o.micronutrients}</div>}

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, MACRO_LABELS, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
 
 const opt = (seq: number, kcal: number, protein: number, items = `Option ${seq + 1}`) =>
-  ({ seq, food_items: items, qty: "1 cup", kcal, protein_g: protein, micronutrients: null, components: [] });
+  ({ seq, food_items: items, qty: "1 cup", kcal, carb_g: 40, protein_g: protein, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] });
 
 const meal = (name: string, opts: ReturnType<typeof opt>[], conditional = false): PlanMeal =>
   ({ seq: 0, name, time_from: null, time_to: null, note: null, conditional, options: opts });
@@ -49,7 +49,7 @@ describe("planTotals", () => {
   });
 
   it("ignores a blank option row rather than counting it as zero", () => {
-    const blank = { seq: 1, food_items: "   ", qty: null, kcal: null, protein_g: null, micronutrients: null, components: [] };
+    const blank = { seq: 1, food_items: "   ", qty: null, kcal: null, carb_g: null, protein_g: null, fat_g: null, fibre_g: null, micronutrients: null, components: [] };
     const meals = [meal("Breakfast", [opt(0, 400, 20), blank])];
     expect(planTotals(meals).minKcal).toBe(400);
   });
@@ -87,7 +87,7 @@ describe("planProblems", () => {
   });
 
   it("blocks an option with no quantity", () => {
-    const noQty = { seq: 0, food_items: "Rice and curry", qty: "", kcal: 500, protein_g: 20, micronutrients: null, components: [] };
+    const noQty = { seq: 0, food_items: "Rice and curry", qty: "", kcal: 500, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] };
     expect(planProblems([meal("Lunch", [noQty])], targets).some((p) => /quantity/.test(p))).toBe(true);
   });
 
@@ -101,7 +101,7 @@ describe("planProblems", () => {
     // micronutrients included — and the day lands on its target. The clinic's
     // rule is that nothing goes to a client with a blank or a mismatch in it.
     const full = (seq: number, kcal: number, protein: number) =>
-      ({ seq, food_items: `Option ${seq + 1}`, qty: "1 cup", kcal, protein_g: protein, micronutrients: "Iron, folate", components: [] });
+      ({ seq, food_items: `Option ${seq + 1}`, qty: "1 cup", kcal, carb_g: 40, protein_g: protein, fat_g: 10, fibre_g: 5, micronutrients: "Iron, folate", components: [] });
     const meals = [meal("Breakfast", [full(0, 450, 20)]), meal("Lunch", [full(0, 450, 30)])];
     expect(planProblems(meals, { ...targets, kcal: 900 })).toEqual([]);
   });
@@ -111,21 +111,22 @@ describe("an option built from recipes", () => {
   const dish = (over: Partial<DishOption> & Pick<DishOption, "id" | "name">): DishOption => ({
     serving_label: null, perServing: null, basis: null, source: null, reason: null, approved: true, ...over,
   });
-  const puttu = dish({ id: "d1", name: "Puttu", perServing: { kcal: 210, protein_g: 4.6 }, basis: "computed" });
-  const kadala = dish({ id: "d2", name: "Kadala curry", perServing: { kcal: 118, protein_g: 6.2 }, basis: "computed" });
+  const puttu = dish({ id: "d1", name: "Puttu", perServing: { kcal: 210, carb_g: 44, protein_g: 4.6, fat_g: 2.2, fibre_g: 1.4 }, basis: "computed" });
+  const kadala = dish({ id: "d2", name: "Kadala curry", perServing: { kcal: 118, carb_g: 14, protein_g: 6.2, fat_g: 4.0, fibre_g: 5.0 }, basis: "computed" });
   const unpriced = dish({ id: "d3", name: "Egg roast", reason: "2 ingredients not matched to the food table (coconut, shallot)" });
   const unapproved = dish({
-    id: "d4", name: "Appam", perServing: { kcal: 120, protein_g: 2.4 },
+    id: "d4", name: "Appam", perServing: { kcal: 120, carb_g: 25, protein_g: 2.4, fat_g: 1.2, fibre_g: 0.8 },
     basis: "published", source: "INDB ASC123", approved: false,
   });
   const library = new Map([puttu, kadala, unpriced, unapproved].map((d) => [d.id, d] as const));
   const targets = { kcal: 1900, protein: "100 g", carbohydrate: "220 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
 
   const part = (dish_id: string, servings = 1, seq = 0) => ({ seq, dish_id, servings });
-  /** Puttu + half a kadala curry: 210 + 59 = 269 kcal, 4.6 + 3.1 = 7.7 g. */
+  /** Puttu + half a kadala curry: 269 kcal, 51 g carb, 7.7 g protein, 4.2 g fat, 3.9 g fibre. */
+  const FULL = { kcal: 269, carb_g: 51, protein_g: 7.7, fat_g: 4.2, fibre_g: 3.9 };
   const built = (over: Partial<PlanOption> = {}): PlanOption => ({
     seq: 0, food_items: "Puttu with kadala curry", qty: "1 piece + ½ cup",
-    kcal: 269, protein_g: 7.7, micronutrients: "Iron, folate",
+    ...FULL, micronutrients: "Iron, folate",
     components: [part("d1", 1, 0), part("d2", 0.5, 1)], ...over,
   });
   const meal = (options: PlanOption[]): PlanMeal =>
@@ -133,16 +134,16 @@ describe("an option built from recipes", () => {
 
   describe("optionNutrients", () => {
     it("adds the recipes up", () => {
-      expect(optionNutrients([part("d1"), part("d2", 0.5, 1)], library)).toEqual({ kcal: 269, protein_g: 7.7 });
+      expect(optionNutrients([part("d1"), part("d2", 0.5, 1)], library)).toEqual(FULL);
     });
     it("gives one recipe on its own as the recipe has it", () => {
-      expect(optionNutrients([part("d1")], library)).toEqual({ kcal: 210, protein_g: 4.6 });
+      expect(optionNutrients([part("d1")], library)).toEqual({ kcal: 210, carb_g: 44, protein_g: 4.6, fat_g: 2.2, fibre_g: 1.4 });
     });
     it("rounds once at the end, not per item", () => {
       // Three thirds of a puttu is a whole puttu. Rounding each component
       // first would make it 210.09 → 210 by luck, or 209 by bad luck.
       expect(optionNutrients([part("d1", 1 / 3, 0), part("d1", 1 / 3, 1), part("d1", 1 / 3, 2)], library))
-        .toEqual({ kcal: 210, protein_g: 4.6 });
+        .toEqual({ kcal: 210, carb_g: 44, protein_g: 4.6, fat_g: 2.2, fibre_g: 1.4 });
     });
     it("gives nothing at all when one item cannot be priced", () => {
       // Not a partial total: a breakfast missing its egg roast is not a
@@ -161,7 +162,7 @@ describe("an option built from recipes", () => {
 
   describe("planProblems", () => {
     it("names the recipe, not the empty box, when one cannot be priced", () => {
-      const m = [meal([built({ components: [part("d1"), part("d3", 1, 1)], kcal: null, protein_g: null })])];
+      const m = [meal([built({ components: [part("d1"), part("d3", 1, 1)], kcal: null, carb_g: null, protein_g: null, fat_g: null, fibre_g: null })])];
       const out = planProblems(m, targets, [puttu, kadala, unpriced]);
       expect(out.some((p) => /Egg roast/.test(p) && /not matched/.test(p))).toBe(true);
       // The generic message would send her to a box she cannot type in.
@@ -181,7 +182,7 @@ describe("an option built from recipes", () => {
     it("refuses a recipe the dietitian has not approved, even though it is priced", () => {
       // The picker hides these. This is what stops one that was selected
       // before the library was reviewed, or had approval withdrawn after.
-      const m = [meal([built({ components: [part("d4")], kcal: 120, protein_g: 2.4 })])];
+      const m = [meal([built({ components: [part("d4")], kcal: 120, carb_g: 25, protein_g: 2.4, fat_g: 1.2, fibre_g: 0.8 })])];
       const out = planProblems(m, targets, [puttu, kadala, unapproved]);
       expect(out.some((p) => /Appam/.test(p) && /not been approved/.test(p))).toBe(true);
     });
@@ -196,7 +197,7 @@ describe("an option built from recipes", () => {
       // How a new version arrives: copied from a published chart, carrying the
       // numbers the recipes gave months ago. Nothing re-prices it until
       // someone saves, so without this it could be approved and sent as is.
-      const m = [meal([built({ kcal: 240, protein_g: 7.1 })])];
+      const m = [meal([built({ kcal: 240 })])];
       const out = planProblems(m, targets, [puttu, kadala]);
       expect(out.some((p) => /work out at 269 kcal today/.test(p))).toBe(true);
       expect(out.some((p) => /Press Save/.test(p))).toBe(true);
@@ -276,14 +277,14 @@ describe("parseNotes", () => {
 describe("planProblems — silent data loss", () => {
   const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
   it("refuses an option that has numbers but no food items", () => {
-    const orphan = { seq: 0, food_items: "  ", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null, components: [] };
-    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null, components: [] };
+    const orphan = { seq: 0, food_items: "  ", qty: "1 cup", kcal: 400, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] };
+    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] };
     const m: PlanMeal = { seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false, options: [orphan, good] };
     expect(planProblems([m], targets).some((p) => /no food items/.test(p))).toBe(true);
   });
   it("ignores a wholly empty row — that's just an unused slot in the grid", () => {
-    const empty = { seq: 0, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: null, components: [] };
-    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: "Iron", components: [] };
+    const empty = { seq: 0, food_items: "", qty: "", kcal: null, carb_g: null, protein_g: null, fat_g: null, fibre_g: null, micronutrients: null, components: [] };
+    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: "Iron", components: [] };
     const m: PlanMeal = { seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false, options: [empty, good] };
     // Nothing is reported against the blank row itself; the filled one is fine.
     expect(planProblems([m], { ...targets, kcal: 400 })).toEqual([]);
@@ -296,7 +297,7 @@ describe("a chart cannot go out with blanks or mismatches", () => {
   const targets = { kcal: 1900, protein: "100-105 g", carbohydrate: "220-230 g", fats: "60-65 g", fibre: "20-30 g", water: "3 ltr" };
   const opt = (over: Partial<PlanOption> = {}): PlanOption => ({
     seq: 0, food_items: "Ragi puttu + kadala curry", qty: "1 medium piece + ½ cup",
-    kcal: 440, protein_g: 26, micronutrients: "Calcium, iron, folate", components: [], ...over,
+    kcal: 440, carb_g: 55, protein_g: 26, fat_g: 12, fibre_g: 6, micronutrients: "Calcium, iron, folate", components: [], ...over,
   });
   const meal = (options: PlanOption[]): PlanMeal =>
     ({ seq: 0, name: "Breakfast", time_from: null, time_to: null, note: null, conditional: false, options });
@@ -316,6 +317,39 @@ describe("a chart cannot go out with blanks or mismatches", () => {
   it("refuses a missing protein figure", () => {
     const m = day(); m[0].options[0].protein_g = null;
     expect(planProblems(m, targets).some((p) => /no protein/.test(p))).toBe(true);
+  });
+
+  it("refuses a blank in any of the five columns the document prints", () => {
+    // The brief's table has nine columns. Until the chart could hold carbs,
+    // fat and fibre, three of them could be silently empty on an issued PDF.
+    for (const [key, label] of MACRO_LABELS) {
+      const m = day();
+      (m[0].options[0] as Record<string, unknown>)[key] = null;
+      expect(planProblems(m, targets).some((p) => p.includes(`no ${label}`)), label).toBe(true);
+    }
+  });
+
+  it("refuses options in one meal whose macros are not interchangeable", () => {
+    // Same calories, different food. 40 kcal apart is within the clinic's rule
+    // on energy, but a plate of rice against a plate of fish is not a choice
+    // between equals, and the brief asks for both to match.
+    const m = day();
+    m[0] = { ...m[0], options: [
+      opt({ seq: 0, kcal: 475, carb_g: 80, protein_g: 10, fat_g: 5, fibre_g: 6 }),
+      opt({ seq: 1, kcal: 470, carb_g: 10, protein_g: 55, fat_g: 20, fibre_g: 1, food_items: "Grilled fish" }),
+    ] };
+    const out = planProblems(m, targets);
+    expect(out.some((p) => /carbohydrate/.test(p) && /interchangeable/.test(p))).toBe(true);
+    expect(out.some((p) => /protein/.test(p) && /interchangeable/.test(p))).toBe(true);
+  });
+
+  it("accepts options whose macros differ only a little", () => {
+    const m = day();
+    m[0] = { ...m[0], options: [
+      opt({ seq: 0, kcal: 470, carb_g: 55, protein_g: 25, fat_g: 12, fibre_g: 6 }),
+      opt({ seq: 1, kcal: 480, carb_g: 60, protein_g: 27, fat_g: 14, fibre_g: 7, food_items: "Idiyappam + stew" }),
+    ] };
+    expect(planProblems(m, targets).filter((p) => /interchangeable/.test(p))).toEqual([]);
   });
 
   it("refuses a blank micronutrient column — it prints on the client's chart", () => {

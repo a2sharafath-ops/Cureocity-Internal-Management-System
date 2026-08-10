@@ -31,6 +31,9 @@ type Db = Awaited<ReturnType<typeof createClient>>;
  */
 const PAGE = 1000;
 
+/** One decimal, matching how the chart stores a macro. */
+const r1 = (v: number | null) => Math.round(Number(v) * 10) / 10;
+
 export async function fetchAllRows<T>(
   page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
   what: string,
@@ -56,7 +59,10 @@ type RawDish = {
   servings: number | null;
   source: string | null;
   source_kcal: number | null;
+  source_carb_g: number | null;
   source_protein_g: number | null;
+  source_fat_g: number | null;
+  source_fibre_g: number | null;
   approved: boolean;
   dish_items: { food_code: string | null; name: string; raw_g: number; seq: number }[] | null;
 };
@@ -76,7 +82,7 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
   // actually a database that did not answer.
   const [dsh, fds] = await Promise.all([
     fetchAllRows<RawDish>((from, to) => supabase.from("dishes")
-      .select("id, name, serving_label, cooked_g, servings, source, source_kcal, source_protein_g, approved, dish_items(food_code, name, raw_g, seq)")
+      .select("id, name, serving_label, cooked_g, servings, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, approved, dish_items(food_code, name, raw_g, seq)")
       .order("name").range(from, to), "the recipe library"),
     fetchAllRows<Food>((from, to) => supabase.from("foods")
       .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
@@ -95,7 +101,11 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
       },
       foods,
     );
-    const published = d.source_kcal != null && d.source_protein_g != null;
+    // All five or none. A published figure that fills in calories and protein
+    // and leaves carbohydrate, fat and fibre blank would block every chart it
+    // is used on, which is worse than the dish plainly saying it is unpriced.
+    const src = [d.source_kcal, d.source_carb_g, d.source_protein_g, d.source_fat_g, d.source_fibre_g];
+    const published = src.every((v) => v != null);
 
     // Our own arithmetic first. It is the only figure that re-prices itself
     // when an ingredient is corrected, so wherever the recipe supports it, it
@@ -119,7 +129,11 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     if (verdict.priced && !contradicted) {
       return {
         id: d.id, name: d.name, serving_label: d.serving_label, source: d.source,
-        perServing: { kcal: verdict.perServing.kcal, protein_g: verdict.perServing.protein_g },
+        perServing: {
+          kcal: verdict.perServing.kcal, carb_g: verdict.perServing.carb_g,
+          protein_g: verdict.perServing.protein_g, fat_g: verdict.perServing.fat_g,
+          fibre_g: verdict.perServing.fibre_g,
+        },
         basis: "computed", reason: null, approved: d.approved,
       };
     }
@@ -133,7 +147,11 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     if (published) {
       return {
         id: d.id, name: d.name, serving_label: d.serving_label, source: d.source,
-        perServing: { kcal: Math.round(Number(d.source_kcal)), protein_g: Math.round(Number(d.source_protein_g) * 10) / 10 },
+        perServing: {
+          kcal: Math.round(Number(d.source_kcal)),
+          carb_g: r1(d.source_carb_g), protein_g: r1(d.source_protein_g),
+          fat_g: r1(d.source_fat_g), fibre_g: r1(d.source_fibre_g),
+        },
         basis: "published",
         // Carried even though the dish is priced, because it is the one thing
         // worth saying about it: the ingredients as recorded do not add up to

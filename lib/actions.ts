@@ -7061,7 +7061,9 @@ type PlanMealIn = {
   note: string | null; conditional: boolean;
   options: {
     seq: number; food_items: string; qty: string | null;
-    kcal: number | null; protein_g: number | null; micronutrients: string | null;
+    kcal: number | null; carb_g: number | null; protein_g: number | null;
+    fat_g: number | null; fibre_g: number | null;
+    micronutrients: string | null;
     components: { seq: number; dish_id: string; servings: number }[];
   }[];
 };
@@ -7205,11 +7207,18 @@ export async function saveDietPlan(
       // passes them.
       const priced = optionNutrients(o.components, dishes);
       const built = o.components.length > 0;
+      // All five columns the issued document prints, on the same rule: built
+      // from recipes and the recipes decide; free text and she does.
+      const figure = (k: "kcal" | "carb_g" | "protein_g" | "fat_g" | "fibre_g"): number | null =>
+        built ? priced?.[k] ?? null : o[k];
       return {
         meal_id: mealId, seq: i, food_items: o.food_items.trim(),
         qty: o.qty?.trim() || null,
-        kcal: built ? priced?.kcal ?? null : o.kcal,
-        protein_g: built ? priced?.protein_g ?? null : o.protein_g,
+        kcal: figure("kcal"),
+        carb_g: figure("carb_g"),
+        protein_g: figure("protein_g"),
+        fat_g: figure("fat_g"),
+        fibre_g: figure("fibre_g"),
         micronutrients: o.micronutrients?.trim() || null,
       };
     });
@@ -7286,10 +7295,10 @@ async function planProblemsFor(
 ): Promise<string[]> {
   const { data } = await supabase.from("diet_plans")
     .select("kcal, protein, carbohydrate, fats, fibre, water, " +
-      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, protein_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)))")
+      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, carb_g, protein_g, fat_g, fibre_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)))")
     .eq("id", id).maybeSingle();
   type RawPart = { dish_id: string; servings: number; seq: number };
-  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; diet_plan_option_dishes: RawPart[] | null };
+  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; carb_g: number | null; protein_g: number | null; fat_g: number | null; fibre_g: number | null; micronutrients: string | null; diet_plan_option_dishes: RawPart[] | null };
   type RawMeal = { seq: number; name: string; conditional: boolean; diet_plan_options: RawOpt[] | null };
   const row = data as {
     kcal: number | null; protein: string | null; carbohydrate: string | null;
@@ -7798,11 +7807,12 @@ export async function newDietPlanVersion(formData: FormData) {
     // against its recipes: the copy cannot be submitted, approved or sent
     // until it has been saved, and saving re-prices it from scratch.
     const { data: opts } = await supabase.from("diet_plan_options")
-      .select("id, seq, food_items, qty, kcal, protein_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)")
+      .select("id, seq, food_items, qty, kcal, carb_g, protein_g, fat_g, fibre_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)")
       .eq("meal_id", m.id).order("seq");
     type SrcOpt = {
       id: string; seq: number; food_items: string; qty: string | null;
-      kcal: number | null; protein_g: number | null; micronutrients: string | null;
+      kcal: number | null; carb_g: number | null; protein_g: number | null;
+      fat_g: number | null; fibre_g: number | null; micronutrients: string | null;
       diet_plan_option_dishes: { dish_id: string; servings: number; seq: number }[] | null;
     };
     const src = (opts ?? []) as unknown as SrcOpt[];

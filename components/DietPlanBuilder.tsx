@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   type PlanMeal, type PlanOption, type PlanTargets, type DishOption,
   mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
+  MACROS, MACRO_LABELS,
 } from "@/lib/diet-plan";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
@@ -29,10 +30,17 @@ const newDietPlanVersionForm = async (formData: FormData) => {
 };
 
 /** A blank option row — a new "+ Add option" click. Free text until linked. */
-const blankOption = (seq: number): PlanOption => ({ seq, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: "", components: [] });
+const blankOption = (seq: number): PlanOption => ({
+  seq, food_items: "", qty: "", kcal: null, carb_g: null, protein_g: null,
+  fat_g: null, fibre_g: null, micronutrients: "", components: [],
+});
 
-/** The seven columns of the options table, shared by the header and each row. */
-const OPT_COLS = "72px 1.6fr 1.2fr 80px 90px 1.2fr 28px";
+/**
+ * The nine columns the clinic's brief specifies, shared by the header and each
+ * row: Option, Food Items, Quantity, Calories, Carbs, Protein, Fat, Fibre,
+ * Micronutrients — plus the delete button.
+ */
+const OPT_COLS = "62px 1.5fr 1.1fr 62px 58px 62px 52px 56px 1fr 28px";
 /** A blank meal slot — a new "+ Add meal slot" click. */
 const blankMeal = (seq: number): PlanMeal => ({ seq, name: "", time_from: null, time_to: null, note: null, conditional: false, options: [] });
 
@@ -166,7 +174,9 @@ export default function DietPlanBuilder({
       // An option with nothing linked goes back to being free text, and keeps
       // whatever figures were last worked out so she has something to adjust
       // rather than an empty row.
-      ...(components.length ? { kcal: priced?.kcal ?? null, protein_g: priced?.protein_g ?? null } : {}),
+      ...(components.length
+        ? Object.fromEntries(MACROS.map((k) => [k, priced?.[k] ?? null]))
+        : {}),
     });
   };
 
@@ -177,8 +187,8 @@ export default function DietPlanBuilder({
     // component again cannot bring it back. On the FIRST one, where there are
     // figures to lose, that is worth a question — a misplaced click on a row
     // she has already costed by hand should not quietly undo the work.
-    if (!o.components.length && (o.kcal != null || o.protein_g != null)
-      && !window.confirm("Building this option from recipes will replace the calories and protein you typed. Continue?")) {
+    if (!o.components.length && MACROS.some((k) => o[k] != null)
+      && !window.confirm("Building this option from recipes will replace the figures you typed. Continue?")) {
       return;
     }
     setComponents(mealIdx, optIdx, [...o.components, { seq: o.components.length, dish_id: first.id, servings: 1 }]);
@@ -202,7 +212,8 @@ export default function DietPlanBuilder({
       const mealsIn = meals.map((m, i) => ({
         seq: i, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
         options: m.options.map((o, j) => ({
-          seq: j, food_items: o.food_items, qty: o.qty, kcal: o.kcal, protein_g: o.protein_g,
+          seq: j, food_items: o.food_items, qty: o.qty,
+          kcal: o.kcal, carb_g: o.carb_g, protein_g: o.protein_g, fat_g: o.fat_g, fibre_g: o.fibre_g,
           micronutrients: o.micronutrients,
           components: o.components.map((c, k) => ({ seq: k, dish_id: c.dish_id, servings: c.servings })),
         })),
@@ -339,7 +350,17 @@ export default function DietPlanBuilder({
         background: check.tone === "ok" ? "var(--green-bg)" : check.tone === "warn" ? "var(--amber-bg)" : "var(--card)",
       }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: check.tone === "ok" ? "var(--green-text)" : check.tone === "warn" ? "var(--amber-text)" : "var(--ink)" }}>
-          Combinations range {totals.minKcal}–{totals.maxKcal} kcal · protein {totals.minProtein}–{totals.maxProtein} g
+          Combinations range {totals.minKcal}–{totals.maxKcal} kcal
+        </div>
+        {/* The day's macros as well as its calories, so the header targets can
+            be read against what the options actually add up to. Until the chart
+            held carbs, fat and fibre this line could only ever say protein. */}
+        <div style={{ fontSize: 12, marginTop: 3, color: "var(--muted)" }}>
+          {MACRO_LABELS.map(([k, label]) => (
+            <span key={k} style={{ marginRight: 12 }}>
+              {label} {totals.macros[k].min}–{totals.macros[k].max} g
+            </span>
+          ))}
         </div>
         {check.text && <div style={{ fontSize: 12, marginTop: 2, color: check.tone === "ok" ? "var(--green-text)" : "var(--amber-text)" }}>{check.text}</div>}
       </div>
@@ -374,7 +395,9 @@ export default function DietPlanBuilder({
           {/* Options table */}
           <div style={{ marginTop: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, fontSize: 11, color: "var(--muted)", fontWeight: 600, padding: "0 2px" }}>
-              <span>Option</span><span>Food items</span><span>Qty</span><span>Kcal</span><span>Protein (g)</span><span>Micronutrient</span><span />
+              <span>Option</span><span>Food items</span><span>Qty</span><span>Kcal</span>
+              <span>Carbs (g)</span><span>Protein (g)</span><span>Fat (g)</span><span>Fibre (g)</span>
+              <span>Micronutrient</span><span />
             </div>
             {m.options.map((o, j) => {
               // A built row's calories and protein are the recipes'. The boxes
@@ -405,14 +428,17 @@ export default function DietPlanBuilder({
                     <span style={{ fontSize: 12, color: "var(--muted)" }}>Option {j + 1}</span>
                     <input disabled={locked} value={o.food_items} placeholder="Food items" onChange={(e) => updateOption(i, j, { food_items: e.target.value })} style={inpControl} />
                     <input disabled={locked} value={o.qty ?? ""} placeholder="Measured qty" onChange={(e) => updateOption(i, j, { qty: e.target.value || null })} style={inpControl} />
-                    <input type="number" disabled={locked} readOnly={built} value={o.kcal ?? ""}
-                      onChange={(e) => updateOption(i, j, { kcal: e.target.value === "" ? null : Number(e.target.value) })}
-                      style={built ? fromRecipe : inpControl}
-                      title={built ? "Added up from the recipes below" : undefined} />
-                    <input type="number" step="0.1" disabled={locked} readOnly={built} value={o.protein_g ?? ""}
-                      onChange={(e) => updateOption(i, j, { protein_g: e.target.value === "" ? null : Number(e.target.value) })}
-                      style={built ? fromRecipe : inpControl}
-                      title={built ? "Added up from the recipes below" : undefined} />
+                    {/* The five figures the issued document prints, in the
+                        brief's order. Read-only wherever the row is built from
+                        recipes — the recipes decide, and the boxes stay
+                        visible so the row still reads straight across. */}
+                    {MACROS.map((k) => (
+                      <input key={k} type="number" step={k === "kcal" ? "1" : "0.1"}
+                        disabled={locked} readOnly={built} value={o[k] ?? ""}
+                        onChange={(e) => updateOption(i, j, { [k]: e.target.value === "" ? null : Number(e.target.value) })}
+                        style={built ? fromRecipe : inpControl}
+                        title={built ? "Added up from the recipes below" : undefined} />
+                    ))}
                     <input disabled={locked} value={o.micronutrients ?? ""} placeholder="Iron, folate…" onChange={(e) => updateOption(i, j, { micronutrients: e.target.value || null })} style={inpControl} />
                     {!locked && <button type="button" onClick={() => removeOption(i, j)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete option">✕</button>}
                   </div>

@@ -57,7 +57,7 @@ export default async function DietPlanPrintPage(
   const { data: optionRows } = mealIds.length
     ? await supabase
         .from("diet_plan_options")
-        .select("id, meal_id, seq, food_items, qty, kcal, protein_g, micronutrients")
+        .select("id, meal_id, seq, food_items, qty, kcal, carb_g, protein_g, fat_g, fibre_g, micronutrients")
         .in("meal_id", mealIds)
         .order("seq")
     : { data: [] as never[] };
@@ -107,16 +107,21 @@ export default async function DietPlanPrintPage(
           {m.note && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", fontStyle: "italic", marginBottom: 10 }}>{m.note}</div>}
 
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5, background: "#fff", borderRadius: 6, overflow: "hidden" }}>
+            {/* The nine columns of the clinic's brief. Narrow, because the
+                document is A4 and four macros now share the space two used. */}
             <colgroup>
-              <col style={{ width: "22%" }} />
-              <col style={{ width: "34%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "20%" }} />
+              <col style={{ width: "26%" }} />
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "8%" }} />
+              <col style={{ width: "17%" }} />
             </colgroup>
             <thead>
               <tr>
-                {["Food Items", "Qty", "Calorie (kcal)", "Protein (g)", "Micronutrient"].map((h) => (
+                {["Food Items", "Qty", "Calories", "Carbs (g)", "Protein (g)", "Fat (g)", "Fibre (g)", "Micronutrient"].map((h) => (
                   <th key={h} style={{
                     textAlign: "left", padding: "8px 10px", background: CORAL, color: "#fff",
                     fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".4px",
@@ -126,11 +131,11 @@ export default async function DietPlanPrintPage(
             </thead>
             <tbody>
               {m.options.length === 0 ? (
-                <tr><td colSpan={5} style={{ padding: "12px 10px", color: "#9ca3af", fontStyle: "italic" }}>No options added.</td></tr>
+                <tr><td colSpan={8} style={{ padding: "12px 10px", color: "#9ca3af", fontStyle: "italic" }}>No options added.</td></tr>
               ) : m.options.map((o, i) => (
                 <Fragment key={o.id ?? i}>
                   <tr>
-                    <td colSpan={5} style={{ background: "#e6e6e6", color: "#111", fontWeight: 700, fontSize: 11, padding: "5px 10px" }}>
+                    <td colSpan={8} style={{ background: "#e6e6e6", color: "#111", fontWeight: 700, fontSize: 11, padding: "5px 10px" }}>
                       Option {i + 1}
                     </td>
                   </tr>
@@ -138,7 +143,9 @@ export default async function DietPlanPrintPage(
                     <td style={{ padding: "8px 10px", color: "#111", verticalAlign: "top", borderBottom: "1px solid #eee" }}>{o.food_items}</td>
                     <td style={{ padding: "8px 10px", color: "#111", verticalAlign: "top", borderBottom: "1px solid #eee" }}>{o.qty || "—"}</td>
                     <td style={{ padding: "8px 10px", color: "#111", verticalAlign: "top", borderBottom: "1px solid #eee" }}>{o.kcal ?? "—"}</td>
-                    <td style={{ padding: "8px 10px", color: "#111", verticalAlign: "top", borderBottom: "1px solid #eee" }}>{o.protein_g != null ? Number(o.protein_g) : "—"}</td>
+                    {([o.carb_g, o.protein_g, o.fat_g, o.fibre_g] as (number | null)[]).map((v, k) => (
+                      <td key={k} style={{ padding: "8px 10px", color: "#111", verticalAlign: "top", borderBottom: "1px solid #eee" }}>{v != null ? Number(v) : "—"}</td>
+                    ))}
                     <td style={{ padding: "8px 10px", color: "#b3323c", fontSize: 10.5, verticalAlign: "top", borderBottom: "1px solid #eee" }}>{o.micronutrients || "—"}</td>
                   </tr>
                 </Fragment>

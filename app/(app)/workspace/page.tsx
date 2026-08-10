@@ -412,11 +412,11 @@ export default async function WorkspacePage(
       .from("diet_plans")
       .select(
         "id, client_id, version, status, issued_on, kcal, protein, carbohydrate, fats, fibre, water, allergies, notes, shared_at, created_at, clients(name), " +
-        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, protein_g, micronutrients, diet_plan_option_dishes(id, dish_id, servings, seq)))",
+        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, carb_g, protein_g, fat_g, fibre_g, micronutrients, diet_plan_option_dishes(id, dish_id, servings, seq)))",
       )
       .order("created_at", { ascending: false });
     type RawPart = { id: string; dish_id: string; servings: number; seq: number };
-    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; diet_plan_option_dishes: RawPart[] | null };
+    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; carb_g: number | null; protein_g: number | null; fat_g: number | null; fibre_g: number | null; micronutrients: string | null; diet_plan_option_dishes: RawPart[] | null };
     type RawMeal = { id: string; seq: number; name: string; time_from: string | null; time_to: string | null; note: string | null; conditional: boolean; diet_plan_options: RawOption[] | null };
     type RawPlan = {
       id: string; client_id: string; version: number; status: string; issued_on: string | null;
@@ -432,7 +432,7 @@ export default async function WorkspacePage(
       meals: (r.diet_plan_meals ?? []).slice().sort((a, b) => a.seq - b.seq).map((m): PlanMeal => ({
         id: m.id, seq: m.seq, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
         options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq).map((o): PlanOption => ({
-          id: o.id, seq: o.seq, food_items: o.food_items, qty: o.qty, kcal: o.kcal, protein_g: o.protein_g, micronutrients: o.micronutrients,
+          id: o.id, seq: o.seq, food_items: o.food_items, qty: o.qty, kcal: o.kcal, carb_g: o.carb_g, protein_g: o.protein_g, fat_g: o.fat_g, fibre_g: o.fibre_g, micronutrients: o.micronutrients,
           components: [...(o.diet_plan_option_dishes ?? [])].sort((a, b) => a.seq - b.seq).map((c): PlanComponent => ({
             id: c.id, seq: c.seq, dish_id: c.dish_id, servings: Number(c.servings),
           })),

@@ -4,13 +4,38 @@
 // time windows, each holding numbered options, each option carrying quantity,
 // calories, protein and micronutrients.
 
+/**
+ * The five figures the clinic's brief prints on every option, in its order.
+ *
+ * Calories and protein were here from the start; carbohydrate, fat and fibre
+ * were asked for on the issued document and had nowhere to live until 0144.
+ */
+export type OptionMacros = {
+  kcal: number | null;
+  carb_g: number | null;
+  protein_g: number | null;
+  fat_g: number | null;
+  fibre_g: number | null;
+};
+
+/** The four the brief requires to match across a slot's options, with labels. */
+export const MACRO_LABELS: [keyof OptionMacros, string][] = [
+  ["carb_g", "carbohydrate"], ["protein_g", "protein"], ["fat_g", "fat"], ["fibre_g", "fibre"],
+];
+
+/** All five, for the checks that treat them alike. */
+export const MACROS: (keyof OptionMacros)[] = ["kcal", "carb_g", "protein_g", "fat_g", "fibre_g"];
+
 export type PlanOption = {
   id?: string;
   seq: number;
   food_items: string;
   qty: string | null;
   kcal: number | null;
+  carb_g: number | null;
   protein_g: number | null;
+  fat_g: number | null;
+  fibre_g: number | null;
   micronutrients: string | null;
   /**
    * The costed recipes this option is built from.
@@ -52,7 +77,7 @@ export type DishOption = {
   /** "1 medium piece", "¾ cup crumbled" — how the portion reads on a chart. */
   serving_label: string | null;
   /** Null when the recipe is too incomplete to price and has no published figure. */
-  perServing: { kcal: number; protein_g: number } | null;
+  perServing: { kcal: number; carb_g: number; protein_g: number; fat_g: number; fibre_g: number } | null;
   /**
    * Where `perServing` came from.
    *
@@ -92,13 +117,17 @@ export type DishOption = {
 export function componentNutrients(
   dish: DishOption | undefined,
   servings: number | null,
-): { kcal: number; protein_g: number } | null {
+): { kcal: number; carb_g: number; protein_g: number; fat_g: number; fibre_g: number } | null {
   if (!dish?.perServing) return null;
   // A blank portion means one serving — the ordinary reading of an empty box
   // beside a named dish. Zero or less is not a reading at all.
   if (servings != null && servings <= 0) return null;
   const s = servings ?? 1;
-  return { kcal: dish.perServing.kcal * s, protein_g: dish.perServing.protein_g * s };
+  const p = dish.perServing;
+  return {
+    kcal: p.kcal * s, carb_g: p.carb_g * s, protein_g: p.protein_g * s,
+    fat_g: p.fat_g * s, fibre_g: p.fibre_g * s,
+  };
 }
 
 /**
@@ -117,16 +146,20 @@ export function componentNutrients(
 export function optionNutrients(
   components: PlanComponent[],
   dishes: Map<string, DishOption>,
-): { kcal: number; protein_g: number } | null {
+): OptionMacros | null {
   if (!components.length) return null;
-  let kcal = 0, protein = 0;
+  let kcal = 0, carb = 0, protein = 0, fat = 0, fibre = 0;
   for (const c of components) {
     const part = componentNutrients(dishes.get(c.dish_id), c.servings);
     if (!part) return null;
-    kcal += part.kcal;
-    protein += part.protein_g;
+    kcal += part.kcal; carb += part.carb_g; protein += part.protein_g;
+    fat += part.fat_g; fibre += part.fibre_g;
   }
-  return { kcal: Math.round(kcal), protein_g: Math.round(protein * 10) / 10 };
+  return {
+    kcal: Math.round(kcal),
+    carb_g: round1(carb), protein_g: round1(protein),
+    fat_g: round1(fat), fibre_g: round1(fibre),
+  };
 }
 
 export type PlanMeal = {
@@ -208,26 +241,39 @@ function stripMeridiem(from: string | null, to: string | null): string {
  * high end whether they can overshoot the target. A single averaged number
  * would hide both.
  */
-export function planTotals(meals: PlanMeal[]): {
-  minKcal: number; maxKcal: number; minProtein: number; maxProtein: number; slotsWithoutOptions: string[];
-} {
-  let minKcal = 0, maxKcal = 0, minProtein = 0, maxProtein = 0;
+export type PlanTotals = {
+  minKcal: number; maxKcal: number;
+  minProtein: number; maxProtein: number;
+  /** The same lightest-and-heaviest range for each of the four macros. */
+  macros: Record<keyof OptionMacros, { min: number; max: number }>;
+  slotsWithoutOptions: string[];
+};
+
+export function planTotals(meals: PlanMeal[]): PlanTotals {
+  const keys: (keyof OptionMacros)[] = ["kcal", "carb_g", "protein_g", "fat_g", "fibre_g"];
+  const macros = Object.fromEntries(keys.map((k) => [k, { min: 0, max: 0 }])) as PlanTotals["macros"];
   const slotsWithoutOptions: string[] = [];
 
   for (const m of meals) {
     if (m.conditional) continue;
     const opts = m.options.filter((o) => o.food_items.trim());
     if (!opts.length) { slotsWithoutOptions.push(m.name); continue; }
-    const kcals = opts.map((o) => o.kcal ?? 0);
-    const prots = opts.map((o) => Number(o.protein_g ?? 0));
-    minKcal += Math.min(...kcals);
-    maxKcal += Math.max(...kcals);
-    minProtein += Math.min(...prots);
-    maxProtein += Math.max(...prots);
+    for (const k of keys) {
+      const vals = opts.map((o) => Number(o[k] ?? 0));
+      macros[k].min += Math.min(...vals);
+      macros[k].max += Math.max(...vals);
+    }
+  }
+  for (const k of keys) {
+    macros[k].min = round1(macros[k].min);
+    macros[k].max = round1(macros[k].max);
   }
   return {
-    minKcal, maxKcal,
-    minProtein: round1(minProtein), maxProtein: round1(maxProtein),
+    // Calories and protein keep their own names: they are read all over the
+    // builder and the approvals queue, and renaming them buys nothing.
+    minKcal: Math.round(macros.kcal.min), maxKcal: Math.round(macros.kcal.max),
+    minProtein: macros.protein_g.min, maxProtein: macros.protein_g.max,
+    macros,
     slotsWithoutOptions,
   };
 }
@@ -262,6 +308,22 @@ export function targetCheck(totals: { minKcal: number; maxKcal: number }, target
  * change; it is not one this file invented.
  */
 export const OPTION_KCAL_SPREAD = 40;
+
+/**
+ * How far apart the macros of two options in the same slot may be.
+ *
+ * The brief says the options must be "equal in carb, protein, fat and fiber".
+ * Literally equal is not achievable with real food, so this is the working
+ * reading of it — and it is derived from the clinic's own ±40 kcal rather than
+ * invented: 40 kcal is 10 g of carbohydrate or protein at 4 kcal a gram, and
+ * about 4.5 g of fat at 9. Fibre is held tighter because it is the reason a
+ * particular option was chosen as often as not.
+ *
+ * A number the clinic can change. It is not one this file is attached to.
+ */
+export const OPTION_MACRO_SPREAD: Record<"carb_g" | "protein_g" | "fat_g" | "fibre_g", number> = {
+  carb_g: 10, protein_g: 10, fat_g: 4.5, fibre_g: 4,
+};
 
 /**
  * What is wrong with an option's recipes, if anything.
@@ -356,7 +418,8 @@ export function planProblems(
       // Saving drops any option without a name, so a row where someone filled
       // the numbers and tabbed past the first column would vanish silently.
       // Better to refuse than to lose it.
-      if (!named && (o.qty?.trim() || o.kcal != null || o.protein_g != null || o.micronutrients?.trim())) {
+      if (!named && (o.qty?.trim() || o.micronutrients?.trim() || o.components.length
+        || MACROS.some((k) => o[k] != null))) {
         out.push(`${where} has details but no food items — it would be dropped when saved.`);
       }
       // Blanks in a named option. Every one of these is a column the issued
@@ -372,10 +435,17 @@ export function planProblems(
         if (link) {
           out.push(link);
         } else {
+          // All five columns the issued document prints, not just the two the
+          // chart used to hold. A gap in any of them is a gap on the client's
+          // chart, and it stops the day's totals being checkable against the
+          // macronutrient targets in the header.
           if (o.kcal == null) out.push(`${where} has no calories.`);
-          if (o.protein_g == null) out.push(`${where} has no protein.`);
           if (o.kcal != null && o.kcal <= 0) out.push(`${where} is ${o.kcal} kcal — that cannot be right.`);
-          if (o.protein_g != null && Number(o.protein_g) < 0) out.push(`${where} has negative protein.`);
+          for (const [key, label] of MACRO_LABELS) {
+            const v = o[key];
+            if (v == null) out.push(`${where} has no ${label}.`);
+            else if (Number(v) < 0) out.push(`${where} has negative ${label}.`);
+          }
         }
         // Micronutrients are the dietitian's own words either way — no recipe
         // supplies them — so this one is asked of linked and free-text alike.
@@ -392,6 +462,22 @@ export function planProblems(
       const lo = Math.min(...kcals), hi = Math.max(...kcals);
       if (hi - lo > OPTION_KCAL_SPREAD) {
         out.push(`${m.name} · options range ${lo}–${hi} kcal, a spread of ${hi - lo} — they should be within ${OPTION_KCAL_SPREAD} kcal of each other to be interchangeable.`);
+      }
+    }
+
+    // The other half of the same rule, which the chart could not check until it
+    // had somewhere to keep these figures. Matching on calories alone lets two
+    // options sit 40 kcal apart and be a plate of rice against a plate of fish
+    // — the same energy, a different prescription, and the client choosing
+    // freely between them is not following one plan.
+    for (const [key, label] of MACRO_LABELS) {
+      const have = m.options.filter((o) => o.food_items.trim() && o[key] != null);
+      if (have.length < 2) continue;
+      const vals = have.map((o) => Number(o[key]));
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      const allowed = OPTION_MACRO_SPREAD[key as keyof typeof OPTION_MACRO_SPREAD];
+      if (hi - lo > allowed) {
+        out.push(`${m.name} · options range ${round1(lo)}–${round1(hi)} g of ${label}, a spread of ${round1(hi - lo)} — they should be within ${allowed} g to be interchangeable.`);
       }
     }
   }
