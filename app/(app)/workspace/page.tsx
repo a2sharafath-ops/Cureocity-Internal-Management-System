@@ -21,7 +21,7 @@ import DietChartSection, { type DietPlanRow, type DietAssessmentRow } from "@/co
 import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
-import { type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+import { type PlanMeal, type PlanOption, type PlanComponent, type DishOption } from "@/lib/diet-plan";
 import { pricedDishes } from "@/lib/dish-pricing";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
@@ -412,10 +412,11 @@ export default async function WorkspacePage(
       .from("diet_plans")
       .select(
         "id, client_id, version, status, issued_on, kcal, protein, carbohydrate, fats, fibre, water, allergies, notes, shared_at, created_at, clients(name), " +
-        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, protein_g, micronutrients, dish_id, servings))",
+        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, protein_g, micronutrients, diet_plan_option_dishes(id, dish_id, servings, seq)))",
       )
       .order("created_at", { ascending: false });
-    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; dish_id: string | null; servings: number | null };
+    type RawPart = { id: string; dish_id: string; servings: number; seq: number };
+    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; diet_plan_option_dishes: RawPart[] | null };
     type RawMeal = { id: string; seq: number; name: string; time_from: string | null; time_to: string | null; note: string | null; conditional: boolean; diet_plan_options: RawOption[] | null };
     type RawPlan = {
       id: string; client_id: string; version: number; status: string; issued_on: string | null;
@@ -432,7 +433,9 @@ export default async function WorkspacePage(
         id: m.id, seq: m.seq, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
         options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq).map((o): PlanOption => ({
           id: o.id, seq: o.seq, food_items: o.food_items, qty: o.qty, kcal: o.kcal, protein_g: o.protein_g, micronutrients: o.micronutrients,
-          dish_id: o.dish_id, servings: o.servings,
+          components: [...(o.diet_plan_option_dishes ?? [])].sort((a, b) => a.seq - b.seq).map((c): PlanComponent => ({
+            id: c.id, seq: c.seq, dish_id: c.dish_id, servings: Number(c.servings),
+          })),
         })),
       })),
     }));
@@ -724,7 +727,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director

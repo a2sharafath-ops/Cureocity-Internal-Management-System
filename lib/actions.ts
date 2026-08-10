@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { HOW_TO_USE, DEFAULT_MEALS, planProblems, linkedNutrients, type DishOption } from "@/lib/diet-plan";
+import { HOW_TO_USE, DEFAULT_MEALS, planProblems, optionNutrients, type DishOption, type PlanComponent } from "@/lib/diet-plan";
 import { pricedDishes } from "@/lib/dish-pricing";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
@@ -7062,7 +7062,7 @@ type PlanMealIn = {
   options: {
     seq: number; food_items: string; qty: string | null;
     kcal: number | null; protein_g: number | null; micronutrients: string | null;
-    dish_id: string | null; servings: number | null;
+    components: { seq: number; dish_id: string; servings: number }[];
   }[];
 };
 
@@ -7153,7 +7153,7 @@ export async function saveDietPlan(
   // Named rows only: an option with a dish picked but its food name cleared is
   // discarded further down, so it should not be able to force a library read
   // — still less to fail the whole save if that read goes wrong.
-  const linked = meals.some((m) => m.options.some((o) => o.dish_id && o.food_items.trim()));
+  const linked = meals.some((m) => m.options.some((o) => o.components.length && o.food_items.trim()));
   const dishes = new Map<string, DishOption>();
   if (linked) {
     try {
@@ -7165,20 +7165,21 @@ export async function saveDietPlan(
 
   // Checked here, while the old chart is still intact.
   //
-  // `dish_id` is a foreign key, so a row pointing at a recipe someone deleted
-  // in another tab is rejected by the database — and by then the slot's old
-  // options have been dropped, which turns a fixable mistake into a lost
-  // meal. The priced library is already in hand, so the same mistake can be
-  // caught a few lines earlier, when refusing costs nothing.
+  // A component's dish is a foreign key, so a row naming a recipe someone
+  // deleted in another tab is rejected by the database — and by then the
+  // slot's old options have been dropped, which turns a fixable mistake into a
+  // lost meal. The priced library is already in hand, so the same mistake can
+  // be caught a few lines earlier, when refusing costs nothing.
   if (linked) {
     const missing = new Set<string>();
     for (const m of meals) {
       for (const o of m.options) {
-        if (o.dish_id && o.food_items.trim() && !dishes.has(o.dish_id)) missing.add(m.name.trim() || "a meal slot");
+        if (!o.food_items.trim()) continue;
+        if (o.components.some((c) => !dishes.has(c.dish_id))) missing.add(m.name.trim() || "a meal slot");
       }
     }
     if (missing.size) {
-      return { error: `Nothing was saved: ${[...missing].join(", ")} still points at a recipe that has been deleted. Set those rows back to Free text, or pick another dish.` };
+      return { error: `Nothing was saved: ${[...missing].join(", ")} is built from a recipe that has been deleted. Remove that item from the option, or pick another dish.` };
     }
   }
 
@@ -7194,41 +7195,68 @@ export async function saveDietPlan(
     }).select("id").maybeSingle();
     const mealId = (row as { id: string } | null)?.id;
     if (!mealId) continue;
-    const opts = m.options.filter((o) => o.food_items.trim()).map((o, i) => {
-      // The recipe wins. Where an option is linked, whatever calories and
-      // protein arrived from the browser are dropped and the dish's own
-      // figures are stored instead. An unpriced dish stores nothing rather
-      // than the sender's numbers — a blank the checks will catch, not a
-      // guess that quietly passes them.
-      const priced = o.dish_id ? linkedNutrients(dishes.get(o.dish_id), o.servings) : null;
+    const kept = m.options.filter((o) => o.food_items.trim());
+    const opts = kept.map((o, i) => {
+      // The recipes win. Where an option is built from them, whatever
+      // calories and protein arrived from the browser are dropped and the
+      // sum of the recipes is stored instead. An option with any component
+      // that cannot be priced stores nothing rather than the sender's
+      // numbers — a blank the checks will catch, not a guess that quietly
+      // passes them.
+      const priced = optionNutrients(o.components, dishes);
+      const built = o.components.length > 0;
       return {
         meal_id: mealId, seq: i, food_items: o.food_items.trim(),
         qty: o.qty?.trim() || null,
-        kcal: o.dish_id ? priced?.kcal ?? null : o.kcal,
-        protein_g: o.dish_id ? priced?.protein_g ?? null : o.protein_g,
+        kcal: built ? priced?.kcal ?? null : o.kcal,
+        protein_g: built ? priced?.protein_g ?? null : o.protein_g,
         micronutrients: o.micronutrients?.trim() || null,
-        dish_id: o.dish_id || null,
-        // A portion only means something alongside a dish. Kept null for free
-        // text so an unlinked row never carries a stray multiplier — and an
-        // empty box on a linked row is stored as the one serving it means.
-        //
+      };
+    });
+    if (!opts.length) continue;
+
+    // Checked, unlike the meal insert above, because a component's dish is a
+    // foreign key: a chart still naming a recipe someone deleted in another
+    // tab is rejected as a batch. The slot's old options were already dropped
+    // a few lines up, so swallowing that error would lose the whole meal and
+    // still report a successful save.
+    const { data: savedOpts, error: optErr } = await supabase
+      .from("diet_plan_options").insert(opts).select("id, seq");
+    if (optErr) {
+      return { error: `Could not save ${m.name || "a meal slot"}: ${optErr.message}` };
+    }
+
+    // Matched by seq rather than by position: the rows come back in whatever
+    // order the database returns them, and pairing an option with the wrong
+    // recipe list is the kind of mistake that would look plausible on screen.
+    const idOfSeq = new Map<number, string>(
+      ((savedOpts ?? []) as { id: string; seq: number }[]).map((r) => [r.seq, r.id] as const));
+
+    const parts = kept.flatMap((o, i) => {
+      const optionId = idOfSeq.get(i);
+      if (!optionId) return [];
+      return o.components.map((c, j) => ({
+        option_id: optionId, dish_id: c.dish_id, seq: j,
         // A nonsense portion is stored AS SENT rather than quietly corrected
         // to 1. The screen and the record then say the same thing, and the
         // checks refuse the chart until she fixes it. Silently substituting a
         // number would leave a chart that passes every gate while showing her
-        // something else.
-        servings: o.dish_id ? o.servings ?? 1 : null,
-      };
+        // something else. An empty box means the one serving it reads as.
+        servings: c.servings ?? 1,
+      }));
     });
-    if (opts.length) {
-      // Checked, unlike the meal insert above, because `dish_id` is now a
-      // foreign key: a chart still pointing at a recipe someone deleted in
-      // another tab is rejected as a batch. The slot's old options were
-      // already dropped a few lines up, so swallowing that error would lose
-      // the whole meal and still report a successful save.
-      const { error: optErr } = await supabase.from("diet_plan_options").insert(opts);
-      if (optErr) {
-        return { error: `Could not save ${m.name || "a meal slot"}: ${optErr.message}. If an option is linked to a recipe that has since been deleted, set that row back to free text.` };
+    if (parts.length) {
+      const { error: partErr } = await supabase.from("diet_plan_option_dishes").insert(parts);
+      if (partErr) {
+        // The option rows went in and their recipes did not. Left alone, that
+        // is the worst state this whole feature guards against: rows carrying
+        // recipe-derived calories with no recipes behind them, which no check
+        // can see, because every check keys off the components being there.
+        // Removing them again is the honest outcome — the slot is visibly
+        // missing and the message says so.
+        await supabase.from("diet_plan_options").delete()
+          .in("id", [...idOfSeq.values()]);
+        return { error: `Could not save the recipes on ${m.name || "a meal slot"}: ${partErr.message}. That slot was not saved — try again.` };
       }
     }
   }
@@ -7258,9 +7286,10 @@ async function planProblemsFor(
 ): Promise<string[]> {
   const { data } = await supabase.from("diet_plans")
     .select("kcal, protein, carbohydrate, fats, fibre, water, " +
-      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, protein_g, micronutrients, dish_id, servings))")
+      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, protein_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)))")
     .eq("id", id).maybeSingle();
-  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; dish_id: string | null; servings: number | null };
+  type RawPart = { dish_id: string; servings: number; seq: number };
+  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; diet_plan_option_dishes: RawPart[] | null };
   type RawMeal = { seq: number; name: string; conditional: boolean; diet_plan_options: RawOpt[] | null };
   const row = data as {
     kcal: number | null; protein: string | null; carbohydrate: string | null;
@@ -7271,7 +7300,11 @@ async function planProblemsFor(
 
   const meals = (row.diet_plan_meals ?? []).slice().sort((a, b) => a.seq - b.seq).map((m) => ({
     seq: m.seq, name: m.name, time_from: null, time_to: null, note: null, conditional: m.conditional,
-    options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq),
+    options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq).map(({ diet_plan_option_dishes, ...o }) => ({
+      ...o,
+      components: [...(diet_plan_option_dishes ?? [])].sort((a, b) => a.seq - b.seq)
+        .map((c): PlanComponent => ({ seq: c.seq, dish_id: c.dish_id, servings: Number(c.servings) })),
+    })),
   }));
   // The library is only fetched when the chart actually leans on it, and only
   // so a broken link reads as a broken link. Without it every other check
@@ -7280,7 +7313,7 @@ async function planProblemsFor(
   // If the library cannot be read, that is itself a reason to refuse: this
   // function is the gate on submitting, approving and sending, and passing a
   // chart because its recipes could not be checked is the wrong way to fail.
-  const linked = meals.some((m) => m.options.some((o) => o.dish_id));
+  const linked = meals.some((m) => m.options.some((o) => o.components.length));
   let dishes: DishOption[] = [];
   if (linked) {
     try {
@@ -7340,10 +7373,14 @@ async function repriceOpenCharts(
    */
   mode: "reprice" | "blank" = "reprice",
 ): Promise<{ changed: number; failed: boolean }> {
-  let dish: DishOption | undefined;
+  // The WHOLE library, not just the dish that changed: an option is the sum of
+  // its recipes, so working out what it now comes to means pricing all of
+  // them. Correcting the kadala curry moves every option that also contains
+  // puttu and eggs, and their figures have to come from somewhere.
+  const dishes = new Map<string, DishOption>();
   if (mode === "reprice") {
     try {
-      dish = (await pricedDishes(supabase)).find((d) => d.id === dishId);
+      for (const d of await pricedDishes(supabase)) dishes.set(d.id, d);
     } catch {
       // The recipe itself is already saved. Charts stay on their old figures
       // until someone saves them, which re-prices from scratch anyway.
@@ -7353,18 +7390,16 @@ async function repriceOpenCharts(
 
   const found = await openChartOptionsUsing(supabase, dishId);
 
-  // Row by row because each option holds its own portion — half a serving and
-  // two servings of the same dish are different numbers.
+  // Row by row because each option is its own sum — the same recipe at half a
+  // serving in one option and two in another are different numbers.
   let changed = 0, failed = found.failed;
   for (const o of found.rows) {
-    const priced = mode === "blank" ? null : linkedNutrients(dish, o.servings);
+    // Blanking wins outright. The dish is on its way out, so an option built
+    // on it has no total any more — not even a partial one from its surviving
+    // components, which would be a figure for a meal nobody is prescribing.
+    const priced = mode === "blank" ? null : optionNutrients(o.components, dishes);
     const { error } = await supabase.from("diet_plan_options")
-      .update({
-        kcal: priced?.kcal ?? null,
-        protein_g: priced?.protein_g ?? null,
-        // Going: a portion of nothing is not a portion.
-        ...(mode === "blank" ? { servings: null } : {}),
-      })
+      .update({ kcal: priced?.kcal ?? null, protein_g: priced?.protein_g ?? null })
       .eq("id", o.id);
     if (error) failed = true; else changed += 1;
   }
@@ -7372,31 +7407,42 @@ async function repriceOpenCharts(
 }
 
 /**
- * The option rows on charts that are still open — draft or in review — and
- * that name this dish.
+ * The option rows on charts that are still open — draft or in review — that
+ * are built from this dish, each with its FULL list of recipes.
  *
- * Walks outwards from the options rather than inwards from every chart in the
- * clinic, so the work is proportional to how widely the recipe is used. A
- * published or archived chart is never included: it is a document already
+ * The full list matters: an option is the sum of its components, so knowing
+ * that one of them changed is not enough to work out what the row now comes
+ * to. Everything it is made of has to come back with it.
+ *
+ * Walks outwards from the component rows rather than inwards from every chart
+ * in the clinic, so the work is proportional to how widely the recipe is used.
+ * A published or archived chart is never included: it is a document already
  * issued, and changing what it says is a new version, not a background job.
  *
- * Every read is checked. A failed one returns no rows, which is
+ * Every read is checked. A failed one would otherwise return no rows, which is
  * indistinguishable from "no chart uses this dish" — and on the delete path
  * that difference is the whole point: nothing found means nothing blanked,
  * and the deletion then leaves recipe-derived figures behind on a row with no
- * link left to explain them. So failure is reported rather than inferred.
+ * recipes left to explain them. So failure is reported rather than inferred.
  */
 async function openChartOptionsUsing(
   supabase: Awaited<ReturnType<typeof createClient>>,
   dishId: string,
-): Promise<{ rows: { id: string; servings: number | null }[]; failed: boolean }> {
+): Promise<{ rows: { id: string; components: PlanComponent[] }[]; failed: boolean }> {
   const none = (failed: boolean) => ({ rows: [], failed });
 
+  const { data: uses, error: useErr } = await supabase
+    .from("diet_plan_option_dishes").select("option_id").eq("dish_id", dishId);
+  if (useErr) return none(true);
+  const optionIds = [...new Set(((uses ?? []) as { option_id: string }[]).map((u) => u.option_id))];
+  if (!optionIds.length) return none(false);
+
   const { data: opts, error: optErr } = await supabase.from("diet_plan_options")
-    .select("id, servings, meal_id").eq("dish_id", dishId);
+    .select("id, meal_id, diet_plan_option_dishes(dish_id, servings, seq)").in("id", optionIds);
   if (optErr) return none(true);
-  const rows = (opts ?? []) as { id: string; servings: number | null; meal_id: string }[];
-  if (!rows.length) return none(false);
+  type RawOpt = { id: string; meal_id: string; diet_plan_option_dishes: { dish_id: string; servings: number; seq: number }[] | null };
+  const rows = (opts ?? []) as unknown as RawOpt[];
+  if (rows.length !== optionIds.length) return none(true);   // silently filtered: not a clean read
 
   const { data: mealRows, error: mealErr } = await supabase.from("diet_plan_meals")
     .select("id, plan_id").in("id", [...new Set(rows.map((r) => r.meal_id))]);
@@ -7421,7 +7467,11 @@ async function openChartOptionsUsing(
     rows: rows.filter((r) => {
       const planId = planOfMeal.get(r.meal_id);
       return Boolean(planId && open.has(planId));     // published, archived or orphaned: left alone
-    }).map((r) => ({ id: r.id, servings: r.servings })),
+    }).map((r) => ({
+      id: r.id,
+      components: [...(r.diet_plan_option_dishes ?? [])].sort((a, b) => a.seq - b.seq)
+        .map((c): PlanComponent => ({ seq: c.seq, dish_id: c.dish_id, servings: Number(c.servings) })),
+    })),
     failed: false,
   };
 }
@@ -7689,13 +7739,50 @@ export async function newDietPlanVersion(formData: FormData) {
     }).select("id").maybeSingle();
     const nmId = (nm as { id: string } | null)?.id;
     if (!nmId) continue;
-    // The recipe link is copied with everything else, so a new version starts
-    // as the same chart rather than one where every dish has quietly become
-    // free text — and the moment it is saved, the new version re-prices from
-    // whatever the recipes say today.
-    const { data: opts } = await supabase.from("diet_plan_options").select("seq, food_items, qty, kcal, protein_g, micronutrients, dish_id, servings").eq("meal_id", m.id).order("seq");
-    const rows = ((opts ?? []) as Record<string, unknown>[]).map((o) => ({ ...o, meal_id: nmId }));
-    if (rows.length) await supabase.from("diet_plan_options").insert(rows);
+    // The recipes are copied with everything else, so a new version starts as
+    // the same chart rather than one where every linked option has quietly
+    // become free text.
+    //
+    // The figures come across as they were, which means they can be out of
+    // date the moment the new draft opens — a recipe corrected since the old
+    // version was published has not touched it, because published charts are
+    // deliberately left alone. That is why `linkProblem` compares each row
+    // against its recipes: the copy cannot be submitted, approved or sent
+    // until it has been saved, and saving re-prices it from scratch.
+    const { data: opts } = await supabase.from("diet_plan_options")
+      .select("id, seq, food_items, qty, kcal, protein_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)")
+      .eq("meal_id", m.id).order("seq");
+    type SrcOpt = {
+      id: string; seq: number; food_items: string; qty: string | null;
+      kcal: number | null; protein_g: number | null; micronutrients: string | null;
+      diet_plan_option_dishes: { dish_id: string; servings: number; seq: number }[] | null;
+    };
+    const src = (opts ?? []) as unknown as SrcOpt[];
+    if (!src.length) continue;
+
+    const { data: made } = await supabase.from("diet_plan_options").insert(
+      src.map(({ id: _id, diet_plan_option_dishes: _parts, ...o }) => ({ ...o, meal_id: nmId })),
+    ).select("id, seq");
+    // Paired by seq, not by position — the order rows come back in is the
+    // database's business, and pairing an option with another one's recipes
+    // would be a mistake nobody could see on screen.
+    const idOfSeq = new Map<number, string>(
+      ((made ?? []) as { id: string; seq: number }[]).map((r) => [r.seq, r.id] as const));
+
+    const parts = src.flatMap((o) => {
+      const optionId = idOfSeq.get(o.seq);
+      if (!optionId) return [];
+      return (o.diet_plan_option_dishes ?? []).map((c) => ({
+        option_id: optionId, dish_id: c.dish_id, servings: c.servings, seq: c.seq,
+      }));
+    });
+    if (parts.length) {
+      const { error: partErr } = await supabase.from("diet_plan_option_dishes").insert(parts);
+      // Unchecked, this is how a new version silently becomes free text: the
+      // options copied across keep the old version's frozen figures, and with
+      // no components behind them nothing can tell they are out of date.
+      if (partErr) return { error: `Could not copy the recipes on ${m.name}: ${partErr.message}` };
+    }
   }
   revalidatePath("/workspace");
   return { ok: true, id: newId };

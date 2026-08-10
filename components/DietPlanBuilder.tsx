@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   type PlanMeal, type PlanOption, type PlanTargets, type DishOption,
-  mealHeading, planTotals, targetCheck, planProblems, resequence, linkedNutrients,
+  mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
 } from "@/lib/diet-plan";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
@@ -29,10 +29,10 @@ const newDietPlanVersionForm = async (formData: FormData) => {
 };
 
 /** A blank option row — a new "+ Add option" click. Free text until linked. */
-const blankOption = (seq: number): PlanOption => ({ seq, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: "", dish_id: null, servings: null });
+const blankOption = (seq: number): PlanOption => ({ seq, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: "", components: [] });
 
-/** The eight columns of the options table, shared by the header and each row. */
-const OPT_COLS = "68px 1.4fr 1.1fr 1.4fr 74px 84px 1.1fr 28px";
+/** The seven columns of the options table, shared by the header and each row. */
+const OPT_COLS = "72px 1.6fr 1.2fr 80px 90px 1.2fr 28px";
 /** A blank meal slot — a new "+ Add meal slot" click. */
 const blankMeal = (seq: number): PlanMeal => ({ seq, name: "", time_from: null, time_to: null, note: null, conditional: false, options: [] });
 
@@ -142,70 +142,49 @@ export default function DietPlanBuilder({
   const dishMap = useMemo(() => new Map<string, DishOption>(dishes.map((d) => [d.id, d] as const)), [dishes]);
 
   /**
-   * Point an option at a recipe, or let it go again.
+   * Change what an option is built from, and re-total it.
    *
-   * The numbers are filled in here as well as on the server. The server's copy
-   * is the one that counts — it is what stops a stale tab writing its own
+   * The numbers are worked out here as well as on the server. The server's
+   * copy is the one that counts — it is what stops a stale tab writing its own
    * figures — but the day's totals, the ±40 kcal spread check and the problem
    * list all read the rows on screen, and they would all be wrong until the
    * next save if this only greyed the boxes out.
    *
-   * Linking offers the dish's name and its household portion where those boxes
-   * are empty, or where they still hold the previous dish's wording. Offers,
-   * not imposes: "Puttu with extra kadala" is hers to type and is left alone.
-   *
-   * That second case is the one that matters. Swapping a row from Puttu to
-   * Kadala curry used to recost the row and leave it saying "Puttu" — a chart
-   * that names one dish and is priced as another, and nothing downstream could
-   * catch it, because the numbers were perfectly correct for a dish the row
-   * did not mention.
+   * Nothing is written into the Food items or Qty boxes. Those are the words
+   * the client reads, the portions vary from client to client, and an option
+   * made of four recipes has no single name to borrow anyway.
    */
-  const linkDish = (mealIdx: number, optIdx: number, dishId: string, o: PlanOption) => {
-    if (!dishId) {
-      // Unlinking leaves the last computed numbers in the boxes rather than
-      // blanking them. She unlinked to adjust one portion, not to start again.
-      updateOption(mealIdx, optIdx, { dish_id: null, servings: null });
-      return;
-    }
-    const d = dishMap.get(dishId);
-    const was = o.dish_id ? dishMap.get(o.dish_id) : undefined;
-    const servings = o.servings != null && o.servings > 0 ? o.servings : 1;
-    const priced = linkedNutrients(d, servings);
-
-    // A box counts as the app's to fill if it is empty, or if it still holds
-    // word-for-word what the previous dish put there. Anything else she typed,
-    // and it stays. `ours` is checked against the OLD dish, so the test is
-    // "did we write this?", not "does it look like the new one?".
-    const ours = (value: string | null | undefined, previous: string | null | undefined) => {
-      const v = value?.trim();
-      if (!v) return true;
-      const prev = previous?.trim();
-      return Boolean(prev) && v === prev;
-    };
-
+  const setComponents = (mealIdx: number, optIdx: number, components: PlanOption["components"]) => {
+    const priced = optionNutrients(components, dishMap);
     updateOption(mealIdx, optIdx, {
-      dish_id: dishId,
-      servings,
-      kcal: priced?.kcal ?? null,
-      protein_g: priced?.protein_g ?? null,
-      // An unknown dish leaves the wording alone — there is nothing to write
-      // in its place, and blanking the row would lose what is already there.
-      food_items: d && ours(o.food_items, was?.name) ? d.name : o.food_items,
-      // Cleared, not left behind, when the new dish has no household portion
-      // of its own. Keeping the old one would print the previous recipe's
-      // portion against this recipe's figures — the very swap this guards.
-      qty: d && ours(o.qty, was?.serving_label) ? d.serving_label : o.qty,
+      components: resequence(components),
+      // An option with nothing linked goes back to being free text, and keeps
+      // whatever figures were last worked out so she has something to adjust
+      // rather than an empty row.
+      ...(components.length ? { kcal: priced?.kcal ?? null, protein_g: priced?.protein_g ?? null } : {}),
     });
   };
 
-  /** A different portion of the same recipe — re-price, don't re-type. */
-  const setServings = (mealIdx: number, optIdx: number, servings: number | null, o: PlanOption) => {
-    const priced = linkedNutrients(o.dish_id ? dishMap.get(o.dish_id) : undefined, servings);
-    updateOption(mealIdx, optIdx, {
-      servings,
-      kcal: priced?.kcal ?? null,
-      protein_g: priced?.protein_g ?? null,
-    });
+  const addComponent = (mealIdx: number, optIdx: number, o: PlanOption) => {
+    const first = dishes[0];
+    if (!first) return;
+    // Building from recipes replaces whatever she typed, and removing the
+    // component again cannot bring it back. On the FIRST one, where there are
+    // figures to lose, that is worth a question — a misplaced click on a row
+    // she has already costed by hand should not quietly undo the work.
+    if (!o.components.length && (o.kcal != null || o.protein_g != null)
+      && !window.confirm("Building this option from recipes will replace the calories and protein you typed. Continue?")) {
+      return;
+    }
+    setComponents(mealIdx, optIdx, [...o.components, { seq: o.components.length, dish_id: first.id, servings: 1 }]);
+  };
+
+  const updateComponent = (mealIdx: number, optIdx: number, at: number, patch: Partial<PlanOption["components"][number]>, o: PlanOption) => {
+    setComponents(mealIdx, optIdx, o.components.map((c, k) => (k === at ? { ...c, ...patch } : c)));
+  };
+
+  const removeComponent = (mealIdx: number, optIdx: number, at: number, o: PlanOption) => {
+    setComponents(mealIdx, optIdx, o.components.filter((_, k) => k !== at));
   };
 
   const totals = planTotals(meals);
@@ -219,7 +198,8 @@ export default function DietPlanBuilder({
         seq: i, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
         options: m.options.map((o, j) => ({
           seq: j, food_items: o.food_items, qty: o.qty, kcal: o.kcal, protein_g: o.protein_g,
-          micronutrients: o.micronutrients, dish_id: o.dish_id, servings: o.servings,
+          micronutrients: o.micronutrients,
+          components: o.components.map((c, k) => ({ seq: k, dish_id: c.dish_id, servings: c.servings })),
         })),
       }));
       const r = await saveDietPlan(planId, targets, meta, mealsIn);
@@ -389,68 +369,95 @@ export default function DietPlanBuilder({
           {/* Options table */}
           <div style={{ marginTop: 12 }}>
             <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, fontSize: 11, color: "var(--muted)", fontWeight: 600, padding: "0 2px" }}>
-              <span>Option</span><span>Food items</span><span>Qty</span><span>From recipe</span><span>Kcal</span><span>Protein (g)</span><span>Micronutrient</span><span />
+              <span>Option</span><span>Food items</span><span>Qty</span><span>Kcal</span><span>Protein (g)</span><span>Micronutrient</span><span />
             </div>
             {m.options.map((o, j) => {
-              // A linked row's calories and protein are the recipe's. The boxes
+              // A built row's calories and protein are the recipes'. The boxes
               // go read-only rather than disappearing, so the figures still
-              // read straight across the row the way an unlinked one does.
-              const linkedTo = o.dish_id ? dishMap.get(o.dish_id) : undefined;
-              // An empty library means the list has not arrived, not that the
-              // dish was deleted — the same distinction planProblems makes.
-              const brokenLink = Boolean(o.dish_id) && !linkedTo && dishes.length > 0;
-              const unknownLink = Boolean(o.dish_id) && !linkedTo && dishes.length === 0;
-              const unpriced = Boolean(linkedTo) && !linkedTo!.perServing;
+              // read straight across the row the way a typed one does.
+              const built = o.components.length > 0;
               const fromRecipe: React.CSSProperties = {
                 ...inpControl, background: "var(--neutral-bg)", color: "var(--muted)", fontWeight: 600,
               };
+              // Said once per component, on the row, rather than only in the
+              // list at the foot of a long page.
+              const trouble = o.components.map((c) => {
+                const d = dishMap.get(c.dish_id);
+                if (!d) return dishes.length ? "one of its recipes is no longer in the library" : null;
+                if (c.servings <= 0) return `the ${d.name} portion has to be more than nothing`;
+                if (!d.perServing) return `${d.name} can't be priced yet — ${d.reason}`;
+                return null;
+              }).find(Boolean);
               return (
-                <div key={o.id ?? `opt-${j}`}>
-                  <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, marginTop: 6, alignItems: "center" }}>
+                <div key={o.id ?? `opt-${j}`} style={{ marginTop: 6, paddingBottom: built ? 6 : 0 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, alignItems: "center" }}>
                     <span style={{ fontSize: 12, color: "var(--muted)" }}>Option {j + 1}</span>
                     <input disabled={locked} value={o.food_items} placeholder="Food items" onChange={(e) => updateOption(i, j, { food_items: e.target.value })} style={inpControl} />
                     <input disabled={locked} value={o.qty ?? ""} placeholder="Measured qty" onChange={(e) => updateOption(i, j, { qty: e.target.value || null })} style={inpControl} />
-
-                    {/* The link itself: which recipe, and how much of it. */}
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <select disabled={locked} value={o.dish_id ?? ""} onChange={(e) => linkDish(i, j, e.target.value, o)}
-                        style={{ ...inpControl, flex: 1, minWidth: 0, cursor: locked ? "default" : "pointer" }}
-                        title={o.dish_id ? "Calories and protein come from this recipe" : "Free text — you type the numbers"}>
-                        <option value="">Free text</option>
-                        {brokenLink && <option value={o.dish_id!}>Recipe removed</option>}
-                        {unknownLink && <option value={o.dish_id!}>Linked recipe</option>}
-                        {dishes.map((d) => (
-                          <option key={d.id} value={d.id}>{d.name}{d.perServing ? "" : " (unpriced)"}</option>
-                        ))}
-                      </select>
-                      {o.dish_id && (
-                        <input type="number" step="0.25" min="0.25" disabled={locked} value={o.servings ?? ""}
-                          onChange={(e) => setServings(i, j, e.target.value === "" ? null : Number(e.target.value), o)}
-                          style={{ ...inpControl, width: 56, flex: "none" }} title="Servings — 1 is one portion, 0.5 is half" />
-                      )}
-                    </div>
-
-                    <input type="number" disabled={locked} readOnly={Boolean(o.dish_id)} value={o.kcal ?? ""}
+                    <input type="number" disabled={locked} readOnly={built} value={o.kcal ?? ""}
                       onChange={(e) => updateOption(i, j, { kcal: e.target.value === "" ? null : Number(e.target.value) })}
-                      style={o.dish_id ? fromRecipe : inpControl}
-                      title={o.dish_id ? "From the recipe — change the dish or the servings" : undefined} />
-                    <input type="number" step="0.1" disabled={locked} readOnly={Boolean(o.dish_id)} value={o.protein_g ?? ""}
+                      style={built ? fromRecipe : inpControl}
+                      title={built ? "Added up from the recipes below" : undefined} />
+                    <input type="number" step="0.1" disabled={locked} readOnly={built} value={o.protein_g ?? ""}
                       onChange={(e) => updateOption(i, j, { protein_g: e.target.value === "" ? null : Number(e.target.value) })}
-                      style={o.dish_id ? fromRecipe : inpControl}
-                      title={o.dish_id ? "From the recipe — change the dish or the servings" : undefined} />
+                      style={built ? fromRecipe : inpControl}
+                      title={built ? "Added up from the recipes below" : undefined} />
                     <input disabled={locked} value={o.micronutrients ?? ""} placeholder="Iron, folate…" onChange={(e) => updateOption(i, j, { micronutrients: e.target.value || null })} style={inpControl} />
                     {!locked && <button type="button" onClick={() => removeOption(i, j)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete option">✕</button>}
                   </div>
 
-                  {/* Why a linked row has no numbers, said on the row rather
-                      than only in the list at the bottom of a long page. The
-                      way out is named both times: fix the recipe, or unlink
-                      and type the figures for this one client. */}
-                  {(unpriced || brokenLink) && (
-                    <div style={{ fontSize: 11.5, color: "var(--amber-text)", margin: "3px 0 0 74px" }}>
-                      {brokenLink
-                        ? "That recipe is no longer in the library — pick another, or set this back to free text."
-                        : `${linkedTo!.name} can't be priced yet — ${linkedTo!.reason}. Fix it under Dishes, or set this row to free text.`}
+                  {/* ---- BUILT FROM ----
+                      One line per recipe in the option. Indented under the row
+                      it belongs to rather than squeezed into a column, because
+                      a breakfast option is routinely four items and a list of
+                      four does not fit in a cell. */}
+                  {built && dishes.length === 0 && (
+                    // The library did not load. Without this the row shows
+                    // greyed, uneditable figures, no recipes and no reason —
+                    // and no way back to typing them by hand.
+                    <div style={{ fontSize: 11.5, color: "var(--amber-text)", margin: "4px 0 0 78px" }}>
+                      Built from recipes, but the recipe library could not be loaded — reload the page to edit this option.
+                    </div>
+                  )}
+
+                  {(built || !locked) && dishes.length > 0 && (
+                    <div style={{ margin: "4px 0 0 78px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                      {built && <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>Built from</span>}
+                      {o.components.map((c, k) => (
+                        <span key={c.id ?? `part-${k}`} style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                          <select disabled={locked} value={c.dish_id}
+                            onChange={(e) => updateComponent(i, j, k, { dish_id: e.target.value }, o)}
+                            style={{ ...inpControl, width: "auto", maxWidth: 190, height: 30, fontSize: 12, cursor: locked ? "default" : "pointer" }}>
+                            {/* A recipe deleted since this was saved would
+                                otherwise vanish from the box and read as
+                                whichever dish happened to be first. */}
+                            {!dishMap.has(c.dish_id) && <option value={c.dish_id}>Recipe removed</option>}
+                            {dishes.map((d) => (
+                              <option key={d.id} value={d.id}>{d.name}{d.perServing ? "" : " (unpriced)"}</option>
+                            ))}
+                          </select>
+                          <input type="number" step="0.25" min="0.25" disabled={locked} value={c.servings}
+                            onChange={(e) => updateComponent(i, j, k, { servings: e.target.value === "" ? 1 : Number(e.target.value) }, o)}
+                            style={{ ...inpControl, width: 52, height: 30, fontSize: 12 }}
+                            title="How much of one serving — 1 is a portion, 0.5 is half" />
+                          {!locked && (
+                            <button type="button" onClick={() => removeComponent(i, j, k, o)}
+                              style={{ ...iconBtn, width: 24, height: 24, lineHeight: "22px", color: "var(--red-text)" }} title="Remove from this option">✕</button>
+                          )}
+                        </span>
+                      ))}
+                      {!locked && (
+                        <button type="button" onClick={() => addComponent(i, j, o)}
+                          style={{ ...outlineBtn, padding: "4px 10px", fontSize: 11.5 }}>
+                          {built ? "+ Add another recipe" : "+ Build from recipes"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {trouble && (
+                    <div style={{ fontSize: 11.5, color: "var(--amber-text)", margin: "3px 0 0 78px" }}>
+                      No figures for this option — {trouble}. Fix it under Dishes, or remove it here and type the numbers.
                     </div>
                   )}
                 </div>

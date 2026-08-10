@@ -13,15 +13,28 @@ export type PlanOption = {
   protein_g: number | null;
   micronutrients: string | null;
   /**
-   * The costed recipe this option is built from, when there is one.
+   * The costed recipes this option is built from.
    *
-   * Null is the normal case and always will be: a dietitian must be able to
+   * Empty is the normal case and always will be: a dietitian must be able to
    * write "two idlis and sambar" mid-consultation without stopping to define a
    * recipe first. Linking is an upgrade to an option, never a requirement.
+   *
+   * A list rather than one dish, because an option is rarely one dish. "Puttu
+   * ¾ cup + kadala curry ½ cup + 2 eggs" is three recipes and three portions
+   * on one line of the client's chart — and holding it as a single entry would
+   * mean a second copy of the kadala curry recipe for every option that uses
+   * it, each drifting away from the others as they are corrected.
    */
-  dish_id: string | null;
-  /** How much of that recipe, as a multiple of one serving. 0.5 = half. */
-  servings: number | null;
+  components: PlanComponent[];
+};
+
+/** One recipe inside an option, and how much of it. */
+export type PlanComponent = {
+  id?: string;
+  seq: number;
+  dish_id: string;
+  /** A multiple of one serving of that dish. 1 = a serving, 0.5 = half. */
+  servings: number;
 };
 
 /**
@@ -45,33 +58,55 @@ export type DishOption = {
 };
 
 /**
- * What a linked option's calories and protein MUST be.
+ * What one component contributes — a portion of a single recipe.
  *
- * The single rule of the link: where an option names a dish, the recipe's
- * arithmetic wins and nobody types over it. Change the dish and every chart
- * still open re-prices itself. That is the whole point — a chart that can be
- * recalculated is a chart that stays true when the recipe is corrected, and a
- * typed-over figure is exactly the remembered number this layer replaces.
+ * Returns null when the dish is missing or unpriced, or the portion is not a
+ * portion. Refusing is the point: a component that cannot be worked out makes
+ * the whole option unpriceable, and the alternative is a plausible number
+ * standing in for one nobody calculated.
  *
- * Returns null when the dish is missing or unpriced, which is a blocking
- * problem rather than a reason to fall back on a guess.
+ * Rounding happens once, at the end of `optionNutrients`, not here — rounding
+ * every component first and then adding them is how four items become 3 kcal
+ * heavier than the sum of what they actually are.
  */
-export function linkedNutrients(
+export function componentNutrients(
   dish: DishOption | undefined,
   servings: number | null,
 ): { kcal: number; protein_g: number } | null {
   if (!dish?.perServing) return null;
-  // A blank portion box means one serving — the ordinary case, and the least
-  // surprising reading of an empty field next to a named dish. Zero or less is
-  // not a reading at all, so it gets no numbers and `linkProblem` says why.
-  // Falling back to a full serving there would put a figure on the row that
-  // contradicts what the box says.
+  // A blank portion means one serving — the ordinary reading of an empty box
+  // beside a named dish. Zero or less is not a reading at all.
   if (servings != null && servings <= 0) return null;
   const s = servings ?? 1;
-  return {
-    kcal: Math.round(dish.perServing.kcal * s),
-    protein_g: Math.round(dish.perServing.protein_g * s * 10) / 10,
-  };
+  return { kcal: dish.perServing.kcal * s, protein_g: dish.perServing.protein_g * s };
+}
+
+/**
+ * What an option's calories and protein MUST be, added up from its recipes.
+ *
+ * The rule of the link: where an option names recipes, their arithmetic wins
+ * and nobody types over it. Change one of those recipes and every chart still
+ * open re-prices itself. That is the whole point — a chart that can be
+ * recalculated stays true when a recipe is corrected, and a typed-over figure
+ * is exactly the remembered number this layer replaces.
+ *
+ * All or nothing. If any one component cannot be priced the option has no
+ * figures at all, because a total missing one of its four items is not a
+ * smaller total, it is a wrong one.
+ */
+export function optionNutrients(
+  components: PlanComponent[],
+  dishes: Map<string, DishOption>,
+): { kcal: number; protein_g: number } | null {
+  if (!components.length) return null;
+  let kcal = 0, protein = 0;
+  for (const c of components) {
+    const part = componentNutrients(dishes.get(c.dish_id), c.servings);
+    if (!part) return null;
+    kcal += part.kcal;
+    protein += part.protein_g;
+  }
+  return { kcal: Math.round(kcal), protein_g: Math.round(protein * 10) / 10 };
 }
 
 export type PlanMeal = {
@@ -209,11 +244,15 @@ export function targetCheck(totals: { minKcal: number; maxKcal: number }, target
 export const OPTION_KCAL_SPREAD = 40;
 
 /**
- * What is wrong with an option's recipe link, if anything.
+ * What is wrong with an option's recipes, if anything.
  *
  * Says nothing when the caller passed no library — it cannot tell an unknown
  * dish from an unknown list, and inventing "that recipe no longer exists" for
  * a recipe that is merely off-screen would be worse than staying quiet.
+ *
+ * Reports the FIRST thing wrong rather than all of them. An option with four
+ * components has four ways to be broken, and a list that says the same thing
+ * four times about one unfinished recipe buries the other meals.
  */
 function linkProblem(
   where: string,
@@ -221,30 +260,33 @@ function linkProblem(
   dishMap: Map<string, DishOption>,
 ): string | null {
   if (!dishMap.size) return null;
-  const d = dishMap.get(o.dish_id!);
-  if (!d) return `${where} is linked to a recipe that no longer exists — unlink it or pick another dish.`;
-  if (o.servings != null && o.servings <= 0) {
-    return `${where} is ${o.servings} servings of ${d.name} — a portion has to be more than nothing.`;
-  }
-  if (!d.perServing) {
-    return `${where} uses ${d.name}, which cannot be priced yet — ${d.reason ?? "the recipe is incomplete"}. Fix it in Dishes, or unlink and type the numbers.`;
+
+  for (const c of o.components) {
+    const d = dishMap.get(c.dish_id);
+    if (!d) return `${where} is built from a recipe that no longer exists — remove that item, or pick another dish.`;
+    if (c.servings != null && c.servings <= 0) {
+      return `${where} is ${c.servings} servings of ${d.name} — a portion has to be more than nothing.`;
+    }
+    if (!d.perServing) {
+      return `${where} uses ${d.name}, which cannot be priced yet — ${d.reason ?? "the recipe is incomplete"}. Fix it in Dishes, or remove it from this option and type the numbers.`;
+    }
   }
 
-  // The row must agree with the recipe as it stands TODAY.
+  // The row must agree with its recipes as they stand TODAY.
   //
-  // Charts are priced when they are saved, and re-priced when the recipe
+  // Charts are priced when they are saved, and re-priced when a recipe
   // changes — but neither covers a new version copied from a published one,
   // which arrives carrying figures frozen at the moment the old version went
   // out. Nothing re-prices it until someone presses Save, and nothing was
   // stopping it being approved and sent in between. This is what stops it:
-  // if the row and the recipe disagree, the chart does not move until the
+  // if the row and its recipes disagree, the chart does not move until the
   // arithmetic has been redone.
   //
   // On screen this never fires — the builder recomputes as she types. It is a
   // check on what was stored, for the paths that do not go through her hands.
-  const priced = linkedNutrients(d, o.servings);
+  const priced = optionNutrients(o.components, dishMap);
   if (priced && (o.kcal !== priced.kcal || Number(o.protein_g) !== priced.protein_g)) {
-    return `${where} shows ${o.kcal ?? "no"} kcal, but ${d.name} works out at ${priced.kcal} kcal today. Press Save to bring the chart up to date with the recipe.`;
+    return `${where} shows ${o.kcal ?? "no"} kcal, but its recipes work out at ${priced.kcal} kcal today. Press Save to bring the chart up to date.`;
   }
   return null;
 }
@@ -300,7 +342,7 @@ export function planProblems(
         // dietitian to a box she cannot type in; the recipe is where the fix
         // is, and saying so is the difference between a useful message and a
         // dead end.
-        const link = o.dish_id ? linkProblem(where, o, dishMap) : null;
+        const link = o.components.length ? linkProblem(where, o, dishMap) : null;
         if (link) {
           out.push(link);
         } else {
