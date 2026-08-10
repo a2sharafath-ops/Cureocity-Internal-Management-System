@@ -11,7 +11,10 @@ import { HOW_TO_USE, DEFAULT_MEALS, planProblems, optionNutrients, type DishOpti
 import { pricedDishes } from "@/lib/dish-pricing";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
-import { draftAssessment, assessmentGaps, type Assessment } from "@/lib/diet-assessment";
+import { draftAssessment, assessmentGaps, estimateTee, type Assessment } from "@/lib/diet-assessment";
+import {
+  SYSTEM_PROMPT, clientBrief, dishMenu, parseGeneratedPlan, type PlanContext,
+} from "@/lib/diet-plan-ai";
 import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
@@ -7271,6 +7274,176 @@ export async function saveDietPlan(
   }
   revalidatePath("/workspace");
   return { ok: true };
+}
+
+/**
+ * Draft a whole chart from what the clinic already knows about the client.
+ *
+ * Reads every consultation write-up, the InBody, vitals and whatever has been
+ * summarised on the uploaded reports, and asks the model to choose recipes
+ * from the approved library. It chooses; the arithmetic here prices. Not one
+ * figure on the finished chart comes from the model — the same
+ * `optionNutrients` that runs when the dietitian picks a recipe by hand runs
+ * over the model's choices, and the result is a DRAFT that has to be saved,
+ * checked and approved like any other.
+ *
+ * The daily calorie target is worked out from the measured BMR and the
+ * client's activity level before the model is called at all, and given to it
+ * as a fixed quantity to build around. That is the one number in the whole
+ * exercise, and it comes from the InBody and a published multiplier.
+ */
+export async function generateDietPlan(formData: FormData): Promise<{ ok?: boolean; id?: string; error?: string; note?: string }> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return { error: "Missing client." };
+  const supabase = await createClient();
+
+  const [{ data: c }, { data: m }, { data: alg }, { data: consults }, { data: vit }, { data: reports }] = await Promise.all([
+    supabase.from("clients").select("name, dob, gender, occupation, height, weight, conditions, goals").eq("id", client_id).maybeSingle(),
+    supabase.from("measurements").select("weight, bmi, bmr, body_fat, muscle_mass, visceral_fat")
+      .eq("client_id", client_id).order("date", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("allergies").select("substance, severity").eq("client_id", client_id),
+    supabase.from("consultations")
+      .select("kind, by_role, by_name, summary, ai_summary, notes, answers, created_at")
+      .eq("client_id", client_id).order("created_at", { ascending: false }).limit(12),
+    supabase.from("vitals").select("*").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("files").select("name, kind, created_at, summary").eq("client_id", client_id).order("created_at", { ascending: false }).limit(20),
+  ]);
+
+  const cl = c as { name: string; dob: string | null; gender: string | null; occupation: string | null; height: number | null; weight: number | null; conditions: string | null; goals: string | null } | null;
+  if (!cl) return { error: "Client not found." };
+
+  type Consult = { kind: string; by_role: string | null; by_name: string | null; summary: string | null; ai_summary: string | null; notes: string | null; answers: [string, string][] | null; created_at: string };
+  const rows = (consults ?? []) as unknown as Consult[];
+
+  // The dietitian's own write-up is the trigger for this button existing. Its
+  // absence means nobody has actually seen this client about their food yet.
+  const diet = rows.find((r) => r.kind === "Diet");
+  if (!diet) return { error: "No dietitian consultation summary for this client yet — write that up first." };
+
+  const meas = m as { weight: number | null; bmi: number | null; bmr: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
+  const answers = diet.answers ?? [];
+  const activity = answerFor(answers, /activity level|daily activity/i);
+  const bmr = meas?.bmr ?? null;
+  const tdee = estimateTee(bmr, activity);
+  if (!tdee) {
+    return { error: bmr
+      ? "No activity level recorded on the diet consultation, so the day's calorie target cannot be worked out. Add it and try again."
+      : "No measured BMR for this client — record an InBody first. The clinic's brief requires the measured figure, not an estimate." };
+  }
+
+  let dishes: DishOption[];
+  try {
+    dishes = await pricedDishes(supabase);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not read the recipe library." };
+  }
+  const usable = dishes.filter((d) => d.approved && d.perServing);
+  if (usable.length < 20) {
+    return { error: `Only ${usable.length} approved recipe${usable.length === 1 ? "" : "s"} in the library — approve more under Dishes before a chart can be drafted from them.` };
+  }
+
+  const context: PlanContext = {
+    name: cl.name,
+    age: ageFrom(cl.dob),
+    sex: cl.gender,
+    height_cm: cl.height,
+    weight_kg: meas?.weight ?? cl.weight,
+    bmi: meas?.bmi ?? null,
+    bmr, tdee, activity,
+    conditions: cl.conditions,
+    goals: cl.goals,
+    allergies: ((alg ?? []) as { substance: string; severity: string }[]).map((a) => `${a.substance}${a.severity ? ` (${a.severity})` : ""}`),
+    medications: answers.filter(([q]) => /medication/i.test(q)).map(([, a]) => a).filter(Boolean),
+    consultations: rows.map((r) => ({
+      role: r.by_role ?? r.kind, kind: r.kind, on: r.created_at.slice(0, 10),
+      text: (r.summary ?? r.ai_summary ?? r.notes ?? "").slice(0, 1500),
+    })).filter((r) => r.text.trim()),
+    reports: ((reports ?? []) as { name: string | null; kind: string | null; created_at: string; summary: string | null }[])
+      .filter((r) => r.summary?.trim())
+      .map((r) => ({ label: r.name ?? r.kind ?? "report", on: r.created_at.slice(0, 10), summary: r.summary!.slice(0, 800) })),
+    vitals: vit ? JSON.stringify(vit).slice(0, 500) : null,
+  };
+
+  const ai = await openaiComplete(
+    SYSTEM_PROMPT,
+    `${clientBrief(context)}\n\nApproved recipes you may use — id | name | per serving:\n${dishMenu(usable)}`,
+    { json: true, maxTokens: 4000, temperature: 0.3 },
+  );
+  if (ai.error || !ai.text) return { error: ai.error ?? "The model returned nothing." };
+
+  const parsed = parseGeneratedPlan(ai.text, usable);
+  if ("error" in parsed) return { error: parsed.error };
+
+  // From here it is the ordinary save path: the plan row, its slots, its
+  // options, and figures computed from the chosen recipes. Nothing the model
+  // said about a number is consulted.
+  const dishMap = new Map(usable.map((d) => [d.id, d] as const));
+  const { count } = await supabase.from("diet_plans").select("id", { count: "exact", head: true }).eq("client_id", client_id);
+  const { data: plan, error: planErr } = await supabase.from("diet_plans").insert({
+    client_id, consultation_id: null, version: (count ?? 0) + 1, status: "draft",
+    issued_on: todayISO(), kcal: tdee, how_to_use: HOW_TO_USE,
+    notes: parsed.notes, created_by: p.name,
+  }).select("id").maybeSingle();
+  if (planErr) return { error: planErr.message };
+  const planId = (plan as { id: string } | null)?.id;
+  if (!planId) return { error: "Could not create the chart." };
+
+  for (const [seq, meal] of parsed.meals.entries()) {
+    const { data: mrow } = await supabase.from("diet_plan_meals").insert({
+      plan_id: planId, seq, name: meal.name,
+      time_from: meal.time_from, time_to: meal.time_to, note: meal.note, conditional: meal.conditional,
+    }).select("id").maybeSingle();
+    const mealId = (mrow as { id: string } | null)?.id;
+    if (!mealId) continue;
+
+    const opts = meal.options.map((o, i) => {
+      const priced = optionNutrients(o.components, dishMap);
+      return {
+        meal_id: mealId, seq: i, food_items: o.food_items, qty: o.qty,
+        kcal: priced?.kcal ?? null, carb_g: priced?.carb_g ?? null,
+        protein_g: priced?.protein_g ?? null, fat_g: priced?.fat_g ?? null,
+        fibre_g: priced?.fibre_g ?? null,
+        micronutrients: o.micronutrients,
+      };
+    });
+    const { data: saved } = await supabase.from("diet_plan_options").insert(opts).select("id, seq");
+    const idOfSeq = new Map<number, string>(((saved ?? []) as { id: string; seq: number }[]).map((r) => [r.seq, r.id] as const));
+    const parts = meal.options.flatMap((o, i) => {
+      const optionId = idOfSeq.get(i);
+      return optionId ? o.components.map((c, j) => ({ option_id: optionId, dish_id: c.dish_id, servings: c.servings, seq: j })) : [];
+    });
+    if (parts.length) await supabase.from("diet_plan_option_dishes").insert(parts);
+  }
+
+  await logAudit(p, "Diet chart drafted by AI", cl.name,
+    [`v${(count ?? 0) + 1}`, `${parsed.meals.length} slots`, `${tdee} kcal target`,
+      parsed.dropped.length ? `${parsed.dropped.length} dropped` : null].filter(Boolean).join(" · "));
+  revalidatePath("/workspace");
+  return {
+    ok: true, id: planId,
+    // Said rather than hidden: a shorter chart than expected has a reason, and
+    // the targets still need filling in by hand.
+    note: [
+      `Drafted ${parsed.meals.length} meal slots against a ${tdee} kcal target.`,
+      parsed.dropped.length ? `${parsed.dropped.length} thing${parsed.dropped.length === 1 ? "" : "s"} left out: ${parsed.dropped.slice(0, 3).join("; ")}` : null,
+      "Check every row, fill in the protein, carbohydrate, fat and fibre targets, then Save.",
+    ].filter(Boolean).join(" "),
+  };
+}
+
+/** First answer whose question matches, from a consultation's answer list. */
+function answerFor(answers: [string, string][], re: RegExp): string | null {
+  const hit = answers.find(([q]) => re.test(q));
+  return hit?.[1]?.trim() || null;
+}
+
+function ageFrom(dob: string | null): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / 31_557_600_000);
 }
 
 /** Send a finished draft for sign-off. */

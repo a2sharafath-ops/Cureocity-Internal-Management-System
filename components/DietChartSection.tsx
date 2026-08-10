@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
-import { createDietPlan, createDietAssessment } from "@/lib/actions";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createDietPlan, createDietAssessment, generateDietPlan } from "@/lib/actions";
 import { DEFAULT_MEALS, type PlanMeal, type PlanTargets, type DishOption } from "@/lib/diet-plan";
 import { type Assessment } from "@/lib/diet-assessment";
 import { todayISO } from "@/lib/today";
@@ -100,6 +100,9 @@ export default function DietChartSection({
   const [newAssess, setNewAssess] = useState<DietAssessmentRow | null>(null);
   const [creating, startCreate] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  /** What the draft-from-consultations run reported back. */
+  const [note, setNote] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (newPlan && plans.some((p) => p.id === newPlan.id)) setNewPlan(null);
@@ -138,7 +141,7 @@ export default function DietChartSection({
     setSelectedClient(id);
     setPlanId(null); setAssessId(null);
     setNewPlan(null); setNewAssess(null);
-    setErr(null);
+    setErr(null); setNote(null);
   };
 
   const startNew = (which: View) => {
@@ -172,6 +175,30 @@ export default function DietChartSection({
         });
         setAssessId(r.id);
       }
+    });
+  };
+
+  /**
+   * Draft both documents from what the clinic already knows.
+   *
+   * The assessment summary first, because it is built deterministically from
+   * the client record and the InBody and costs nothing; then the chart, which
+   * asks a model to choose recipes and prices them here. A full page reload
+   * afterwards rather than patching state by hand: what comes back is a whole
+   * chart of slots and options, and pretending to know its shape on the client
+   * is how the two drift apart.
+   */
+  const generate = () => {
+    if (!selectedClient) { setErr("Select a client first."); return; }
+    setErr(null); setNote(null);
+    startCreate(async () => {
+      const fd = new FormData();
+      fd.set("client_id", selectedClient);
+      if (!assessVersions.length) await createDietAssessment(fd);
+      const r = await generateDietPlan(fd);
+      if (r.error) { setErr(r.error); return; }
+      setNote(r.note ?? "Draft ready.");
+      router.refresh();
     });
   };
 
@@ -278,11 +305,36 @@ export default function DietChartSection({
               {open && (
                 <div style={{ padding: "0 14px 16px" }}>
                   {canCompose && (
-                    <div style={{ marginBottom: 12 }}>
+                    <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                       <button type="button" onClick={() => startNew(view)} disabled={creating}
                         style={{ ...darkBtn, cursor: creating ? "default" : "pointer", opacity: creating ? 0.6 : 1 }}>
-                        {creating ? "Starting…" : view === "chart" ? "+ New chart" : "+ New assessment"}
+                        {creating ? "Working…" : view === "chart" ? "+ New chart" : "+ New assessment"}
                       </button>
+
+                      {/* Reads every write-up on this client and drafts both
+                          documents. Not a shortcut past the dietitian: it picks
+                          recipes from the approved library, the app prices them,
+                          and what lands is a draft with every check still to
+                          pass. Deliberately the second button, not the first. */}
+                      <button type="button" onClick={generate} disabled={creating}
+                        style={{
+                          border: "1px solid var(--border)", background: "#fff", borderRadius: 8,
+                          padding: "7px 14px", fontSize: 13, fontWeight: 600,
+                          cursor: creating ? "default" : "pointer", opacity: creating ? 0.6 : 1,
+                        }}
+                        title="Reads the consultation summaries, InBody and reports, then drafts a chart from approved recipes">
+                        {creating ? "Drafting…" : "✦ Draft from consultations"}
+                      </button>
+                      {creating && (
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                          Reading the write-ups and choosing recipes — this takes a few seconds.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {note && (
+                    <div style={{ ...box, padding: "10px 14px", marginBottom: 12, background: "var(--green-bg)", color: "var(--green-text)", fontSize: 12.5 }}>
+                      {note}
                     </div>
                   )}
                   {/* The two halves. */}
