@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption } from "@/lib/diet-plan";
+import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, linkedNutrients, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
 
 const opt = (seq: number, kcal: number, protein: number, items = `Option ${seq + 1}`) =>
-  ({ seq, food_items: items, qty: "1 cup", kcal, protein_g: protein, micronutrients: null });
+  ({ seq, food_items: items, qty: "1 cup", kcal, protein_g: protein, micronutrients: null, dish_id: null, servings: null });
 
 const meal = (name: string, opts: ReturnType<typeof opt>[], conditional = false): PlanMeal =>
   ({ seq: 0, name, time_from: null, time_to: null, note: null, conditional, options: opts });
@@ -49,7 +49,7 @@ describe("planTotals", () => {
   });
 
   it("ignores a blank option row rather than counting it as zero", () => {
-    const blank = { seq: 1, food_items: "   ", qty: null, kcal: null, protein_g: null, micronutrients: null };
+    const blank = { seq: 1, food_items: "   ", qty: null, kcal: null, protein_g: null, micronutrients: null, dish_id: null, servings: null };
     const meals = [meal("Breakfast", [opt(0, 400, 20), blank])];
     expect(planTotals(meals).minKcal).toBe(400);
   });
@@ -87,7 +87,7 @@ describe("planProblems", () => {
   });
 
   it("blocks an option with no quantity", () => {
-    const noQty = { seq: 0, food_items: "Rice and curry", qty: "", kcal: 500, protein_g: 20, micronutrients: null };
+    const noQty = { seq: 0, food_items: "Rice and curry", qty: "", kcal: 500, protein_g: 20, micronutrients: null, dish_id: null, servings: null };
     expect(planProblems([meal("Lunch", [noQty])], targets).some((p) => /quantity/.test(p))).toBe(true);
   });
 
@@ -101,9 +101,97 @@ describe("planProblems", () => {
     // micronutrients included — and the day lands on its target. The clinic's
     // rule is that nothing goes to a client with a blank or a mismatch in it.
     const full = (seq: number, kcal: number, protein: number) =>
-      ({ seq, food_items: `Option ${seq + 1}`, qty: "1 cup", kcal, protein_g: protein, micronutrients: "Iron, folate" });
+      ({ seq, food_items: `Option ${seq + 1}`, qty: "1 cup", kcal, protein_g: protein, micronutrients: "Iron, folate", dish_id: null, servings: null });
     const meals = [meal("Breakfast", [full(0, 450, 20)]), meal("Lunch", [full(0, 450, 30)])];
     expect(planProblems(meals, { ...targets, kcal: 900 })).toEqual([]);
+  });
+});
+
+describe("an option linked to a recipe", () => {
+  const puttu: DishOption = {
+    id: "d1", name: "Puttu", serving_label: "1 medium piece",
+    perServing: { kcal: 210, protein_g: 4.6 }, reason: null,
+  };
+  const unpriced: DishOption = {
+    id: "d2", name: "Kadala curry", serving_label: "½ cup",
+    perServing: null, reason: "2 ingredients not matched to the food table (coconut, shallot)",
+  };
+  const targets = { kcal: 1900, protein: "100 g", carbohydrate: "220 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+
+  const linked = (over: Partial<PlanOption> = {}): PlanOption => ({
+    seq: 0, food_items: "Puttu", qty: "1 medium piece", kcal: 210, protein_g: 4.6,
+    micronutrients: "Iron, folate", dish_id: "d1", servings: 1, ...over,
+  });
+  const meal = (options: PlanOption[]): PlanMeal =>
+    ({ seq: 0, name: "Breakfast", time_from: null, time_to: null, note: null, conditional: false, options });
+
+  describe("linkedNutrients", () => {
+    it("gives one serving as the recipe has it", () => {
+      expect(linkedNutrients(puttu, 1)).toEqual({ kcal: 210, protein_g: 4.6 });
+    });
+    it("scales a part portion", () => {
+      expect(linkedNutrients(puttu, 0.5)).toEqual({ kcal: 105, protein_g: 2.3 });
+    });
+    it("treats a missing portion as one serving rather than nothing", () => {
+      expect(linkedNutrients(puttu, null)).toEqual({ kcal: 210, protein_g: 4.6 });
+    });
+    it("refuses rather than estimates when the recipe cannot be priced", () => {
+      expect(linkedNutrients(unpriced, 1)).toBeNull();
+      expect(linkedNutrients(undefined, 1)).toBeNull();
+    });
+    it("gives no figures for a portion of nothing", () => {
+      // Not a full serving: the row would then show numbers that contradict
+      // the portion box beside them, and pass every check while doing it.
+      expect(linkedNutrients(puttu, 0)).toBeNull();
+      expect(linkedNutrients(puttu, -1)).toBeNull();
+    });
+  });
+
+  describe("planProblems", () => {
+    it("names the recipe, not the empty box, when a dish cannot be priced", () => {
+      const m = [meal([linked({ dish_id: "d2", kcal: null, protein_g: null })])];
+      const out = planProblems(m, targets, [puttu, unpriced]);
+      expect(out.some((p) => /Kadala curry/.test(p) && /not matched/.test(p))).toBe(true);
+      // The generic message would send her to a box she cannot type in.
+      expect(out.some((p) => /has no calories/.test(p))).toBe(false);
+    });
+
+    it("catches a link to a recipe that has since been deleted", () => {
+      const m = [meal([linked({ dish_id: "gone" })])];
+      expect(planProblems(m, targets, [puttu]).some((p) => /no longer exists/.test(p))).toBe(true);
+    });
+
+    it("refuses a portion of nothing", () => {
+      const m = [meal([linked({ servings: 0 })])];
+      expect(planProblems(m, targets, [puttu]).some((p) => /more than nothing/.test(p))).toBe(true);
+    });
+
+    it("refuses a row whose figures no longer match the recipe", () => {
+      // How a new version arrives: copied from a published chart, carrying the
+      // numbers the recipe gave months ago. Nothing re-prices it until someone
+      // saves, so without this it could be approved and sent as it stands.
+      const m = [meal([linked({ kcal: 190, protein_g: 4.1 })])];
+      const out = planProblems(m, targets, [puttu]);
+      expect(out.some((p) => /works out at 210 kcal today/.test(p))).toBe(true);
+      expect(out.some((p) => /Press Save/.test(p))).toBe(true);
+    });
+
+    it("says nothing when the row already agrees with the recipe", () => {
+      const m = [meal([linked({ servings: 0.5, kcal: 105, protein_g: 2.3 })])];
+      expect(planProblems(m, targets, [puttu]).filter((p) => /works out at/.test(p))).toEqual([]);
+    });
+
+    it("still asks for micronutrients — no recipe supplies those", () => {
+      const m = [meal([linked({ micronutrients: "" })])];
+      expect(planProblems(m, targets, [puttu]).some((p) => /no micronutrients/.test(p))).toBe(true);
+    });
+
+    it("says nothing about the link when no library was passed", () => {
+      // The caller has no list to judge against; inventing "that recipe no
+      // longer exists" would be worse than checking the row as it stands.
+      const m = [meal([linked({ dish_id: "anything" })])];
+      expect(planProblems(m, targets).some((p) => /no longer exists/.test(p))).toBe(false);
+    });
   });
 });
 
@@ -162,14 +250,14 @@ describe("parseNotes", () => {
 describe("planProblems — silent data loss", () => {
   const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
   it("refuses an option that has numbers but no food items", () => {
-    const orphan = { seq: 0, food_items: "  ", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null };
-    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null };
+    const orphan = { seq: 0, food_items: "  ", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null, dish_id: null, servings: null };
+    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null, dish_id: null, servings: null };
     const m: PlanMeal = { seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false, options: [orphan, good] };
     expect(planProblems([m], targets).some((p) => /no food items/.test(p))).toBe(true);
   });
   it("ignores a wholly empty row — that's just an unused slot in the grid", () => {
-    const empty = { seq: 0, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: null };
-    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: "Iron" };
+    const empty = { seq: 0, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: null, dish_id: null, servings: null };
+    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: "Iron", dish_id: null, servings: null };
     const m: PlanMeal = { seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false, options: [empty, good] };
     // Nothing is reported against the blank row itself; the filled one is fine.
     expect(planProblems([m], { ...targets, kcal: 400 })).toEqual([]);
@@ -182,7 +270,7 @@ describe("a chart cannot go out with blanks or mismatches", () => {
   const targets = { kcal: 1900, protein: "100-105 g", carbohydrate: "220-230 g", fats: "60-65 g", fibre: "20-30 g", water: "3 ltr" };
   const opt = (over: Partial<PlanOption> = {}): PlanOption => ({
     seq: 0, food_items: "Ragi puttu + kadala curry", qty: "1 medium piece + ½ cup",
-    kcal: 440, protein_g: 26, micronutrients: "Calcium, iron, folate", ...over,
+    kcal: 440, protein_g: 26, micronutrients: "Calcium, iron, folate", dish_id: null, servings: null, ...over,
   });
   const meal = (options: PlanOption[]): PlanMeal =>
     ({ seq: 0, name: "Breakfast", time_from: null, time_to: null, note: null, conditional: false, options });

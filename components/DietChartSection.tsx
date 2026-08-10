@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { createDietPlan, createDietAssessment } from "@/lib/actions";
-import { DEFAULT_MEALS, type PlanMeal, type PlanTargets } from "@/lib/diet-plan";
+import { DEFAULT_MEALS, type PlanMeal, type PlanTargets, type DishOption } from "@/lib/diet-plan";
 import { type Assessment } from "@/lib/diet-assessment";
 import { todayISO } from "@/lib/today";
 import DietPlanBuilder, { type PlanMeta } from "@/components/DietPlanBuilder";
@@ -76,10 +76,12 @@ type View = "assessment" | "chart";
  * older ones are one click away in the strip.
  */
 export default function DietChartSection({
-  plans, assessments, clients, canReview, canCompose, pdf, whatsapp }: {
+  plans, assessments, clients, dishes, canReview, canCompose, pdf, whatsapp }: {
   plans: DietPlanRow[];
   assessments: DietAssessmentRow[];
   clients: { id: string; name: string }[];
+  /** The recipe library, priced per serving, for the chart's dish picker. */
+  dishes: DishOption[];
   /** Can approve/send-back a document awaiting sign-off. */
   canReview: boolean;
   pdf: { ready: boolean; missing: string[] };
@@ -330,6 +332,7 @@ export default function DietChartSection({
               status={plan.status}
               version={plan.version}
               canReview={canReview}
+              dishes={dishes}
               initial={{ targets: plan.targets, meta: plan.meta, meals: plan.meals, sharedAt: plan.sharedAt }}
               readOnly={!canCompose}
             />

@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { HOW_TO_USE, DEFAULT_MEALS, planProblems } from "@/lib/diet-plan";
+import { HOW_TO_USE, DEFAULT_MEALS, planProblems, linkedNutrients, type DishOption } from "@/lib/diet-plan";
+import { pricedDishes } from "@/lib/dish-pricing";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
 import { draftAssessment, assessmentGaps, type Assessment } from "@/lib/diet-assessment";
@@ -7058,8 +7059,26 @@ async function planGuard() {
 type PlanMealIn = {
   seq: number; name: string; time_from: string | null; time_to: string | null;
   note: string | null; conditional: boolean;
-  options: { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null }[];
+  options: {
+    seq: number; food_items: string; qty: string | null;
+    kcal: number | null; protein_g: number | null; micronutrients: string | null;
+    dish_id: string | null; servings: number | null;
+  }[];
 };
+
+// ---------------------------------------------------------------------------
+// Pricing a chart from the recipe library.
+//
+// The rule the clinic settled on: where a chart option names a dish, the
+// recipe's arithmetic is the answer and cannot be typed over. So the numbers
+// are worked out HERE, on save, and the ones the browser sent are discarded.
+// A disabled input is a courtesy; this is the control. A stale tab, a second
+// window or a hand-made request all arrive at the same place, and all get the
+// recipe's figures.
+//
+// The lookup itself is in `lib/dish-pricing.ts` — this file is "use server",
+// and a helper exported from here would be a browser-callable endpoint.
+// ---------------------------------------------------------------------------
 
 /** Start a plan for a client, seeded with the clinic's standard day. */
 export async function createDietPlan(formData: FormData) {
@@ -7125,6 +7144,44 @@ export async function saveDietPlan(
   }).eq("id", id);
   if (upErr) return { error: upErr.message };
 
+  // Priced once for the whole save, and only when something is actually
+  // linked — an all-free-text chart should not pay for the food table.
+  //
+  // Deliberately BEFORE the meals are deleted. If the library cannot be read
+  // there is no way to price the chart, and stopping here leaves the saved
+  // chart exactly as it was rather than wiping it and rebuilding it wrong.
+  // Named rows only: an option with a dish picked but its food name cleared is
+  // discarded further down, so it should not be able to force a library read
+  // — still less to fail the whole save if that read goes wrong.
+  const linked = meals.some((m) => m.options.some((o) => o.dish_id && o.food_items.trim()));
+  const dishes = new Map<string, DishOption>();
+  if (linked) {
+    try {
+      for (const d of await pricedDishes(supabase)) dishes.set(d.id, d);
+    } catch (e) {
+      return { error: `${e instanceof Error ? e.message : "Could not read the recipe library"} — nothing was saved.` };
+    }
+  }
+
+  // Checked here, while the old chart is still intact.
+  //
+  // `dish_id` is a foreign key, so a row pointing at a recipe someone deleted
+  // in another tab is rejected by the database — and by then the slot's old
+  // options have been dropped, which turns a fixable mistake into a lost
+  // meal. The priced library is already in hand, so the same mistake can be
+  // caught a few lines earlier, when refusing costs nothing.
+  if (linked) {
+    const missing = new Set<string>();
+    for (const m of meals) {
+      for (const o of m.options) {
+        if (o.dish_id && o.food_items.trim() && !dishes.has(o.dish_id)) missing.add(m.name.trim() || "a meal slot");
+      }
+    }
+    if (missing.size) {
+      return { error: `Nothing was saved: ${[...missing].join(", ")} still points at a recipe that has been deleted. Set those rows back to Free text, or pick another dish.` };
+    }
+  }
+
   await supabase.from("diet_plan_meals").delete().eq("plan_id", id);   // options cascade
   // A slot added and never filled in would otherwise print as a blank heading
   // over "No options added." on the client's plan.
@@ -7137,12 +7194,43 @@ export async function saveDietPlan(
     }).select("id").maybeSingle();
     const mealId = (row as { id: string } | null)?.id;
     if (!mealId) continue;
-    const opts = m.options.filter((o) => o.food_items.trim()).map((o, i) => ({
-      meal_id: mealId, seq: i, food_items: o.food_items.trim(),
-      qty: o.qty?.trim() || null, kcal: o.kcal, protein_g: o.protein_g,
-      micronutrients: o.micronutrients?.trim() || null,
-    }));
-    if (opts.length) await supabase.from("diet_plan_options").insert(opts);
+    const opts = m.options.filter((o) => o.food_items.trim()).map((o, i) => {
+      // The recipe wins. Where an option is linked, whatever calories and
+      // protein arrived from the browser are dropped and the dish's own
+      // figures are stored instead. An unpriced dish stores nothing rather
+      // than the sender's numbers — a blank the checks will catch, not a
+      // guess that quietly passes them.
+      const priced = o.dish_id ? linkedNutrients(dishes.get(o.dish_id), o.servings) : null;
+      return {
+        meal_id: mealId, seq: i, food_items: o.food_items.trim(),
+        qty: o.qty?.trim() || null,
+        kcal: o.dish_id ? priced?.kcal ?? null : o.kcal,
+        protein_g: o.dish_id ? priced?.protein_g ?? null : o.protein_g,
+        micronutrients: o.micronutrients?.trim() || null,
+        dish_id: o.dish_id || null,
+        // A portion only means something alongside a dish. Kept null for free
+        // text so an unlinked row never carries a stray multiplier — and an
+        // empty box on a linked row is stored as the one serving it means.
+        //
+        // A nonsense portion is stored AS SENT rather than quietly corrected
+        // to 1. The screen and the record then say the same thing, and the
+        // checks refuse the chart until she fixes it. Silently substituting a
+        // number would leave a chart that passes every gate while showing her
+        // something else.
+        servings: o.dish_id ? o.servings ?? 1 : null,
+      };
+    });
+    if (opts.length) {
+      // Checked, unlike the meal insert above, because `dish_id` is now a
+      // foreign key: a chart still pointing at a recipe someone deleted in
+      // another tab is rejected as a batch. The slot's old options were
+      // already dropped a few lines up, so swallowing that error would lose
+      // the whole meal and still report a successful save.
+      const { error: optErr } = await supabase.from("diet_plan_options").insert(opts);
+      if (optErr) {
+        return { error: `Could not save ${m.name || "a meal slot"}: ${optErr.message}. If an option is linked to a recipe that has since been deleted, set that row back to free text.` };
+      }
+    }
   }
   revalidatePath("/workspace");
   return { ok: true };
@@ -7170,9 +7258,9 @@ async function planProblemsFor(
 ): Promise<string[]> {
   const { data } = await supabase.from("diet_plans")
     .select("kcal, protein, carbohydrate, fats, fibre, water, " +
-      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, protein_g, micronutrients))")
+      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, protein_g, micronutrients, dish_id, servings))")
     .eq("id", id).maybeSingle();
-  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null };
+  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; dish_id: string | null; servings: number | null };
   type RawMeal = { seq: number; name: string; conditional: boolean; diet_plan_options: RawOpt[] | null };
   const row = data as {
     kcal: number | null; protein: string | null; carbohydrate: string | null;
@@ -7185,10 +7273,27 @@ async function planProblemsFor(
     seq: m.seq, name: m.name, time_from: null, time_to: null, note: null, conditional: m.conditional,
     options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq),
   }));
+  // The library is only fetched when the chart actually leans on it, and only
+  // so a broken link reads as a broken link. Without it every other check
+  // still runs exactly as before.
+  //
+  // If the library cannot be read, that is itself a reason to refuse: this
+  // function is the gate on submitting, approving and sending, and passing a
+  // chart because its recipes could not be checked is the wrong way to fail.
+  const linked = meals.some((m) => m.options.some((o) => o.dish_id));
+  let dishes: DishOption[] = [];
+  if (linked) {
+    try {
+      dishes = await pricedDishes(supabase);
+    } catch (e) {
+      return [`${e instanceof Error ? e.message : "Could not read the recipe library"} — this chart uses recipes, so it cannot be checked right now.`];
+    }
+  }
+
   return planProblems(meals, {
     kcal: row.kcal, protein: row.protein, carbohydrate: row.carbohydrate,
     fats: row.fats, fibre: row.fibre, water: row.water,
-  });
+  }, dishes);
 }
 
 // ---------------------------------------------------------------------------
@@ -7200,6 +7305,125 @@ async function dishGuard() {
   const p = await getProfile();
   if (!p || !canWriteNutrition(p.role)) return null;
   return p;
+}
+
+/**
+ * Push a corrected recipe through to every chart still open on it.
+ *
+ * This is the half of "the recipe wins" that happens after the fact. A chart
+ * is priced when it is saved, so without this, correcting a dish would fix the
+ * library and leave yesterday's drafts quoting the old figures — the recipe
+ * would win only for charts nobody had written yet.
+ *
+ * Published and archived charts are deliberately left alone. A published chart
+ * is a document a client is eating from and, once sent, one they hold a copy
+ * of; silently restating what it says is not a correction, it is a different
+ * document wearing the same version number. Correcting one means a new
+ * version, which is a clinical decision and a human one.
+ *
+ * Returns how many option rows actually changed, and whether anything went
+ * wrong doing it — both go in the audit line, because "12 options re-priced"
+ * is only worth writing down if it happened.
+ *
+ * Starts from the options that name this dish and works outwards to their
+ * charts, rather than starting from every open chart in the clinic. The work
+ * is then proportional to how widely the recipe is used, not to how busy the
+ * dietitians have been.
+ */
+async function repriceOpenCharts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  dishId: string,
+  /**
+   * Blank the figures instead of recomputing them. Used when the recipe is
+   * being deleted: there is nothing left to recompute from, and leaving the
+   * last computed numbers behind would turn them into figures that look typed.
+   */
+  mode: "reprice" | "blank" = "reprice",
+): Promise<{ changed: number; failed: boolean }> {
+  let dish: DishOption | undefined;
+  if (mode === "reprice") {
+    try {
+      dish = (await pricedDishes(supabase)).find((d) => d.id === dishId);
+    } catch {
+      // The recipe itself is already saved. Charts stay on their old figures
+      // until someone saves them, which re-prices from scratch anyway.
+      return { changed: 0, failed: true };
+    }
+  }
+
+  const found = await openChartOptionsUsing(supabase, dishId);
+
+  // Row by row because each option holds its own portion — half a serving and
+  // two servings of the same dish are different numbers.
+  let changed = 0, failed = found.failed;
+  for (const o of found.rows) {
+    const priced = mode === "blank" ? null : linkedNutrients(dish, o.servings);
+    const { error } = await supabase.from("diet_plan_options")
+      .update({
+        kcal: priced?.kcal ?? null,
+        protein_g: priced?.protein_g ?? null,
+        // Going: a portion of nothing is not a portion.
+        ...(mode === "blank" ? { servings: null } : {}),
+      })
+      .eq("id", o.id);
+    if (error) failed = true; else changed += 1;
+  }
+  return { changed, failed };
+}
+
+/**
+ * The option rows on charts that are still open — draft or in review — and
+ * that name this dish.
+ *
+ * Walks outwards from the options rather than inwards from every chart in the
+ * clinic, so the work is proportional to how widely the recipe is used. A
+ * published or archived chart is never included: it is a document already
+ * issued, and changing what it says is a new version, not a background job.
+ *
+ * Every read is checked. A failed one returns no rows, which is
+ * indistinguishable from "no chart uses this dish" — and on the delete path
+ * that difference is the whole point: nothing found means nothing blanked,
+ * and the deletion then leaves recipe-derived figures behind on a row with no
+ * link left to explain them. So failure is reported rather than inferred.
+ */
+async function openChartOptionsUsing(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  dishId: string,
+): Promise<{ rows: { id: string; servings: number | null }[]; failed: boolean }> {
+  const none = (failed: boolean) => ({ rows: [], failed });
+
+  const { data: opts, error: optErr } = await supabase.from("diet_plan_options")
+    .select("id, servings, meal_id").eq("dish_id", dishId);
+  if (optErr) return none(true);
+  const rows = (opts ?? []) as { id: string; servings: number | null; meal_id: string }[];
+  if (!rows.length) return none(false);
+
+  const { data: mealRows, error: mealErr } = await supabase.from("diet_plan_meals")
+    .select("id, plan_id").in("id", [...new Set(rows.map((r) => r.meal_id))]);
+  if (mealErr) return none(true);
+  const planOfMeal = new Map<string, string>(
+    ((mealRows ?? []) as { id: string; plan_id: string }[]).map((m) => [m.id, m.plan_id] as const));
+  if (!planOfMeal.size) return none(true);   // rows exist but their slots don't: not a clean read
+
+  const wanted = [...new Set([...planOfMeal.values()])];
+  const { data: planRows, error: planErr } = await supabase.from("diet_plans")
+    .select("id, status").in("id", wanted);
+  if (planErr) return none(true);
+  // Row-level security filters silently rather than erroring, so a short
+  // answer is not a clean one. Treating it as clean would report "nothing to
+  // clear" for charts this user simply cannot see — and on the delete path
+  // that is how figures get left behind on someone else's chart.
+  if (((planRows ?? []) as unknown[]).length !== wanted.length) return none(true);
+  const open = new Set(((planRows ?? []) as { id: string; status: string }[])
+    .filter((p) => p.status === "draft" || p.status === "in_review").map((p) => p.id));
+
+  return {
+    rows: rows.filter((r) => {
+      const planId = planOfMeal.get(r.meal_id);
+      return Boolean(planId && open.has(planId));     // published, archived or orphaned: left alone
+    }).map((r) => ({ id: r.id, servings: r.servings })),
+    failed: false,
+  };
 }
 
 export async function saveDish(formData: FormData): Promise<{ error?: string; id?: string }> {
@@ -7260,8 +7484,14 @@ export async function saveDish(formData: FormData): Promise<{ error?: string; id
     if (error) return { error: error.message };
   }
 
+  // Only on an edit: a dish created a moment ago cannot be on anyone's chart.
+  const repriced = id ? await repriceOpenCharts(supabase, dishId) : { changed: 0, failed: false };
+
   await logAudit(p, id ? "Dish updated" : "Dish created", name,
-    `${items.length} ingredient${items.length === 1 ? "" : "s"}`);
+    [`${items.length} ingredient${items.length === 1 ? "" : "s"}`,
+      repriced.changed ? `${repriced.changed} chart option${repriced.changed === 1 ? "" : "s"} re-priced` : null,
+      repriced.failed ? "some open charts could not be re-priced" : null]
+      .filter(Boolean).join(" · "));
   revalidatePath("/workspace");
   return { id: dishId };
 }
@@ -7275,8 +7505,36 @@ export async function deleteDish(formData: FormData) {
   // The name is read before the row goes, so the audit line says which dish
   // was removed rather than an id nobody can look up afterwards.
   const { data: gone } = await supabase.from("dishes").select("name").eq("id", id).single();
+
+  // Clear the figures BEFORE the row goes.
+  //
+  // Deleting a dish unlinks it from every chart automatically, but unlinking
+  // is all it does — the calories and protein the recipe put on those rows
+  // stay behind, now indistinguishable from numbers a dietitian typed. They
+  // would pass every check and print on a client's chart while the recipe
+  // they came from no longer exists. Blanking them turns a silent inheritance
+  // into a visible gap the checks refuse until someone decides what the row
+  // should say. Only charts still open: a published one is a document already
+  // issued, and is left exactly as it was signed off.
+  const cleared = await repriceOpenCharts(supabase, id, "blank");
+
+  // If the blanking could not be completed, the deletion does not happen.
+  //
+  // Going ahead would be the worst of both: the recipe gone, the link dropped
+  // by the foreign key, and the figures it produced still sitting on a
+  // client's chart with nothing to trace them to and no check that can see
+  // them. Keeping the dish is recoverable — press Delete again. The row
+  // staying in the list is the signal; the audit line says why.
+  if (cleared.failed) {
+    await logAudit(p, "Dish delete abandoned", (gone as { name?: string } | null)?.name ?? id,
+      "open charts could not be cleared first — nothing was deleted");
+    revalidatePath("/workspace");
+    return;
+  }
+
   await supabase.from("dishes").delete().eq("id", id);
-  await logAudit(p, "Dish deleted", (gone as { name?: string } | null)?.name ?? id, null);
+  await logAudit(p, "Dish deleted", (gone as { name?: string } | null)?.name ?? id,
+    cleared.changed ? `${cleared.changed} open chart option${cleared.changed === 1 ? "" : "s"} left without figures` : null);
   revalidatePath("/workspace");
 }
 
@@ -7431,7 +7689,11 @@ export async function newDietPlanVersion(formData: FormData) {
     }).select("id").maybeSingle();
     const nmId = (nm as { id: string } | null)?.id;
     if (!nmId) continue;
-    const { data: opts } = await supabase.from("diet_plan_options").select("seq, food_items, qty, kcal, protein_g, micronutrients").eq("meal_id", m.id).order("seq");
+    // The recipe link is copied with everything else, so a new version starts
+    // as the same chart rather than one where every dish has quietly become
+    // free text — and the moment it is saved, the new version re-prices from
+    // whatever the recipes say today.
+    const { data: opts } = await supabase.from("diet_plan_options").select("seq, food_items, qty, kcal, protein_g, micronutrients, dish_id, servings").eq("meal_id", m.id).order("seq");
     const rows = ((opts ?? []) as Record<string, unknown>[]).map((o) => ({ ...o, meal_id: nmId }));
     if (rows.length) await supabase.from("diet_plan_options").insert(rows);
   }

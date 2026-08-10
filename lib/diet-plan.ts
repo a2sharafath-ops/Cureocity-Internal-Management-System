@@ -12,7 +12,67 @@ export type PlanOption = {
   kcal: number | null;
   protein_g: number | null;
   micronutrients: string | null;
+  /**
+   * The costed recipe this option is built from, when there is one.
+   *
+   * Null is the normal case and always will be: a dietitian must be able to
+   * write "two idlis and sambar" mid-consultation without stopping to define a
+   * recipe first. Linking is an upgrade to an option, never a requirement.
+   */
+  dish_id: string | null;
+  /** How much of that recipe, as a multiple of one serving. 0.5 = half. */
+  servings: number | null;
 };
+
+/**
+ * A recipe as the chart builder sees it: a name to pick from a list, and what
+ * one serving contains — or why it cannot be worked out.
+ *
+ * Deliberately not the whole recipe. The builder never needs the ingredients,
+ * and shipping the entire food table to the browser for a screen that only
+ * multiplies two numbers would be a lot of weight for nothing. The sums happen
+ * on the server, in `lib/nutrition.ts`, and this is what comes back.
+ */
+export type DishOption = {
+  id: string;
+  name: string;
+  /** "1 medium piece", "¾ cup crumbled" — how the portion reads on a chart. */
+  serving_label: string | null;
+  /** Null when the recipe is too incomplete to price. */
+  perServing: { kcal: number; protein_g: number } | null;
+  /** What is missing, when it cannot be priced. Shown to the dietitian. */
+  reason: string | null;
+};
+
+/**
+ * What a linked option's calories and protein MUST be.
+ *
+ * The single rule of the link: where an option names a dish, the recipe's
+ * arithmetic wins and nobody types over it. Change the dish and every chart
+ * still open re-prices itself. That is the whole point — a chart that can be
+ * recalculated is a chart that stays true when the recipe is corrected, and a
+ * typed-over figure is exactly the remembered number this layer replaces.
+ *
+ * Returns null when the dish is missing or unpriced, which is a blocking
+ * problem rather than a reason to fall back on a guess.
+ */
+export function linkedNutrients(
+  dish: DishOption | undefined,
+  servings: number | null,
+): { kcal: number; protein_g: number } | null {
+  if (!dish?.perServing) return null;
+  // A blank portion box means one serving — the ordinary case, and the least
+  // surprising reading of an empty field next to a named dish. Zero or less is
+  // not a reading at all, so it gets no numbers and `linkProblem` says why.
+  // Falling back to a full serving there would put a figure on the row that
+  // contradicts what the box says.
+  if (servings != null && servings <= 0) return null;
+  const s = servings ?? 1;
+  return {
+    kcal: Math.round(dish.perServing.kcal * s),
+    protein_g: Math.round(dish.perServing.protein_g * s * 10) / 10,
+  };
+}
 
 export type PlanMeal = {
   id?: string;
@@ -148,8 +208,62 @@ export function targetCheck(totals: { minKcal: number; maxKcal: number }, target
  */
 export const OPTION_KCAL_SPREAD = 40;
 
-export function planProblems(meals: PlanMeal[], targets: PlanTargets): string[] {
+/**
+ * What is wrong with an option's recipe link, if anything.
+ *
+ * Says nothing when the caller passed no library — it cannot tell an unknown
+ * dish from an unknown list, and inventing "that recipe no longer exists" for
+ * a recipe that is merely off-screen would be worse than staying quiet.
+ */
+function linkProblem(
+  where: string,
+  o: PlanOption,
+  dishMap: Map<string, DishOption>,
+): string | null {
+  if (!dishMap.size) return null;
+  const d = dishMap.get(o.dish_id!);
+  if (!d) return `${where} is linked to a recipe that no longer exists — unlink it or pick another dish.`;
+  if (o.servings != null && o.servings <= 0) {
+    return `${where} is ${o.servings} servings of ${d.name} — a portion has to be more than nothing.`;
+  }
+  if (!d.perServing) {
+    return `${where} uses ${d.name}, which cannot be priced yet — ${d.reason ?? "the recipe is incomplete"}. Fix it in Dishes, or unlink and type the numbers.`;
+  }
+
+  // The row must agree with the recipe as it stands TODAY.
+  //
+  // Charts are priced when they are saved, and re-priced when the recipe
+  // changes — but neither covers a new version copied from a published one,
+  // which arrives carrying figures frozen at the moment the old version went
+  // out. Nothing re-prices it until someone presses Save, and nothing was
+  // stopping it being approved and sent in between. This is what stops it:
+  // if the row and the recipe disagree, the chart does not move until the
+  // arithmetic has been redone.
+  //
+  // On screen this never fires — the builder recomputes as she types. It is a
+  // check on what was stored, for the paths that do not go through her hands.
+  const priced = linkedNutrients(d, o.servings);
+  if (priced && (o.kcal !== priced.kcal || Number(o.protein_g) !== priced.protein_g)) {
+    return `${where} shows ${o.kcal ?? "no"} kcal, but ${d.name} works out at ${priced.kcal} kcal today. Press Save to bring the chart up to date with the recipe.`;
+  }
+  return null;
+}
+
+export function planProblems(
+  meals: PlanMeal[],
+  targets: PlanTargets,
+  /**
+   * The recipe library, when the caller has it. Without it a linked option is
+   * simply checked like any other — its numbers are already on the row, put
+   * there by the server, so the chart is still fully checked. What the list
+   * adds is a better sentence: "uses Puttu, which cannot be priced yet"
+   * instead of "has no calories", which sends the dietitian to the wrong
+   * screen to fix it.
+   */
+  dishes: DishOption[] = [],
+): string[] {
   const out: string[] = [];
+  const dishMap = new Map<string, DishOption>(dishes.map((d) => [d.id, d] as const));
   const totals = planTotals(meals);
   for (const s of totals.slotsWithoutOptions) out.push(`${s} has no options — the client would have nothing to eat at that meal.`);
   if (!targets.kcal) out.push("No daily calorie target set.");
@@ -181,11 +295,23 @@ export function planProblems(meals: PlanMeal[], targets: PlanTargets): string[] 
       // document prints, so a gap here is a gap on the client's chart — and
       // nothing downstream can check a total built from missing numbers.
       if (named) {
-        if (o.kcal == null) out.push(`${where} has no calories.`);
-        if (o.protein_g == null) out.push(`${where} has no protein.`);
+        // A broken link is reported instead of the missing numbers it causes,
+        // not as well as. "Has no calories" on a linked option would send the
+        // dietitian to a box she cannot type in; the recipe is where the fix
+        // is, and saying so is the difference between a useful message and a
+        // dead end.
+        const link = o.dish_id ? linkProblem(where, o, dishMap) : null;
+        if (link) {
+          out.push(link);
+        } else {
+          if (o.kcal == null) out.push(`${where} has no calories.`);
+          if (o.protein_g == null) out.push(`${where} has no protein.`);
+          if (o.kcal != null && o.kcal <= 0) out.push(`${where} is ${o.kcal} kcal — that cannot be right.`);
+          if (o.protein_g != null && Number(o.protein_g) < 0) out.push(`${where} has negative protein.`);
+        }
+        // Micronutrients are the dietitian's own words either way — no recipe
+        // supplies them — so this one is asked of linked and free-text alike.
         if (!o.micronutrients?.trim()) out.push(`${where} has no micronutrients listed.`);
-        if (o.kcal != null && o.kcal <= 0) out.push(`${where} is ${o.kcal} kcal — that cannot be right.`);
-        if (o.protein_g != null && Number(o.protein_g) < 0) out.push(`${where} has negative protein.`);
       }
     });
 

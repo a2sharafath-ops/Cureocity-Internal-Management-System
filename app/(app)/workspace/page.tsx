@@ -21,7 +21,8 @@ import DietChartSection, { type DietPlanRow, type DietAssessmentRow } from "@/co
 import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
-import { type PlanMeal, type PlanOption } from "@/lib/diet-plan";
+import { type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+import { pricedDishes } from "@/lib/dish-pricing";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
 
@@ -411,10 +412,10 @@ export default async function WorkspacePage(
       .from("diet_plans")
       .select(
         "id, client_id, version, status, issued_on, kcal, protein, carbohydrate, fats, fibre, water, allergies, notes, shared_at, created_at, clients(name), " +
-        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, protein_g, micronutrients))",
+        "diet_plan_meals(id, seq, name, time_from, time_to, note, conditional, diet_plan_options(id, seq, food_items, qty, kcal, protein_g, micronutrients, dish_id, servings))",
       )
       .order("created_at", { ascending: false });
-    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null };
+    type RawOption = { id: string; seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null; dish_id: string | null; servings: number | null };
     type RawMeal = { id: string; seq: number; name: string; time_from: string | null; time_to: string | null; note: string | null; conditional: boolean; diet_plan_options: RawOption[] | null };
     type RawPlan = {
       id: string; client_id: string; version: number; status: string; issued_on: string | null;
@@ -431,10 +432,33 @@ export default async function WorkspacePage(
         id: m.id, seq: m.seq, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
         options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq).map((o): PlanOption => ({
           id: o.id, seq: o.seq, food_items: o.food_items, qty: o.qty, kcal: o.kcal, protein_g: o.protein_g, micronutrients: o.micronutrients,
+          dish_id: o.dish_id, servings: o.servings,
         })),
       })),
     }));
   }
+  // The recipe library, priced, for the chart builder's dish picker.
+  //
+  // Priced here rather than in the browser: the builder only ever multiplies
+  // one serving by a portion, and shipping the whole ICMR food table to the
+  // client so it could do that itself would be a lot of weight for two
+  // numbers. The Dishes tab still loads the full table — matching ingredients
+  // as you type genuinely needs it.
+  //
+  // A failed read must not take the tab down with it. The builder already
+  // treats an empty list as "the library hasn't arrived" rather than "the
+  // recipe was deleted", and the server refuses to submit, approve or send a
+  // chart it could not price — so degrading here costs a picker, not a
+  // safeguard. Throwing would cost the dietitian her whole Workspace.
+  let chartDishes: DishOption[] = [];
+  if (tab === "charts") {
+    try {
+      chartDishes = await pricedDishes(supabase);
+    } catch {
+      chartDishes = [];
+    }
+  }
+
   // Dietary Assessment Summary — the companion document to the diet plan,
   // same tab, its own client picker and version list.
   let dietAssessments: DietAssessmentRow[] = [];
@@ -937,7 +961,7 @@ export default async function WorkspacePage(
         <div>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Diet chart</div>
           <DietChartSection
-            plans={dietPlans} assessments={dietAssessments}
+            plans={dietPlans} assessments={dietAssessments} dishes={chartDishes}
             clients={rosterRows.map((r) => ({ id: r.id, name: r.name }))}
             canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly}
             pdf={pdfReadiness()} whatsapp={watiReadiness()} />
