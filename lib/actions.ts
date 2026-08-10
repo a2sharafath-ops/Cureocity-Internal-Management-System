@@ -10,7 +10,7 @@ import { getProfile } from "@/lib/auth";
 import { HOW_TO_USE, DEFAULT_MEALS, planProblems } from "@/lib/diet-plan";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
-import { draftAssessment } from "@/lib/diet-assessment";
+import { draftAssessment, assessmentGaps, type Assessment } from "@/lib/diet-assessment";
 import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
@@ -7363,7 +7363,10 @@ export async function reviewDietPlan(formData: FormData) {
  * sharing is the delivery one. A plan can be approved while a colleague checks
  * the wording, and withdrawn without un-publishing it.
  */
-export async function shareDietPlan(formData: FormData) {
+// The explicit return type matters: without it TypeScript infers a union of
+// `{error}` and `{ok}`, and callers cannot read `.error` off it at all. That is
+// how deliverDocument came to throw this result away and report a false send.
+export async function shareDietPlan(formData: FormData): Promise<{ ok?: boolean; error?: string }> {
   const p = await planGuard();
   if (!p) return { error: "Not authorized." };
   const id = String(formData.get("id") || "");
@@ -7609,7 +7612,7 @@ export async function deliverDocument(formData: FormData): Promise<{
     portalErr = (await shareLabToPortal(share)).error;
   } else if (kind === "plan") {
     share.set("id", id);
-    await shareDietPlan(share);
+    portalErr = (await shareDietPlan(share)).error;
   } else if (kind === "assess") {
     share.set("id", id);
     portalErr = (await shareDietAssessment(share)).error;
@@ -7622,6 +7625,15 @@ export async function deliverDocument(formData: FormData): Promise<{
     await toggleConsultFlag(share);
   }
 
+  // 2b. If the portal refused, stop. The portal share is where the lifecycle
+  //     rules live — "publish this first", "these checks still fail" — so a
+  //     refusal there means this document is not cleared to leave the clinic.
+  //     WhatsApp used to fire regardless, which meant a plan the portal had
+  //     just rejected could still land on a patient's phone, and there is no
+  //     unsend. Nothing has reached the client at this point: rendering only
+  //     writes a file staff can see.
+  if (portalErr) return { error: portalErr };
+
   // 3. WhatsApp, if it is configured. Not an error when it isn't — plenty of
   //    clinics run portal-only, and refusing to deliver at all would be wrong.
   let whatsapp = false;
@@ -7633,14 +7645,18 @@ export async function deliverDocument(formData: FormData): Promise<{
     if (r.error) waErr = r.error; else whatsapp = true;
   }
 
+  // Past the gate above, the portal share succeeded — so the note states it
+  // rather than testing for it. WhatsApp is still reported either way: a
+  // portal delivery that WhatsApp failed to echo is a partial success worth
+  // naming, not a failure.
   const note = [
-    portalErr ? `Portal: ${portalErr}` : "In the client portal",
+    "In the client portal",
     waErr ? `WhatsApp: ${waErr}` : whatsapp ? "sent on WhatsApp" : null,
   ].filter(Boolean).join(" · ");
 
   return {
     ok: true, url: rendered.url, name: rendered.name,
-    portal: !portalErr, whatsapp, note,
+    portal: true, whatsapp, note,
   };
 }
 
@@ -7814,12 +7830,40 @@ export async function newDietAssessmentVersion(formData: FormData): Promise<{ ok
   return { ok: true, id: (copy as { id: string } | null)?.id };
 }
 
+/**
+ * Everything still missing from a saved assessment, read back from the record.
+ *
+ * The counterpart of planProblemsFor, and it exists for the same reason: the
+ * builder greys out its buttons while gaps remain, but a disabled button is a
+ * courtesy, not a control. Assessments had only the courtesy — the gap check
+ * lived entirely in the browser — so a stale tab or a second window could push
+ * an incomplete summary all the way to a client's portal.
+ *
+ * Only the columns assessmentGaps actually reads are loaded, and the row is
+ * widened to Assessment for the call. Selecting the whole document to check
+ * four fields would be a lie about what this depends on.
+ */
+async function assessmentGapsFor(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<string[]> {
+  const { data } = await supabase.from("diet_assessments")
+    .select("height, weight, daily_activity, bmr, primary_goals")
+    .eq("id", id).maybeSingle();
+  if (!data) return ["Assessment not found."];
+  return assessmentGaps(data as unknown as Assessment);
+}
+
 export async function submitDietAssessment(formData: FormData) {
   const p = await planGuard();
   if (!p) return;
   const id = String(formData.get("id") || "");
   if (!id) return;
   const supabase = await createClient();
+  // The control, not the courtesy. Silent like its plan counterpart: the
+  // builder never lets a complete document reach here, so a caller that does
+  // is bypassing the UI and gets nothing back.
+  if ((await assessmentGapsFor(supabase, id)).length) return;
   await supabase.from("diet_assessments").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
   // Only the Medical Director can approve these (canReviewDietChart), so only
   // they are told. A notification its recipient cannot act on is just noise —
@@ -7844,6 +7888,11 @@ export async function reviewDietAssessment(formData: FormData) {
   // under a client who already has it.
   const { data: cur } = await supabase.from("diet_assessments").select("status").eq("id", id).maybeSingle();
   if ((cur as { status: string } | null)?.status !== "in_review") return;
+
+  // Approving is the signature, so it carries the same gate as submitting.
+  // Sending back stays open in every case — gaps are precisely what an
+  // assessment gets sent back for, and blocking that would strand the document.
+  if (approve && (await assessmentGapsFor(supabase, id)).length) return;
 
   const note = String(formData.get("note") || "").trim() || null;
   const { data: who } = await supabase.from("diet_assessments").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
@@ -7879,6 +7928,16 @@ export async function shareDietAssessment(formData: FormData): Promise<{ ok?: bo
   const r = row as { status: string; client_id: string } | null;
   if (!r) return { error: "Assessment not found." };
   if (!undo && r.status !== "published") return { error: "Publish it before sharing." };
+
+  // Last gate, matching shareDietPlan. An assessment can be published and then
+  // edited, so approval alone is not proof that what is about to reach the
+  // client is still complete.
+  if (!undo) {
+    const gaps = await assessmentGapsFor(supabase, id);
+    if (gaps.length) {
+      return { error: `${gaps.length} thing${gaps.length === 1 ? "" : "s"} still missing before this can go to the client — see the gaps on the assessment.` };
+    }
+  }
 
   await supabase.from("diet_assessments").update({ shared_at: undo ? null : new Date().toISOString() }).eq("id", id);
   if (!undo) {

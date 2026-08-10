@@ -171,10 +171,17 @@ export default function DietPlanBuilder({
         <a href={`/diet-plan/${planId}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF →</a>
         {/* One press: makes the stored file, puts it in the portal, sends it.
             Preview above is just a look — it leaves nothing behind.
-            Withheld entirely while the chart has unresolved checks: a chart that
-            does not add up must not reach a client, and the server refuses it
-            too, so a disabled button here is the courtesy and that is the rule. */}
-        {problems.length === 0 ? (
+
+            Two gates, and both matter. Unresolved checks mean the chart does not
+            add up. Anything short of published means nobody has signed it off —
+            and WhatsApp has no unsend, so an unapproved draft reaching a patient
+            cannot be walked back. The assessment builder has always gated on
+            published; this one did not, which is how a draft could be sent. */}
+        {status !== "published" ? (
+          <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}>
+            Approve and publish before this can be sent
+          </span>
+        ) : problems.length === 0 ? (
           <DeliverButton kind="plan" id={planId} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
             whatsappReady={Boolean(whatsapp?.ready)} alreadySent={initial.sharedAt} />
         ) : (
@@ -186,9 +193,15 @@ export default function DietPlanBuilder({
         {!readOnly && status === "draft" && (
           <>
             <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
+            {/* Submitting posts only the plan id — the server then re-reads the
+                SAVED rows. With unsaved edits on screen those are two different
+                charts, and the mismatch is silent: the server finds the old row
+                still incomplete and simply does nothing, with nothing to show
+                for the press. So the button waits for Save. */}
             <form action={submitDietPlan}>
               <input type="hidden" name="id" value={planId} />
-              <button disabled={problems.length > 0} style={disabledOf(problems.length > 0, darkBtn)} title={problems.length ? "Resolve the problems below first" : undefined}>Submit for review</button>
+              <button disabled={problems.length > 0 || dirty} style={disabledOf(problems.length > 0 || dirty, darkBtn)}
+                title={dirty ? "Save your changes first — this submits the saved chart" : problems.length ? "Resolve the problems below first" : undefined}>Submit for review</button>
             </form>
           </>
         )}
@@ -202,9 +215,12 @@ export default function DietPlanBuilder({
                   <input type="hidden" name="id" value={planId} />
                   <input type="hidden" name="approve" value="true" />
                   {/* Approving is the signature. Sending back is always open —
-                      unresolved checks are exactly what you send a chart back for. */}
-                  <button disabled={problems.length > 0} style={disabledOf(problems.length > 0, greenBtn)}
-                    title={problems.length ? "Resolve the checks below first" : undefined}>Approve &amp; publish</button>
+                      unresolved checks are exactly what you send a chart back for.
+                      Unsaved edits block approval for a sharper reason than they
+                      block submission: what gets frozen as published would be the
+                      saved version, not the one the approver is looking at. */}
+                  <button disabled={problems.length > 0 || dirty} style={disabledOf(problems.length > 0 || dirty, greenBtn)}
+                    title={dirty ? "Save your changes first — this publishes the saved chart" : problems.length ? "Resolve the checks below first" : undefined}>Approve &amp; publish</button>
                 </form>
                 <form action={reviewDietPlan}>
                   <input type="hidden" name="id" value={planId} />

@@ -214,7 +214,10 @@ export default function DietAssessmentBuilder({
             <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
             <form action={submitDietAssessment}>
               <input type="hidden" name="id" value={id} />
-              <button disabled={gaps.length > 0} style={disabledOf(gaps.length > 0, darkBtn)} title={gaps.length ? "Resolve the gaps below first" : undefined}>Submit for review</button>
+              {/* Submitting posts only the id; the server reads the SAVED rows.
+                  Unsaved edits make those two different documents. */}
+              <button disabled={gaps.length > 0 || dirty} style={disabledOf(gaps.length > 0 || dirty, darkBtn)}
+                title={dirty ? "Save your changes first — this submits the saved assessment" : gaps.length ? "Resolve the gaps below first" : undefined}>Submit for review</button>
             </form>
           </>
         )}
@@ -227,7 +230,13 @@ export default function DietAssessmentBuilder({
                 <form action={reviewDietAssessment}>
                   <input type="hidden" name="id" value={id} />
                   <input type="hidden" name="approve" value="true" />
-                  <button style={greenBtn}>Approve &amp; publish</button>
+                  {/* Matches the plan builder: approval is the signature, so it
+                      waits for both a complete document and a saved one. What
+                      publishing freezes is the saved version, not the screen.
+                      Sending back to draft stays open — gaps are what you send
+                      an assessment back for. */}
+                  <button disabled={gaps.length > 0 || dirty} style={disabledOf(gaps.length > 0 || dirty, greenBtn)}
+                    title={dirty ? "Save your changes first — this publishes the saved assessment" : gaps.length ? "Resolve the gaps below first" : undefined}>Approve &amp; publish</button>
                 </form>
                 <form action={reviewDietAssessment}>
                   <input type="hidden" name="id" value={id} />
