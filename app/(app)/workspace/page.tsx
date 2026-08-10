@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
-import { canSee, isClinician, canReviewDietChart } from "@/lib/roles";
+import { canSee, isClinician, canReviewDietChart, canDeliverDoc } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
@@ -868,7 +868,7 @@ export default async function WorkspacePage(
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
-      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} />}
+      {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} canSend={canDeliverDoc(me.role, "summary") && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />}
 
       {/* ---- CONCERNS ---- */}
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}

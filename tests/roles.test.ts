@@ -298,3 +298,28 @@ describe("clinical nav", () => {
     }
   });
 });
+
+describe("every discipline can hand their own consultation summary to the client", () => {
+  // The summary is the clinician's own note. A trainer's fitness assessment and
+  // a coach's briefing are as much the client's to receive as a doctor's - the
+  // narrower gate is for prescriptions and lab requisitions, which only the
+  // people who can write them may send.
+  it("covers all five disciplines and the Medical Director", () => {
+    for (const role of ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist", "Medical Director"]) {
+      expect(canDeliverDoc(role, "summary"), role).toBe(true);
+    }
+  });
+
+  it("still keeps prescriptions and lab requisitions to the people who write them", () => {
+    for (const role of ["Fitness Trainer", "Health Coach", "Psychologist", "Dietitian"]) {
+      expect(canDeliverDoc(role, "rx"), role).toBe(false);
+      expect(canDeliverDoc(role, "lab"), role).toBe(false);
+    }
+  });
+
+  it("does not let the front desk send a clinical summary", () => {
+    expect(canDeliverDoc("Front Desk", "summary")).toBe(false);
+    expect(canDeliverDoc("Finance", "summary")).toBe(false);
+    expect(canDeliverDoc("Client", "summary")).toBe(false);
+  });
+});

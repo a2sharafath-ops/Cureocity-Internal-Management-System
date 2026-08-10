@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toggleConsultFlag, saveConsolidatedSummary, signoffConsolidated, startConsult, cancelConsultation, deleteEmptyConsultation } from "@/lib/actions";
 import { disciplineLabel } from "@/lib/disciplines";
 import { CANCELLED } from "@/lib/consult-lifecycle";
+import DeliverButton from "@/components/DeliverButton";
 
 export type ConsultSummary = {
   id: string;
@@ -52,7 +53,14 @@ const deleteEmptyConsultationForm = async (formData: FormData) => {
  * place the text is shown, because that is the only place it can be edited —
  * anywhere else it is a document to open, not a paragraph to skim.
  */
-function SummaryStatus({ id, text, status }: { id: string; text: string | null; status: string }) {
+function SummaryStatus({ id, text, status, clientName, canSend, pdf, whatsapp }: {
+  id: string; text: string | null; status: string;
+  clientName: string | null;
+  /** The viewer may hand a summary to a client (canDeliverDoc). */
+  canSend: boolean;
+  pdf?: { ready: boolean; missing: string[] };
+  whatsapp?: { ready: boolean; missing: string[] };
+}) {
   const has = !!text?.trim();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
@@ -64,6 +72,14 @@ function SummaryStatus({ id, text, status }: { id: string; text: string | null; 
            style={{ fontSize: 12, fontWeight: 600, color: "var(--brand-text)", textDecoration: "none" }}>
           View PDF →
         </a>
+      )}
+      {/* Sending lived only inside the console, so a clinician who had finished
+          and come back to the list had to re-open the consultation to hand the
+          summary over — a detour with no purpose, and the sort of thing people
+          stop bothering with. Same button, same permission, both places. */}
+      {has && canSend && pdf && (
+        <DeliverButton kind="summary" id={id} clientName={clientName ?? ""}
+          ready={pdf.ready} missing={pdf.missing} whatsappReady={Boolean(whatsapp?.ready)} />
       )}
       {!has && status !== "completed" && (
         <span style={{ fontSize: 11.5, color: "var(--muted)" }}>Open the console to write it.</span>
@@ -79,7 +95,12 @@ function SummaryStatus({ id, text, status }: { id: string; text: string | null; 
  * is deliberately two clicks and never sits next to Approve — a stray click on
  * a row you're signing off shouldn't be able to take the consultation away.
  */
-function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => string }) {
+function ConsultRow({ c, fmt, canSend, pdf, whatsapp }: {
+  c: ConsultSummary; fmt: (iso: string) => string;
+  canSend: boolean;
+  pdf?: { ready: boolean; missing: string[] };
+  whatsapp?: { ready: boolean; missing: string[] };
+}) {
   const [confirming, setConfirming] = useState(false);
   const cancelled = c.status === CANCELLED;
 
@@ -96,7 +117,7 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
             {!cancelled && c.approved && <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>✓ Approved</span>}
             {!cancelled && c.shared && <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5, fontWeight: 700 }}>Shared</span>}
           </div>
-          <SummaryStatus id={c.id} text={c.summary} status={c.status} />
+          <SummaryStatus id={c.id} text={c.summary} status={c.status} clientName={c.client_name} canSend={canSend} pdf={pdf} whatsapp={whatsapp} />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: "auto" }}>
@@ -182,11 +203,16 @@ function ConsultRow({ c, fmt }: { c: ConsultSummary; fmt: (iso: string) => strin
 }
 
 export default function SummariesPanel({
-  roleLabel, roleKind, consults, consolidated, clients, viewerDisc = null, canSignAny = false,
+  roleLabel, roleKind, consults, consolidated, clients, viewerDisc = null, canSignAny = false, pdf, whatsapp, canSend = false,
 }: {
   roleLabel: string;
   roleKind: string;
   consults: ConsultSummary[];
+  /** Whether server-side PDF rendering / WhatsApp are configured. */
+  pdf?: { ready: boolean; missing: string[] };
+  whatsapp?: { ready: boolean; missing: string[] };
+  /** The viewer may hand a summary to a client — every discipline can. */
+  canSend?: boolean;
   consolidated: ConsolidatedRow[];
   clients: { id: string; name: string }[];
   /** the viewing clinician's discipline (doctor/dietitian/...) */
@@ -234,7 +260,7 @@ export default function SummariesPanel({
         <div style={{ ...box, overflow: "hidden" }}>
           <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)" }}>Approve your {roleLabel} consultation summaries. Approved summaries feed the client&apos;s BluePrint sign-off.</div>
           {consults.length
-            ? consults.map((c) => <ConsultRow key={c.id} c={c} fmt={fmt} />)
+            ? consults.map((c) => <ConsultRow key={c.id} c={c} fmt={fmt} canSend={canSend} pdf={pdf} whatsapp={whatsapp} />)
             : <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No {roleLabel} summaries yet.</div>}
         </div>
         </>
