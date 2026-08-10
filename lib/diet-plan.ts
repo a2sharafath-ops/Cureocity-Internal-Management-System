@@ -138,25 +138,76 @@ export function targetCheck(totals: { minKcal: number; maxKcal: number }, target
 }
 
 /** Blocking problems. A plan with an empty meal slot must not reach a client. */
+/**
+ * How far apart two options in the same meal slot may be, in calories.
+ *
+ * The clinic's own dietitian brief sets this: the options within a meal must be
+ * "±40 kcal of each other" and interchangeable, so a client can pick whichever
+ * suits the day without the day's total moving. It is a number the clinic can
+ * change; it is not one this file invented.
+ */
+export const OPTION_KCAL_SPREAD = 40;
+
 export function planProblems(meals: PlanMeal[], targets: PlanTargets): string[] {
   const out: string[] = [];
-  const { slotsWithoutOptions } = planTotals(meals);
-  for (const s of slotsWithoutOptions) out.push(`${s} has no options — the client would have nothing to eat at that meal.`);
+  const totals = planTotals(meals);
+  for (const s of totals.slotsWithoutOptions) out.push(`${s} has no options — the client would have nothing to eat at that meal.`);
   if (!targets.kcal) out.push("No daily calorie target set.");
+
+  // The rest of the header. A plan that states calories but not protein is half
+  // a prescription, and these are printed on the document the client receives.
+  const header: [keyof PlanTargets, string][] = [
+    ["protein", "protein"], ["carbohydrate", "carbohydrate"], ["fats", "fats"],
+    ["fibre", "fibre"], ["water", "water intake"],
+  ];
+  for (const [key, label] of header) {
+    if (!String(targets[key] ?? "").trim()) out.push(`No daily ${label} target set.`);
+  }
+
   for (const m of meals) {
     m.options.forEach((o, i) => {
       const named = o.food_items.trim();
+      const where = `${m.name} · option ${i + 1}`;
       if (named && !o.qty?.trim()) {
-        out.push(`${m.name} · option ${i + 1} has no quantity — "eat rice" is not a portion.`);
+        out.push(`${where} has no quantity — "eat rice" is not a portion.`);
       }
       // Saving drops any option without a name, so a row where someone filled
       // the numbers and tabbed past the first column would vanish silently.
       // Better to refuse than to lose it.
       if (!named && (o.qty?.trim() || o.kcal != null || o.protein_g != null || o.micronutrients?.trim())) {
-        out.push(`${m.name} · option ${i + 1} has details but no food items — it would be dropped when saved.`);
+        out.push(`${where} has details but no food items — it would be dropped when saved.`);
+      }
+      // Blanks in a named option. Every one of these is a column the issued
+      // document prints, so a gap here is a gap on the client's chart — and
+      // nothing downstream can check a total built from missing numbers.
+      if (named) {
+        if (o.kcal == null) out.push(`${where} has no calories.`);
+        if (o.protein_g == null) out.push(`${where} has no protein.`);
+        if (!o.micronutrients?.trim()) out.push(`${where} has no micronutrients listed.`);
+        if (o.kcal != null && o.kcal <= 0) out.push(`${where} is ${o.kcal} kcal — that cannot be right.`);
+        if (o.protein_g != null && Number(o.protein_g) < 0) out.push(`${where} has negative protein.`);
       }
     });
+
+    // Options are meant to be interchangeable. If one is 200 kcal heavier than
+    // another, the client picking freely is not following the same plan — and
+    // the day's total silently depends on which one they happen to fancy.
+    const priced = m.options.filter((o) => o.food_items.trim() && o.kcal != null);
+    if (priced.length > 1) {
+      const kcals = priced.map((o) => o.kcal as number);
+      const lo = Math.min(...kcals), hi = Math.max(...kcals);
+      if (hi - lo > OPTION_KCAL_SPREAD) {
+        out.push(`${m.name} · options range ${lo}–${hi} kcal, a spread of ${hi - lo} — they should be within ${OPTION_KCAL_SPREAD} kcal of each other to be interchangeable.`);
+      }
+    }
   }
+
+  // The day itself. `targetCheck` is advisory on screen; here it is a refusal,
+  // because a plan whose every combination misses the target is not a plan that
+  // was checked before it went out.
+  const day = targetCheck(totals, targets.kcal);
+  if (day.tone === "warn") out.push(day.text);
+
   return out;
 }
 

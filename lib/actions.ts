@@ -7149,6 +7149,48 @@ export async function saveDietPlan(
 }
 
 /** Send a finished draft for sign-off. */
+
+/**
+ * Everything wrong with a saved plan, read back from the record.
+ *
+ * The builder disables its buttons while problems remain, but a disabled button
+ * is a courtesy, not a control — a stale tab, a direct post or a second window
+ * can all get past it. This is the control, and it is applied at all three
+ * points a plan can escape the dietitian: submitting for review, approving, and
+ * sharing with the client.
+ *
+ * It loads the SAME columns the builder validates. An earlier version of this
+ * check read only the food names and portions and passed nulls for everything
+ * else, which meant it could never see a missing calorie count — and once the
+ * checks grew, would have failed every plan instead.
+ */
+async function planProblemsFor(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  id: string,
+): Promise<string[]> {
+  const { data } = await supabase.from("diet_plans")
+    .select("kcal, protein, carbohydrate, fats, fibre, water, " +
+      "diet_plan_meals(seq, name, conditional, diet_plan_options(seq, food_items, qty, kcal, protein_g, micronutrients))")
+    .eq("id", id).maybeSingle();
+  type RawOpt = { seq: number; food_items: string; qty: string | null; kcal: number | null; protein_g: number | null; micronutrients: string | null };
+  type RawMeal = { seq: number; name: string; conditional: boolean; diet_plan_options: RawOpt[] | null };
+  const row = data as {
+    kcal: number | null; protein: string | null; carbohydrate: string | null;
+    fats: string | null; fibre: string | null; water: string | null;
+    diet_plan_meals: RawMeal[] | null;
+  } | null;
+  if (!row) return ["Plan not found."];
+
+  const meals = (row.diet_plan_meals ?? []).slice().sort((a, b) => a.seq - b.seq).map((m) => ({
+    seq: m.seq, name: m.name, time_from: null, time_to: null, note: null, conditional: m.conditional,
+    options: (m.diet_plan_options ?? []).slice().sort((a, b) => a.seq - b.seq),
+  }));
+  return planProblems(meals, {
+    kcal: row.kcal, protein: row.protein, carbohydrate: row.carbohydrate,
+    fats: row.fats, fibre: row.fibre, water: row.water,
+  });
+}
+
 export async function submitDietPlan(formData: FormData) {
   const p = await planGuard();
   if (!p) return;
@@ -7156,21 +7198,7 @@ export async function submitDietPlan(formData: FormData) {
   if (!id) return;
   const supabase = await createClient();
 
-  // The builder disables Submit while problems remain, but a disabled button is
-  // a courtesy, not a control. Re-check here so a stale tab or a direct post
-  // can't push a plan with an empty meal slot into review.
-  const { data: pl } = await supabase.from("diet_plans")
-    .select("kcal, diet_plan_meals(name, conditional, diet_plan_options(food_items, qty))")
-    .eq("id", id).maybeSingle();
-  const row = pl as { kcal: number | null; diet_plan_meals: { name: string; conditional: boolean; diet_plan_options: { food_items: string; qty: string | null }[] }[] } | null;
-  if (row) {
-    const meals = (row.diet_plan_meals ?? []).map((m) => ({
-      seq: 0, name: m.name, time_from: null, time_to: null, note: null, conditional: m.conditional,
-      options: (m.diet_plan_options ?? []).map((o, i) => ({ seq: i, food_items: o.food_items, qty: o.qty, kcal: null, protein_g: null, micronutrients: null })),
-    }));
-    const problems = planProblems(meals, { kcal: row.kcal, protein: null, carbohydrate: null, fats: null, fibre: null, water: null });
-    if (problems.length) return;
-  }
+  if ((await planProblemsFor(supabase, id)).length) return;
 
   await supabase.from("diet_plans").update({ status: "in_review" }).eq("id", id).eq("status", "draft");
   // Only the Medical Director can approve these (canReviewDietChart), so only
@@ -7200,6 +7228,11 @@ export async function reviewDietPlan(formData: FormData) {
   // that action exists.
   const { data: cur } = await supabase.from("diet_plans").select("status").eq("id", id).maybeSingle();
   if ((cur as { status: string } | null)?.status !== "in_review") return;
+
+  // Approving is the signature that puts this in front of a client, so it gets
+  // the same refusal the dietitian got. Sending it BACK is always allowed —
+  // problems are exactly what a reviewer sends a plan back for.
+  if (approve && (await planProblemsFor(supabase, id)).length) return;
 
   const note = String(formData.get("note") || "").trim() || null;
   const { data: who } = await supabase.from("diet_plans").select("client_id, clients:client_id(name)").eq("id", id).maybeSingle();
@@ -7252,6 +7285,15 @@ export async function shareDietPlan(formData: FormData) {
   const r = row as { status: string; client_id: string } | null;
   if (!r) return { error: "Plan not found." };
   if (!undo && r.status !== "published") return { error: "Publish the plan before sharing it." };
+
+  // Last gate. A plan can be published and then edited, so approval alone is
+  // not proof that what is about to reach the client still adds up.
+  if (!undo) {
+    const problems = await planProblemsFor(supabase, id);
+    if (problems.length) {
+      return { error: `${problems.length} thing${problems.length === 1 ? "" : "s"} still to fix before this can go to the client — see the checks on the plan.` };
+    }
+  }
 
   await supabase.from("diet_plans").update({ shared_at: undo ? null : new Date().toISOString() }).eq("id", id);
   if (!undo) {
@@ -7340,6 +7382,16 @@ export async function renderDocument(formData: FormData): Promise<{ ok?: boolean
   if (!provider || !url) return { error: "PDF rendering isn't set up yet." };
 
   const supabase = await createClient();
+
+  // A diet chart is refused at the door if it does not add up. Rendering it into
+  // a stored PDF is the moment it becomes the document the client was given, so
+  // this is the last place the check can still mean anything.
+  if (kind === "plan") {
+    const problems = await planProblemsFor(supabase, id);
+    if (problems.length) {
+      return { error: `${problems.length} thing${problems.length === 1 ? "" : "s"} still to fix on this chart — resolve the checks before sending it.` };
+    }
+  }
 
   // Who the document belongs to, and what to call the file. Each document type
   // reaches its client differently, so resolve it per kind rather than guessing.

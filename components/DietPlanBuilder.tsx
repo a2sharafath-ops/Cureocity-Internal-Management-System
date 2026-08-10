@@ -170,9 +170,18 @@ export default function DietPlanBuilder({
         )}
         <a href={`/diet-plan/${planId}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF →</a>
         {/* One press: makes the stored file, puts it in the portal, sends it.
-            Preview above is just a look — it leaves nothing behind. */}
-        <DeliverButton kind="plan" id={planId} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
-          whatsappReady={Boolean(whatsapp?.ready)} alreadySent={initial.sharedAt} />
+            Preview above is just a look — it leaves nothing behind.
+            Withheld entirely while the chart has unresolved checks: a chart that
+            does not add up must not reach a client, and the server refuses it
+            too, so a disabled button here is the courtesy and that is the rule. */}
+        {problems.length === 0 ? (
+          <DeliverButton kind="plan" id={planId} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
+            whatsappReady={Boolean(whatsapp?.ready)} alreadySent={initial.sharedAt} />
+        ) : (
+          <span style={{ fontSize: 11.5, color: "var(--red-text)", fontWeight: 600 }}>
+            {problems.length} check{problems.length === 1 ? "" : "s"} to resolve before this can be sent
+          </span>
+        )}
 
         {!readOnly && status === "draft" && (
           <>
@@ -192,7 +201,10 @@ export default function DietPlanBuilder({
                 <form action={reviewDietPlan}>
                   <input type="hidden" name="id" value={planId} />
                   <input type="hidden" name="approve" value="true" />
-                  <button style={greenBtn}>Approve &amp; publish</button>
+                  {/* Approving is the signature. Sending back is always open —
+                      unresolved checks are exactly what you send a chart back for. */}
+                  <button disabled={problems.length > 0} style={disabledOf(problems.length > 0, greenBtn)}
+                    title={problems.length ? "Resolve the checks below first" : undefined}>Approve &amp; publish</button>
                 </form>
                 <form action={reviewDietPlan}>
                   <input type="hidden" name="id" value={planId} />
@@ -312,7 +324,7 @@ export default function DietPlanBuilder({
       {/* ---- PROBLEMS ---- */}
       {problems.length > 0 && (
         <div style={{ ...box, padding: 14, marginBottom: 12, background: "var(--red-bg)" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>Before this can go for review</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>Resolve before this chart can be approved or sent</div>
           <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red-text)", fontSize: 12.5 }}>
             {problems.map((p, i) => <li key={i} style={{ marginBottom: 3 }}>{p}</li>)}
           </ul>

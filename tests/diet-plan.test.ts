@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal } from "@/lib/diet-plan";
+import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption } from "@/lib/diet-plan";
 
 const opt = (seq: number, kcal: number, protein: number, items = `Option ${seq + 1}`) =>
   ({ seq, food_items: items, qty: "1 cup", kcal, protein_g: protein, micronutrients: null });
@@ -79,7 +79,7 @@ describe("targetCheck", () => {
 });
 
 describe("planProblems", () => {
-  const targets = { kcal: 1800, protein: null, carbohydrate: null, fats: null, fibre: null, water: null };
+  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
 
   it("blocks a plan with an empty meal slot", () => {
     const meals = [meal("Breakfast", [opt(0, 400, 20)]), meal("Dinner", [])];
@@ -97,8 +97,13 @@ describe("planProblems", () => {
   });
 
   it("passes a complete plan", () => {
-    const meals = [meal("Breakfast", [opt(0, 400, 20)]), meal("Lunch", [opt(0, 500, 30)])];
-    expect(planProblems(meals, targets)).toEqual([]);
+    // "Complete" now means every column the issued document prints is filled —
+    // micronutrients included — and the day lands on its target. The clinic's
+    // rule is that nothing goes to a client with a blank or a mismatch in it.
+    const full = (seq: number, kcal: number, protein: number) =>
+      ({ seq, food_items: `Option ${seq + 1}`, qty: "1 cup", kcal, protein_g: protein, micronutrients: "Iron, folate" });
+    const meals = [meal("Breakfast", [full(0, 450, 20)]), meal("Lunch", [full(0, 450, 30)])];
+    expect(planProblems(meals, { ...targets, kcal: 900 })).toEqual([]);
   });
 });
 
@@ -155,7 +160,7 @@ describe("parseNotes", () => {
 });
 
 describe("planProblems — silent data loss", () => {
-  const targets = { kcal: 1800, protein: null, carbohydrate: null, fats: null, fibre: null, water: null };
+  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
   it("refuses an option that has numbers but no food items", () => {
     const orphan = { seq: 0, food_items: "  ", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null };
     const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null };
@@ -164,8 +169,85 @@ describe("planProblems — silent data loss", () => {
   });
   it("ignores a wholly empty row — that's just an unused slot in the grid", () => {
     const empty = { seq: 0, food_items: "", qty: "", kcal: null, protein_g: null, micronutrients: null };
-    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: null };
+    const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, protein_g: 20, micronutrients: "Iron" };
     const m: PlanMeal = { seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false, options: [empty, good] };
-    expect(planProblems([m], targets)).toEqual([]);
+    // Nothing is reported against the blank row itself; the filled one is fine.
+    expect(planProblems([m], { ...targets, kcal: 400 })).toEqual([]);
+  });
+});
+
+describe("a chart cannot go out with blanks or mismatches", () => {
+  // The clinic's rule, stated by the user: no warnings. Anything wrong, missing
+  // or inconsistent blocks approval and blocks sending, and has to be resolved.
+  const targets = { kcal: 1900, protein: "100-105 g", carbohydrate: "220-230 g", fats: "60-65 g", fibre: "20-30 g", water: "3 ltr" };
+  const opt = (over: Partial<PlanOption> = {}): PlanOption => ({
+    seq: 0, food_items: "Ragi puttu + kadala curry", qty: "1 medium piece + ½ cup",
+    kcal: 440, protein_g: 26, micronutrients: "Calcium, iron, folate", ...over,
+  });
+  const meal = (options: PlanOption[]): PlanMeal =>
+    ({ seq: 0, name: "Breakfast", time_from: null, time_to: null, note: null, conditional: false, options });
+  // A day that adds up: four slots of ~475 kcal each against a 1900 target.
+  const day = (over: PlanMeal[] = []): PlanMeal[] => over.length ? over : [0, 1, 2, 3].map((i) =>
+    ({ ...meal([opt({ kcal: 475, protein_g: 25 })]), seq: i, name: `Meal ${i + 1}` }));
+
+  it("passes a complete chart", () => {
+    expect(planProblems(day(), targets)).toEqual([]);
+  });
+
+  it("refuses a missing calorie count", () => {
+    const m = day(); m[0].options[0].kcal = null;
+    expect(planProblems(m, targets).some((p) => /no calories/.test(p))).toBe(true);
+  });
+
+  it("refuses a missing protein figure", () => {
+    const m = day(); m[0].options[0].protein_g = null;
+    expect(planProblems(m, targets).some((p) => /no protein/.test(p))).toBe(true);
+  });
+
+  it("refuses a blank micronutrient column — it prints on the client's chart", () => {
+    const m = day(); m[0].options[0].micronutrients = "  ";
+    expect(planProblems(m, targets).some((p) => /no micronutrients/.test(p))).toBe(true);
+  });
+
+  it("refuses a nonsense value", () => {
+    const m = day(); m[0].options[0].kcal = 0;
+    expect(planProblems(m, targets).some((p) => /cannot be right/.test(p))).toBe(true);
+  });
+
+  it("refuses a header target left blank", () => {
+    for (const key of ["protein", "carbohydrate", "fats", "fibre", "water"] as const) {
+      const t = { ...targets, [key]: null };
+      expect(planProblems(day(), t).length, key).toBeGreaterThan(0);
+    }
+  });
+
+  it("refuses options in one meal that are not interchangeable", () => {
+    // The clinic's own brief: options within a meal sit within ±40 kcal of each
+    // other. 300 vs 600 means the day's total depends on the client's mood.
+    const m = day();
+    m[0] = { ...m[0], options: [opt({ seq: 0, kcal: 300 }), opt({ seq: 1, kcal: 600, food_items: "Idiyappam + stew" })] };
+    expect(planProblems(m, targets).some((p) => /spread of 300/.test(p))).toBe(true);
+  });
+
+  it("accepts options that differ within the allowed spread", () => {
+    const m = day();
+    m[0] = { ...m[0], options: [opt({ seq: 0, kcal: 460 }), opt({ seq: 1, kcal: 490, food_items: "Idiyappam + stew" })] };
+    expect(planProblems(m, targets).filter((p) => /spread/.test(p))).toEqual([]);
+  });
+
+  it("refuses a day that misses its own calorie target", () => {
+    const m = day().map((x) => ({ ...x, options: [opt({ kcal: 200, protein_g: 10 })] }));
+    expect(planProblems(m, targets).some((p) => /target/.test(p))).toBe(true);
+  });
+
+  it("ignores the conditional backup slot in the day's total", () => {
+    // The travel-delay meal is eaten INSTEAD of another, not as well as.
+    const m = [...day(), { ...meal([opt({ kcal: 500 })]), seq: 9, name: "Travel-delay backup", conditional: true }];
+    expect(planProblems(m, targets)).toEqual([]);
+  });
+
+  it("still catches an empty meal slot", () => {
+    const m = day(); m[1] = { ...m[1], options: [] };
+    expect(planProblems(m, targets).some((p) => /nothing to eat/.test(p))).toBe(true);
   });
 });
