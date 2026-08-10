@@ -72,6 +72,9 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
   // by scrolling.
   const [filter, setFilter] = useState<"all" | "pending" | "suspect">("all");
 
+  /** Which of the two tables this screen is showing. */
+  const [view, setView] = useState<"dishes" | "foods">("dishes");
+
   /**
    * A recipe whose own ingredients contradict the figure its source publishes.
    *
@@ -93,6 +96,12 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dishes, q, filter]);
+
+  const shownFoods = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return foods;
+    return foods.filter((f) => f.name.toLowerCase().includes(needle) || f.food_code.toLowerCase().includes(needle));
+  }, [foods, q]);
 
   const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
   const suspects = useMemo(() => dishes.filter(suspect).length,
@@ -168,21 +177,69 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
   return (
     <div>
       <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
-        Recipes costed against the ICMR food table. Once a dish is here, a chart option built from it carries calculated numbers instead of remembered ones.
+        {view === "dishes"
+          ? "Recipes costed against the food table. Once a dish is here, a chart option built from it carries calculated numbers instead of remembered ones."
+          : "The food table itself — single ingredients, per 100 g, as published. Recipes are built from these; nothing here is edited by hand."}
+      </div>
+
+      {/* ---- DISHES OR INGREDIENTS ----
+          Two different things that were both being counted in one line, with
+          only one of them ever shown. A recipe is a list of ingredients in
+          grams; an ingredient is a row of published composition. Being able to
+          look up "what does the table actually say about coconut" is the
+          question that comes up when a dish's figures look wrong. */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {([["dishes", `Dishes (${dishes.length})`], ["foods", `Ingredients (${foods.length})`]] as const).map(([k, label]) => (
+          <button key={k} type="button" onClick={() => { setView(k); setQ(""); }}
+            style={view === k ? darkBtn : { ...ghost, background: "#fff" }}>{label}</button>
+        ))}
       </div>
 
       <div style={{ ...box, padding: 14, marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search dishes…" style={{ ...inp, minWidth: 220 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder={view === "dishes" ? "Search dishes…" : "Search ingredients…"} style={{ ...inp, minWidth: 220 }} />
         <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>{dishes.length} dish{dishes.length === 1 ? "" : "es"} · {foods.length} foods</span>
-        {canEdit && <button type="button" onClick={() => setDraft(blank())} style={darkBtn}>+ New dish</button>}
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>
+          {view === "dishes"
+            ? `${shown.length} of ${dishes.length} shown`
+            : `${shownFoods.length} of ${foods.length} shown`}
+        </span>
+        {canEdit && view === "dishes" && <button type="button" onClick={() => setDraft(blank())} style={darkBtn}>+ New dish</button>}
       </div>
+
+      {view === "foods" && (
+        <div style={{ ...box, overflow: "hidden" }}>
+          {shownFoods.length === 0 ? (
+            <div style={{ padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No ingredient matches that search.</div>
+          ) : shownFoods.slice(0, 300).map((f) => (
+            <div key={f.food_code} style={{ borderTop: "1px solid var(--border)", padding: "10px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ minWidth: 220, flex: 1 }}>
+                <b style={{ fontSize: 13 }}>{f.name}</b>
+                <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{f.food_code}</div>
+              </div>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>per 100 g</span>
+              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 260, textAlign: "right" }}>
+                {f.kcal ?? "—"} kcal · {f.protein_g ?? "—"}g protein · {f.carb_g ?? "—"}g carbs · {f.fat_g ?? "—"}g fat · {f.fibre_g ?? "—"}g fibre
+              </span>
+            </div>
+          ))}
+          {/* The list is reference data, not a worklist. Showing all 719 is a
+              long scroll to no purpose when searching is how anyone finds a
+              row; the cap keeps the page quick and says so plainly. */}
+          {shownFoods.length > 300 && (
+            <div style={{ borderTop: "1px solid var(--border)", padding: "10px 14px", fontSize: 12, color: "var(--muted)" }}>
+              Showing the first 300 of {shownFoods.length}. Search to narrow it down.
+            </div>
+          )}
+        </div>
+      )}
+
 
       {/* ---- REVIEW BAR ----
           Only drawn while something is waiting. An imported library lands here
           unapproved and stays out of every chart until it is read; once she has
           worked through it this row disappears and the screen is what it was. */}
-      {canEdit && (pending > 0 || suspects > 0) && (
+      {view === "dishes" && canEdit && (pending > 0 || suspects > 0) && (
         <div style={{ ...box, padding: 14, marginBottom: 14, background: "var(--amber-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ fontSize: 13 }}>
             {pending > 0 && (
@@ -226,7 +283,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
         </div>
       )}
 
-      {draft && (
+      {view === "dishes" && draft && (
         <div style={{ ...box, padding: 16, marginBottom: 14 }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>{draft.id ? "Edit dish" : "New dish"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
@@ -290,7 +347,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
         </div>
       )}
 
-      {shown.length === 0 ? (
+      {view === "dishes" && (shown.length === 0 ? (
         <div style={{ ...box, padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
           {dishes.length ? "No dish matches that search." : "No dishes yet. Add the ones you write most often — puttu, kadala curry, idiyappam — and every chart built from them prices itself."}
         </div>
@@ -347,7 +404,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
             );
           })}
         </div>
-      )}
+      ))}
     </div>
   );
 }
