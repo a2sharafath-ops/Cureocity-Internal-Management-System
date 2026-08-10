@@ -67,18 +67,37 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
     { name: d.name, cooked_g: d.cooked_g, servings: d.servings, items: d.items }, foodMap);
 
   // Reviewing an imported library is the job this screen now has to support,
-  // so "show me only what I haven't cleared yet" is a first-class filter
-  // rather than something to find by scrolling past nine hundred rows.
-  const [onlyPending, setOnlyPending] = useState(false);
+  // so the two questions worth asking of a thousand rows — what have I not
+  // cleared, and what looks wrong — are filters rather than something to find
+  // by scrolling.
+  const [filter, setFilter] = useState<"all" | "pending" | "suspect">("all");
+
+  /**
+   * A recipe whose own ingredients contradict the figure its source publishes.
+   *
+   * Nearly always a recipe that lists something it does not contain: a pan of
+   * frying oil the food absorbs a little of, a marinade poured away. Worth
+   * looking at before the recipe is used on anyone's chart, and impossible to
+   * find among a thousand rows without asking for it.
+   */
+  const suspect = (d: DishRow) => {
+    const v = priced(d);
+    return v.priced && d.source_kcal != null && contradictsSource(v.perServing.kcal, Math.round(Number(d.source_kcal)));
+  };
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let list = needle ? dishes.filter((d) => d.name.toLowerCase().includes(needle)) : dishes;
-    if (onlyPending) list = list.filter((d) => !d.approved);
+    if (filter === "pending") list = list.filter((d) => !d.approved);
+    if (filter === "suspect") list = list.filter(suspect);
     return list;
-  }, [dishes, q, onlyPending]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dishes, q, filter]);
 
   const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
+  const suspects = useMemo(() => dishes.filter(suspect).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dishes, foodMap]);
 
   /**
    * What one serving comes to, and whether we worked it out or quoted it.
@@ -163,17 +182,35 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
           Only drawn while something is waiting. An imported library lands here
           unapproved and stays out of every chart until it is read; once she has
           worked through it this row disappears and the screen is what it was. */}
-      {canEdit && pending > 0 && (
+      {canEdit && (pending > 0 || suspects > 0) && (
         <div style={{ ...box, padding: 14, marginBottom: 14, background: "var(--amber-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ fontSize: 13 }}>
-            <b>{pending} recipe{pending === 1 ? "" : "s"} waiting to be approved.</b>
-            <span style={{ color: "var(--amber-text)" }}> Nothing here can be used on a client&apos;s chart until you approve it.</span>
+            {pending > 0 && (
+              <>
+                <b>{pending} recipe{pending === 1 ? "" : "s"} waiting to be approved.</b>
+                <span style={{ color: "var(--amber-text)" }}> Nothing here can be used on a client&apos;s chart until you approve it.</span>
+              </>
+            )}
+            {pending === 0 && <b>All recipes approved.</b>}
           </div>
           <span style={{ flex: 1 }} />
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
-            <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
-            Show only these
-          </label>
+
+          {/* Three views of the same list. "Needs a look" is the one to clear
+              first: those recipes are priced, so they will pass every check —
+              the only thing wrong with them is that their own ingredients say
+              something different, and nobody would notice by scrolling. */}
+          {([
+            ["all", `All ${dishes.length}`, dishes.length],
+            ["pending", `Not approved (${pending})`, pending],
+            ["suspect", `Needs a look (${suspects})`, suspects],
+          ] as const).filter(([, , n]) => n > 0).map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setFilter(key)}
+              style={filter === key
+                ? { ...darkBtn, padding: "6px 12px", fontSize: 12.5 }
+                : { ...ghost, background: "#fff" }}>
+              {label}
+            </button>
+          ))}
           {/* Approves what is ON SCREEN, not everything outstanding. Search for
               "dosa", read the eleven results, approve those eleven — which is
               how a thousand recipes actually get worked through. A button that
