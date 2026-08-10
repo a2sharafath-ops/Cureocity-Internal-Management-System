@@ -16,6 +16,37 @@ import { type createClient } from "@/lib/supabase/server";
 
 type Db = Awaited<ReturnType<typeof createClient>>;
 
+/**
+ * Read every row, a page at a time.
+ *
+ * Supabase caps a single response at its project-level "Max rows" setting —
+ * 1,000 by default — and a `.limit()` above that is silently ignored rather
+ * than refused. With 1,014 imported recipes that meant fourteen of them simply
+ * did not exist as far as this app was concerned: missing from the chart's
+ * picker, and reported as "a recipe that no longer exists" on any option built
+ * from one. A truncation that looks exactly like data loss.
+ *
+ * Paging keeps that correct whatever the setting is and however the library
+ * grows, which is worth more than a number typed into a dashboard once.
+ */
+const PAGE = 1000;
+
+export async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+  what: string,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1);
+    if (error) throw new Error(`Could not read ${what}: ${error.message}`);
+    const rows = (data ?? []) as T[];
+    all.push(...rows);
+    // A short page is the last one. Anything else risks looping forever
+    // against a table that keeps answering.
+    if (rows.length < PAGE) return all;
+  }
+}
+
 
 type RawDish = {
   id: string;
@@ -39,27 +70,22 @@ type RawDish = {
  * client the caller hands over rather than an admin one.
  */
 export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
-  const [{ data: dsh, error: dishErr }, { data: fds, error: foodErr }] = await Promise.all([
-    supabase.from("dishes")
+  // Paged, not limited. Both reads throw on failure rather than coming back
+  // empty: an empty library would price every recipe as unpriceable and blame
+  // the recipes — "ingredients not matched to the food table" — for what is
+  // actually a database that did not answer.
+  const [dsh, fds] = await Promise.all([
+    fetchAllRows<RawDish>((from, to) => supabase.from("dishes")
       .select("id, name, serving_label, cooked_g, servings, source, source_kcal, source_protein_g, approved, dish_items(food_code, name, raw_g, seq)")
-      // Explicit limits: PostgREST caps a response at 1,000 rows by default,
-      // and a silently truncated library would price every missing recipe as
-      // "not matched to the food table" — blaming the recipes for a row that
-      // was simply never sent.
-      .order("name").limit(5000),
-    supabase.from("foods").select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal").limit(5000),
+      .order("name").range(from, to), "the recipe library"),
+    fetchAllRows<Food>((from, to) => supabase.from("foods")
+      .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
+      .order("food_code").range(from, to), "the food table"),
   ]);
 
-  // A failed read must not come back as an empty library. It would price every
-  // recipe as unpriceable and blame the recipes — "ingredients not matched to
-  // the food table" — for what is actually a database that did not answer.
-  // Callers stop instead, and say so.
-  if (dishErr) throw new Error(`Could not read the recipe library: ${dishErr.message}`);
-  if (foodErr) throw new Error(`Could not read the food table: ${foodErr.message}`);
+  const foods = new Map<string, Food>(fds.map((f) => [f.food_code, f] as const));
 
-  const foods = new Map<string, Food>(((fds ?? []) as Food[]).map((f) => [f.food_code, f] as const));
-
-  return ((dsh ?? []) as unknown as RawDish[]).map((d): DishOption => {
+  return dsh.map((d): DishOption => {
     const verdict = dishNutrients(
       {
         name: d.name,

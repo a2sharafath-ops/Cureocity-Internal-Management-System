@@ -22,7 +22,7 @@ import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
 import { type PlanMeal, type PlanOption, type PlanComponent, type DishOption } from "@/lib/diet-plan";
-import { pricedDishes } from "@/lib/dish-pricing";
+import { pricedDishes, fetchAllRows } from "@/lib/dish-pricing";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
 
@@ -529,24 +529,26 @@ export default async function WorkspacePage(
   let dishes: DishRow[] = [];
   let foods: Food[] = [];
   if (tab === "dishes") {
-    const [{ data: dsh }, { data: fds }] = await Promise.all([
-      supabase.from("dishes")
+    type Raw = Omit<DishRow, "items"> & { dish_items: DishRow["items"] | null };
+    // Paged rather than limited: Supabase caps a response at its project "Max
+    // rows" setting and ignores a larger .limit(), so an imported library of
+    // 1,014 recipes arrived as 1,000 and fourteen dishes simply vanished — off
+    // this screen, and out of the chart's picker with them.
+    const [dsh, fds] = await Promise.all([
+      fetchAllRows<Raw>((from, to) => supabase.from("dishes")
         .select("id, name, cuisine, cooked_g, servings, serving_label, notes, source, source_kcal, source_protein_g, approved, approved_by, dish_items(food_code, name, raw_g, seq)")
         // Unapproved first: with an imported library in the table, the work
         // waiting to be done is what should be at the top of the screen.
-        .order("approved").order("name")
-        .limit(2000),
-      supabase.from("foods")
+        .order("approved").order("name").range(from, to), "the recipe library"),
+      fetchAllRows<Food>((from, to) => supabase.from("foods")
         .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
-        .order("name")
-        .limit(2000),
+        .order("name").range(from, to), "the food table"),
     ]);
-    type Raw = Omit<DishRow, "items"> & { dish_items: DishRow["items"] | null };
-    dishes = ((dsh ?? []) as unknown as Raw[]).map(({ dish_items, ...d }) => ({
+    dishes = dsh.map(({ dish_items, ...d }) => ({
       ...d,
       items: [...(dish_items ?? [])].sort((a, b) => a.seq - b.seq),
     }));
-    foods = (fds ?? []) as Food[];
+    foods = fds;
   }
 
   // Summaries + consolidated Blueprint sign-off.
