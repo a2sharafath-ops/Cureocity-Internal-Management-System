@@ -108,19 +108,17 @@ describe("planProblems", () => {
 });
 
 describe("an option built from recipes", () => {
-  const puttu: DishOption = {
-    id: "d1", name: "Puttu", serving_label: null,
-    perServing: { kcal: 210, protein_g: 4.6 }, reason: null,
-  };
-  const kadala: DishOption = {
-    id: "d2", name: "Kadala curry", serving_label: null,
-    perServing: { kcal: 118, protein_g: 6.2 }, reason: null,
-  };
-  const unpriced: DishOption = {
-    id: "d3", name: "Egg roast", serving_label: null,
-    perServing: null, reason: "2 ingredients not matched to the food table (coconut, shallot)",
-  };
-  const library = new Map([puttu, kadala, unpriced].map((d) => [d.id, d] as const));
+  const dish = (over: Partial<DishOption> & Pick<DishOption, "id" | "name">): DishOption => ({
+    serving_label: null, perServing: null, basis: null, source: null, reason: null, approved: true, ...over,
+  });
+  const puttu = dish({ id: "d1", name: "Puttu", perServing: { kcal: 210, protein_g: 4.6 }, basis: "computed" });
+  const kadala = dish({ id: "d2", name: "Kadala curry", perServing: { kcal: 118, protein_g: 6.2 }, basis: "computed" });
+  const unpriced = dish({ id: "d3", name: "Egg roast", reason: "2 ingredients not matched to the food table (coconut, shallot)" });
+  const unapproved = dish({
+    id: "d4", name: "Appam", perServing: { kcal: 120, protein_g: 2.4 },
+    basis: "published", source: "INDB ASC123", approved: false,
+  });
+  const library = new Map([puttu, kadala, unpriced, unapproved].map((d) => [d.id, d] as const));
   const targets = { kcal: 1900, protein: "100 g", carbohydrate: "220 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
 
   const part = (dish_id: string, servings = 1, seq = 0) => ({ seq, dish_id, servings });
@@ -178,6 +176,14 @@ describe("an option built from recipes", () => {
     it("refuses a portion of nothing", () => {
       const m = [meal([built({ components: [part("d1", 0)] })])];
       expect(planProblems(m, targets, [puttu, kadala]).some((p) => /more than nothing/.test(p))).toBe(true);
+    });
+
+    it("refuses a recipe the dietitian has not approved, even though it is priced", () => {
+      // The picker hides these. This is what stops one that was selected
+      // before the library was reviewed, or had approval withdrawn after.
+      const m = [meal([built({ components: [part("d4")], kcal: 120, protein_g: 2.4 })])];
+      const out = planProblems(m, targets, [puttu, kadala, unapproved]);
+      expect(out.some((p) => /Appam/.test(p) && /not been approved/.test(p))).toBe(true);
     });
 
     it("reports one problem per option, not one per component", () => {

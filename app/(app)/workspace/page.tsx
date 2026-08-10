@@ -531,11 +531,15 @@ export default async function WorkspacePage(
   if (tab === "dishes") {
     const [{ data: dsh }, { data: fds }] = await Promise.all([
       supabase.from("dishes")
-        .select("id, name, cuisine, cooked_g, servings, serving_label, notes, dish_items(food_code, name, raw_g, seq)")
-        .order("name"),
+        .select("id, name, cuisine, cooked_g, servings, serving_label, notes, source, source_kcal, source_protein_g, approved, approved_by, dish_items(food_code, name, raw_g, seq)")
+        // Unapproved first: with an imported library in the table, the work
+        // waiting to be done is what should be at the top of the screen.
+        .order("approved").order("name")
+        .limit(2000),
       supabase.from("foods")
         .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
-        .order("name"),
+        .order("name")
+        .limit(2000),
     ]);
     type Raw = Omit<DishRow, "items"> & { dish_items: DishRow["items"] | null };
     dishes = ((dsh ?? []) as unknown as Raw[]).map(({ dish_items, ...d }) => ({

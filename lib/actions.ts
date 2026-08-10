@@ -7546,6 +7546,54 @@ export async function saveDish(formData: FormData): Promise<{ error?: string; id
   return { id: dishId };
 }
 
+/**
+ * Clear a recipe for use on client charts, or withdraw it again.
+ *
+ * The gate on an imported library. A thousand recipes arrived from a published
+ * databank; none of them are on offer in the chart builder until someone here
+ * has read one and said so. Withdrawing is deliberately possible too — a
+ * recipe approved in a batch and later found wrong should stop being offered
+ * without having to be deleted, and any chart still open on it is refused
+ * until it is sorted out.
+ *
+ * Same gate as authoring: approving a recipe is a nutrition decision.
+ */
+export async function setDishApproved(formData: FormData) {
+  const p = await dishGuard();
+  if (!p) return;
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+  const approve = String(formData.get("approve") || "") === "true";
+
+  const supabase = await createClient();
+  const { data: d } = await supabase.from("dishes").select("name").eq("id", id).maybeSingle();
+  await supabase.from("dishes").update({
+    approved: approve,
+    approved_by: approve ? p.name : null,
+    approved_at: approve ? new Date().toISOString() : null,
+  }).eq("id", id);
+
+  await logAudit(p, approve ? "Dish approved for charts" : "Dish approval withdrawn",
+    (d as { name?: string } | null)?.name ?? id, null);
+  revalidatePath("/workspace");
+}
+
+/** Approve everything currently unapproved — the batch the dietitian just read. */
+export async function approveDishes(formData: FormData) {
+  const p = await dishGuard();
+  if (!p) return;
+  const ids = String(formData.get("ids") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!ids.length) return;
+
+  const supabase = await createClient();
+  await supabase.from("dishes").update({
+    approved: true, approved_by: p.name, approved_at: new Date().toISOString(),
+  }).in("id", ids);
+
+  await logAudit(p, "Dishes approved for charts", `${ids.length} recipe${ids.length === 1 ? "" : "s"}`, null);
+  revalidatePath("/workspace");
+}
+
 export async function deleteDish(formData: FormData) {
   const p = await dishGuard();
   if (!p) return;

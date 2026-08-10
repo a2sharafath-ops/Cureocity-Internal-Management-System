@@ -51,10 +51,30 @@ export type DishOption = {
   name: string;
   /** "1 medium piece", "¾ cup crumbled" — how the portion reads on a chart. */
   serving_label: string | null;
-  /** Null when the recipe is too incomplete to price. */
+  /** Null when the recipe is too incomplete to price and has no published figure. */
   perServing: { kcal: number; protein_g: number } | null;
-  /** What is missing, when it cannot be priced. Shown to the dietitian. */
+  /**
+   * Where `perServing` came from.
+   *
+   * "computed" — this app's own arithmetic over the recipe's ingredients. The
+   * preferred answer, and the only one that re-prices itself when an
+   * ingredient is corrected.
+   *
+   * "published" — the figure the databank the recipe came from states for one
+   * serving, used where our ingredient weights are incomplete. Still a lookup
+   * rather than a guess, but it cannot be recalculated here, so the dietitian
+   * is told which she is looking at.
+   */
+  basis: "computed" | "published" | null;
+  /** The source a published figure is quoted from, e.g. "INDB ASC001". */
+  source: string | null;
+  /** What is missing, when it cannot be priced at all. Shown to the dietitian. */
   reason: string | null;
+  /**
+   * Cleared by the dietitian for use on a client's chart. An imported library
+   * arrives unapproved; the picker offers approved dishes only.
+   */
+  approved: boolean;
 };
 
 /**
@@ -269,6 +289,12 @@ function linkProblem(
     }
     if (!d.perServing) {
       return `${where} uses ${d.name}, which cannot be priced yet — ${d.reason ?? "the recipe is incomplete"}. Fix it in Dishes, or remove it from this option and type the numbers.`;
+    }
+    // An imported recipe nobody here has read must not reach a client, even if
+    // it was selected before the library was reviewed or approval was later
+    // withdrawn. The picker hides these; this is what actually stops them.
+    if (!d.approved) {
+      return `${where} uses ${d.name}, which has not been approved for use on charts yet. Approve it under Dishes, or remove it from this option.`;
     }
   }
 

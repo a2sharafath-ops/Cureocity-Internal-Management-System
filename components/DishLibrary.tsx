@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveDish, deleteDish } from "@/lib/actions";
+import { saveDish, deleteDish, setDishApproved, approveDishes } from "@/lib/actions";
 import { dishNutrients, energyLooksWrong, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
@@ -12,6 +12,14 @@ export type DishRow = {
   servings: number | null;
   serving_label: string | null;
   notes: string | null;
+  /** Where the recipe came from — a citation for anything imported. */
+  source: string | null;
+  /** What the source says one serving contains, where we cannot compute it. */
+  source_kcal: number | null;
+  source_protein_g: number | null;
+  /** Cleared for use on a client's chart. */
+  approved: boolean;
+  approved_by: string | null;
   items: { food_code: string | null; name: string; raw_g: number; seq: number }[];
 };
 
@@ -58,10 +66,33 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
   const priced = (d: DishRow) => dishNutrients(
     { name: d.name, cooked_g: d.cooked_g, servings: d.servings, items: d.items }, foodMap);
 
+  // Reviewing an imported library is the job this screen now has to support,
+  // so "show me only what I haven't cleared yet" is a first-class filter
+  // rather than something to find by scrolling past nine hundred rows.
+  const [onlyPending, setOnlyPending] = useState(false);
+
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return needle ? dishes.filter((d) => d.name.toLowerCase().includes(needle)) : dishes;
-  }, [dishes, q]);
+    let list = needle ? dishes.filter((d) => d.name.toLowerCase().includes(needle)) : dishes;
+    if (onlyPending) list = list.filter((d) => !d.approved);
+    return list;
+  }, [dishes, q, onlyPending]);
+
+  const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
+
+  /** What one serving comes to, and whether we worked it out or quoted it. */
+  const figures = (d: DishRow) => {
+    const v = priced(d);
+    if (v.priced) return { kcal: v.perServing.kcal, protein: v.perServing.protein_g, quoted: false, reason: null };
+    if (d.source_kcal != null && d.source_protein_g != null) {
+      return {
+        kcal: Math.round(Number(d.source_kcal)),
+        protein: Math.round(Number(d.source_protein_g) * 10) / 10,
+        quoted: true, reason: null,
+      };
+    }
+    return { kcal: null, protein: null, quoted: false, reason: v.reason };
+  };
 
   const edit = (d: DishRow) => setDraft({
     id: d.id, name: d.name, cuisine: d.cuisine ?? "", servings: String(d.servings ?? ""),
@@ -110,6 +141,36 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
         <span style={{ fontSize: 12, color: "var(--muted)" }}>{dishes.length} dish{dishes.length === 1 ? "" : "es"} · {foods.length} foods</span>
         {canEdit && <button type="button" onClick={() => setDraft(blank())} style={darkBtn}>+ New dish</button>}
       </div>
+
+      {/* ---- REVIEW BAR ----
+          Only drawn while something is waiting. An imported library lands here
+          unapproved and stays out of every chart until it is read; once she has
+          worked through it this row disappears and the screen is what it was. */}
+      {canEdit && pending > 0 && (
+        <div style={{ ...box, padding: 14, marginBottom: 14, background: "var(--amber-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13 }}>
+            <b>{pending} recipe{pending === 1 ? "" : "s"} waiting to be approved.</b>
+            <span style={{ color: "var(--amber-text)" }}> Nothing here can be used on a client&apos;s chart until you approve it.</span>
+          </div>
+          <span style={{ flex: 1 }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+            <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
+            Show only these
+          </label>
+          {/* Approves what is ON SCREEN, not everything outstanding. Search for
+              "dosa", read the eleven results, approve those eleven — which is
+              how a thousand recipes actually get worked through. A button that
+              silently cleared all 1,014 would make the gate pointless. */}
+          {shown.some((d) => !d.approved) && (
+            <form action={approveDishes}>
+              <input type="hidden" name="ids" value={shown.filter((d) => !d.approved).map((d) => d.id).join(",")} />
+              <button style={darkBtn}>
+                Approve the {shown.filter((d) => !d.approved).length} shown
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       {draft && (
         <div style={{ ...box, padding: 16, marginBottom: 14 }}>
@@ -182,21 +243,42 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
       ) : (
         <div style={{ ...box, overflow: "hidden" }}>
           {shown.map((d) => {
-            const v = priced(d);
+            const f = figures(d);
             return (
-              <div key={d.id} style={{ borderTop: "1px solid var(--border)", padding: "11px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div key={d.id} style={{ borderTop: "1px solid var(--border)", padding: "11px 14px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", background: d.approved ? undefined : "var(--amber-bg)" }}>
                 <div style={{ minWidth: 200, flex: 1 }}>
                   <b style={{ fontSize: 13 }}>{d.name}</b>
                   {d.serving_label && <span style={{ color: "var(--muted)", fontSize: 12 }}> · {d.serving_label}</span>}
-                  <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{d.items.length} ingredient{d.items.length === 1 ? "" : "s"}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                    {d.items.length} ingredient{d.items.length === 1 ? "" : "s"}
+                    {d.source && <> · {d.source}</>}
+                    {d.approved && d.approved_by && <> · approved by {d.approved_by}</>}
+                  </div>
                 </div>
-                {v.priced ? (
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{v.perServing.kcal} kcal · {v.perServing.protein_g}g protein</span>
+
+                {f.kcal != null ? (
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                    {f.kcal} kcal · {f.protein}g protein
+                    {/* Said every time, not just once at the top. She is
+                        deciding dish by dish whether to trust the number, and
+                        which kind of number it is belongs next to it. */}
+                    {f.quoted && <span style={{ color: "var(--muted)", fontWeight: 500 }}> · quoted, not calculated</span>}
+                  </span>
                 ) : (
-                  <span style={{ fontSize: 11.5, color: "var(--amber-text)", fontWeight: 600 }}>{v.reason}</span>
+                  <span style={{ fontSize: 11.5, color: "var(--amber-text)", fontWeight: 600 }}>{f.reason}</span>
                 )}
+
                 {canEdit && (
                   <>
+                    {/* Approving is what puts a recipe in front of a client, so
+                        it sits with the other things that change the dish. */}
+                    <form action={setDishApproved}>
+                      <input type="hidden" name="id" value={d.id} />
+                      <input type="hidden" name="approve" value={d.approved ? "false" : "true"} />
+                      <button style={d.approved ? ghost : { ...darkBtn, padding: "6px 12px", fontSize: 12.5 }}>
+                        {d.approved ? "Withdraw" : "Approve"}
+                      </button>
+                    </form>
                     <button type="button" onClick={() => edit(d)} style={ghost}>Edit</button>
                     <form action={deleteDish}>
                       <input type="hidden" name="id" value={d.id} />

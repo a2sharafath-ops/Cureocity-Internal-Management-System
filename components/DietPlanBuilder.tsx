@@ -141,6 +141,11 @@ export default function DietPlanBuilder({
 
   const dishMap = useMemo(() => new Map<string, DishOption>(dishes.map((d) => [d.id, d] as const)), [dishes]);
 
+  // Only what the dietitian has cleared is on offer. An imported library
+  // arrives unapproved, so this is what keeps a thousand recipes nobody here
+  // has read out of the pickers while she works through them.
+  const selectable = useMemo(() => dishes.filter((d) => d.approved), [dishes]);
+
   /**
    * Change what an option is built from, and re-total it.
    *
@@ -166,7 +171,7 @@ export default function DietPlanBuilder({
   };
 
   const addComponent = (mealIdx: number, optIdx: number, o: PlanOption) => {
-    const first = dishes[0];
+    const first = selectable[0];
     if (!first) return;
     // Building from recipes replaces whatever she typed, and removing the
     // component again cannot bring it back. On the FIRST one, where there are
@@ -386,8 +391,14 @@ export default function DietPlanBuilder({
                 if (!d) return dishes.length ? "one of its recipes is no longer in the library" : null;
                 if (c.servings <= 0) return `the ${d.name} portion has to be more than nothing`;
                 if (!d.perServing) return `${d.name} can't be priced yet — ${d.reason}`;
+                if (!d.approved) return `${d.name} hasn't been approved for use on charts yet`;
                 return null;
               }).find(Boolean);
+              // Where the figures come from, said plainly. A row added up from
+              // published per-serving values is a different kind of number
+              // from one this app calculated, and the difference matters when
+              // she is deciding whether to trust it on a client's chart.
+              const quoted = built && o.components.some((c) => dishMap.get(c.dish_id)?.basis === "published");
               return (
                 <div key={o.id ?? `opt-${j}`} style={{ marginTop: 6, paddingBottom: built ? 6 : 0 }}>
                   <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, alignItems: "center" }}>
@@ -432,7 +443,15 @@ export default function DietPlanBuilder({
                                 otherwise vanish from the box and read as
                                 whichever dish happened to be first. */}
                             {!dishMap.has(c.dish_id) && <option value={c.dish_id}>Recipe removed</option>}
-                            {dishes.map((d) => (
+                            {/* A dish already on the chart stays listed even
+                                if approval was withdrawn afterwards, so the
+                                box never silently reads as a different
+                                recipe. The red check below is what stops it
+                                going out. */}
+                            {!dishMap.get(c.dish_id)?.approved && dishMap.has(c.dish_id) && (
+                              <option value={c.dish_id}>{dishMap.get(c.dish_id)!.name} (not approved)</option>
+                            )}
+                            {selectable.map((d) => (
                               <option key={d.id} value={d.id}>{d.name}{d.perServing ? "" : " (unpriced)"}</option>
                             ))}
                           </select>
@@ -446,12 +465,27 @@ export default function DietPlanBuilder({
                           )}
                         </span>
                       ))}
-                      {!locked && (
+                      {!locked && selectable.length > 0 && (
                         <button type="button" onClick={() => addComponent(i, j, o)}
                           style={{ ...outlineBtn, padding: "4px 10px", fontSize: 11.5 }}>
                           {built ? "+ Add another recipe" : "+ Build from recipes"}
                         </button>
                       )}
+                      {!locked && selectable.length === 0 && !built && (
+                        <span style={{ fontSize: 11.5, color: "var(--muted)" }}>
+                          No approved recipes yet — approve some under Dishes to build options from them.
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {!trouble && quoted && (
+                    // Not a warning. A published figure is a proper lookup —
+                    // she simply needs to know it is the databank's number and
+                    // not this app's, because correcting an ingredient will not
+                    // move it until the recipe can be computed here.
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", margin: "3px 0 0 78px" }}>
+                      Figures quoted from the published recipe, not calculated here.
                     </div>
                   )}
 
