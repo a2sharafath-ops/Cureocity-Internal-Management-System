@@ -5,7 +5,8 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Flag } from "@/components/AttentionPanel";
 import { dueOn, waitingSince, fmtDay, daysBetweenISO } from "@/lib/due";
-import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, FOLLOWUP_QUEUE_OWNER, SETTLED_INVOICE, FOLLOWUP_CLOSED_SQL } from "@/lib/work-owners";
+import { INVOICE_RAISE_OWNER, INVOICE_CHASE_OWNER, INTAKE_OWNER, BLOOD_CHASE_OWNER, RENEWAL_OWNER, FOLLOWUP_QUEUE_OWNER, SETTLED_INVOICE, FOLLOWUP_CLOSED_SQL } from "@/lib/work-owners";
+import { renewalWindow } from "@/lib/obligations";
 
 const shift = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 /** Payment terms: 7 days from issue. */
@@ -20,7 +21,7 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
   const sb = await createClient();
   const cut7 = shift(today, -7);
   const [{ data: cps }, { data: inv }, { data: clients }, { data: blood }, { data: tablet }, { data: fu }] = await Promise.all([
-    sb.from("client_packages").select("client_id, package_name, price, status, start_date").eq("status", "active"),
+    sb.from("client_packages").select("client_id, package_name, price, status, start_date, end_date").eq("status", "active"),
     sb.from("invoices").select("client_id, num, amount, status, issued_date"),
     sb.from("clients").select("id, name"),
     sb.from("blood_requests").select("client_id, panel, submitted, requested_at"),
@@ -55,6 +56,36 @@ export async function frontDeskFlags(today: string): Promise<Flag[]> {
       // A package sold and active with nothing billed was the most
       // money-relevant item in the app and nobody was chased for it.
       chaseRole: { roles: INVOICE_RAISE_OWNER, who: "Front Desk", label: `Raise invoice — ${nameOf(cp.client_id)}`, clientId: cp.client_id, href: "/billing" } });
+  }
+
+  // ---- packages ending, and ones that quietly lapsed -----------------------
+  //
+  // A package ending appeared ONLY on that client's own card, so nobody saw it
+  // unless they happened to open them. A renewal nobody is told about is a
+  // renewal that doesn't happen (ruling 6, docs/obligations-rulings.md).
+  //
+  // Subscriptions are already covered — they mint a renewal call
+  // RENEWAL_LEAD_DAYS ahead of renews_on, which reaches the follow-up queue.
+  // This is the other kind: a package with an end_date and no subscription
+  // behind it.
+  //
+  // The window is bounded at BOTH ends, and lives in lib/obligations.ts with
+  // the reasoning — see renewalWindow().
+  for (const cp of (cps ?? []) as { client_id: string; package_name: string | null; end_date: string | null }[]) {
+    if (!cp.client_id) continue;
+    const w = renewalWindow(cp.end_date, today);
+    if (!w || !cp.end_date) continue;   // end_date is non-null inside the window
+    const ends = cp.end_date;
+    const lapsed = w.lapsed;
+    flags.push({
+      sev: lapsed ? "high" : "med",
+      title: `${nameOf(cp.client_id)} — ${lapsed ? "package lapsed" : "package ending"}`,
+      detail: `${cp.package_name ?? "Package"} · ${lapsed ? "ended" : "ends"} ${fmtDay(ends)}`,
+      href: `/clients/${cp.client_id}`, cta: "View",
+      ...dueOn(ends, today),
+      dedupeKey: `package-end:${cp.client_id}:${ends}`,
+      chaseRole: { roles: RENEWAL_OWNER, who: "Front Desk", label: `Renewal — ${nameOf(cp.client_id)}`, clientId: cp.client_id, href: `/clients/${cp.client_id}` },
+    });
   }
 
   // ---- overdue unpaid invoices ---------------------------------------------

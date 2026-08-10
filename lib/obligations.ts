@@ -19,6 +19,48 @@ export const ROLE_TO_DISC: Record<string, string> = {
 
 export type Owner = { id: string; name: string };
 
+// ---- renewals ---------------------------------------------------------------
+
+/** Days before a package ends that the front desk should be chasing a renewal. */
+export const RENEWAL_LEAD_DAYS = 7;
+/**
+ * How long a package that has already lapsed keeps chasing.
+ *
+ * Bounded deliberately, and this is the important half. Nothing in the app
+ * expires a package by date — `client_packages.status` only moves on a void or
+ * an explicit completion — so end dates pass and rows sit "active" forever. An
+ * unbounded look-back would put every package the clinic has ever sold on the
+ * front desk queue on day one.
+ *
+ * A fortnight either side of the end date is the window where a renewal is
+ * still an ops task. Past that it is a win-back, which is what /retention is
+ * for, and leaving it on the queue would only train people to ignore the queue.
+ */
+export const RENEWAL_LAPSED_DAYS = 14;
+
+const shiftISO = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * Is this package end date worth chasing today, and has it already passed?
+ *
+ * Returns null when it is outside the window — too far off to act on, or long
+ * enough gone to belong to retention rather than the front desk.
+ */
+export function renewalWindow(
+  endDate: string | null | undefined,
+  today: string,
+): { lapsed: boolean } | null {
+  if (!endDate) return null;
+  if (endDate > shiftISO(today, RENEWAL_LEAD_DAYS)) return null;
+  if (endDate < shiftISO(today, -RENEWAL_LAPSED_DAYS)) return null;
+  // Ruling 8: due today is not overdue — you have until the end of the day.
+  return { lapsed: endDate < today };
+}
+
 export type AssignRow = { client_id: string; discipline: string; staff_id: string | null; staff: { name: string } | null };
 export type ApptOwnerRow = { client_id: string; status: string; provider_id: string | null; staff: { name: string; role: string } | null };
 

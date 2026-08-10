@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, ROLE_TO_DISC, type AssignRow, type ApptOwnerRow, type MilestoneLike } from "@/lib/obligations";
+import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, renewalWindow, RENEWAL_LEAD_DAYS, RENEWAL_LAPSED_DAYS, ROLE_TO_DISC, type AssignRow, type ApptOwnerRow, type MilestoneLike } from "@/lib/obligations";
+
+const shift = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
 // ---- buildOwnerResolver -----------------------------------------------------
 // Locks the parity of the owner-resolution logic that used to be copy-pasted in
@@ -199,5 +201,47 @@ describe("unsatisfiedMilestones — no-shows", () => {
   it("but a completed booking in the past does", () => {
     const appts = [{ type: "10th Day Diet Followup", date: "2026-08-11", status: "completed" }];
     expect(unsatisfiedMilestones("c1", [ms({})], appts, SVC, TODAY)).toHaveLength(0);
+  });
+});
+
+// ---- renewalWindow ----------------------------------------------------------
+// Ruling 6 (docs/obligations-rulings.md): a package ending reaches the front
+// desk queue, not just that client's own card. The window is the whole safety
+// of it — nothing in the app expires a package by date, so rows sit "active"
+// long after they end, and an unbounded look-back would put every package the
+// clinic has ever sold on the queue at once.
+describe("renewalWindow", () => {
+  const TODAY = "2026-08-09";
+
+  it("chases a package ending inside the lead time", () => {
+    expect(renewalWindow("2026-08-14", TODAY)).toEqual({ lapsed: false });
+    expect(renewalWindow(shift(TODAY, RENEWAL_LEAD_DAYS), TODAY)).toEqual({ lapsed: false });
+  });
+
+  it("stays quiet about one ending beyond the lead time", () => {
+    expect(renewalWindow(shift(TODAY, RENEWAL_LEAD_DAYS + 1), TODAY)).toBeNull();
+    expect(renewalWindow("2026-12-31", TODAY)).toBeNull();
+  });
+
+  it("treats today as ending, not lapsed", () => {
+    // Ruling 8: due today is not overdue — there is still a day to act.
+    expect(renewalWindow(TODAY, TODAY)).toEqual({ lapsed: false });
+  });
+
+  it("marks yesterday as lapsed", () => {
+    expect(renewalWindow("2026-08-08", TODAY)).toEqual({ lapsed: true });
+  });
+
+  it("stops chasing once it belongs to retention", () => {
+    // The bound that matters: without it, every package ever sold would land on
+    // the front desk queue, because nothing sets these rows inactive.
+    expect(renewalWindow(shift(TODAY, -RENEWAL_LAPSED_DAYS), TODAY)).toEqual({ lapsed: true });
+    expect(renewalWindow(shift(TODAY, -RENEWAL_LAPSED_DAYS - 1), TODAY)).toBeNull();
+    expect(renewalWindow("2024-01-01", TODAY)).toBeNull();
+  });
+
+  it("ignores a package with no end date — nothing to renew", () => {
+    expect(renewalWindow(null, TODAY)).toBeNull();
+    expect(renewalWindow(undefined, TODAY)).toBeNull();
   });
 });
