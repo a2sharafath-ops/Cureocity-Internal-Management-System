@@ -126,6 +126,27 @@ export function portionOf(perServing: Nutrients, servings: number): Nutrients {
 }
 
 /**
+ * How far our own figure may sit from a published one for the same recipe
+ * before we stop believing our own.
+ *
+ * Generous on purpose. Composition tables differ by region and season, cooking
+ * losses are modelled by some sources and not others, and a 15% gap between
+ * two honest calculations of the same dish is ordinary.
+ *
+ * What this catches is the other thing entirely: a recipe whose ingredient
+ * list is not what a serving contains. A deep-fried dish lists the whole pan
+ * of oil, of which the food absorbs a fraction; a marinade is weighed in and
+ * then poured away. Those come out three to nine times over, not fifteen
+ * percent over, so the line does not need to be fine to find them — and when
+ * it does, the fault is in the recipe, not in the arithmetic.
+ */
+export const TRUST_COMPUTED_WITHIN = 0.25;
+
+export function contradictsSource(ours: number, published: number): boolean {
+  return published > 0 && Math.abs(ours - published) / published > TRUST_COMPUTED_WITHIN;
+}
+
+/**
  * Does the energy on a row agree with its own macros?
  *
  * Atwater: 4 kcal per gram of protein and carbohydrate, 9 for fat, 2 for fibre.

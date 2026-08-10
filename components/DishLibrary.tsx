@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { saveDish, deleteDish, setDishApproved, approveDishes } from "@/lib/actions";
-import { dishNutrients, energyLooksWrong, type Food, type Dish } from "@/lib/nutrition";
+import { dishNutrients, energyLooksWrong, contradictsSource, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -80,18 +80,35 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
 
   const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
 
-  /** What one serving comes to, and whether we worked it out or quoted it. */
+  /**
+   * What one serving comes to, and whether we worked it out or quoted it.
+   *
+   * Mirrors the server's rule exactly (lib/dish-pricing.ts): our own
+   * arithmetic wins, unless a published figure for the same recipe flatly
+   * contradicts it — which nearly always means the ingredient list is not what
+   * a serving contains, most often a pan of frying oil the food only absorbs a
+   * little of. The published figure is used and the disagreement is shown,
+   * because that recipe is the one worth a second look.
+   */
   const figures = (d: DishRow) => {
     const v = priced(d);
-    if (v.priced) return { kcal: v.perServing.kcal, protein: v.perServing.protein_g, quoted: false, reason: null };
-    if (d.source_kcal != null && d.source_protein_g != null) {
+    const pub = d.source_kcal != null && d.source_protein_g != null
+      ? { kcal: Math.round(Number(d.source_kcal)), protein: Math.round(Number(d.source_protein_g) * 10) / 10 }
+      : null;
+    const clash = v.priced && pub ? contradictsSource(v.perServing.kcal, pub.kcal) : false;
+
+    if (v.priced && !clash) {
+      return { kcal: v.perServing.kcal, protein: v.perServing.protein_g, quoted: false, clash: null, reason: null };
+    }
+    if (pub) {
       return {
-        kcal: Math.round(Number(d.source_kcal)),
-        protein: Math.round(Number(d.source_protein_g) * 10) / 10,
-        quoted: true, reason: null,
+        ...pub, quoted: true, reason: null,
+        clash: clash && v.priced
+          ? `ingredients as listed come to ${v.perServing.kcal} kcal — check for frying oil that isn't eaten`
+          : null,
       };
     }
-    return { kcal: null, protein: null, quoted: false, reason: v.reason };
+    return { kcal: null, protein: null, quoted: false, clash: null, reason: v.priced ? null : v.reason };
   };
 
   const edit = (d: DishRow) => setDraft({
@@ -254,6 +271,9 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                     {d.source && <> · {d.source}</>}
                     {d.approved && d.approved_by && <> · approved by {d.approved_by}</>}
                   </div>
+                  {f.clash && (
+                    <div style={{ fontSize: 11.5, color: "var(--amber-text)", marginTop: 2 }}>{f.clash}</div>
+                  )}
                 </div>
 
                 {f.kcal != null ? (

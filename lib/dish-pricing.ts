@@ -10,11 +10,12 @@
 // browser can call. This is read-only reference data used by code that already
 // runs on the server, and there is no reason to open a door for it.
 
-import { dishNutrients, type Food } from "@/lib/nutrition";
+import { dishNutrients, contradictsSource, type Food } from "@/lib/nutrition";
 import { type DishOption } from "@/lib/diet-plan";
 import { type createClient } from "@/lib/supabase/server";
 
 type Db = Awaited<ReturnType<typeof createClient>>;
+
 
 type RawDish = {
   id: string;
@@ -68,10 +69,28 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
       },
       foods,
     );
+    const published = d.source_kcal != null && d.source_protein_g != null;
+
     // Our own arithmetic first. It is the only figure that re-prices itself
     // when an ingredient is corrected, so wherever the recipe supports it, it
-    // wins — including over a published figure that disagrees.
-    if (verdict.priced) {
+    // wins.
+    //
+    // Except where the source flatly contradicts it. A published figure for
+    // the same recipe is a free second opinion, and when the two are miles
+    // apart the fault is almost always in the recipe rather than the sums: a
+    // deep-fried dish lists the whole pan of oil, of which the food absorbs a
+    // fraction; a marinade is weighed in and then poured away. Computing those
+    // gives a poori at 4,264 kcal against a published 921 — arithmetic that is
+    // perfectly correct about the wrong quantity, and the kind of confident
+    // wrong number this whole layer exists to keep off a client's chart.
+    //
+    // So a disagreement past this point is treated as a reason not to trust
+    // our own figure, not a reason to doubt theirs. The dish keeps the
+    // published value and says why.
+    const contradicted = verdict.priced && published
+      && contradictsSource(verdict.perServing.kcal, Number(d.source_kcal));
+
+    if (verdict.priced && !contradicted) {
       return {
         id: d.id, name: d.name, serving_label: d.serving_label, source: d.source,
         perServing: { kcal: verdict.perServing.kcal, protein_g: verdict.perServing.protein_g },
@@ -80,16 +99,24 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     }
 
     // Failing that, what the databank the recipe came from states for one
-    // serving. Used only when we cannot compute — usually because an imported
+    // serving. Used when we cannot compute — usually because an imported
     // recipe records an amount in teaspoons and nobody has supplied the gram
-    // weight yet. Still a published lookup, not an estimate, and the screen
-    // says which of the two the dietitian is reading.
-    const published = d.source_kcal != null && d.source_protein_g != null;
+    // weight yet — and when our own figure disagrees with it too sharply to
+    // trust. Still a published lookup, not an estimate, and the screen says
+    // which of the two the dietitian is reading.
     if (published) {
       return {
         id: d.id, name: d.name, serving_label: d.serving_label, source: d.source,
         perServing: { kcal: Math.round(Number(d.source_kcal)), protein_g: Math.round(Number(d.source_protein_g) * 10) / 10 },
-        basis: "published", reason: null, approved: d.approved,
+        basis: "published",
+        // Carried even though the dish is priced, because it is the one thing
+        // worth saying about it: the ingredients as recorded do not add up to
+        // a serving, which is usually a pan of frying oil or a discarded
+        // marinade, and someone should look at the recipe.
+        reason: contradicted
+          ? `the ingredients as listed come to ${verdict.priced ? verdict.perServing.kcal : 0} kcal a serving, well away from the published ${Math.round(Number(d.source_kcal))} — check for uneaten frying oil or a discarded marinade`
+          : null,
+        approved: d.approved,
       };
     }
 
@@ -97,7 +124,11 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     // so the builder can say what is missing instead of just greying it out.
     return {
       id: d.id, name: d.name, serving_label: d.serving_label, source: d.source,
-      perServing: null, basis: null, reason: verdict.reason, approved: d.approved,
+      // Only reachable when the sums could not be done at all — a contradicted
+      // figure has a published one to fall back on and returned above.
+      perServing: null, basis: null,
+      reason: verdict.priced ? "no published figure to fall back on" : verdict.reason,
+      approved: d.approved,
     };
   });
 }
