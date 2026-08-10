@@ -8,8 +8,7 @@
 -- Every value below is copied from a published table and cited. Nothing is
 -- estimated: an ingredient with no sourced conversion arrives at zero grams,
 -- which makes its recipe uncomputable here and leaves it quoting INDB's own
--- published per-serving figure instead. That is the honest outcome, and it is
--- why 331 of the 1,014 recipes compute rather than all of them.
+-- published per-serving figure instead.
 --
 -- 'derived' marks a spoon weight worked out from the cup weight on the same
 -- USDA row using 1 cup = 16 tbsp = 48 tsp. Arithmetic on a published figure,
@@ -18,9 +17,14 @@
 -- Still unconverted, for want of a published spoon weight in either USDA
 -- FoodData Central SR Legacy or FNDDS: black pepper, green and black cardamom,
 -- asafoetida, fennel seed, amchur, ajwain, oregano, white pepper, gelatine,
--- and anything measured in sprigs (coriander, curry and mint leaves). Those
--- are the largest remaining blockers and each would move dozens of recipes
--- from quoted to calculated the day a source for them turns up.
+-- and anything measured in sprigs (coriander, curry and mint leaves).
+--
+-- FOUR INGREDIENTS ARRIVE UNMAPPED. Mutton muscle, dry lotus stem, raw
+-- beetroot and spring onion bulbs are named in INDB recipes under codes that
+-- appear in none of the composition tables it ships with, so there is nothing
+-- to look their values up in. They are stored with their name and weight but
+-- no food code — visible on the recipe, and priceable the day someone adds
+-- them to the food table. The 19 recipes involved quote INDB in the meantime.
 --
 --   Baking powder: 1 tsp = 4.6 g, 1 tbsp = 13.8 g  [USDA FDC 172803 Leavening agents, baking powder (tbsp der)]
 --   Bicarbonate of soda: 1 tsp = 4.6 g, 1 tbsp = 13.8 g  [USDA FDC 175040 Leavening agents, baking soda (tbsp der)]
@@ -542,7 +546,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC068', 'F002', 'Carrot, orange (Daucus carota)', 10.0, 0),
   ('INDB ASC068', 'G017', 'Onion, big (Allium cepa)', 10.0, 1),
   ('INDB ASC068', 'G031', 'Pepper, black (Piper nigrum)', 0.0, 2),
-  ('INDB ASC068', 'O064', 'MUTTON, muscle', 100.0, 3),
+  ('INDB ASC068', null, 'MUTTON, muscle', 100.0, 3),
   ('INDB ASC068', 'F501', 'Turnip, flesh only, raw', 10.0, 4),
   ('INDB ASC068', 'G512', 'Bay leaf, dried', 0.4, 5),
   ('INDB ASC068', 'G528', 'Salt', 3.0, 6),
@@ -709,7 +713,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC088', 'F002', 'Carrot, orange (Daucus carota)', 20.0, 3),
   ('INDB ASC088', 'G017', 'Onion, big (Allium cepa)', 20.0, 4),
   ('INDB ASC088', 'G031', 'Pepper, black (Piper nigrum)', 0.0, 5),
-  ('INDB ASC088', 'O064', 'MUTTON, muscle', 25.0, 6),
+  ('INDB ASC088', null, 'MUTTON, muscle', 25.0, 6),
   ('INDB ASC088', 'A507', 'Pasta, white, dried, raw', 10.0, 7),
   ('INDB ASC088', 'L505', 'Cheese, processed, plain', 10.0, 8),
   ('INDB ASC088', 'G528', 'Salt', 3.0, 9),
@@ -732,7 +736,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC090', 'G017', 'Onion, big (Allium cepa)', 20.0, 4),
   ('INDB ASC090', 'G031', 'Pepper, black (Piper nigrum)', 0.0, 5),
   ('INDB ASC090', 'M001', 'Egg, poultry, whole, raw', 12.5, 6),
-  ('INDB ASC090', 'O064', 'MUTTON, muscle', 40.0, 7),
+  ('INDB ASC090', null, 'MUTTON, muscle', 40.0, 7),
   ('INDB ASC090', 'T508', 'Oil, sunflower', 441.6, 8),
   ('INDB ASC090', 'G528', 'Salt', 3.0, 9),
   ('INDB ASC090', 'T501', 'Butter, unsalted', 4.7, 10),
@@ -1063,7 +1067,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC122', 'G032', 'Poppy seeds (Papaver somniferum)', 0.7, 9),
   ('INDB ASC122', 'G033', 'Turmeric powder (Curcuma domestica)', 0.75, 10),
   ('INDB ASC122', 'L002', 'Milk, whole, Cow', 15.0, 11),
-  ('INDB ASC122', 'O064', 'MUTTON, muscle', 100.0, 12),
+  ('INDB ASC122', null, 'MUTTON, muscle', 100.0, 12),
   ('INDB ASC122', 'L520', 'Yogurt, whole milk, plain', 15.3, 13),
   ('INDB ASC122', 'G512', 'Bay leaf, dried', 0.6, 14),
   ('INDB ASC122', 'G529', 'Saffron', 0.5, 15),
@@ -2396,7 +2400,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC227', 'G031', 'Pepper, black (Piper nigrum)', 0.0, 10),
   ('INDB ASC227', 'G032', 'Poppy seeds (Papaver somniferum)', 0.7, 11),
   ('INDB ASC227', 'G033', 'Turmeric powder (Curcuma domestica)', 0.375, 12),
-  ('INDB ASC227', 'O064', 'MUTTON, muscle', 100.0, 13),
+  ('INDB ASC227', null, 'MUTTON, muscle', 100.0, 13),
   ('INDB ASC227', 'L520', 'Yogurt, whole milk, plain', 30.0, 14),
   ('INDB ASC227', 'G523', 'Garam masala', 0.5, 15),
   ('INDB ASC227', 'G516', 'Chilli powder', 0.675, 16),
@@ -2416,7 +2420,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC228', 'G031', 'Pepper, black (Piper nigrum)', 0.0, 11),
   ('INDB ASC228', 'G032', 'Poppy seeds (Papaver somniferum)', 0.7, 12),
   ('INDB ASC228', 'G033', 'Turmeric powder (Curcuma domestica)', 0.375, 13),
-  ('INDB ASC228', 'O064', 'MUTTON, muscle', 100.0, 14),
+  ('INDB ASC228', null, 'MUTTON, muscle', 100.0, 14),
   ('INDB ASC228', 'L520', 'Yogurt, whole milk, plain', 30.0, 15),
   ('INDB ASC228', 'G523', 'Garam masala', 0.5, 16),
   ('INDB ASC228', 'G516', 'Chilli powder', 0.675, 17),
@@ -2488,7 +2492,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC232', 'G021', 'Cardamom, black (Elettaria cardamomum)', 0.0, 2),
   ('INDB ASC232', 'G023', 'Cloves (Syzygium aromaticum)', 1.05, 3),
   ('INDB ASC232', 'G025', 'Cumin seeds (Cuminum cyminum)', 0.525, 4),
-  ('INDB ASC232', 'O064', 'MUTTON, muscle', 100.0, 5),
+  ('INDB ASC232', null, 'MUTTON, muscle', 100.0, 5),
   ('INDB ASC232', 'G512', 'Bay leaf, dried', 0.4, 6),
   ('INDB ASC232', 'G510', 'Fennel seeds', 0.0, 7),
   ('INDB ASC232', 'G554', 'Ginger, ground', 0.9, 8),
@@ -2518,7 +2522,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC234', 'G024', 'Coriander seeds (Coriandrum sativum)', 3.6, 6),
   ('INDB ASC234', 'G025', 'Cumin seeds (Cuminum cyminum)', 1.05, 7),
   ('INDB ASC234', 'M001', 'Egg, poultry, whole, raw', 50.0, 8),
-  ('INDB ASC234', 'O064', 'MUTTON, muscle', 100.0, 9),
+  ('INDB ASC234', null, 'MUTTON, muscle', 100.0, 9),
   ('INDB ASC234', 'L520', 'Yogurt, whole milk, plain', 61.25, 10),
   ('INDB ASC234', 'G516', 'Chilli powder', 1.35, 11),
   ('INDB ASC234', 'G518', 'Cinnamon, ground', 2.5, 12),
@@ -2528,7 +2532,7 @@ select d.id, v.food_code, v.name, v.raw_g, v.seq from (values
   ('INDB ASC236', 'G014', 'Ginger, fresh (Zingiber officinale)', 3.17, 1),
   ('INDB ASC236', 'G017', 'Onion, big (Allium cepa)', 15.0, 2),
   ('INDB ASC236', 'M001', 'Egg, poultry, whole, raw', 25.0, 3),
-  ('INDB ASC236', 'O064', 'MUTTON, muscle', 120.0, 4),
+  ('INDB ASC236', null, 'MUTTON, muscle', 120.0, 4),
   ('INDB ASC236', 'U511', 'Bread, white, average', 13.6, 5),
   ('INDB ASC236', 'L520', 'Yogurt, whole milk, plain', 15.3, 6),
   ('INDB ASC236', 'G516', 'Chilli powder', 0.675, 7),
