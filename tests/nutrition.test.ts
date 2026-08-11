@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   nutrientsOf, dishNutrients, portionOf, energyLooksWrong, roundNutrients,
   servingLooksTooBig, contradictsSource, suggestServings,
-  portionMedians, portionLooksOdd,
+  portionMedians, portionLooksOdd, perPortion, wholeRecipe, energySplit,
   type Food, type Dish,
 } from "@/lib/nutrition";
 
@@ -197,5 +197,79 @@ describe("portion weight against the library's own distribution", () => {
 
   it("says nothing without a reference to compare against", () => {
     expect(portionLooksOdd(976, null)).toBeNull();
+  });
+});
+
+describe("reading a recipe one portion at a time", () => {
+  it("divides the pot by what it makes", () => {
+    expect(perPortion(282, 3)).toBeCloseTo(94, 5);
+    expect(perPortion(120, 1)).toBe(120);
+  });
+
+  it("admits it does not know, rather than showing the pot as a portion", () => {
+    // A recipe with no servings count would otherwise label 282 g of potato
+    // "one parantha", which is four times what anyone eats.
+    expect(perPortion(282, null)).toBeNull();
+    expect(perPortion(282, 0)).toBeNull();
+    expect(perPortion(282, -2)).toBeNull();
+  });
+
+  it("multiplies back, to 0.1 g", () => {
+    expect(wholeRecipe(94, 3)).toBe(282);
+    expect(wholeRecipe(33.333, 3)).toBe(100);
+  });
+
+  it("survives a round trip without drifting", () => {
+    // The whole reason the conversion is display-only: open a dish, save it
+    // unchanged, and every weight must be exactly what it was.
+    for (const [g, s] of [[282, 3], [100, 7], [1, 3], [4.5, 2], [1000, 6]] as const) {
+      expect(wholeRecipe(perPortion(g, s)!, s)).toBeCloseTo(g, 1);
+    }
+  });
+
+  it("refuses a negative weight", () => {
+    expect(wholeRecipe(-5, 2)).toBeNull();
+  });
+});
+
+describe("the energy split", () => {
+  const n = { kcal: 384, protein_g: 40.9, carb_g: 18.1, fat_g: 17.3, fibre_g: 4.2 };
+
+  it("splits a dish by where its energy comes from", () => {
+    const s = energySplit(n)!;
+    expect(s.protein).toBe(42);
+    // 17.3 g of fat against 18.1 g of carbohydrate, and the fat carries more
+    // than twice the energy — 9 kcal a gram against 4.
+    expect(s.fat).toBe(40);
+    expect(s.carb).toBe(18);
+  });
+
+  it("always adds to a hundred", () => {
+    // Three independent roundings give 33/33/33, and a reader who can add up
+    // reports it as a bug. The largest share takes the remainder instead.
+    for (const d of [
+      { kcal: 100, protein_g: 3.33, carb_g: 3.33, fat_g: 1.48, fibre_g: 0 },
+      { kcal: 210, protein_g: 4.4, carb_g: 39.7, fat_g: 8.5, fibre_g: 2.6 },
+      { kcal: 899, protein_g: 0, carb_g: 0, fat_g: 99.9, fibre_g: 0 },
+      { kcal: 17, protein_g: 0.6, carb_g: 3.4, fat_g: 0.1, fibre_g: 1.9 },
+    ]) {
+      const s = energySplit(d)!;
+      expect(s.protein + s.carb + s.fat).toBe(100);
+    }
+  });
+
+  it("comes from the macros, not from the stated calories", () => {
+    // IFCT measures energy directly, so the stated figure and the Atwater sum
+    // differ slightly. Dividing by the stated figure would give three shares
+    // that do not close.
+    const s = energySplit({ kcal: 1, protein_g: 10, carb_g: 10, fat_g: 0, fibre_g: 0 })!;
+    expect(s.protein).toBe(50);
+    expect(s.carb).toBe(50);
+  });
+
+  it("says nothing about a dish with no energy in it", () => {
+    // Black tea. "33% fat" would be an invention, and this screen exists to
+    // stop exactly that.
+    expect(energySplit({ kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, fibre_g: 0 })).toBeNull();
   });
 });

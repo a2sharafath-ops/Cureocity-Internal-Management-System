@@ -83,10 +83,30 @@ are for pasting, not reading.
   with RLS, vitest for tests.
 - Verify with: `npx tsc -p tsconfig.json --noEmit`, `npm test`, `npx eslint .`
   (there are ~56 pre-existing warnings; 0 errors is the bar).
-- `node_modules` holds macOS binaries, so vitest cannot run in a Linux sandbox
-  without Linux builds of rollup and esbuild supplied via `NODE_PATH` and
-  `ESBUILD_BINARY_PATH`. `tsc` is pure JavaScript and runs fine there, so a
-  type-check can be done for him rather than handed over unverified.
+- `node_modules` holds macOS binaries, so vitest needs Linux builds of rollup
+  and esbuild before it will run in a sandbox. This works, and means the tests
+  can be run for him rather than handed over unverified:
+
+  ```bash
+  mkdir -p /tmp/vt && cd /tmp/vt
+  # BOTH in one package.json — `npm i --no-save` prunes whatever is not listed,
+  # so installing them one at a time silently deletes the other.
+  # Versions must match the repo's own: node -p "require('rollup/package.json').version"
+  cat > package.json <<'EOF'
+  { "name": "vt", "private": true, "dependencies": {
+      "@rollup/rollup-linux-arm64-gnu": "4.62.2",
+      "@esbuild/linux-arm64": "0.21.5" } }
+  EOF
+  npm install
+  cd ~/Downloads/cureocity-app
+  NODE_PATH=/tmp/vt/node_modules \
+  ESBUILD_BINARY_PATH=/tmp/vt/node_modules/@esbuild/linux-arm64/bin/esbuild \
+  npx vitest run
+  ```
+
+  The sandbox is arm64; `linux-x64` packages refuse to install. esbuild's
+  version must match the repo's exactly or it reports a host/binary mismatch.
+  `tsc` is pure JavaScript and needs none of this.
 - **`.next` grows to gigabytes.** It reached 12 GB once and filled the disk,
   which broke `tsc` and vitest with `ENOSPC` — errors that look like code
   faults and are not. If tooling fails strangely, check `df -h /` first.

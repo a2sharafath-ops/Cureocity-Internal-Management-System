@@ -314,3 +314,81 @@ export function energyLooksWrong(n: Nutrients): boolean {
   if (gap <= ATWATER_FLOOR_KCAL) return false;
   return gap / Math.max(n.kcal, 1) > ATWATER_TOLERANCE;
 }
+
+/* -------------------------------------------------------------------------
+   READING A RECIPE ONE PORTION AT A TIME
+
+   A recipe is stored as what goes into the whole pot: 282 g of potato making
+   three paranthas. A dietitian deciding what to put on a client's chart is
+   thinking about one parantha. These convert between the two.
+
+   The conversion is deliberately not applied to the stored data. The recipe
+   remains what the recipe is, and only the screen divides — because dividing
+   and multiplying back through a rounded display is how 282 quietly becomes
+   279 after somebody opens a dish and closes it again.
+   ------------------------------------------------------------------------- */
+
+/**
+ * What one portion of an ingredient weighs, given a recipe that makes several.
+ *
+ * Returns null rather than the whole weight where the servings count is
+ * missing or nonsensical. A screen that showed the pot's worth of rice labelled
+ * "one portion" would be worse than a screen that admits it does not know.
+ */
+export function perPortion(wholeRecipeG: number, servings: number | null): number | null {
+  if (servings == null || !Number.isFinite(servings) || servings <= 0) return null;
+  if (!Number.isFinite(wholeRecipeG)) return null;
+  return wholeRecipeG / servings;
+}
+
+/**
+ * The reverse, for saving an amount somebody typed as one portion.
+ *
+ * Rounded to 0.1 g, which is the precision the food table itself carries and
+ * finer than any kitchen scale in the building.
+ */
+export function wholeRecipe(portionG: number, servings: number | null): number | null {
+  if (servings == null || !Number.isFinite(servings) || servings <= 0) return null;
+  if (!Number.isFinite(portionG) || portionG < 0) return null;
+  return Math.round(portionG * servings * 10) / 10;
+}
+
+/**
+ * What share of a dish's energy each macro carries.
+ *
+ * The percentages come from the macros through Atwater — 4 kcal a gram for
+ * protein and carbohydrate, 9 for fat — and NOT from dividing by the stated
+ * calories. Those two disagree slightly by design, because IFCT measures energy
+ * directly, and dividing by the stated figure gives three percentages that do
+ * not add to a hundred. Whatever a reader thinks of a pie chart, one that fails
+ * to close is a bug they will report.
+ *
+ * Fibre is left out of the split. It carries a little energy and the brief asks
+ * for it, but a fourth slice on an energy chart implies it competes with the
+ * other three for a place in the diet, which is not how anyone plans a meal.
+ * It is reported in grams alongside.
+ *
+ * Returns null for a dish with no energy in it at all — a cup of black tea has
+ * no macro split, and 0/0 rendered as "33% fat" would be an invention.
+ */
+export type EnergySplit = { protein: number; carb: number; fat: number };
+
+export const KCAL_PER_G = { protein: 4, carb: 4, fat: 9 } as const;
+
+export function energySplit(n: Nutrients): EnergySplit | null {
+  const p = KCAL_PER_G.protein * n.protein_g;
+  const c = KCAL_PER_G.carb * n.carb_g;
+  const f = KCAL_PER_G.fat * n.fat_g;
+  const total = p + c + f;
+  if (!(total > 0)) return null;
+  // Rounded so the three always add to 100: the two smaller shares are rounded
+  // normally and the largest takes the remainder. Three independent roundings
+  // give 33/33/33 and a reader who can add up.
+  const pct = { protein: (100 * p) / total, carb: (100 * c) / total, fat: (100 * f) / total };
+  const keys = (Object.keys(pct) as (keyof EnergySplit)[]).sort((a, b) => pct[a] - pct[b]);
+  const out = { protein: 0, carb: 0, fat: 0 } as EnergySplit;
+  let used = 0;
+  for (const k of keys.slice(0, 2)) { out[k] = Math.round(pct[k]); used += out[k]; }
+  out[keys[2]] = 100 - used;
+  return out;
+}

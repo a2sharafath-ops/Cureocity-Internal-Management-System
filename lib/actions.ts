@@ -7874,6 +7874,92 @@ export async function setDishPortion(formData: FormData): Promise<{ error?: stri
   return {};
 }
 
+/**
+ * Save edits made on the dish detail screen.
+ *
+ * WHY THIS EXISTS RATHER THAN REUSING saveDish
+ *
+ * `saveDish` replaces a recipe's ingredients wholesale, which is right when
+ * somebody is rewriting the recipe. The detail screen is not doing that. She
+ * has corrected the weight of one ingredient out of eleven, and the other ten
+ * must come back byte for byte.
+ *
+ * That matters because the detail screen shows PORTION weights and the table
+ * stores WHOLE-RECIPE ones. Send all eleven through a divide and a multiply and
+ * every untouched weight comes back a tenth of a gram out; do it a few times
+ * and a recipe drifts away from what anyone wrote. So only the edited rows
+ * arrive here, matched by their position in the list, and the rest are not
+ * written at all.
+ *
+ * The weights arriving are already whole-recipe figures — the screen multiplies
+ * back before sending, because it is the side that knows how many portions she
+ * was looking at when she typed.
+ */
+export async function saveDishPortions(formData: FormData): Promise<{ error?: string; repriced?: number }> {
+  const p = await dishGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "Missing dish." };
+
+  const servings = Number(String(formData.get("servings") || ""));
+  if (!Number.isFinite(servings) || servings <= 0) {
+    return { error: "A recipe makes at least a fraction of a portion." };
+  }
+
+  type Edit = { seq: number; raw_g: number };
+  let edits: Edit[] = [];
+  try {
+    edits = (JSON.parse(String(formData.get("items") || "[]")) as Edit[])
+      .filter((e) => e && Number.isFinite(Number(e.raw_g)) && Number(e.raw_g) >= 0);
+  } catch { return { error: "Could not read the changed ingredients." }; }
+
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("dishes")
+    .select("name, servings").eq("id", id).maybeSingle();
+  const was = before as { name?: string; servings?: number | null } | null;
+
+  // Each edited ingredient on its own, keyed by the position it holds in the
+  // recipe. A failure part way through leaves the rest untouched and says so,
+  // rather than reporting success over a half-applied recipe.
+  for (const e of edits) {
+    const { error } = await supabase.from("dish_items")
+      .update({
+        raw_g: Number(e.raw_g),
+        // A weight she has just looked at and accepted is no longer an estimate.
+        raw_g_source: null,
+      })
+      .eq("dish_id", id).eq("seq", e.seq);
+    if (error) return { error: `Could not save one of the ingredients: ${error.message}` };
+  }
+
+  const { error: dErr } = await supabase.from("dishes")
+    .update({ servings, updated_at: new Date().toISOString() }).eq("id", id);
+  if (dErr) return { error: dErr.message };
+
+  // The portion weight was worked out from these ingredients, so it is now
+  // stale — unless she set it herself, in which case it was never ours to move.
+  const { data: pd } = await supabase.from("dishes")
+    .select("portion_g_source").eq("id", id).maybeSingle();
+  if ((pd as { portion_g_source?: string | null } | null)?.portion_g_source !== "dietitian") {
+    const { data: rows } = await supabase.from("dish_items").select("raw_g").eq("dish_id", id);
+    const list = (rows ?? []) as { raw_g: number | null }[];
+    const complete = list.length > 0 && list.every((r) => Number(r.raw_g) > 0);
+    await supabase.from("dishes").update({
+      portion_g: complete
+        ? Math.round((list.reduce((s, r) => s + Number(r.raw_g), 0) / servings) * 10) / 10
+        : null,
+      portion_g_source: complete ? "derived" : null,
+    }).eq("id", id);
+  }
+
+  const repriced = await repriceOpenCharts(supabase, id);
+  await logAudit(p, "Dish edited on the detail screen", was?.name ?? id,
+    `${edits.length} ingredient${edits.length === 1 ? "" : "s"} reweighed` +
+    (was?.servings !== servings ? `; makes ${was?.servings ?? "—"} → ${servings}` : ""));
+  revalidatePath("/workspace");
+  return { repriced: repriced.changed };
+}
+
 /** Approve everything currently unapproved — the batch the dietitian just read. */
 export async function approveDishes(formData: FormData) {
   const p = await dishGuard();

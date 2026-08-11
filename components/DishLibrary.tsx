@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings, setDishPortion } from "@/lib/actions";
+import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings, setDishPortion, saveDishPortions } from "@/lib/actions";
+import DishDetail from "./DishDetail";
 import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, suggestServings,
   portionMedians, portionLooksOdd, servingUnit, type Food, type Dish } from "@/lib/nutrition";
 
@@ -274,6 +275,19 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dishes, foodMap]);
 
+  /**
+   * The dish currently opened up, if any.
+   *
+   * Held as an id rather than the row, so that after a save the panel shows the
+   * refreshed record the server sent back instead of the copy taken when it
+   * opened. Editing a weight and seeing the old figure survive the save is how
+   * somebody concludes the save did not work and does it again.
+   */
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
+  const [detailErr, setDetailErr] = useState<string | null>(null);
+  const opened = useMemo(() => dishes.find((d) => d.id === openId) ?? null, [dishes, openId]);
+
   const edit = (d: DishRow) => setDraft({
     id: d.id, name: d.name, cuisine: d.cuisine ?? "", servings: String(d.servings ?? ""),
     cooked_g: String(d.cooked_g ?? ""), serving_label: d.serving_label ?? "", notes: d.notes ?? "",
@@ -370,11 +384,38 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
       )}
 
 
+      {/* ---- ONE DISH, OPENED UP ----
+          Takes over the screen while it is open. A detail panel above a list of
+          a thousand rows is a panel nobody can read without losing their place,
+          and the list is still one Back away. */}
+      {view === "dishes" && opened && (
+        <DishDetail
+          dish={opened}
+          foods={foods}
+          canEdit={canEdit}
+          busy={saving}
+          error={detailErr}
+          onClose={() => { setOpenId(null); setDetailErr(null); }}
+          onRewrite={() => { edit(opened); setOpenId(null); }}
+          onSave={({ servings, items }) => startSaving(async () => {
+            const fd = new FormData();
+            fd.set("id", opened.id);
+            fd.set("servings", String(servings));
+            // Only the rows she edited, each named by its position in the
+            // recipe. The untouched ones are not sent, so they cannot drift.
+            fd.set("items", JSON.stringify(items.map((i) => ({ seq: i.seq, raw_g: i.raw_g }))));
+            const r = await saveDishPortions(fd);
+            setDetailErr(r.error ?? null);
+            if (!r.error) setOpenId(null);
+          })}
+        />
+      )}
+
       {/* ---- REVIEW BAR ----
           Only drawn while something is waiting. An imported library lands here
           unapproved and stays out of every chart until it is read; once she has
           worked through it this row disappears and the screen is what it was. */}
-      {view === "dishes" && canEdit && (pending > 0 || suspects > 0) && (
+      {view === "dishes" && !opened && canEdit && (pending > 0 || suspects > 0) && (
         <div style={{ ...box, padding: 14, marginBottom: 14, background: "var(--amber-bg)", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ fontSize: 13 }}>
             {pending > 0 && (
@@ -418,7 +459,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
         </div>
       )}
 
-      {view === "dishes" && draft && (
+      {view === "dishes" && !opened && draft && (
         <div style={{ ...box, padding: 16, marginBottom: 14 }}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>{draft.id ? "Edit dish" : "New dish"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }}>
@@ -482,7 +523,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
         </div>
       )}
 
-      {view === "dishes" && (shown.length === 0 ? (
+      {view === "dishes" && !opened && (shown.length === 0 ? (
         <div style={{ ...box, padding: "22px 16px", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
           {dishes.length ? "No dish matches that search." : "No dishes yet. Add the ones you write most often — puttu, kadala curry, idiyappam — and every chart built from them prices itself."}
         </div>
@@ -632,7 +673,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                         {d.approved ? "Withdraw" : "Approve"}
                       </button>
                     </form>
-                    <button type="button" onClick={() => edit(d)} style={ghost}>Edit</button>
+                    <button type="button" onClick={() => { setOpenId(d.id); setDetailErr(null); }} style={ghost}>Edit</button>
                     <form action={deleteDish}>
                       <input type="hidden" name="id" value={d.id} />
                       <button style={ghost}>Delete</button>
