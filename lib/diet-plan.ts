@@ -269,6 +269,71 @@ export const HOW_TO_USE: [string, string][] = [
  * consistent between clients, which matters when a coach is reading someone
  * else's plan back to them over the phone.
  */
+/* -------------------------------------------------------------------------
+   THE EARLY MORNING DRINK
+
+   Section 8 of the brief, and the only rule in it phrased as a refusal rather
+   than a preference:
+
+     "Do not suggest lemon water, ashwagandha, cinnamon water, apple cider
+      vinegar, or anything not supported by standard clinical nutrition."
+
+   WHY IT IS A REFUSAL AND NOT A WARNING
+
+   The rest of this file checks that a chart is complete and internally
+   consistent — a missing figure, a spread too wide to be interchangeable.
+   Those are faults. This one is different: it is the clinic taking a position,
+   and the position is the reason a client is paying for a dietitian rather
+   than reading the internet. A chart that goes out with lemon water on it is
+   not incomplete, it is off-message, and nobody downstream will catch it.
+
+   So it joins `planProblems`, which stops a chart being submitted.
+
+   WHY THE LIST IS NAMED AND SHORT
+
+   "Anything not supported by standard clinical nutrition" cannot be checked by
+   a computer, and pretending otherwise would mean a list that quietly grows
+   until it refuses ginger. So this holds what the brief names, plus the near
+   neighbours that are the same claim wearing a different word — jeera water and
+   methi water are the cinnamon-water idea, "detox" and "fat burner" are the
+   category itself. Everything else is the dietitian's judgement, which is where
+   it belongs.
+   ------------------------------------------------------------------------- */
+
+/** The slots this applies to, matched loosely — she renames them. */
+const WAKING_SLOT = /upon waking|on waking|early morning|empty stomach|bed ?tea|first thing/i;
+
+/** What the brief refuses, and the words each is usually written as. */
+export const DISCOURAGED_MORNING: { match: RegExp; called: string }[] = [
+  { match: /\blemon\s*(water|juice)\b|\bnimbu\s*pani\b/i, called: "lemon water" },
+  { match: /\bashwagandha\b|\bwithania\b/i, called: "ashwagandha" },
+  { match: /\bcinnamon\s*(water|tea|infusion)\b|\bdalchini\s*water\b/i, called: "cinnamon water" },
+  { match: /\bapple\s*cider\s*vinegar\b|\bacv\b/i, called: "apple cider vinegar" },
+  { match: /\bdetox\b|\bfat[- ]?burn/i, called: "a detox or fat-burner drink" },
+  { match: /\bjeera\s*water\b|\bcumin\s*water\b/i, called: "jeera water" },
+  { match: /\bmethi\s*water\b|\bfenugreek\s*water\b/i, called: "methi water" },
+  { match: /\bhoney\s*(and\s*)?(warm\s*)?water\b/i, called: "honey water" },
+];
+
+/** What section 8 puts in its place, quoted so the message can offer it. */
+export const ALLOWED_MORNING = [
+  "5 soaked almonds and 2 dates",
+  "1 tsp soaked chia seeds in plain water",
+  "1 small fruit",
+];
+
+export const isWakingSlot = (mealName: string): boolean => WAKING_SLOT.test(mealName);
+
+/**
+ * What is on an early-morning option that the brief refuses.
+ *
+ * Reads the food items only. The quantity column says "1 glass", which tells
+ * nobody what is in it.
+ */
+export function discouragedMorningDrinks(foodItems: string): string[] {
+  return DISCOURAGED_MORNING.filter((d) => d.match.test(foodItems)).map((d) => d.called);
+}
+
 export const DEFAULT_MEALS: Omit<PlanMeal, "options">[] = [
   { seq: 0, name: "Upon waking", time_from: "8:00 am", time_to: "8:15 am", note: null, conditional: false },
   { seq: 1, name: "Morning milk tea", time_from: "8:30 am", time_to: "8:45 am", note: null, conditional: false },
@@ -481,6 +546,20 @@ export function planProblems(
       const where = `${m.name} · option ${i + 1}`;
       if (named && !o.qty?.trim()) {
         out.push(`${where} has no quantity — "eat rice" is not a portion.`);
+      }
+
+      // Section 8, and the only rule in the brief that refuses rather than
+      // prefers. Checked on the waking slot alone: lemon in a salad at lunch is
+      // lemon in a salad, and a rule that fired there would be ignored within a
+      // week.
+      if (named && isWakingSlot(m.name)) {
+        const bad = discouragedMorningDrinks(named);
+        if (bad.length) {
+          out.push(
+            `${where} suggests ${bad.join(" and ")} on an empty stomach, which the brief `
+            + `rules out. Use one of: ${ALLOWED_MORNING.join("; ")}.`,
+          );
+        }
       }
       // Saving drops any option without a name, so a row where someone filled
       // the numbers and tabbed past the first column would vanish silently.

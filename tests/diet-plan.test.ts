@@ -525,3 +525,62 @@ describe("micronutrients on a chart option", () => {
     });
   });
 });
+
+describe("the early morning drink (section 8)", () => {
+  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const opt = (food: string): PlanOption => ({
+    seq: 0, food_items: food, qty: "1 glass", micronutrients: "—",
+    kcal: 20, carb_g: 4, protein_g: 0.5, fat_g: 0.2, fibre_g: 0.5, components: [],
+  });
+  const check = (slot: string, food: string) =>
+    planProblems([meal(slot, [opt(food)]), meal("Breakfast", [opt("Idli and sambar")])], targets)
+      .filter((p) => /rules out/.test(p));
+
+  it("refuses each of the four the brief names", () => {
+    for (const [food, called] of [
+      ["Warm lemon water", "lemon water"],
+      ["Ashwagandha with milk", "ashwagandha"],
+      ["Cinnamon water", "cinnamon water"],
+      ["Apple cider vinegar in water", "apple cider vinegar"],
+    ]) {
+      const p = check("Upon waking", food);
+      expect(p).toHaveLength(1);
+      expect(p[0]).toContain(called);
+    }
+  });
+
+  it("refuses the same claim written a different way", () => {
+    for (const food of ["Nimbu pani", "ACV shot", "Jeera water", "Methi water", "Detox drink"]) {
+      expect(check("Upon waking", food)).toHaveLength(1);
+    }
+  });
+
+  it("offers what the brief allows instead of only refusing", () => {
+    // A refusal with no alternative is a message somebody argues with.
+    expect(check("Upon waking", "Lemon water")[0]).toContain("5 soaked almonds and 2 dates");
+  });
+
+  it("passes what the brief actually recommends", () => {
+    for (const food of ["5 soaked almonds and 2 dates", "1 tsp soaked chia seeds in plain water", "1 small apple"]) {
+      expect(check("Upon waking", food)).toEqual([]);
+    }
+  });
+
+  it("only looks at the waking slot", () => {
+    // Lemon in a salad at lunch is lemon in a salad. A rule that fired there
+    // would be ignored within a week.
+    expect(check("Lunch", "Rice, fish curry, lemon water on the side")).toEqual([]);
+    expect(check("Evening snack", "Cinnamon water")).toEqual([]);
+  });
+
+  it("finds the slot however she has renamed it", () => {
+    for (const slot of ["Upon waking", "On waking", "Early morning", "Empty stomach", "Bed tea"]) {
+      expect(check(slot, "Lemon water")).toHaveLength(1);
+    }
+  });
+
+  it("names both when an option carries two of them", () => {
+    expect(check("Upon waking", "Lemon water with a pinch of cinnamon water")[0])
+      .toMatch(/lemon water and cinnamon water/);
+  });
+});
