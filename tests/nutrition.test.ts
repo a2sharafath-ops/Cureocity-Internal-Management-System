@@ -3,6 +3,7 @@ import {
   nutrientsOf, dishNutrients, portionOf, energyLooksWrong, roundNutrients,
   servingLooksTooBig, contradictsSource, suggestServings,
   portionMedians, portionLooksOdd, perPortion, wholeRecipe, energySplit,
+  toGrams, fromGrams, unitsFor, type Measure,
   type Food, type Dish,
 } from "@/lib/nutrition";
 
@@ -271,5 +272,69 @@ describe("the energy split", () => {
     // Black tea. "33% fat" would be an invention, and this screen exists to
     // stop exactly that.
     expect(energySplit({ kcal: 0, protein_g: 0, carb_g: 0, fat_g: 0, fibre_g: 0 })).toBeNull();
+  });
+});
+
+describe("units", () => {
+  const atta: Measure[] = [{ unit: "cup", grams: 130, source: "INDB Units.xlsx — BFP manual", set_by: null }];
+  const milk: Measure[] = [{ unit: "ml", grams: 1.03, source: "published density", set_by: null }];
+  const hers: Measure[] = [{ unit: "cup", grams: 150, source: "weighed in the clinic", set_by: "Afya" }];
+  const none: Measure[] = [];
+
+  it("converts mass without caring what the food is", () => {
+    expect(toGrams(1, "oz", none)).toEqual({ ok: true, grams: 28.349523125, how: "28.349523125 g per oz" });
+    expect(toGrams(2, "kg", none)).toMatchObject({ ok: true, grams: 2000 });
+    expect(toGrams(1, "lb", none)).toMatchObject({ ok: true, grams: 453.59237 });
+    expect(toGrams(75, "g", none)).toMatchObject({ ok: true, grams: 75 });
+  });
+
+  it("converts a cup only for a food somebody has weighed", () => {
+    expect(toGrams(2, "cup", atta)).toMatchObject({ ok: true, grams: 260 });
+  });
+
+  it("refuses a cup of something nobody has weighed", () => {
+    // The whole point. A cup of flour taken as 240 g would be nearly double,
+    // and a chart built on it would look exactly as confident as a correct one.
+    const r = toGrams(1, "cup", none);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.why).toMatch(/nobody has recorded/);
+  });
+
+  it("says where the figure came from, and names her when it is hers", () => {
+    const a = toGrams(1, "cup", atta);
+    if (a.ok) expect(a.how).toMatch(/BFP manual/);
+    const b = toGrams(1, "cup", hers);
+    if (b.ok) expect(b.how).toMatch(/set by Afya/);
+  });
+
+  it("reads a litre off a millilitre, because that is the same measurement", () => {
+    expect(toGrams(1, "L", milk)).toMatchObject({ ok: true, grams: 1030 });
+    expect(toGrams(250, "ml", milk)).toMatchObject({ ok: true, grams: 257.5 });
+  });
+
+  it("does not derive a tablespoon from a teaspoon", () => {
+    // Three level teaspoons and one heaped tablespoon of flour are not the same
+    // weight, and the tables that publish both do not always agree. If nobody
+    // measured the tablespoon, we have not got one.
+    const tsp: Measure[] = [{ unit: "tsp", grams: 2.5, source: "USDA", set_by: null }];
+    expect(toGrams(1, "tbsp", tsp).ok).toBe(false);
+  });
+
+  it("converts back for display", () => {
+    expect(fromGrams(260, "cup", atta)).toBe(2);
+    expect(fromGrams(28.349523125, "oz", none)).toBeCloseTo(1, 9);
+    expect(fromGrams(100, "cup", none)).toBeNull();
+  });
+
+  it("offers mass for anything, and a cup only where there is one", () => {
+    expect(unitsFor(none)).toEqual(["g", "kg", "oz", "lb"]);
+    expect(unitsFor(atta)).toContain("cup");
+    expect(unitsFor(none)).not.toContain("cup");
+    // A millilitre weight answers for litres too.
+    expect(unitsFor(milk)).toEqual(expect.arrayContaining(["ml", "L"]));
+  });
+
+  it("refuses a negative amount", () => {
+    expect(toGrams(-1, "g", none).ok).toBe(false);
   });
 });

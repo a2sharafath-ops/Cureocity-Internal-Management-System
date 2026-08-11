@@ -392,3 +392,106 @@ export function energySplit(n: Nutrients): EnergySplit | null {
   out[keys[2]] = 100 - used;
   return out;
 }
+
+/* -------------------------------------------------------------------------
+   UNITS
+
+   A gram is a gram. A cup is not a cup.
+
+   Mass converts on a fixed factor and always has: an ounce is 28.3495 g
+   whatever is in the pan. Volume does not. A cup of puffed rice weighs 30 g, a
+   cup of atta 130 g, a cup of bengal gram dal 200 g — nearly seven times the
+   first. "A cup in grams" is not a quantity that exists; only a cup OF
+   something is.
+
+   So the two kinds are kept apart here. Mass units convert with no knowledge of
+   the food. Everything else needs a row in `food_measures` for that particular
+   food, and where there is none the answer is that we cannot say — not a
+   plausible number with nothing behind it.
+   ------------------------------------------------------------------------- */
+
+/** Grams per unit of mass. Exact, by definition — an ounce IS 28.349523125 g. */
+export const MASS_UNITS = {
+  g: 1,
+  kg: 1000,
+  oz: 28.349523125,
+  lb: 453.59237,
+} as const;
+
+export type MassUnit = keyof typeof MASS_UNITS;
+
+/** Units that mean nothing without knowing which food is being measured. */
+export const FOOD_UNITS = [
+  "ml", "L", "tsp", "tbsp", "cup",
+  "piece", "slice", "medium", "small", "clove", "cube", "handful",
+] as const;
+
+export type FoodUnit = (typeof FOOD_UNITS)[number];
+export type Unit = MassUnit | FoodUnit;
+
+export const isMassUnit = (u: string): u is MassUnit => u in MASS_UNITS;
+
+/**
+ * A weight for one unit of a particular food, as `food_measures` holds it.
+ *
+ * `source` is a citation or the name of whoever measured it, and is never
+ * blank — the screen shows it, so that a figure a dietitian took with her own
+ * scales can be told apart from one USDA published.
+ */
+export type Measure = { unit: string; grams: number; source: string; set_by: string | null };
+
+export type Conversion =
+  | { ok: true; grams: number; how: string }
+  | { ok: false; why: string };
+
+/**
+ * Turn an amount in some unit into grams.
+ *
+ * `measures` are the rows held for THIS food. A litre is a thousand millilitres
+ * of the same substance, so a millilitre weight answers for both; nothing else
+ * is derived, because a tablespoon is three teaspoons of volume but a heaped
+ * spoon of flour and three level ones are not the same weight and the tables
+ * that publish both do not always agree.
+ */
+export function toGrams(amount: number, unit: string, measures: Measure[]): Conversion {
+  if (!Number.isFinite(amount) || amount < 0) return { ok: false, why: "that is not an amount" };
+
+  if (isMassUnit(unit)) {
+    return { ok: true, grams: amount * MASS_UNITS[unit], how: unit === "g" ? "" : `${MASS_UNITS[unit]} g per ${unit}` };
+  }
+
+  const direct = measures.find((m) => m.unit === unit);
+  if (direct) {
+    return { ok: true, grams: amount * direct.grams, how: `1 ${unit} = ${direct.grams} g (${direct.set_by ? `set by ${direct.set_by}` : direct.source})` };
+  }
+
+  // A litre is a thousand millilitres of the same thing. Arithmetic on the same
+  // measurement, not a second one.
+  if (unit === "L") {
+    const ml = measures.find((m) => m.unit === "ml");
+    if (ml) return { ok: true, grams: amount * ml.grams * 1000, how: `1 ml = ${ml.grams} g (${ml.set_by ? `set by ${ml.set_by}` : ml.source})` };
+  }
+  if (unit === "ml") {
+    const l = measures.find((m) => m.unit === "L");
+    if (l) return { ok: true, grams: (amount * l.grams) / 1000, how: `1 L = ${l.grams} g (${l.set_by ? `set by ${l.set_by}` : l.source})` };
+  }
+
+  return { ok: false, why: `nobody has recorded what a ${unit} of this weighs` };
+}
+
+/** The reverse, for showing a stored gram weight in the unit she chose. */
+export function fromGrams(grams: number, unit: string, measures: Measure[]): number | null {
+  if (!Number.isFinite(grams)) return null;
+  if (isMassUnit(unit)) return grams / MASS_UNITS[unit];
+  const one = toGrams(1, unit, measures);
+  return one.ok && one.grams > 0 ? grams / one.grams : null;
+}
+
+/** Which units this food can actually be measured in, mass first. */
+export function unitsFor(measures: Measure[]): Unit[] {
+  const mass = Object.keys(MASS_UNITS) as MassUnit[];
+  const have = new Set(measures.map((m) => m.unit));
+  if (have.has("ml")) have.add("L");
+  if (have.has("L")) have.add("ml");
+  return [...mass, ...FOOD_UNITS.filter((u) => have.has(u))];
+}

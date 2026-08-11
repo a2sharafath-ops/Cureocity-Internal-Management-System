@@ -28,7 +28,7 @@ import { loadCatOf } from "@/lib/appt-match";
 
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import DishLibrary, { type DishRow } from "@/components/DishLibrary";
-import { type Food } from "@/lib/nutrition";
+import { type Food, type Measure } from "@/lib/nutrition";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import { deletable } from "@/lib/consult-lifecycle";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
@@ -528,13 +528,14 @@ export default async function WorkspacePage(
   // data, loaded only on the tab that needs it.
   let dishes: DishRow[] = [];
   let foods: Food[] = [];
+  const measures = new Map<string, Measure[]>();
   if (tab === "dishes") {
     type Raw = Omit<DishRow, "items"> & { dish_items: DishRow["items"] | null };
     // Paged rather than limited: Supabase caps a response at its project "Max
     // rows" setting and ignores a larger .limit(), so an imported library of
     // 1,014 recipes arrived as 1,000 and fourteen dishes simply vanished — off
     // this screen, and out of the chart's picker with them.
-    const [dsh, fds] = await Promise.all([
+    const [dsh, fds, mss] = await Promise.all([
       fetchAllRows<Raw>((from, to) => supabase.from("dishes")
         .select("id, name, cuisine, cooked_g, servings, serving_label, notes, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, portion_g, portion_g_source, approved, approved_by, dish_items(food_code, name, raw_g, raw_g_source, note, seq)")
         // Unapproved first: with an imported library in the table, the work
@@ -543,12 +544,23 @@ export default async function WorkspacePage(
       fetchAllRows<Food>((from, to) => supabase.from("foods")
         .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
         .order("name").range(from, to), "the food table"),
+      // What a cup, spoon or piece of each food weighs. A volume means nothing
+      // without one, so the detail screen offers those units only where a row
+      // exists — and lets the dietitian add the missing ones as she works.
+      fetchAllRows<{ food_code: string; unit: string; grams: number; source: string; set_by: string | null }>(
+        (from, to) => supabase.from("food_measures")
+          .select("food_code, unit, grams, source, set_by").range(from, to), "the measures table"),
     ]);
     dishes = dsh.map(({ dish_items, ...d }) => ({
       ...d,
       items: [...(dish_items ?? [])].sort((a, b) => a.seq - b.seq),
     }));
     foods = fds;
+    for (const m of mss) {
+      const list = measures.get(m.food_code) ?? [];
+      list.push({ unit: m.unit, grams: Number(m.grams), source: m.source, set_by: m.set_by });
+      measures.set(m.food_code, list);
+    }
   }
 
   // Summaries + consolidated Blueprint sign-off.
@@ -985,7 +997,7 @@ export default async function WorkspacePage(
 
       {/* ---- DISH LIBRARY (dietitian) ---- */}
       {tab === "dishes" && (
-        <DishLibrary dishes={dishes} foods={foods} canEdit={!readOnly && canWriteNutrition(me.role)} />
+        <DishLibrary dishes={dishes} foods={foods} measures={measures} canEdit={!readOnly && canWriteNutrition(me.role)} />
       )}
 
     </div>

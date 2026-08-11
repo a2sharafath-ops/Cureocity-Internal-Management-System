@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings, setDishPortion, saveDishPortions } from "@/lib/actions";
+import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings, setDishPortion, saveDishPortions, setFoodMeasure } from "@/lib/actions";
 import DishDetail from "./DishDetail";
 import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, suggestServings,
-  portionMedians, portionLooksOdd, servingUnit, type Food, type Dish } from "@/lib/nutrition";
+  portionMedians, portionLooksOdd, servingUnit, type Food, type Dish, type Measure } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -78,10 +78,12 @@ const blank = (): Draft => ({
  * asafoetida" and name the culprit, so the reader can judge whether a quarter
  * teaspoon of it is worth caring about. Usually it is worth about 2 kcal.
  */
-export default function DishLibrary({ dishes, foods, canEdit }: {
+export default function DishLibrary({ dishes, foods, measures, canEdit }: {
   dishes: DishRow[];
   /** The ICMR food table, for matching ingredients. */
   foods: Food[];
+  /** What a cup, spoon or piece of each food weighs, keyed by food code. */
+  measures: Map<string, Measure[]>;
   canEdit: boolean;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -392,11 +394,18 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
         <DishDetail
           dish={opened}
           foods={foods}
+          measures={measures}
           canEdit={canEdit}
           busy={saving}
           error={detailErr}
           onClose={() => { setOpenId(null); setDetailErr(null); }}
           onRewrite={() => { edit(opened); setOpenId(null); }}
+          onTeachMeasure={(food, unit, grams) => startSaving(async () => {
+            const fd = new FormData();
+            fd.set("food_code", food); fd.set("unit", unit); fd.set("grams", String(grams));
+            const r = await setFoodMeasure(fd);
+            setDetailErr(r.error ?? null);
+          })}
           onSave={({ servings, items }) => startSaving(async () => {
             const fd = new FormData();
             fd.set("id", opened.id);

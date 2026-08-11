@@ -7960,6 +7960,57 @@ export async function saveDishPortions(formData: FormData): Promise<{ error?: st
   return { repriced: repriced.changed };
 }
 
+/**
+ * Record what a cup, spoon or piece of one food weighs.
+ *
+ * The library ships with 133 of these from INDB, covering 86 foods. The other
+ * six-hundred-odd gain one the first time somebody needs it: she puts a cup of
+ * ragi flour on the scales, types 120, and every recipe in the building can be
+ * written in cups of ragi flour from then on.
+ *
+ * Her name goes on it. The screen shows "set by Afya" where a seeded row shows
+ * its USDA citation, so a figure measured in the clinic is never mistaken for a
+ * published one — and if it turns out to be wrong, it is obvious who to ask.
+ */
+export async function setFoodMeasure(formData: FormData): Promise<{ error?: string }> {
+  const p = await dishGuard();
+  if (!p) return { error: "Not authorized." };
+
+  const food = String(formData.get("food_code") || "").trim();
+  const unit = String(formData.get("unit") || "").trim();
+  if (!food || !unit) return { error: "Missing the food or the unit." };
+
+  const raw = String(formData.get("grams") || "").trim();
+  const grams = Number(raw);
+  if (!Number.isFinite(grams) || grams <= 0) {
+    return { error: "A cup of something weighs more than nothing." };
+  }
+  // A cup holds about 240 ml. Nothing edible is nine times the density of
+  // water, so a figure above this is a typed decimal point, not a measurement.
+  if (grams > 2000) {
+    return { error: `${grams} g for one ${unit} is heavier than anything that fits in one. Check the decimal point.` };
+  }
+
+  const supabase = await createClient();
+  const { data: was } = await supabase.from("food_measures")
+    .select("grams, source").eq("food_code", food).eq("unit", unit).maybeSingle();
+
+  const { error } = await supabase.from("food_measures").upsert({
+    food_code: food,
+    unit,
+    grams,
+    source: `Weighed at the clinic by ${p.name}`,
+    set_by: p.name,
+  }, { onConflict: "food_code,unit" });
+  if (error) return { error: error.message };
+
+  const before = was as { grams?: number; source?: string } | null;
+  await logAudit(p, before ? "Food measure changed" : "Food measure recorded", `${food} · 1 ${unit}`,
+    before ? `${before.grams} g (${before.source}) → ${grams} g` : `${grams} g`);
+  revalidatePath("/workspace");
+  return {};
+}
+
 /** Approve everything currently unapproved — the batch the dietitian just read. */
 export async function approveDishes(formData: FormData) {
   const p = await dishGuard();

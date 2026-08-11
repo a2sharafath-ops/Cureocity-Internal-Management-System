@@ -3,8 +3,8 @@
 import React, { useMemo, useState } from "react";
 import {
   nutrientsOf, dishNutrients, roundNutrients, energySplit, perPortion, wholeRecipe,
-  servingProblem, contradictsSource,
-  type Food, type Nutrients,
+  servingProblem, contradictsSource, toGrams, fromGrams, unitsFor, isMassUnit,
+  type Food, type Nutrients, type Measure,
 } from "@/lib/nutrition";
 
 /**
@@ -153,9 +153,11 @@ function Facts({ n, dense }: { n: Nutrients; dense?: boolean }) {
   );
 }
 
-export default function DishDetail({ dish, foods, canEdit, onClose, onSave, onRewrite, busy, error }: {
+export default function DishDetail({ dish, foods, measures, canEdit, onClose, onSave, onRewrite, onTeachMeasure, busy, error }: {
   dish: DetailDish;
   foods: Food[];
+  /** Every recorded cup, spoon and piece weight, keyed by food code. */
+  measures: Map<string, Measure[]>;
   canEdit: boolean;
   onClose: () => void;
   /** Given only the ingredients whose weight changed, plus the servings count. */
@@ -166,6 +168,8 @@ export default function DishDetail({ dish, foods, canEdit, onClose, onSave, onRe
    * the form that rewrites the recipe wholesale.
    */
   onRewrite: () => void;
+  /** Record what one unit of a food weighs, so cups work for it from then on. */
+  onTeachMeasure: (foodCode: string, unit: string, grams: number) => void;
   busy?: boolean;
   error?: string | null;
 }) {
@@ -178,19 +182,40 @@ export default function DishDetail({ dish, foods, canEdit, onClose, onSave, onRe
    * weight and is never divided and multiplied back — which is what stops 282
    * quietly becoming 279 because somebody opened the dish and closed it.
    */
-  const [edits, setEdits] = useState<Map<number, string>>(new Map());
+  const [edits, setEdits] = useState<Map<number, { amount: string; unit: string }>>(new Map());
   const [servings, setServings] = useState(String(dish.servings ?? 1));
   const [open, setOpen] = useState<number | null>(null);
+  /** A cup weight she is in the middle of supplying, per ingredient. */
+  const [teaching, setTeaching] = useState<Map<number, string>>(new Map());
+
+  const unitOf = (i: number) => edits.get(i)?.unit ?? "g";
+  const measuresFor = (code: string | null) => (code ? measures.get(code) ?? [] : []);
+
+  /**
+   * What she has typed, converted to grams for ONE portion — or a reason it
+   * cannot be. A cup of a food nobody has weighed is not a small problem to be
+   * rounded past; it is an amount we do not know.
+   */
+  const editedGrams = (i: number): { g: number; how: string } | { why: string } | null => {
+    const e = edits.get(i);
+    if (!e) return null;
+    if (e.amount.trim() === "") return { why: "type an amount" };
+    const c = toGrams(Number(e.amount), e.unit, measuresFor(dish.items[i].food_code));
+    return c.ok ? { g: c.grams, how: c.how } : { why: c.why };
+  };
 
   const nServings = Number(servings) > 0 ? Number(servings) : null;
 
   /** The recipe as it stands with her edits applied — whole-recipe weights. */
   const items = useMemo(() => dish.items.map((it, i) => {
-    const typed = edits.get(i);
-    if (typed == null) return it;
-    const w = wholeRecipe(Number(typed), nServings);
+    const e = edits.get(i);
+    if (!e || e.amount.trim() === "") return it;
+    const c = toGrams(Number(e.amount), e.unit, measuresFor(it.food_code));
+    if (!c.ok) return it;
+    const w = wholeRecipe(c.grams, nServings);
     return w == null ? it : { ...it, raw_g: w };
-  }), [dish.items, edits, nServings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [dish.items, edits, nServings, measures]);
 
   const verdict = useMemo(() => dishNutrients(
     { name: dish.name, cooked_g: dish.cooked_g, servings: nServings, items },
@@ -210,22 +235,54 @@ export default function DishDetail({ dish, foods, canEdit, onClose, onSave, onRe
     return roundNutrients(nutrientsOf(f, g));
   };
 
-  /** What the box should show for an ingredient: her typing, or the stored weight ÷ servings. */
-  const shownG = (i: number): string => {
-    const typed = edits.get(i);
-    if (typed != null) return typed;
+  /**
+   * What the amount box shows: her typing, or the stored weight for one
+   * portion expressed in whichever unit she has picked.
+   */
+  const shownAmount = (i: number): string => {
+    const e = edits.get(i);
+    if (e) return e.amount;
     const g = perPortion(dish.items[i].raw_g, nServings);
-    return g == null ? "" : String(Math.round(g * 10) / 10);
+    if (g == null) return "";
+    const u = unitOf(i);
+    const v = fromGrams(g, u, measuresFor(dish.items[i].food_code));
+    if (v == null) return "";
+    // Grams to a tenth; a cup to two decimals, because 0.3 of a cup and 0.25
+    // are different amounts of flour and rounding them together hides that.
+    return String(isMassUnit(u) ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100);
   };
 
-  const dirty = edits.size > 0 || Number(servings) !== dish.servings;
+  /** Change the unit without changing the amount of food she meant. */
+  const switchUnit = (i: number, u: string) => {
+    const cur = shownAmount(i);
+    const from = unitOf(i);
+    const ms = measuresFor(dish.items[i].food_code);
+    const asG = cur === "" ? null : toGrams(Number(cur), from, ms);
+    const v = asG && asG.ok ? fromGrams(asG.grams, u, ms) : null;
+    setEdits(new Map(edits).set(i, {
+      unit: u,
+      amount: v == null ? "" : String(isMassUnit(u) ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100),
+    }));
+  };
+
+  /** Rows she has changed AND that convert to a real weight. */
+  const usable = [...edits.keys()].filter((i) => {
+    const r = editedGrams(i);
+    return r != null && "g" in r;
+  });
+  const blocked = [...edits.keys()].filter((i) => {
+    const r = editedGrams(i);
+    return r != null && "why" in r;
+  });
+  const dirty = usable.length > 0 || Number(servings) !== dish.servings;
 
   const save = () => {
     if (!nServings) return;
     onSave({
       servings: nServings,
-      // Only the rows she touched. The rest are not sent at all.
-      items: [...edits.keys()].map((i) => items[i]),
+      // Only the rows she touched AND that converted. A cup of something with
+      // no recorded weight is left alone rather than written as a guess.
+      items: usable.map((i) => items[i]),
     });
   };
 
@@ -336,7 +393,7 @@ export default function DishDetail({ dish, foods, canEdit, onClose, onSave, onRe
                 <div style={{ flex: 1, minWidth: 120 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</div>
                   <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
-                    {shownG(i) === "" ? "no weight yet" : `${shownG(i)} g`}
+                    {shownAmount(i) === "" ? "no weight yet" : `${shownAmount(i)} ${unitOf(i)}`}
                     {edits.has(i) && " · edited"}
                     {it.raw_g_source === "estimated" && " · estimated weight"}
                     {it.note && ` · ${it.note}`}
@@ -350,20 +407,82 @@ export default function DishDetail({ dish, foods, canEdit, onClose, onSave, onRe
 
               {isOpen && (
                 <div style={{ padding: "0 12px 12px", borderTop: "1px solid var(--border)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>One portion contains</span>
-                    <input value={shownG(i)} disabled={!canEdit || !nServings} inputMode="decimal"
-                      onChange={(e) => setEdits(new Map(edits).set(i, e.target.value))}
-                      style={{ ...inp, width: 92 }} />
-                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
-                      g · {nServings ? `${Math.round(items[i].raw_g * 10) / 10} g in the whole recipe` : "set a portion count first"}
-                    </span>
-                    {edits.has(i) && (
-                      <button type="button" style={ghost} onClick={() => {
-                        const m = new Map(edits); m.delete(i); setEdits(m);
-                      }}>Undo</button>
-                    )}
-                  </div>
+                  {(() => {
+                    const ms = measuresFor(it.food_code);
+                    const avail = unitsFor(ms);
+                    const res = editedGrams(i);
+                    const u = unitOf(i);
+                    const teachable = !isMassUnit(u) && !avail.includes(u as never);
+                    return (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>One portion contains</span>
+                          <input value={shownAmount(i)} disabled={!canEdit || !nServings} inputMode="decimal"
+                            onChange={(e) => setEdits(new Map(edits).set(i, { amount: e.target.value, unit: u }))}
+                            style={{ ...inp, width: 92 }} />
+                          {/* Units this food can be measured in. Grams, kilos,
+                              ounces and pounds always; a cup only where someone
+                              has weighed a cup of this particular food. The
+                              rest sit under "measure it yourself" below. */}
+                          <select value={u} disabled={!canEdit || !nServings}
+                            onChange={(e) => switchUnit(i, e.target.value)}
+                            style={{ ...inp, width: 108 }}>
+                            {avail.map((x) => <option key={x} value={x}>{x}</option>)}
+                            {teachable && <option value={u}>{u}</option>}
+                            <optgroup label="needs weighing first">
+                              {(["cup", "tbsp", "tsp", "ml", "L", "piece", "slice"] as const)
+                                .filter((x) => !avail.includes(x))
+                                .map((x) => <option key={x} value={x}>{x}…</option>)}
+                            </optgroup>
+                          </select>
+                          {edits.has(i) && (
+                            <button type="button" style={ghost} onClick={() => {
+                              const m = new Map(edits); m.delete(i); setEdits(m);
+                            }}>Undo</button>
+                          )}
+                        </div>
+
+                        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: -6, marginBottom: 10 }}>
+                          {res && "g" in res
+                            ? <>= {Math.round(res.g * 10) / 10} g a portion, {Math.round(items[i].raw_g * 10) / 10} g in the whole recipe{res.how && <> · {res.how}</>}</>
+                            : res && "why" in res
+                              ? <span style={{ color: "var(--amber-text)" }}>Cannot use this: {res.why}.</span>
+                              : nServings
+                                ? <>{Math.round(items[i].raw_g * 10) / 10} g in the whole recipe</>
+                                : "Set how many portions the recipe makes first."}
+                        </div>
+
+                        {/* ---- TEACH THE LIBRARY A MEASURE ----
+                            Offered the moment she picks a unit nothing has been
+                            weighed in. She puts one on the scales once and every
+                            recipe in the building can use it afterwards. */}
+                        {canEdit && teachable && it.food_code && (
+                          <div style={{ background: "var(--amber-bg)", border: "1px solid var(--border)",
+                                        borderRadius: 8, padding: "10px 11px", marginBottom: 10 }}>
+                            <div style={{ fontSize: 12.5, marginBottom: 6 }}>
+                              Nobody has weighed a {u} of <b>{it.name}</b> yet. What does one {u} of it weigh?
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>1 {u} =</span>
+                              <input value={teaching.get(i) ?? ""} inputMode="decimal" placeholder="120"
+                                onChange={(e) => setTeaching(new Map(teaching).set(i, e.target.value))}
+                                style={{ ...inp, width: 88 }} />
+                              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>g</span>
+                              <button type="button" style={ghost}
+                                disabled={!(Number(teaching.get(i)) > 0)}
+                                onClick={() => onTeachMeasure(it.food_code!, u, Number(teaching.get(i)))}>
+                                Save this measure
+                              </button>
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6 }}>
+                              Saved against the food with your name on it, and used by every
+                              recipe from then on — so weigh it rather than estimate it.
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   {c ? <Facts n={c} dense /> : (
                     <div style={{ fontSize: 12.5, color: "var(--amber-text)" }}>
                       {unmatched
