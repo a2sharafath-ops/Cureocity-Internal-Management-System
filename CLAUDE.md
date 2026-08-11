@@ -83,6 +83,14 @@ are for pasting, not reading.
   with RLS, vitest for tests.
 - Verify with: `npx tsc -p tsconfig.json --noEmit`, `npm test`, `npx eslint .`
   (there are ~56 pre-existing warnings; 0 errors is the bar).
+- **Migrations must be parsed before they are handed over**: `python3
+  scripts/check-sql.py` (needs `pip install pglast --break-system-packages`).
+  It runs PostgreSQL's own grammar over every file in `supabase/`. This is not
+  optional politeness — 0153 reached Sharafath with a syntax error that a
+  bracket count and a regex both waved through, because the generator put each
+  row's comment *after* the values tuple and the separating comma ended up
+  inside the comment. Whenever a migration's rows are produced by a script, put
+  the comment on the line ABOVE the row.
 - `node_modules` holds macOS binaries, so vitest needs Linux builds of rollup
   and esbuild before it will run in a sandbox. This works, and means the tests
   can be run for him rather than handed over unverified:
