@@ -4,6 +4,8 @@ import {
   servingLooksTooBig, contradictsSource, suggestServings,
   portionMedians, portionLooksOdd, perPortion, wholeRecipe, energySplit,
   toGrams, fromGrams, unitsFor, type Measure,
+  dishMicronutrients, micronutrientsKnown, notableMicronutrients, MICRONUTRIENTS,
+  type MicroFood, type MicroTotals,
   type Food, type Dish,
 } from "@/lib/nutrition";
 
@@ -336,5 +338,80 @@ describe("units", () => {
 
   it("refuses a negative amount", () => {
     expect(toGrams(-1, "g", none).ok).toBe(false);
+  });
+});
+
+describe("micronutrients", () => {
+  // Real IFCT figures per 100 g.
+  const MICROS = new Map<string, MicroFood>([
+    ["B023", { sodium_mg: 10.62, calcium_mg: 200, iron_mg: 4.76, vit_c_mg: 1.11, vit_d_ug: 0 }],
+    ["G528", { sodium_mg: 39300, calcium_mg: 10, iron_mg: 0.3, vit_c_mg: 0 }],   // salt: no vitamin D figure
+    ["K505", { sodium_mg: 0, calcium_mg: 0, iron_mg: 0, vit_c_mg: 0, vit_d_ug: 0 }],
+  ]);
+  const items = [
+    { food_code: "B023", raw_g: 100 },
+    { food_code: "G528", raw_g: 2 },
+    { food_code: "K505", raw_g: 300 },
+  ];
+
+  it("adds a nutrient up across the ingredients and divides by the servings", () => {
+    const t = dishMicronutrients(items, MICROS, 2);
+    // 10.62 + 2% of 39300 (=786) + 0 = 796.62, over two servings
+    expect(t.sodium_mg).toBeCloseTo(398.31, 2);
+    expect(t.calcium_mg).toBeCloseTo(100.1, 2);
+  });
+
+  it("gives up on ONE nutrient without giving up on the rest", () => {
+    // Salt has no vitamin D figure, so this recipe has no vitamin D total.
+    // It still has a sodium total, and sodium is the reason anyone looked.
+    const t = dishMicronutrients(items, MICROS, 2);
+    expect(t.vit_d_ug).toBeNull();
+    expect(t.sodium_mg).not.toBeNull();
+  });
+
+  it("refuses everything when an ingredient is not in the food table", () => {
+    const t = dishMicronutrients([...items, { food_code: null, raw_g: 5 }], MICROS, 2);
+    expect(t.sodium_mg).toBeNull();
+    expect(t.calcium_mg).toBeNull();
+  });
+
+  it("will not label the whole pot as one portion", () => {
+    for (const s of [null, 0, -1]) {
+      expect(dishMicronutrients(items, MICROS, s).sodium_mg).toBeNull();
+    }
+  });
+
+  it("counts what it could work out", () => {
+    expect(micronutrientsKnown(dishMicronutrients(items, MICROS, 2))).toBe(4);
+    expect(micronutrientsKnown(dishMicronutrients([], MICROS, 2))).toBe(0);
+  });
+
+  describe("which are worth printing on a chart", () => {
+    const totals = (o: Partial<MicroTotals>): MicroTotals =>
+      ({ ...Object.fromEntries(MICRONUTRIENTS.map((m) => [m.key, null])), ...o }) as MicroTotals;
+
+    it("ranks by how much of a day one portion carries, not by the raw number", () => {
+      // 400 mg of sodium is a fifth of a day. 5 mg of iron is a quarter. The
+      // bigger number is the less notable one.
+      const n = notableMicronutrients(totals({ sodium_mg: 400, iron_mg: 5 }));
+      expect(n[0]).toBe("iron_mg");
+      expect(n[1]).toBe("sodium_mg");
+    });
+
+    it("says nothing about a trace", () => {
+      // Under a tenth of a day is not "a source of" anything.
+      expect(notableMicronutrients(totals({ iron_mg: 0.5 }))).toEqual([]);
+    });
+
+    it("ignores a nutrient with no total, rather than ranking it last", () => {
+      expect(notableMicronutrients(totals({ sodium_mg: null, iron_mg: 10 }))).toEqual(["iron_mg"]);
+    });
+
+    it("returns at most the number asked for", () => {
+      const n = notableMicronutrients(totals({
+        sodium_mg: 1500, iron_mg: 15, calcium_mg: 800, vit_c_mg: 70, folate_ug: 250,
+      }), 3);
+      expect(n).toHaveLength(3);
+    });
   });
 });

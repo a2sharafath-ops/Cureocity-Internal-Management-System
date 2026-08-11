@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings, setDishPortion, saveDishPortions, setFoodMeasure } from "@/lib/actions";
 import DishDetail from "./DishDetail";
 import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, suggestServings,
-  portionMedians, portionLooksOdd, servingUnit, type Food, type Dish, type Measure } from "@/lib/nutrition";
+  portionMedians, portionLooksOdd, servingUnit, type Food, type Dish, type Measure, type MicroFood } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -80,12 +80,14 @@ const blank = (): Draft => ({
  * asafoetida" and name the culprit, so the reader can judge whether a quarter
  * teaspoon of it is worth caring about. Usually it is worth about 2 kcal.
  */
-export default function DishLibrary({ dishes, foods, measures, canEdit }: {
+export default function DishLibrary({ dishes, foods, measures, micros, canEdit }: {
   dishes: DishRow[];
   /** The ICMR food table, for matching ingredients. */
   foods: Food[];
   /** What a cup, spoon or piece of each food weighs, keyed by food code. */
   measures: Map<string, Measure[]>;
+  /** Each food's vitamins and minerals per 100 g, keyed by food code. */
+  micros: Map<string, MicroFood>;
   canEdit: boolean;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -379,6 +381,7 @@ export default function DishLibrary({ dishes, foods, measures, canEdit }: {
           dish={opened}
           foods={foods}
           measures={measures}
+          micros={micros}
           canEdit={canEdit}
           busy={saving}
           error={detailErr}

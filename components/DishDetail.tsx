@@ -4,8 +4,9 @@ import React, { useMemo, useState } from "react";
 import {
   nutrientsOf, dishNutrients, roundNutrients, energySplit, perPortion, wholeRecipe,
   servingProblem, contradictsSource, toGrams, fromGrams, unitsFor, isMassUnit,
-  portionLooksOdd,
-  type Food, type Nutrients, type Measure,
+  portionLooksOdd, dishMicronutrients, micronutrientsKnown, notableMicronutrients,
+  MICRONUTRIENTS,
+  type Food, type Nutrients, type Measure, type MicroFood,
 } from "@/lib/nutrition";
 
 /**
@@ -160,13 +161,15 @@ function Facts({ n, dense }: { n: Nutrients; dense?: boolean }) {
 }
 
 export default function DishDetail({
-  dish, foods, measures, canEdit, onClose, onSave, onRewrite, onTeachMeasure,
+  dish, foods, measures, micros, canEdit, onClose, onSave, onRewrite, onTeachMeasure,
   onSavePortion, portionMedian, busy, error,
 }: {
   dish: DetailDish;
   foods: Food[];
   /** Every recorded cup, spoon and piece weight, keyed by food code. */
   measures: Map<string, Measure[]>;
+  /** Each food's vitamins and minerals per 100 g, keyed by food code. */
+  micros: Map<string, MicroFood>;
   canEdit: boolean;
   onClose: () => void;
   /** Given only the ingredients whose weight changed, plus the servings count. */
@@ -247,6 +250,19 @@ export default function DishDetail({
   ), [dish.name, dish.cooked_g, nServings, items, foodMap]);
 
   const portion = verdict.priced ? roundNutrients(verdict.perServing) : null;
+
+  /**
+   * The vitamins and minerals in one portion, worked out one nutrient at a
+   * time. Uses the same edited weights as everything else, so correcting an
+   * ingredient moves the calcium as well as the calories.
+   */
+  const micro = useMemo(
+    () => dishMicronutrients(items, micros, nServings),
+    [items, micros, nServings],
+  );
+  const microKnown = micronutrientsKnown(micro);
+  const notable = notableMicronutrients(micro);
+  const [allMicros, setAllMicros] = useState(false);
   const problem = portion ? servingProblem(portion) : null;
   const clash = portion && dish.source_superseded == null && dish.source_kcal != null
     && contradictsSource(portion.kcal, Math.round(Number(dish.source_kcal)));
@@ -372,6 +388,70 @@ export default function DishDetail({
         <div style={{ fontSize: 12, color: "var(--amber-text)", marginTop: 4 }}>
           {dish.source} publishes {Math.round(Number(dish.source_kcal))} kcal for one portion.
           The ingredients below come to {portion.kcal}.
+        </div>
+      )}
+
+      {/* ---- VITAMINS AND MINERALS ----------------------------------------
+          Ranked by how much of an adult's day one portion carries, not by the
+          raw number — 5 mg of iron matters more than 400 mg of sodium, and
+          reading the two side by side would suggest otherwise.
+
+          A nutrient with no total is listed by name rather than left out, so
+          "no calcium figure" cannot be mistaken for "no calcium". */}
+      {microKnown > 0 && (
+        <div style={{ borderTop: "1px solid var(--border)", margin: "16px 0 0", paddingTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Vitamins and minerals</div>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>
+              one portion · {microKnown} of {MICRONUTRIENTS.length} could be worked out
+            </span>
+            <span style={{ flex: 1 }} />
+            <button type="button" style={{ ...ghost, padding: "3px 9px", fontSize: 11.5 }}
+              onClick={() => setAllMicros(!allMicros)}>
+              {allMicros ? "Show the notable ones" : "Show all"}
+            </button>
+          </div>
+
+          {!allMicros && notable.length > 0 && (
+            <div style={{ fontSize: 12.5, marginTop: 8 }}>
+              Most of a day&apos;s worth, in order:{" "}
+              {notable.map((k) => {
+                const m = MICRONUTRIENTS.find((x) => x.key === k)!;
+                return `${m.label} ${Math.round((micro[k] as number) * 10) / 10} ${m.unit}`;
+              }).join(" · ")}
+            </div>
+          )}
+          {!allMicros && notable.length === 0 && (
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 8 }}>
+              Nothing here reaches a tenth of an adult&apos;s daily requirement, so this
+              portion is not a source of any one of them.
+            </div>
+          )}
+
+          {allMicros && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))",
+                          gap: "6px 16px", marginTop: 10 }}>
+              {MICRONUTRIENTS.map((m) => (
+                <div key={m.key} style={{ fontSize: 12, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ color: "var(--muted)" }}>{m.label}</span>
+                  <span style={{ fontWeight: micro[m.key] == null ? 400 : 600,
+                                 color: micro[m.key] == null ? "var(--muted)" : undefined }}>
+                    {micro[m.key] == null
+                      ? "not known"
+                      : `${Math.round((micro[m.key] as number) * 100) / 100} ${m.unit}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {microKnown < MICRONUTRIENTS.length && (
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 8 }}>
+              A nutrient reads &ldquo;not known&rdquo; where one of the ingredients has no published
+              figure for it. Adding up the rest would under-report it, which on a chart
+              is worse than saying nothing.
+            </div>
+          )}
         </div>
       )}
 

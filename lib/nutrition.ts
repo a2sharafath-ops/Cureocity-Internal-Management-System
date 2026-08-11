@@ -495,3 +495,132 @@ export function unitsFor(measures: Measure[]): Unit[] {
   if (have.has("L")) have.add("ml");
   return [...mass, ...FOOD_UNITS.filter((u) => have.has(u))];
 }
+
+/* -------------------------------------------------------------------------
+   MICRONUTRIENTS
+
+   The clinic's brief asks for coverage of "all required vitamins and minerals",
+   and names four in its food-drug section: calcium and iron against thyroxine,
+   sodium and potassium on diuretics. Until the food table carried them, the
+   chart's Key Micronutrients column was a box somebody typed from memory —
+   which is the one thing this whole layer exists to replace.
+
+   WHY THESE ARE NOT PART OF `Nutrients`
+
+   The five macros are on every recipe and every chart option, and everything
+   here depends on them being present. A micronutrient is different: it is
+   available for some foods and not others, so a total either exists or does
+   not, one nutrient at a time. Keeping them apart means the macro arithmetic —
+   which is heavily tested and correct — does not change at all.
+
+   ONE NUTRIENT AT A TIME, AND WHY THAT MATTERS
+
+   Sodium is missing from 3 foods in the table. Vitamin D is missing from 191.
+   A single all-or-nothing rule would throw away every sodium total in the
+   library to protect a vitamin D figure nobody could compute anyway.
+
+   So each nutrient is decided on its own. If every ingredient has a calcium
+   figure, the recipe has a calcium figure. If one of them does not, calcium is
+   null — not a smaller number. A total missing one of four items is not a
+   smaller total, it is a wrong one, and a client's chart is the last place to
+   quietly under-report the mineral somebody is being treated for.
+   ------------------------------------------------------------------------- */
+
+export const MICRONUTRIENTS = [
+  { key: "sodium_mg", label: "Sodium", unit: "mg" },
+  { key: "potassium_mg", label: "Potassium", unit: "mg" },
+  { key: "calcium_mg", label: "Calcium", unit: "mg" },
+  { key: "iron_mg", label: "Iron", unit: "mg" },
+  { key: "magnesium_mg", label: "Magnesium", unit: "mg" },
+  { key: "phosphorus_mg", label: "Phosphorus", unit: "mg" },
+  { key: "zinc_mg", label: "Zinc", unit: "mg" },
+  { key: "selenium_ug", label: "Selenium", unit: "µg" },
+  { key: "vit_a_ug", label: "Vitamin A", unit: "µg" },
+  { key: "vit_c_mg", label: "Vitamin C", unit: "mg" },
+  { key: "vit_d_ug", label: "Vitamin D", unit: "µg" },
+  { key: "vit_e_mg", label: "Vitamin E", unit: "mg" },
+  { key: "vit_k_ug", label: "Vitamin K", unit: "µg" },
+  { key: "vit_b1_mg", label: "Thiamine (B1)", unit: "mg" },
+  { key: "vit_b2_mg", label: "Riboflavin (B2)", unit: "mg" },
+  { key: "vit_b3_mg", label: "Niacin (B3)", unit: "mg" },
+  { key: "vit_b6_mg", label: "Vitamin B6", unit: "mg" },
+  { key: "folate_ug", label: "Folate (B9)", unit: "µg" },
+  { key: "cholesterol_mg", label: "Cholesterol", unit: "mg" },
+  { key: "saturated_fat_g", label: "Saturated fat", unit: "g" },
+  { key: "oxalate_mg", label: "Oxalate", unit: "mg" },
+] as const;
+
+export type MicroKey = (typeof MICRONUTRIENTS)[number]["key"];
+
+/** Just the keys, for reading them off a database row. */
+export const MICRO_KEYS: readonly MicroKey[] = MICRONUTRIENTS.map((m) => m.key);
+
+/** A food's micronutrients, per 100 g. Any of them may be absent. */
+export type MicroFood = Partial<Record<MicroKey, number | null>>;
+
+/** A recipe's micronutrients per serving. Null where it cannot be worked out. */
+export type MicroTotals = Record<MicroKey, number | null>;
+
+/**
+ * Add up one serving's worth of each micronutrient.
+ *
+ * `servings` divides the total, exactly as `dishNutrients` does. A missing or
+ * nonsensical servings count gives nothing at all — the whole pot labelled as
+ * one portion is the failure this app was built around.
+ */
+export function dishMicronutrients(
+  items: { food_code: string | null; raw_g: number }[],
+  foods: Map<string, MicroFood>,
+  servings: number | null,
+): MicroTotals {
+  const empty = Object.fromEntries(MICRONUTRIENTS.map((m) => [m.key, null])) as MicroTotals;
+  if (servings == null || !(servings > 0) || !items.length) return empty;
+
+  const out = { ...empty };
+  for (const { key } of MICRONUTRIENTS) {
+    let sum = 0;
+    let complete = true;
+    for (const it of items) {
+      const f = it.food_code ? foods.get(it.food_code) : undefined;
+      const v = f?.[key];
+      // An ingredient with no weight contributes nothing and says nothing
+      // about whether the nutrient is known — but a food we cannot look up,
+      // or one the source never measured, means this nutrient has no total.
+      if (v == null || !Number.isFinite(Number(v))) { complete = false; break; }
+      if (!Number.isFinite(it.raw_g) || it.raw_g < 0) { complete = false; break; }
+      sum += (Number(v) * it.raw_g) / 100;
+    }
+    if (complete) out[key] = Math.round((sum / servings) * 1000) / 1000;
+  }
+  return out;
+}
+
+/** How many of the micronutrients a recipe could actually be given. */
+export const micronutrientsKnown = (t: MicroTotals): number =>
+  MICRONUTRIENTS.filter((m) => t[m.key] != null).length;
+
+/**
+ * The ones worth printing on a chart: the largest contributors, by how much of
+ * an adult's daily requirement one portion carries.
+ *
+ * ICMR-NIN's 2020 Recommended Dietary Allowances for an adult Indian man doing
+ * moderate work. A reference point for "is this worth mentioning", NOT advice —
+ * a pregnant woman, a child and a dialysis patient all need different figures,
+ * and this ranks a list rather than assessing anybody.
+ */
+export const ADULT_RDA: Partial<Record<MicroKey, number>> = {
+  sodium_mg: 2000, potassium_mg: 3500, calcium_mg: 1000, iron_mg: 19,
+  magnesium_mg: 440, phosphorus_mg: 1000, zinc_mg: 17, selenium_ug: 40,
+  vit_a_ug: 1000, vit_c_mg: 80, vit_d_ug: 15, vit_e_mg: 10, vit_k_ug: 55,
+  vit_b1_mg: 1.4, vit_b2_mg: 2.0, vit_b3_mg: 18, vit_b6_mg: 1.9, folate_ug: 300,
+};
+
+export function notableMicronutrients(t: MicroTotals, take = 4): MicroKey[] {
+  return MICRONUTRIENTS
+    .map((m) => ({ key: m.key, share: ADULT_RDA[m.key] && t[m.key] != null
+      ? (t[m.key] as number) / (ADULT_RDA[m.key] as number) : 0 }))
+    .filter((x) => x.share > 0.1)         // under a tenth of a day is not "a source of"
+    .sort((a, b) => b.share - a.share)
+    .slice(0, take)
+    .map((x) => x.key);
+}

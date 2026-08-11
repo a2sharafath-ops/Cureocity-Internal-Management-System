@@ -28,7 +28,7 @@ import { loadCatOf } from "@/lib/appt-match";
 
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import DishLibrary, { type DishRow } from "@/components/DishLibrary";
-import { type Food, type Measure } from "@/lib/nutrition";
+import { MICRO_KEYS, type Food, type Measure, type MicroFood } from "@/lib/nutrition";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import { deletable } from "@/lib/consult-lifecycle";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
@@ -529,6 +529,7 @@ export default async function WorkspacePage(
   let dishes: DishRow[] = [];
   let foods: Food[] = [];
   const measures = new Map<string, Measure[]>();
+  const micros = new Map<string, MicroFood>();
   if (tab === "dishes") {
     type Raw = Omit<DishRow, "items"> & { dish_items: DishRow["items"] | null };
     // Paged rather than limited: Supabase caps a response at its project "Max
@@ -541,8 +542,10 @@ export default async function WorkspacePage(
         // Unapproved first: with an imported library in the table, the work
         // waiting to be done is what should be at the top of the screen.
         .order("approved").order("name").range(from, to), "the recipe library"),
-      fetchAllRows<Food>((from, to) => supabase.from("foods")
-        .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
+      // The macros and the micronutrients come back together: one read, and a
+      // food that is on screen always has both or neither.
+      fetchAllRows<Food & { food_code: string } & MicroFood>((from, to) => supabase.from("foods")
+        .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, selenium_ug, vit_a_ug, vit_c_mg, vit_d_ug, vit_e_mg, vit_k_ug, vit_b1_mg, vit_b2_mg, vit_b3_mg, vit_b6_mg, folate_ug, cholesterol_mg, saturated_fat_g, oxalate_mg")
         .order("name").range(from, to), "the food table"),
       // What a cup, spoon or piece of each food weighs. A volume means nothing
       // without one, so the detail screen offers those units only where a row
@@ -568,6 +571,11 @@ export default async function WorkspacePage(
       items: [...(dish_items ?? [])].sort((a, b) => a.seq - b.seq),
     }));
     foods = fds;
+    for (const f of fds) {
+      micros.set(f.food_code, Object.fromEntries(
+        MICRO_KEYS.map((k) => [k, (f as MicroFood)[k] == null ? null : Number((f as MicroFood)[k])]),
+      ) as MicroFood);
+    }
     for (const m of mss) {
       const list = measures.get(m.food_code) ?? [];
       list.push({ unit: m.unit, grams: Number(m.grams), source: m.source, set_by: m.set_by });
@@ -1009,7 +1017,7 @@ export default async function WorkspacePage(
 
       {/* ---- DISH LIBRARY (dietitian) ---- */}
       {tab === "dishes" && (
-        <DishLibrary dishes={dishes} foods={foods} measures={measures} canEdit={!readOnly && canWriteNutrition(me.role)} />
+        <DishLibrary dishes={dishes} foods={foods} measures={measures} micros={micros} canEdit={!readOnly && canWriteNutrition(me.role)} />
       )}
 
     </div>
