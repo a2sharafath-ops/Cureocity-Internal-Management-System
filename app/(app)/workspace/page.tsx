@@ -29,6 +29,7 @@ import { loadCatOf } from "@/lib/appt-match";
 import RecipeLibrary, { type RecipeRow } from "@/components/RecipeLibrary";
 import DishLibrary, { type DishRow } from "@/components/DishLibrary";
 import { MICRO_KEYS, type Food, type Measure, type MicroFood } from "@/lib/nutrition";
+import { type LabResult } from "@/lib/lab-results";
 import SummariesPanel, { type ConsultSummary, type ConsolidatedRow } from "@/components/SummariesPanel";
 import { deletable } from "@/lib/consult-lifecycle";
 import AppointmentsBoard, { type ApptRow } from "@/components/AppointmentsBoard";
@@ -458,6 +459,7 @@ export default async function WorkspacePage(
   // Names only, and only the active ones — a medicine that was stopped last
   // year should not put a warning on a chart written today.
   const medsByClient: Record<string, string[]> = {};
+  const labsByClient: Record<string, LabResult[]> = {};
   if (tab === "charts") {
     try {
       chartDishes = await pricedDishes(supabase);
@@ -475,6 +477,17 @@ export default async function WorkspacePage(
         (medsByClient[m.client_id] ??= []).push(m.name);
       }
     } catch { /* left empty; the builder says the check could not run */ }
+
+    // Lab values, for section 4. Same treatment as the medicines: a failure
+    // here loses a panel on the chart screen, never the chart screen itself.
+    try {
+      const { data } = await supabase.from("lab_results")
+        .select("client_id, marker, label, value, unit, low, high, taken_on")
+        .order("taken_on", { ascending: false });
+      for (const l of (data ?? []) as (LabResult & { client_id: string })[]) {
+        (labsByClient[l.client_id] ??= []).push(l);
+      }
+    } catch { /* the table may not exist yet; the panel simply does not appear */ }
   }
 
   // Dietary Assessment Summary — the companion document to the diet plan,
@@ -1018,7 +1031,7 @@ export default async function WorkspacePage(
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Diet chart</div>
           <DietChartSection
             plans={dietPlans} assessments={dietAssessments} dishes={chartDishes}
-            medsByClient={medsByClient}
+            medsByClient={medsByClient} labsByClient={labsByClient}
             clients={rosterRows.map((r) => ({ id: r.id, name: r.name }))}
             canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly}
             pdf={pdfReadiness()} whatsapp={watiReadiness()} />

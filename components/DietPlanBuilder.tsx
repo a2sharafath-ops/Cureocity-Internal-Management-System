@@ -7,6 +7,7 @@ import {
   MACROS, MACRO_LABELS, optionMicronutrients, micronutrientLine, targetStepProblem,
 } from "@/lib/diet-plan";
 import { rulesFor, optionInteractions } from "@/lib/food-drug";
+import { labFindings, type LabResult } from "@/lib/lab-results";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
 
@@ -69,7 +70,7 @@ function slotRangeText(m: PlanMeal): string {
  */
 export default function DietPlanBuilder({
   planId, clientName, status, version, canReview, initial, dishes, medications = [],
-  previousTargetKcal = null, readOnly = false, pdf, whatsapp }: {
+  labs = [], previousTargetKcal = null, readOnly = false, pdf, whatsapp }: {
   planId: string;
   /**
    * The recipe library, priced per serving. An option linked to one of these
@@ -86,6 +87,8 @@ export default function DietPlanBuilder({
    * purpose — "Thyronorm 50mcg OD" is what a prescription actually says.
    */
   medications?: string[];
+  /** This client's lab values, for section 4's deficiency panel. */
+  labs?: LabResult[];
   /** The calorie target on the version before this one, for section 2's step rule. */
   previousTargetKcal?: number | null;
   status: string;
@@ -219,6 +222,9 @@ export default function DietPlanBuilder({
   // an estimated BMR and then corrected by a real InBody reading can move 400
   // kcal in one step and be more right afterwards, not less.
   const stepWarning = targetStepProblem(previousTargetKcal, targets.kcal);
+
+  // Section 4. Only what is out of range, latest result per marker.
+  const findings = useMemo(() => labFindings(labs), [labs]);
 
   /**
    * The chart read against what the client is taking.
@@ -651,6 +657,44 @@ export default function DietPlanBuilder({
           that the calcium at breakfast does not matter — and a gate that was
           wrong on most of the charts it stopped would train everybody to click
           through it. */}
+      {/* ---- WHAT THE BLOOD WORK SAYS ----
+          Section 4: "Identify deficiencies from history/lab reports. Include
+          appropriate food sources."
+
+          Above the medicines panel because a deficiency is something the chart
+          should answer, while an interaction is something it should avoid —
+          and the first is the reason she is writing this version. */}
+      {findings.length > 0 && (
+        <div style={{ ...box, padding: 14, marginTop: 12, background: "var(--amber-bg)" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            What the blood work says
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
+            The latest result for each marker that sits outside its range. These do not
+            stop the chart being sent.
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
+            {findings.map((f) => (
+              <li key={f.marker} style={{ marginBottom: 5 }}>
+                {f.text}
+                {/* Named so she can see whether the chart already answers it —
+                    the option rows carry the same figure. */}
+                {f.answersLabel && (
+                  <span style={{ color: "var(--muted)" }}>
+                    {" "}The column to watch on this chart is <b>{f.answersLabel}</b>.
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
+            &ldquo;Low&rdquo; here means below the range on the report, which is a laboratory
+            statement rather than a clinical one. Values sit outside a range for reasons
+            that have nothing to do with diet, and a real deficiency can sit inside one.
+          </div>
+        </div>
+      )}
+
       {drugWatch && (
         <div style={{ ...box, padding: 14, marginTop: 12, background: "var(--blue-bg)" }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>

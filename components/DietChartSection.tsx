@@ -8,6 +8,7 @@ import { type Assessment } from "@/lib/diet-assessment";
 import { todayISO } from "@/lib/today";
 import DietPlanBuilder, { type PlanMeta } from "@/components/DietPlanBuilder";
 import DietAssessmentBuilder from "@/components/DietAssessmentBuilder";
+import { type LabResult } from "@/lib/lab-results";
 
 export type DietPlanRow = {
   id: string;
@@ -76,7 +77,7 @@ type View = "assessment" | "chart";
  * older ones are one click away in the strip.
  */
 export default function DietChartSection({
-  plans, assessments, clients, dishes, medsByClient, canReview, canCompose, pdf, whatsapp }: {
+  plans, assessments, clients, dishes, medsByClient, labsByClient, canReview, canCompose, pdf, whatsapp }: {
   plans: DietPlanRow[];
   assessments: DietAssessmentRow[];
   clients: { id: string; name: string }[];
@@ -84,6 +85,8 @@ export default function DietChartSection({
   dishes: DishOption[];
   /** Active medicine names per client, for the food-drug check. */
   medsByClient: Record<string, string[]>;
+  /** Lab values per client, for section 4's deficiency panel. */
+  labsByClient: Record<string, LabResult[]>;
   /** Can approve/send-back a document awaiting sign-off. */
   canReview: boolean;
   pdf: { ready: boolean; missing: string[] };
@@ -388,6 +391,7 @@ export default function DietChartSection({
               canReview={canReview}
               dishes={dishes}
               medications={medsByClient[plan.client_id] ?? []}
+              labs={labsByClient[plan.client_id] ?? []}
               // The chart before this one, whatever its status. A draft that
               // has not been published is still what the dietitian last
               // decided, and comparing against a published version two back
