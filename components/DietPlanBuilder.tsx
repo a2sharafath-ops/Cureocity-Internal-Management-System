@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   type PlanMeal, type PlanOption, type PlanTargets, type DishOption,
   mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
-  MACROS, MACRO_LABELS,
+  MACROS, MACRO_LABELS, optionMicronutrients, micronutrientLine,
 } from "@/lib/diet-plan";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
@@ -439,6 +439,17 @@ export default function DietPlanBuilder({
                         style={built ? fromRecipe : inpControl}
                         title={built ? "Added up from the recipes below" : undefined} />
                     ))}
+                    {/* ---- KEY MICRONUTRIENTS ----
+                        Left as a box she can type in, always. The recipes can
+                        work out iron and folate; they cannot know that this
+                        client is the one on thyroxine, and the column has
+                        carried that sort of remark for as long as the clinic
+                        has issued charts.
+
+                        What is new is the suggestion beside it: where an option
+                        is built from recipes, the app offers the line it worked
+                        out and she takes it with one click. Filling the box for
+                        her would overwrite a note somebody meant. */}
                     <input disabled={locked} value={o.micronutrients ?? ""} placeholder="Iron, folate…" onChange={(e) => updateOption(i, j, { micronutrients: e.target.value || null })} style={inpControl} />
                     {!locked && <button type="button" onClick={() => removeOption(i, j)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete option">✕</button>}
                   </div>
@@ -504,6 +515,33 @@ export default function DietPlanBuilder({
                       )}
                     </div>
                   )}
+
+                  {/* ---- WHAT THE RECIPES SAY THE MICRONUTRIENTS ARE ----
+                      Offered, never written. The box above is hers: it has
+                      always carried remarks the ingredients cannot know — that
+                      this client is on thyroxine, that the iron here is the
+                      non-haem kind. Filling it automatically would overwrite
+                      one of those the first time a recipe changed.
+
+                      So the line sits underneath with a button, and one click
+                      puts it in. Nothing appears where the option is typed by
+                      hand, because then there is nothing to add up. */}
+                  {(() => {
+                    if (!built || locked || !dishes.length) return null;
+                    const line = micronutrientLine(optionMicronutrients(o.components, dishMap));
+                    if (!line || line === o.micronutrients) return null;
+                    return (
+                      <div style={{ fontSize: 11.5, color: "var(--muted)", margin: "3px 0 0 78px",
+                                    display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span>These recipes work out at <b style={{ color: "var(--ink)" }}>{line}</b></span>
+                        <button type="button"
+                          onClick={() => updateOption(i, j, { micronutrients: line })}
+                          style={{ ...outlineBtn, padding: "2px 8px", fontSize: 11 }}>
+                          {o.micronutrients?.trim() ? "Replace what is there" : "Use this"}
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {!trouble && quoted && (
                     // Not a warning. A published figure is a proper lookup —

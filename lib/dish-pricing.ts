@@ -10,7 +10,8 @@
 // browser can call. This is read-only reference data used by code that already
 // runs on the server, and there is no reason to open a door for it.
 
-import { dishNutrients, contradictsSource, servingProblem, type Food } from "@/lib/nutrition";
+import { dishNutrients, contradictsSource, servingProblem, dishMicronutrients,
+  MICRO_KEYS, type Food, type MicroFood } from "@/lib/nutrition";
 import { type DishOption } from "@/lib/diet-plan";
 import { type createClient } from "@/lib/supabase/server";
 
@@ -91,12 +92,16 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     fetchAllRows<RawDish>((from, to) => supabase.from("dishes")
       .select("id, name, serving_label, cooked_g, servings, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, source_superseded, approved, dish_items(food_code, name, raw_g, seq)")
       .order("name").range(from, to), "the recipe library"),
-    fetchAllRows<Food>((from, to) => supabase.from("foods")
-      .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
+    fetchAllRows<Food & MicroFood>((from, to) => supabase.from("foods")
+      .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal, sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg, phosphorus_mg, zinc_mg, selenium_ug, vit_a_ug, vit_c_mg, vit_d_ug, vit_e_mg, vit_k_ug, vit_b1_mg, vit_b2_mg, vit_b3_mg, vit_b6_mg, folate_ug, cholesterol_mg, saturated_fat_g, oxalate_mg")
       .order("food_code").range(from, to), "the food table"),
   ]);
 
   const foods = new Map<string, Food>(fds.map((f) => [f.food_code, f] as const));
+  const microFoods = new Map<string, MicroFood>(fds.map((f) => [
+    f.food_code,
+    Object.fromEntries(MICRO_KEYS.map((k) => [k, f[k] == null ? null : Number(f[k])])) as MicroFood,
+  ] as const));
 
   return dsh.map((d): DishOption => {
     const verdict = dishNutrients(
@@ -171,6 +176,13 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
           fibre_g: verdict.perServing.fibre_g,
         },
         basis: "computed", reason: implausible(verdict.perServing), approved: d.approved,
+        // Only ever alongside a computed figure. A published per-serving row
+        // carries calories and macros and nothing else, so there would be
+        // nothing to add up — and a chart option is only as good as the
+        // weakest recipe on it.
+        micro: dishMicronutrients(
+          [...(d.dish_items ?? [])], microFoods, d.servings,
+        ),
       };
     }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, MACRO_LABELS, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, optionMicronutrients, micronutrientLine, MACRO_LABELS, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+import { MICRONUTRIENTS, type MicroTotals } from "@/lib/nutrition";
 
 const opt = (seq: number, kcal: number, protein: number, items = `Option ${seq + 1}`) =>
   ({ seq, food_items: items, qty: "1 cup", kcal, carb_g: 40, protein_g: protein, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] });
@@ -459,5 +460,68 @@ describe("a typed option that disagrees with itself", () => {
     });
     const p = planProblems([meal("Lunch", [linked])], targets, [dish]);
     expect(p.some((x) => /come to about/.test(x))).toBe(false);
+  });
+});
+
+describe("micronutrients on a chart option", () => {
+  const micro = (o: Record<string, number | null>) =>
+    ({ ...Object.fromEntries(MICRONUTRIENTS.map((m) => [m.key, null])), ...o }) as MicroTotals;
+  const dish = (id: string, m: Record<string, number | null>): DishOption => ({
+    id, name: id, serving_label: "1 bowl",
+    perServing: { kcal: 200, carb_g: 20, protein_g: 8, fat_g: 6, fibre_g: 3 },
+    basis: "computed", source: null, reason: null, approved: true, micro: micro(m),
+  });
+  const map = (...ds: DishOption[]) => new Map(ds.map((d) => [d.id, d]));
+
+  it("adds a nutrient across the recipes, scaled by the portion of each", () => {
+    const m = new Map([["a", dish("a", { iron_mg: 4, sodium_mg: 300 })]]);
+    const t = optionMicronutrients([{ seq: 0, dish_id: "a", servings: 0.5 }], m)!;
+    expect(t.iron_mg).toBe(2);
+    expect(t.sodium_mg).toBe(150);
+  });
+
+  it("adds across several recipes", () => {
+    const m = map(dish("a", { iron_mg: 4 }), dish("b", { iron_mg: 1.5 }));
+    const t = optionMicronutrients(
+      [{ seq: 0, dish_id: "a", servings: 1 }, { seq: 1, dish_id: "b", servings: 2 }], m)!;
+    expect(t.iron_mg).toBe(7);
+  });
+
+  it("has no total for a nutrient one of its recipes is missing", () => {
+    // Three of four items is not a smaller sodium figure, it is a wrong one —
+    // and this ends up printed on a document somebody is treated from.
+    const m = map(dish("a", { iron_mg: 4, sodium_mg: 300 }), dish("b", { iron_mg: 1 }));
+    const t = optionMicronutrients(
+      [{ seq: 0, dish_id: "a", servings: 1 }, { seq: 1, dish_id: "b", servings: 1 }], m)!;
+    expect(t.iron_mg).toBe(5);
+    expect(t.sodium_mg).toBeNull();
+  });
+
+  it("has nothing at all when a recipe is missing or unpriced", () => {
+    const m = map(dish("a", { iron_mg: 4 }));
+    const t = optionMicronutrients([{ seq: 0, dish_id: "gone", servings: 1 }], m)!;
+    expect(t.iron_mg).toBeNull();
+    expect(optionMicronutrients([], m)).toBeNull();
+  });
+
+  describe("the line it puts on the chart", () => {
+    it("names the largest few by share of a day, not by the raw number", () => {
+      // 30 mg of vitamin C is 37% of a day; 5 mg of iron is 26%; 400 mg of
+      // sodium is 20%. Sorted by size they would come out in exactly the
+      // wrong order, with the least notable figure first.
+      const line = micronutrientLine(micro({ iron_mg: 5, sodium_mg: 400, vit_c_mg: 30 }));
+      expect(line).toBe("Vitamin C 30 mg, Iron 5 mg, Sodium 400 mg");
+    });
+
+    it("rounds a large figure to whole units and a small one to a decimal", () => {
+      expect(micronutrientLine(micro({ folate_ug: 172.53 }))).toBe("Folate (B9) 173 µg");
+      expect(micronutrientLine(micro({ iron_mg: 5.24 }))).toBe("Iron 5.2 mg");
+    });
+
+    it("says nothing rather than an empty string, so the two can be told apart", () => {
+      // "" would read the same as "we could not work it out".
+      expect(micronutrientLine(micro({ iron_mg: 0.4 }))).toBeNull();
+      expect(micronutrientLine(null)).toBeNull();
+    });
   });
 });

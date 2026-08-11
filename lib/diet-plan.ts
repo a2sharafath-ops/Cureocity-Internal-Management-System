@@ -1,4 +1,5 @@
-import { energyLooksWrong } from "@/lib/nutrition";
+import { energyLooksWrong, MICRONUTRIENTS, notableMicronutrients,
+  type MicroKey, type MicroTotals } from "@/lib/nutrition";
 
 // The customised diet plan — shapes, defaults and the arithmetic.
 //
@@ -102,7 +103,71 @@ export type DishOption = {
    * arrives unapproved; the picker offers approved dishes only.
    */
   approved: boolean;
+  /**
+   * The vitamins and minerals in one serving, each either a number or null.
+   *
+   * Null for a nutrient means no ingredient list could supply it, not that the
+   * dish contains none. Only ever present alongside a computed `perServing` —
+   * a published per-serving figure comes with calories and macros and nothing
+   * else, so there is nothing to add up.
+   */
+  micro?: MicroTotals | null;
 };
+
+/**
+ * The micronutrients in a whole option, added across the recipes it is built
+ * from — one nutrient at a time, exactly as a single recipe does it.
+ *
+ * If ANY component is missing a nutrient, the option has no total for it. The
+ * rule that matters: a sodium figure covering three of four items on the line
+ * is not a smaller number, it is a wrong one, and this ends up printed on a
+ * document somebody is treated from.
+ */
+export function optionMicronutrients(
+  components: PlanComponent[],
+  dishes: Map<string, DishOption>,
+): MicroTotals | null {
+  if (!components.length) return null;
+  const out = Object.fromEntries(MICRONUTRIENTS.map((m) => [m.key, null])) as MicroTotals;
+
+  for (const { key } of MICRONUTRIENTS) {
+    let sum = 0;
+    let complete = true;
+    for (const c of components) {
+      const d = dishes.get(c.dish_id);
+      const v = d?.micro?.[key];
+      if (d == null || v == null || !Number.isFinite(Number(v))) { complete = false; break; }
+      const s = c.servings ?? 1;
+      if (!(s > 0)) { complete = false; break; }
+      sum += Number(v) * s;
+    }
+    if (complete) out[key] = Math.round(sum * 1000) / 1000;
+  }
+  return out;
+}
+
+/**
+ * The Key Micronutrients line, as it should read on the client's document.
+ *
+ * The largest few by share of a day, in the clinic's own house style — the
+ * printed chart has always carried a short phrase rather than a table, and a
+ * client reading "Iron 5.2 mg" acts on it in a way they do not act on
+ * twenty-one rows of figures.
+ *
+ * Returns null rather than an empty string where nothing qualifies, so the
+ * caller can tell "we worked it out and there is nothing notable" apart from
+ * "we could not work it out", which read identically as "".
+ */
+export function micronutrientLine(t: MicroTotals | null, take = 4): string | null {
+  if (!t) return null;
+  const keys: MicroKey[] = notableMicronutrients(t, take);
+  if (!keys.length) return null;
+  return keys.map((k) => {
+    const m = MICRONUTRIENTS.find((x) => x.key === k)!;
+    const v = t[k] as number;
+    return `${m.label} ${v >= 10 ? Math.round(v) : Math.round(v * 10) / 10} ${m.unit}`;
+  }).join(", ");
+}
 
 /**
  * What one component contributes — a portion of a single recipe.
