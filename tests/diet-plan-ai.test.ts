@@ -68,6 +68,13 @@ describe("what the client brief says", () => {
     bmr: 1350, tdee: 1850, activity: "Lightly active",
     conditions: "Hypothyroidism", goals: "Fat loss",
     allergies: ["Peanuts (severe)"], medications: ["Thyroxine 50 mcg"],
+    occupation: "Night-shift nurse", sleep: "6 hours · interrupted", stress: "high",
+    region: "Hyderabad", shiftPattern: "Night shift, 10 pm to 6 am", outsideMeals: "Restaurant twice weekly",
+    dietPattern: "Non-vegetarian", dislikes: "Bitter gourd", supplements: "Vitamin D",
+    exercise: ["Strength training · 3 days/week · 7 pm"],
+    recall: [{ meal: "Breakfast", food: "2 dosas and tea" }, { meal: "Dinner", food: "Rice and fish curry" }],
+    physiological: ["Female health: perimenopause symptoms"],
+    labFindings: ["Ferritin is low at 9 ng/mL."],
     consultations: [{ role: "Doctor", kind: "Medical", on: "2026-08-01", text: "TSH elevated." }],
     reports: [{ label: "Lipid panel", on: "2026-07-20", summary: "LDL 140" }],
     vitals: null,
@@ -85,6 +92,16 @@ describe("what the client brief says", () => {
     expect(b).toMatch(/Thyroxine/);
     expect(b).toMatch(/Doctor \(Medical, 2026-08-01\): TSH elevated\./);
     expect(b).toMatch(/Lipid panel .*LDL 140/);
+  });
+
+  it("carries the structured assessment, recall and labs instead of relying on prose", () => {
+    const b = clientBrief(ctx);
+    expect(b).toMatch(/Region: Hyderabad/);
+    expect(b).toMatch(/Night shift, 10 pm to 6 am/);
+    expect(b).toMatch(/Restaurant twice weekly/);
+    expect(b).toMatch(/Structured 24-hour dietary recall:[\s\S]*Breakfast: 2 dosas and tea/);
+    expect(b).toMatch(/Latest out-of-range laboratory findings:[\s\S]*Ferritin is low/);
+    expect(b).toMatch(/perimenopause/);
   });
 });
 

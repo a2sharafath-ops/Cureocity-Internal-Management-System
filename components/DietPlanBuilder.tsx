@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
-  type PlanMeal, type PlanOption, type PlanTargets, type DishOption,
+  type PlanMeal, type PlanOption, type PlanTargets, type DishOption, type TargetMacroKey,
   mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
-  MACROS, MACRO_LABELS, optionMicronutrients, micronutrientLine, targetStepProblem,
+  MACROS, MACRO_LABELS, MACRO_TARGETS, optionMicronutrients, micronutrientLine, targetStepProblem,
 } from "@/lib/diet-plan";
 import { rulesFor, optionInteractions } from "@/lib/food-drug";
 import { labFindings, type LabResult } from "@/lib/lab-results";
@@ -125,6 +125,14 @@ export default function DietPlanBuilder({
   }, [dirty]);
 
   const touch = () => setDirty(true);
+
+  const setTargetBound = (key: TargetMacroKey, bound: "min" | "max", value: string) => {
+    setTargets((t) => ({
+      ...t,
+      [key]: { ...t[key], [bound]: value === "" ? null : Number(value) },
+    }));
+    touch();
+  };
 
   const updateMeal = (idx: number, patch: Partial<PlanMeal>) => {
     setMeals((ms) => ms.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
@@ -386,14 +394,20 @@ export default function DietPlanBuilder({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
           <div><div style={label}>Calorie target (kcal/day)</div>
             <input type="number" disabled={locked} value={targets.kcal ?? ""} onChange={(e) => { setTargets((t) => ({ ...t, kcal: e.target.value === "" ? null : Number(e.target.value) })); touch(); }} style={inpControl} /></div>
-          <div><div style={label}>Protein</div>
-            <input disabled={locked} value={targets.protein ?? ""} placeholder="e.g. 90-95 g" onChange={(e) => { setTargets((t) => ({ ...t, protein: e.target.value || null })); touch(); }} style={inpControl} /></div>
-          <div><div style={label}>Carbohydrate</div>
-            <input disabled={locked} value={targets.carbohydrate ?? ""} placeholder="e.g. 180-200 g" onChange={(e) => { setTargets((t) => ({ ...t, carbohydrate: e.target.value || null })); touch(); }} style={inpControl} /></div>
-          <div><div style={label}>Fats</div>
-            <input disabled={locked} value={targets.fats ?? ""} placeholder="e.g. 50-60 g" onChange={(e) => { setTargets((t) => ({ ...t, fats: e.target.value || null })); touch(); }} style={inpControl} /></div>
-          <div><div style={label}>Fibre</div>
-            <input disabled={locked} value={targets.fibre ?? ""} placeholder="e.g. 25-30 g" onChange={(e) => { setTargets((t) => ({ ...t, fibre: e.target.value || null })); touch(); }} style={inpControl} /></div>
+          {MACRO_TARGETS.map(([key, , targetLabel]) => (
+            <div key={key}>
+              <div style={label}>{targetLabel[0].toUpperCase() + targetLabel.slice(1)} target (g/day)</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 5, alignItems: "center" }}>
+                <input type="number" min="0" step="0.1" disabled={locked} aria-label={`${targetLabel} minimum`}
+                  value={targets[key].min ?? ""} placeholder="Min"
+                  onChange={(e) => setTargetBound(key, "min", e.target.value)} style={inpControl} />
+                <span style={{ color: "var(--muted)", fontSize: 12 }}>to</span>
+                <input type="number" min="0" step="0.1" disabled={locked} aria-label={`${targetLabel} maximum`}
+                  value={targets[key].max ?? ""} placeholder="Max"
+                  onChange={(e) => setTargetBound(key, "max", e.target.value)} style={inpControl} />
+              </div>
+            </div>
+          ))}
           <div><div style={label}>Water</div>
             <input disabled={locked} value={targets.water ?? ""} placeholder="e.g. 2.5 - 3 ltr/day" onChange={(e) => { setTargets((t) => ({ ...t, water: e.target.value || null })); touch(); }} style={inpControl} /></div>
           <div style={{ gridColumn: "span 2" }}><div style={label}>Food allergies</div>

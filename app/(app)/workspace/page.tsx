@@ -21,7 +21,10 @@ import DietChartSection, { type DietPlanRow, type DietAssessmentRow } from "@/co
 import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
-import { type PlanMeal, type PlanOption, type PlanComponent, type DishOption } from "@/lib/diet-plan";
+import {
+  type PlanMeal, type PlanOption, type PlanComponent, type DishOption,
+  parseTargetRange, formatTargetRange,
+} from "@/lib/diet-plan";
 import { pricedDishes, fetchAllRows } from "@/lib/dish-pricing";
 import WorkoutPlanner, { type WorkoutPlanRow } from "@/components/WorkoutPlanner";
 import { loadCatOf } from "@/lib/appt-match";
@@ -428,7 +431,11 @@ export default async function WorkspacePage(
     dietPlans = ((dp ?? []) as unknown as RawPlan[]).map((r) => ({
       id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null, version: r.version, status: r.status,
       created_at: r.created_at, sharedAt: r.shared_at,
-      targets: { kcal: r.kcal, protein: r.protein, carbohydrate: r.carbohydrate, fats: r.fats, fibre: r.fibre, water: r.water },
+      targets: {
+        kcal: r.kcal,
+        protein: parseTargetRange(r.protein), carbohydrate: parseTargetRange(r.carbohydrate),
+        fats: parseTargetRange(r.fats), fibre: parseTargetRange(r.fibre), water: r.water,
+      },
       meta: { allergies: r.allergies, notes: r.notes, issued_on: r.issued_on },
       meals: (r.diet_plan_meals ?? []).slice().sort((a, b) => a.seq - b.seq).map((m): PlanMeal => ({
         id: m.id, seq: m.seq, name: m.name, time_from: m.time_from, time_to: m.time_to, note: m.note, conditional: m.conditional,
@@ -775,7 +782,7 @@ export default async function WorkspacePage(
       version: p.version, createdAt: p.created_at, author: null,
       summary: [
         p.targets.kcal ? `${p.targets.kcal} kcal` : null,
-        p.targets.protein ? `${p.targets.protein} protein` : null,
+        formatTargetRange(p.targets.protein) ? `${formatTargetRange(p.targets.protein)} protein` : null,
         `${p.meals.length} meal${p.meals.length === 1 ? "" : "s"}`,
       ].filter(Boolean).join(" · ") || null,
       readHref: `/diet-plan/${p.id}/print`,

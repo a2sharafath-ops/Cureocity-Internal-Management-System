@@ -241,14 +241,51 @@ export type PlanMeal = {
   options: PlanOption[];
 };
 
+export type TargetRange = {
+  min: number | null;
+  max: number | null;
+};
+
+export type TargetMacroKey = "protein" | "carbohydrate" | "fats" | "fibre";
+
 export type PlanTargets = {
   kcal: number | null;
-  protein: string | null;
-  carbohydrate: string | null;
-  fats: string | null;
-  fibre: string | null;
+  protein: TargetRange;
+  carbohydrate: TargetRange;
+  fats: TargetRange;
+  fibre: TargetRange;
   water: string | null;
 };
+
+/** The stored plan predates numeric target columns, so read its text safely. */
+export function parseTargetRange(value: string | null | undefined): TargetRange {
+  const raw = String(value ?? "").trim();
+  const onlyMax = raw.match(/^\s*-\s*(\d+(?:\.\d+)?)/);
+  if (onlyMax) return { min: null, max: Number(onlyMax[1]) };
+  const onlyMin = raw.match(/^(\d+(?:\.\d+)?)\s*-\s*(?:g|$)/i);
+  if (onlyMin) return { min: Number(onlyMin[1]), max: null };
+  const nums = raw.match(/\d+(?:\.\d+)?/g)?.slice(0, 2).map(Number) ?? [];
+  if (!nums.length || !Number.isFinite(nums[0])) return { min: null, max: null };
+  return { min: nums[0], max: Number.isFinite(nums[1]) ? nums[1] : nums[0] };
+}
+
+/** Keep historical/print compatibility while the builder works with numbers. */
+export function formatTargetRange(range: TargetRange | null | undefined): string | null {
+  const { min, max } = range ?? { min: null, max: null };
+  if (min == null && max == null) return null;
+  if (min == null) return Number.isFinite(max) ? `-${max} g` : null;
+  if (max == null) return Number.isFinite(min) ? `${min}- g` : null;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return min === max ? `${min} g` : `${min}-${max} g`;
+}
+
+/** The target field and the option figure it must be checked against. */
+export const MACRO_TARGETS: [TargetMacroKey, keyof OptionMacros, string][] = [
+  ["carbohydrate", "carb_g", "carbohydrate"],
+  ["protein", "protein_g", "protein"],
+  ["fats", "fat_g", "fat"],
+  ["fibre", "fibre_g", "fibre"],
+];
 
 /** The nine points printed on every plan. Editable per plan; this is the seed. */
 export const HOW_TO_USE: [string, string][] = [
@@ -579,15 +616,26 @@ export function planProblems(
 
   // The rest of the header. A plan that states calories but not protein is half
   // a prescription, and these are printed on the document the client receives.
-  const header: [keyof PlanTargets, string][] = [
-    ["protein", "protein"], ["carbohydrate", "carbohydrate"], ["fats", "fats"],
-    ["fibre", "fibre"], ["water", "water intake"],
-  ];
-  for (const [key, label] of header) {
-    if (!String(targets[key] ?? "").trim()) out.push(`No daily ${label} target set.`);
+  for (const [key, , label] of MACRO_TARGETS) {
+    const target = targets[key];
+    if (!target || target.min == null || target.max == null) {
+      out.push(`No daily ${label} target range set.`);
+    } else if (!Number.isFinite(target.min) || !Number.isFinite(target.max) || target.min <= 0 || target.max <= 0) {
+      out.push(`The daily ${label} target must contain positive numbers.`);
+    } else if (target.min > target.max) {
+      out.push(`The daily ${label} target starts at ${target.min} g but ends at ${target.max} g.`);
+    }
   }
+  if (!targets.water?.trim()) out.push("No daily water intake target set.");
 
   for (const m of meals) {
+    const optionCount = m.options.filter((o) => o.food_items.trim()).length;
+    // The ordinary day must always offer four interchangeable choices. A
+    // conditional backup may be left unused, but once it contains a choice it
+    // is a real slot and follows the same four-option rule.
+    if (optionCount > 0 && optionCount !== 4) {
+      out.push(`${m.name} has ${optionCount} option${optionCount === 1 ? "" : "s"} — every active meal slot must have exactly 4.`);
+    }
     m.options.forEach((o, i) => {
       const named = o.food_items.trim();
       const where = `${m.name} · option ${i + 1}`;
@@ -715,6 +763,22 @@ export function planProblems(
   // was checked before it went out.
   const day = targetCheck(totals, targets.kcal);
   if (day.tone === "warn") out.push(day.text);
+
+  // Every possible choice through the day must land inside the prescribed
+  // macro range. Checking only an average would let the client choose four
+  // individually valid options and still end the day outside the prescription.
+  for (const [key, figure, label] of MACRO_TARGETS) {
+    const target = targets[key];
+    if (!target || target.min == null || target.max == null || target.min <= 0 || target.max <= 0 || target.min > target.max) continue;
+    const actual = totals.macros[figure];
+    if (actual.max < target.min) {
+      out.push(`Every combination lands under the ${target.min}-${target.max} g ${label} target.`);
+    } else if (actual.min > target.max) {
+      out.push(`Every combination lands over the ${target.min}-${target.max} g ${label} target.`);
+    } else if (actual.min < target.min || actual.max > target.max) {
+      out.push(`${label[0].toUpperCase()}${label.slice(1)} combinations range ${actual.min}-${actual.max} g against the ${target.min}-${target.max} g target.`);
+    }
+  }
 
   return out;
 }

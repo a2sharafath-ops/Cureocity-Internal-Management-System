@@ -163,7 +163,11 @@ export default function DietChartSection({
         setNewPlan({
           id: r.id, client_id: selectedClient, client_name: clientName,
           version: planVersions.length + 1, status: "draft", created_at: new Date().toISOString(),
-          targets: { kcal: null, protein: null, carbohydrate: null, fats: null, fibre: null, water: null },
+          targets: {
+            kcal: null,
+            protein: { min: null, max: null }, carbohydrate: { min: null, max: null },
+            fats: { min: null, max: null }, fibre: { min: null, max: null }, water: null,
+          },
           meta: { allergies: null, notes: null, issued_on: todayISO() },
           meals: DEFAULT_MEALS.map((m) => ({ ...m, options: [] })),
           sharedAt: null,

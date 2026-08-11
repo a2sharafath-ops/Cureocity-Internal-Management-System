@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, optionMicronutrients, micronutrientLine, MACRO_LABELS,
-  targetStepProblem, GENTLE_STEP_KCAL, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+  targetStepProblem, GENTLE_STEP_KCAL, DEFAULT_MEALS, HOW_TO_USE, parseTargetRange, formatTargetRange,
+  type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
 import { MICRONUTRIENTS, type MicroTotals } from "@/lib/nutrition";
+
+const range = (min: number, max = min) => ({ min, max });
 
 const opt = (seq: number, kcal: number, protein: number, items = `Option ${seq + 1}`) =>
   ({ seq, food_items: items, qty: "1 cup", kcal, carb_g: 40, protein_g: protein, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] });
@@ -80,8 +83,25 @@ describe("targetCheck", () => {
   });
 });
 
+describe("numeric macro target ranges", () => {
+  it("reads historical target text without changing old plans", () => {
+    expect(parseTargetRange("90-95 g")).toEqual({ min: 90, max: 95 });
+    expect(parseTargetRange("25 g/day")).toEqual({ min: 25, max: 25 });
+    expect(parseTargetRange("90- g")).toEqual({ min: 90, max: null });
+    expect(parseTargetRange("-95 g")).toEqual({ min: null, max: 95 });
+    expect(parseTargetRange(null)).toEqual({ min: null, max: null });
+  });
+
+  it("serializes the structured range for the existing print columns", () => {
+    expect(formatTargetRange(range(90, 95))).toBe("90-95 g");
+    expect(formatTargetRange(range(25))).toBe("25 g");
+    expect(formatTargetRange({ min: 90, max: null })).toBe("90- g");
+    expect(formatTargetRange({ min: null, max: null })).toBeNull();
+  });
+});
+
 describe("planProblems", () => {
-  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const targets = { kcal: 1800, protein: range(90), carbohydrate: range(200), fats: range(60), fibre: range(25), water: "3 ltr" };
 
   it("blocks a plan with an empty meal slot", () => {
     const meals = [meal("Breakfast", [opt(0, 400, 20)]), meal("Dinner", [])];
@@ -104,8 +124,11 @@ describe("planProblems", () => {
     // rule is that nothing goes to a client with a blank or a mismatch in it.
     const full = (seq: number, kcal: number, protein: number) =>
       ({ seq, food_items: `Option ${seq + 1}`, qty: "1 cup", kcal, carb_g: 40, protein_g: protein, fat_g: 10, fibre_g: 5, micronutrients: "Iron, folate", components: [] });
-    const meals = [meal("Breakfast", [full(0, 450, 20)]), meal("Lunch", [full(0, 450, 30)])];
-    expect(planProblems(meals, { ...targets, kcal: 900 })).toEqual([]);
+    const choices = (kcal: number, protein: number) => [0, 1, 2, 3].map((i) => full(i, kcal, protein));
+    const meals = [meal("Breakfast", choices(450, 20)), meal("Lunch", choices(450, 30))];
+    expect(planProblems(meals, {
+      kcal: 900, protein: range(50), carbohydrate: range(80), fats: range(20), fibre: range(10), water: "3 ltr",
+    })).toEqual([]);
   });
 });
 
@@ -121,7 +144,7 @@ describe("an option built from recipes", () => {
     basis: "published", source: "INDB ASC123", approved: false,
   });
   const library = new Map([puttu, kadala, unpriced, unapproved].map((d) => [d.id, d] as const));
-  const targets = { kcal: 1900, protein: "100 g", carbohydrate: "220 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const targets = { kcal: 1900, protein: range(100), carbohydrate: range(220), fats: range(60), fibre: range(25), water: "3 ltr" };
 
   const part = (dish_id: string, servings = 1, seq = 0) => ({ seq, dish_id, servings });
   /** Puttu + half a kadala curry: 269 kcal, 51 g carb, 7.7 g protein, 4.2 g fat, 3.9 g fibre. */
@@ -277,7 +300,7 @@ describe("parseNotes", () => {
 });
 
 describe("planProblems — silent data loss", () => {
-  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const targets = { kcal: 1800, protein: range(90), carbohydrate: range(200), fats: range(60), fibre: range(25), water: "3 ltr" };
   it("refuses an option that has numbers but no food items", () => {
     const orphan = { seq: 0, food_items: "  ", qty: "1 cup", kcal: 400, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] };
     const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: null, components: [] };
@@ -287,16 +310,21 @@ describe("planProblems — silent data loss", () => {
   it("ignores a wholly empty row — that's just an unused slot in the grid", () => {
     const empty = { seq: 0, food_items: "", qty: "", kcal: null, carb_g: null, protein_g: null, fat_g: null, fibre_g: null, micronutrients: null, components: [] };
     const good = { seq: 1, food_items: "Rice", qty: "1 cup", kcal: 400, carb_g: 40, protein_g: 20, fat_g: 10, fibre_g: 5, micronutrients: "Iron", components: [] };
-    const m: PlanMeal = { seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false, options: [empty, good] };
+    const m: PlanMeal = {
+      seq: 0, name: "Lunch", time_from: null, time_to: null, note: null, conditional: false,
+      options: [empty, ...[0, 1, 2, 3].map((seq) => ({ ...good, seq, food_items: `Rice ${seq + 1}` }))],
+    };
     // Nothing is reported against the blank row itself; the filled one is fine.
-    expect(planProblems([m], { ...targets, kcal: 400 })).toEqual([]);
+    expect(planProblems([m], {
+      kcal: 400, protein: range(20), carbohydrate: range(40), fats: range(10), fibre: range(5), water: "3 ltr",
+    })).toEqual([]);
   });
 });
 
 describe("a chart cannot go out with blanks or mismatches", () => {
   // The clinic's rule, stated by the user: no warnings. Anything wrong, missing
   // or inconsistent blocks approval and blocks sending, and has to be resolved.
-  const targets = { kcal: 1900, protein: "100-105 g", carbohydrate: "220-230 g", fats: "60-65 g", fibre: "20-30 g", water: "3 ltr" };
+  const targets = { kcal: 1900, protein: range(100, 105), carbohydrate: range(220, 230), fats: range(45, 50), fibre: range(20, 30), water: "3 ltr" };
   const opt = (over: Partial<PlanOption> = {}): PlanOption => ({
     seq: 0, food_items: "Ragi puttu + kadala curry", qty: "1 medium piece + ½ cup",
     kcal: 440, carb_g: 55, protein_g: 26, fat_g: 12, fibre_g: 6, micronutrients: "Calcium, iron, folate", components: [], ...over,
@@ -304,11 +332,26 @@ describe("a chart cannot go out with blanks or mismatches", () => {
   const meal = (options: PlanOption[]): PlanMeal =>
     ({ seq: 0, name: "Breakfast", time_from: null, time_to: null, note: null, conditional: false, options });
   // A day that adds up: four slots of ~475 kcal each against a 1900 target.
+  const four = (over: Partial<PlanOption> = {}) => [0, 1, 2, 3].map((seq) =>
+    opt({ kcal: 475, protein_g: 25, ...over, seq, food_items: `${over.food_items ?? "Ragi puttu + kadala curry"} ${seq + 1}` }));
   const day = (over: PlanMeal[] = []): PlanMeal[] => over.length ? over : [0, 1, 2, 3].map((i) =>
-    ({ ...meal([opt({ kcal: 475, protein_g: 25 })]), seq: i, name: `Meal ${i + 1}` }));
+    ({ ...meal(four()), seq: i, name: `Meal ${i + 1}` }));
 
   it("passes a complete chart", () => {
     expect(planProblems(day(), targets)).toEqual([]);
+  });
+
+  it("requires exactly four options in every active meal slot", () => {
+    const tooFew = day(); tooFew[0].options = tooFew[0].options.slice(0, 3);
+    expect(planProblems(tooFew, targets).some((p) => /Meal 1 has 3 options.*exactly 4/.test(p))).toBe(true);
+
+    const tooMany = day(); tooMany[0].options.push(opt({ seq: 4, food_items: "Fifth option" }));
+    expect(planProblems(tooMany, targets).some((p) => /Meal 1 has 5 options.*exactly 4/.test(p))).toBe(true);
+  });
+
+  it("blocks a day whose choices miss a numeric macro target", () => {
+    const lowProtein = day().map((m) => ({ ...m, options: m.options.map((o) => ({ ...o, protein_g: 10 })) }));
+    expect(planProblems(lowProtein, targets).some((p) => /under.*protein target/.test(p))).toBe(true);
   });
 
   it("refuses a missing calorie count", () => {
@@ -392,7 +435,7 @@ describe("a chart cannot go out with blanks or mismatches", () => {
 
   it("ignores the conditional backup slot in the day's total", () => {
     // The travel-delay meal is eaten INSTEAD of another, not as well as.
-    const m = [...day(), { ...meal([opt({ kcal: 500 })]), seq: 9, name: "Travel-delay backup", conditional: true }];
+    const m = [...day(), { ...meal(four({ kcal: 500 })), seq: 9, name: "Travel-delay backup", conditional: true }];
     expect(planProblems(m, targets)).toEqual([]);
   });
 
@@ -403,7 +446,7 @@ describe("a chart cannot go out with blanks or mismatches", () => {
 });
 
 describe("a typed option that disagrees with itself", () => {
-  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const targets = { kcal: 1800, protein: range(90), carbohydrate: range(200), fats: range(60), fibre: range(25), water: "3 ltr" };
   const typed = (o: Partial<PlanOption>): PlanOption => ({
     seq: 0, food_items: "Rice and dal", qty: "1 cup", micronutrients: "iron, folate",
     kcal: 400, carb_g: 60, protein_g: 15, fat_g: 8, fibre_g: 4, components: [], ...o,
@@ -528,7 +571,7 @@ describe("micronutrients on a chart option", () => {
 });
 
 describe("the early morning drink (section 8)", () => {
-  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const targets = { kcal: 1800, protein: range(90), carbohydrate: range(200), fats: range(60), fibre: range(25), water: "3 ltr" };
   const opt = (food: string): PlanOption => ({
     seq: 0, food_items: food, qty: "1 glass", micronutrients: "—",
     kcal: 20, carb_g: 4, protein_g: 0.5, fat_g: 0.2, fibre_g: 0.5, components: [],

@@ -7,7 +7,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
-import { HOW_TO_USE, DEFAULT_MEALS, planProblems, optionNutrients, type DishOption, type PlanComponent } from "@/lib/diet-plan";
+import {
+  HOW_TO_USE, DEFAULT_MEALS, planProblems, optionNutrients, parseTargetRange, formatTargetRange,
+  type DishOption, type PlanComponent, type PlanTargets,
+} from "@/lib/diet-plan";
 import { pricedDishes } from "@/lib/dish-pricing";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
@@ -28,6 +31,7 @@ import { assignCareTeam } from "@/lib/care-team";
 import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
 import { resolveNotificationTarget, nudgeLink } from "@/lib/notification-target";
 import { openaiComplete, type AiState } from "@/lib/ai";
+import { labFindings, type LabResult } from "@/lib/lab-results";
 import { notifyRoles, notifyStaff, notifyClient } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { BOOKING_OWNER } from "@/lib/work-owners";
@@ -7125,7 +7129,7 @@ export async function createDietPlan(formData: FormData) {
  */
 export async function saveDietPlan(
   id: string,
-  targets: { kcal: number | null; protein: string | null; carbohydrate: string | null; fats: string | null; fibre: string | null; water: string | null },
+  targets: PlanTargets,
   meta: { allergies: string | null; notes: string | null; issued_on: string | null },
   meals: PlanMealIn[],
 ): Promise<{ ok?: boolean; error?: string }> {
@@ -7142,8 +7146,12 @@ export async function saveDietPlan(
   if (status === "published" || status === "archived") return { error: "Published — start a new version to change it." };
 
   const { error: upErr } = await supabase.from("diet_plans").update({
-    kcal: targets.kcal, protein: targets.protein, carbohydrate: targets.carbohydrate,
-    fats: targets.fats, fibre: targets.fibre, water: targets.water,
+    kcal: targets.kcal,
+    protein: formatTargetRange(targets.protein),
+    carbohydrate: formatTargetRange(targets.carbohydrate),
+    fats: formatTargetRange(targets.fats),
+    fibre: formatTargetRange(targets.fibre),
+    water: targets.water,
     allergies: meta.allergies, notes: meta.notes, issued_on: meta.issued_on,
     updated_at: new Date().toISOString(),
   }).eq("id", id);
@@ -7299,7 +7307,10 @@ export async function generateDietPlan(formData: FormData): Promise<{ ok?: boole
   if (!client_id) return { error: "Missing client." };
   const supabase = await createClient();
 
-  const [{ data: c }, { data: m }, { data: alg }, { data: consults }, { data: vit }, { data: reports }] = await Promise.all([
+  const [
+    { data: c }, { data: m }, { data: alg }, { data: consults }, { data: vit },
+    { data: reports }, { data: activeMeds }, { data: labRows },
+  ] = await Promise.all([
     supabase.from("clients").select("name, dob, gender, occupation, height, weight, conditions, goals").eq("id", client_id).maybeSingle(),
     supabase.from("measurements").select("weight, bmi, bmr, body_fat, muscle_mass, visceral_fat")
       .eq("client_id", client_id).order("date", { ascending: false }).limit(1).maybeSingle(),
@@ -7309,6 +7320,9 @@ export async function generateDietPlan(formData: FormData): Promise<{ ok?: boole
       .eq("client_id", client_id).order("created_at", { ascending: false }).limit(12),
     supabase.from("vitals").select("*").eq("client_id", client_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("files").select("name, kind, created_at, summary").eq("client_id", client_id).order("created_at", { ascending: false }).limit(20),
+    supabase.from("medications").select("name").eq("client_id", client_id).eq("status", "active"),
+    supabase.from("lab_results").select("marker, label, value, unit, low, high, taken_on")
+      .eq("client_id", client_id).order("taken_on", { ascending: false }),
   ]);
 
   const cl = c as { name: string; dob: string | null; gender: string | null; occupation: string | null; height: number | null; weight: number | null; conditions: string | null; goals: string | null } | null;
@@ -7339,9 +7353,22 @@ export async function generateDietPlan(formData: FormData): Promise<{ ok?: boole
   // across. The measurement is still the fallback, for a client whose
   // assessment has not been written yet.
   const { data: assess } = await supabase.from("diet_assessments")
-    .select("bmr, daily_activity").eq("client_id", client_id)
+    .select("bmr, daily_activity, occupation, exercise, sleep_hours, sleep_quality, stress_level, " +
+      "region, shift_pattern, outside_meals, diet_type, food_allergies, food_dislikes, supplements, medications, " +
+      "medical_history, existing_condition, primary_goals, objectives, meal_frequency, meals_per_day, snacking, hydration")
+    .eq("client_id", client_id)
     .order("version", { ascending: false }).limit(1).maybeSingle();
-  const a = assess as { bmr: number | null; daily_activity: string | null } | null;
+  const a = assess as {
+    bmr: number | null; daily_activity: string | null; occupation: string | null;
+    exercise: { type: string; frequency: string; duration: string }[] | null;
+    sleep_hours: string | null; sleep_quality: string | null; stress_level: string | null;
+    region: string | null; shift_pattern: string | null; outside_meals: string | null;
+    diet_type: string | null; food_allergies: string | null; food_dislikes: string | null;
+    supplements: string | null; medications: { medication: string; notes: string }[] | null;
+    medical_history: string | null; existing_condition: string | null;
+    primary_goals: string | null; objectives: string | null;
+    meal_frequency: string | null; meals_per_day: string | null; snacking: string | null; hydration: string | null;
+  } | null;
   const activity = a?.daily_activity ?? answerFor(answers, /activity level|daily activity/i);
   const bmr = a?.bmr ?? meas?.bmr ?? null;
   const tdee = estimateTee(bmr, activity);
@@ -7370,10 +7397,42 @@ export async function generateDietPlan(formData: FormData): Promise<{ ok?: boole
     weight_kg: meas?.weight ?? cl.weight,
     bmi: meas?.bmi ?? null,
     bmr, tdee, activity,
-    conditions: cl.conditions,
-    goals: cl.goals,
-    allergies: ((alg ?? []) as { substance: string; severity: string }[]).map((a) => `${a.substance}${a.severity ? ` (${a.severity})` : ""}`),
-    medications: answers.filter(([q]) => /medication/i.test(q)).map(([, a]) => a).filter(Boolean),
+    conditions: [cl.conditions, a?.existing_condition, a?.medical_history].filter(Boolean).join(" · ") || null,
+    goals: [cl.goals, a?.primary_goals, a?.objectives].filter(Boolean).join(" · ") || null,
+    allergies: [...new Set([
+      ...((alg ?? []) as { substance: string; severity: string }[]).map((x) => `${x.substance}${x.severity ? ` (${x.severity})` : ""}`),
+      ...[a?.food_allergies].filter((x): x is string => !!x?.trim()),
+    ])],
+    medications: [...new Set([
+      ...((activeMeds ?? []) as { name: string }[]).map((x) => x.name),
+      ...(a?.medications ?? []).map((x) => [x.medication, x.notes].filter(Boolean).join(" — ")),
+      ...answers.filter(([q]) => /medication/i.test(q)).map(([, value]) => value),
+    ].map((x) => x.trim()).filter(Boolean))],
+    occupation: a?.occupation ?? cl.occupation,
+    sleep: [a?.sleep_hours, a?.sleep_quality].filter(Boolean).join(" · ") || answerFor(answers, /sleep/i),
+    stress: a?.stress_level ?? answerFor(answers, /stress/i),
+    region: a?.region,
+    shiftPattern: a?.shift_pattern ?? answerFor(answers, /shift work|working hours/i),
+    outsideMeals: a?.outside_meals ?? answerFor(answers, /eating.out frequency|outside food|restaurant/i),
+    dietPattern: a?.diet_type ?? answerFor(answers, /special diets|daily dietary habits/i),
+    mealPattern: [a?.meal_frequency, a?.meals_per_day, a?.snacking].filter(Boolean).join(" · ")
+      || answerFor(answers, /daily dietary habits/i),
+    hydration: a?.hydration ?? answerFor(answers, /water intake/i),
+    dislikes: a?.food_dislikes ?? answerFor(answers, /aversions|dislikes/i),
+    supplements: a?.supplements ?? answerFor(answers, /supplement/i),
+    exercise: [
+      ...(a?.exercise ?? []).map((x) => [x.type, x.frequency, x.duration].filter(Boolean).join(" · ")),
+      ...answers.filter(([q]) => /workout|exercise|activity.*routine/i.test(q)).map(([q, value]) => `${q}: ${value}`),
+    ].filter(Boolean),
+    recall: answers
+      .filter(([q, value]) => /24-hour recall/i.test(q) && value.trim())
+      .map(([q, value]) => ({ meal: q.replace(/^.*24-hour recall\s*[—:-]?\s*/i, "") || "Meal", food: value.trim() })),
+    physiological: answers
+      .filter(([q, value]) => /pregnan|postpartum|breastfeed|menopause|major life events/i.test(q) && value.trim())
+      .map(([q, value]) => `${q}: ${value}`),
+    labFindings: labFindings(((labRows ?? []) as unknown as LabResult[]).map((x) => ({
+      ...x, value: Number(x.value), low: x.low == null ? null : Number(x.low), high: x.high == null ? null : Number(x.high),
+    }))).map((x) => x.text),
     consultations: rows.map((r) => ({
       role: r.by_role ?? r.kind, kind: r.kind, on: r.created_at.slice(0, 10),
       text: (r.summary ?? r.ai_summary ?? r.notes ?? "").slice(0, 1500),
@@ -7524,8 +7583,9 @@ async function planProblemsFor(
   }
 
   return planProblems(meals, {
-    kcal: row.kcal, protein: row.protein, carbohydrate: row.carbohydrate,
-    fats: row.fats, fibre: row.fibre, water: row.water,
+    kcal: row.kcal,
+    protein: parseTargetRange(row.protein), carbohydrate: parseTargetRange(row.carbohydrate),
+    fats: parseTargetRange(row.fats), fibre: parseTargetRange(row.fibre), water: row.water,
   }, dishes);
 }
 

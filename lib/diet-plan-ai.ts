@@ -36,6 +36,21 @@ export type PlanContext = {
   goals: string | null;
   allergies: string[];
   medications: string[];
+  occupation?: string | null;
+  sleep?: string | null;
+  stress?: string | null;
+  region?: string | null;
+  shiftPattern?: string | null;
+  outsideMeals?: string | null;
+  dietPattern?: string | null;
+  mealPattern?: string | null;
+  hydration?: string | null;
+  dislikes?: string | null;
+  supplements?: string | null;
+  exercise?: string[];
+  recall?: { meal: string; food: string }[];
+  physiological?: string[];
+  labFindings?: string[];
   /** Consultation write-ups, most recent first, labelled by discipline. */
   consultations: { role: string; kind: string; on: string; text: string }[];
   /** Uploaded reports, as far as anyone has summarised them. */
@@ -157,7 +172,31 @@ export function clientBrief(c: PlanContext): string {
     `Goals: ${c.goals || "none recorded"}`,
     `Allergies: ${c.allergies.length ? c.allergies.join(", ") : "none recorded"}`,
     `Medications: ${c.medications.length ? c.medications.join(", ") : "none recorded"}`,
+    `Region: ${c.region?.trim() || "Kerala (clinic default)"}`,
+    `Occupation: ${c.occupation?.trim() || "not recorded"}`,
+    `Shift pattern: ${c.shiftPattern?.trim() || "ordinary daytime routine"}`,
+    `Eating out / English-style meals: ${c.outsideMeals?.trim() || "not recorded"}`,
+    `Diet pattern: ${c.dietPattern?.trim() || "not recorded"}`,
+    `Meal pattern: ${c.mealPattern?.trim() || "not recorded"}`,
+    `Hydration: ${c.hydration?.trim() || "not recorded"}`,
+    `Food dislikes: ${c.dislikes?.trim() || "none recorded"}`,
+    `Supplements: ${c.supplements?.trim() || "none recorded"}`,
+    `Sleep: ${c.sleep?.trim() || "not recorded"}`,
+    `Stress: ${c.stress?.trim() || "not recorded"}`,
   ];
+  if (c.physiological?.length) lines.push(`Physiological context: ${c.physiological.join("; ")}`);
+  if (c.exercise?.length) {
+    lines.push("", "Exercise / workout context:");
+    for (const item of c.exercise) lines.push(`- ${item}`);
+  }
+  if (c.recall?.length) {
+    lines.push("", "Structured 24-hour dietary recall:");
+    for (const item of c.recall) lines.push(`- ${item.meal}: ${item.food}`);
+  }
+  if (c.labFindings?.length) {
+    lines.push("", "Latest out-of-range laboratory findings:");
+    for (const item of c.labFindings) lines.push(`- ${item}`);
+  }
   if (c.vitals) lines.push(`Vitals: ${c.vitals}`);
   if (c.consultations.length) {
     lines.push("", "Consultation write-ups:");
