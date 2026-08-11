@@ -35,6 +35,12 @@ export type DishRow = {
      * teaspoon, the middle of USDA's own range for the ones it does publish.
      */
     raw_g_source: string | null;
+    /**
+     * Why this ingredient's composition is not simply itself — mutton priced
+     * as goat, a colouring counted as nothing. A substitution must never be
+     * able to pass for a measurement.
+     */
+    note: string | null;
   }[];
 };
 
@@ -178,6 +184,17 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
    */
   const estimated = (d: DishRow) =>
     d.items.filter((i) => i.raw_g_source === "estimated").map((i) => i.name);
+
+  /**
+   * Ingredients whose composition is a stand-in, grouped by the reason. One
+   * line per reason rather than per ingredient, because a sweet with four
+   * colourings in it should not push its own figures off the screen.
+   */
+  const standIns = (d: DishRow) => {
+    const g = new Map<string, string[]>();
+    for (const i of d.items) if (i.note) g.set(i.note, [...(g.get(i.note) ?? []), i.name]);
+    return [...g];
+  };
 
   /**
    * What one serving comes to, and whether we worked it out or quoted it.
@@ -504,6 +521,11 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                       Estimated weight for {estimated(d).join(", ")}
                     </div>
                   )}
+                  {standIns(d).map(([note, names]) => (
+                    <div key={note} style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>
+                      {names.join(", ")} — {note}
+                    </div>
+                  ))}
                   {f.clash && (
                     <div style={{ fontSize: 11.5, color: "var(--amber-text)", marginTop: 2 }}>{f.clash}</div>
                   )}
