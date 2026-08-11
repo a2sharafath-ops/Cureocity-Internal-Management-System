@@ -134,26 +134,6 @@ export default function DishLibrary({ dishes, foods, measures, canEdit }: {
    */
   const medians = useMemo(() => portionMedians(dishes), [dishes]);
 
-  const [portEdit, setPortEdit] = useState<Record<string, { g: string; label: string }>>({});
-  const [portSaving, setPortSaving] = useState<string | null>(null);
-
-  const savePortion = (d: DishRow) => {
-    const e = portEdit[d.id];
-    if (!e) return;
-    if (e.g.trim() === String(d.portion_g ?? "") && e.label.trim() === (d.serving_label ?? "")) return;
-    setErr(null);
-    setPortSaving(d.id);
-    start(async () => {
-      const fd = new FormData();
-      fd.set("id", d.id);
-      fd.set("portion_g", e.g.trim());
-      fd.set("serving_label", e.label.trim());
-      const r = await setDishPortion(fd);
-      setPortSaving(null);
-      if (r?.error) setErr(r.error);
-    });
-  };
-
   const saveServings = (d: DishRow) => {
     const typed = srvEdit[d.id];
     if (typed === undefined) return;
@@ -400,6 +380,15 @@ export default function DishLibrary({ dishes, foods, measures, canEdit }: {
           error={detailErr}
           onClose={() => { setOpenId(null); setDetailErr(null); }}
           onRewrite={() => { edit(opened); setOpenId(null); }}
+          portionMedian={medians.get(servingUnit(opened.serving_label) ?? "") ?? null}
+          onSavePortion={(label, grams) => startSaving(async () => {
+            const fd = new FormData();
+            fd.set("id", opened.id);
+            fd.set("portion_g", grams);
+            fd.set("serving_label", label);
+            const r = await setDishPortion(fd);
+            setDetailErr(r?.error ?? null);
+          })}
           onTeachMeasure={(food, unit, grams) => startSaving(async () => {
             const fd = new FormData();
             fd.set("food_code", food); fd.set("unit", unit); fd.set("grams", String(grams));
@@ -622,41 +611,11 @@ export default function DishLibrary({ dishes, foods, measures, canEdit }: {
                     </div>
                   )}
 
-                  {/* ---- WHAT ONE PORTION IS ----
-                      Both fields are hers. The weight arrives worked out from
-                      the recipe and the name from whatever the source called
-                      it; neither is a measurement anyone took, so neither is
-                      protected from being corrected. */}
-                  {canEdit && (
-                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, flexWrap: "wrap" }}>
-                      <span style={{ color: "var(--muted)" }}>One portion is</span>
-                      <input value={portEdit[d.id]?.label ?? (d.serving_label ?? "")}
-                        placeholder="1 bowl"
-                        onChange={(e) => setPortEdit((m) => ({ ...m, [d.id]: { g: m[d.id]?.g ?? String(d.portion_g ?? ""), label: e.target.value } }))}
-                        onBlur={() => savePortion(d)}
-                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        style={{ ...inp, width: 110, height: 26, fontSize: 12 }} />
-                      <input type="number" min="1" step="1"
-                        value={portEdit[d.id]?.g ?? (d.portion_g != null ? String(Math.round(Number(d.portion_g))) : "")}
-                        placeholder="g"
-                        onChange={(e) => setPortEdit((m) => ({ ...m, [d.id]: { label: m[d.id]?.label ?? (d.serving_label ?? ""), g: e.target.value } }))}
-                        onBlur={() => savePortion(d)}
-                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        style={{ ...inp, width: 72, height: 26, fontSize: 12 }}
-                        title="Raw ingredient weight of one portion" />
-                      <span style={{ color: "var(--muted)" }}>g of ingredients</span>
-                      {portSaving === d.id && <span style={{ color: "var(--muted)" }}>saving…</span>}
-                      {(() => {
-                        // Checked against other dishes measured the same way,
-                        // which is the only reference that exists. Says a dish
-                        // is unlike its neighbours, not that it is wrong.
-                        const odd = d.portion_g != null
-                          ? portionLooksOdd(Number(d.portion_g), medians.get(servingUnit(d.serving_label) ?? "") ?? null)
-                          : null;
-                        return odd ? <span style={{ color: "var(--amber-text)" }}>{odd}</span> : null;
-                      })()}
-                    </div>
-                  )}
+                  {/* The portion used to be editable here too, which meant the
+                      same figure appeared twice on one row — once as text and
+                      once in a box. Editing it now lives on the dish itself,
+                      behind Edit, where the ingredients it is derived from are
+                      also on screen. A list of a thousand rows is for reading. */}
                 </div>
 
                 {f.kcal != null ? (

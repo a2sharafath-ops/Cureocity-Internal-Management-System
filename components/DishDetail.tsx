@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import {
   nutrientsOf, dishNutrients, roundNutrients, energySplit, perPortion, wholeRecipe,
   servingProblem, contradictsSource, toGrams, fromGrams, unitsFor, isMassUnit,
+  portionLooksOdd,
   type Food, type Nutrients, type Measure,
 } from "@/lib/nutrition";
 
@@ -54,6 +55,9 @@ export type DetailDish = {
   source_fat_g: number | null;
   source_fibre_g: number | null;
   approved: boolean;
+  /** Raw ingredient weight of one portion, and whether a person set it. */
+  portion_g: number | null;
+  portion_g_source: string | null;
   items: DetailItem[];
 };
 
@@ -153,7 +157,10 @@ function Facts({ n, dense }: { n: Nutrients; dense?: boolean }) {
   );
 }
 
-export default function DishDetail({ dish, foods, measures, canEdit, onClose, onSave, onRewrite, onTeachMeasure, busy, error }: {
+export default function DishDetail({
+  dish, foods, measures, canEdit, onClose, onSave, onRewrite, onTeachMeasure,
+  onSavePortion, portionMedian, busy, error,
+}: {
   dish: DetailDish;
   foods: Food[];
   /** Every recorded cup, spoon and piece weight, keyed by food code. */
@@ -170,6 +177,14 @@ export default function DishDetail({ dish, foods, measures, canEdit, onClose, on
   onRewrite: () => void;
   /** Record what one unit of a food weighs, so cups work for it from then on. */
   onTeachMeasure: (foodCode: string, unit: string, grams: number) => void;
+  /** What one portion is called and what it weighs. Both hers to correct. */
+  onSavePortion: (label: string, grams: string) => void;
+  /**
+   * The middle portion weight across every dish measured in this one's unit —
+   * 260 g for a bowl, 19 g for a biscuit. Null where too few dishes share the
+   * unit to have a middle worth comparing against.
+   */
+  portionMedian: number | null;
   busy?: boolean;
   error?: string | null;
 }) {
@@ -185,6 +200,13 @@ export default function DishDetail({ dish, foods, measures, canEdit, onClose, on
   const [edits, setEdits] = useState<Map<number, { amount: string; unit: string }>>(new Map());
   const [servings, setServings] = useState(String(dish.servings ?? 1));
   const [open, setOpen] = useState<number | null>(null);
+
+  /** What one portion is called and weighs, while she is changing it. */
+  const [label, setLabel] = useState(dish.serving_label ?? "");
+  const [portionG, setPortionG] = useState(
+    dish.portion_g != null ? String(Math.round(Number(dish.portion_g))) : "");
+  const portionDirty = label.trim() !== (dish.serving_label ?? "")
+    || portionG.trim() !== (dish.portion_g != null ? String(Math.round(Number(dish.portion_g))) : "");
   /** A cup weight she is in the middle of supplying, per ingredient. */
   const [teaching, setTeaching] = useState<Map<number, string>>(new Map());
 
@@ -366,6 +388,45 @@ export default function DishDetail({ dish, foods, measures, canEdit, onClose, on
             </>
           )}
         </div>
+
+        {/* ---- WHAT ONE PORTION IS CALLED, AND WHAT IT WEIGHS ----
+            Both arrive worked out rather than measured — the weight from the
+            recipe's own arithmetic, the name from whatever the source called
+            it — so neither is protected from being corrected. This used to sit
+            on the list, where it appeared twice on every row; here the
+            ingredients it is derived from are on the same screen. */}
+        {canEdit && (
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>One portion is</span>
+            <input value={label} placeholder="1 bowl" onChange={(e) => setLabel(e.target.value)}
+              style={{ ...inp, width: 130 }} />
+            <input value={portionG} placeholder="g" inputMode="decimal"
+              onChange={(e) => setPortionG(e.target.value)}
+              style={{ ...inp, width: 84 }} title="Raw ingredient weight of one portion" />
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>g of ingredients</span>
+            {portionDirty && (
+              <button type="button" style={ghost} disabled={busy}
+                onClick={() => onSavePortion(label.trim(), portionG.trim())}>
+                {busy ? "Saving…" : "Save the portion"}
+              </button>
+            )}
+          </div>
+        )}
+        {(() => {
+          // Checked against other dishes measured the same way, which is the
+          // only reference that exists — nobody publishes what a bowl weighs.
+          // Says a dish is unlike its neighbours, not that it is wrong.
+          const g = Number(portionG);
+          const odd = g > 0 ? portionLooksOdd(g, portionMedian) : null;
+          return odd ? (
+            <div style={{ fontSize: 11.5, color: "var(--amber-text)", marginTop: 6 }}>{odd}</div>
+          ) : null;
+        })()}
+        {dish.portion_g_source === "dietitian" && (
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6 }}>
+            This weight was set here, so nothing recalculates over it.
+          </div>
+        )}
       </div>
 
       {/* ---- INGREDIENTS -------------------------------------------------- */}
