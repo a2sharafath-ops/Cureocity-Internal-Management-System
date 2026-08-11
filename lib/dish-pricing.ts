@@ -101,11 +101,22 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
       },
       foods,
     );
-    // All five or none. A published figure that fills in calories and protein
-    // and leaves carbohydrate, fat and fibre blank would block every chart it
-    // is used on, which is worse than the dish plainly saying it is unpriced.
-    const src = [d.source_kcal, d.source_carb_g, d.source_protein_g, d.source_fat_g, d.source_fibre_g];
-    const published = src.every((v) => v != null);
+    // Two different questions, and tying them together was a mistake.
+    //
+    // CAN THE SOURCE STAND IN FOR OUR SUMS? Only with all five figures. One
+    // that fills in calories and protein and leaves carbohydrate, fat and
+    // fibre blank would block every chart it is used on, which is worse than
+    // the dish plainly saying it is unpriced.
+    //
+    // CAN THE SOURCE CONTRADICT OUR SUMS? A single published calorie figure is
+    // enough. Requiring all five here meant a recipe whose source happened to
+    // record no fibre had no second opinion at all — and a cabbage kofta curry
+    // came out at 4,212 kcal a bowl, computed, unflagged, and selectable for a
+    // client's chart. The cross-check was switched off by a missing fibre
+    // value, which has nothing to do with whether 4,212 kcal is plausible.
+    const published = [d.source_kcal, d.source_carb_g, d.source_protein_g, d.source_fat_g, d.source_fibre_g]
+      .every((v) => v != null);
+    const comparable = d.source_kcal != null;
 
     // Our own arithmetic first. It is the only figure that re-prices itself
     // when an ingredient is corrected, so wherever the recipe supports it, it
@@ -123,7 +134,7 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     // So a disagreement past this point is treated as a reason not to trust
     // our own figure, not a reason to doubt theirs. The dish keeps the
     // published value and says why.
-    const contradicted = verdict.priced && published
+    const contradicted = verdict.priced && comparable
       && contradictsSource(verdict.perServing.kcal, Number(d.source_kcal));
 
     if (verdict.priced && !contradicted) {
@@ -166,12 +177,17 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
 
     // Neither. Refuses rather than estimates — the reason travels with the dish
     // so the builder can say what is missing instead of just greying it out.
+    //
+    // Two ways to arrive here. The sums could not be done at all, or they could
+    // and the source contradicted them without offering a complete set of its
+    // own to use instead. The second is the more important: our figure is not
+    // quietly kept just because there was nothing to replace it with.
     return {
       id: d.id, name: d.name, serving_label: d.serving_label, source: d.source,
-      // Only reachable when the sums could not be done at all — a contradicted
-      // figure has a published one to fall back on and returned above.
       perServing: null, basis: null,
-      reason: verdict.priced ? "no published figure to fall back on" : verdict.reason,
+      reason: contradicted && verdict.priced
+        ? `the ingredients as listed come to ${verdict.perServing.kcal} kcal a serving against a published ${Math.round(Number(d.source_kcal))} — check for uneaten frying oil or a discarded marinade`
+        : verdict.priced ? "no published figure to check the sums against" : verdict.reason,
       approved: d.approved,
     };
   });

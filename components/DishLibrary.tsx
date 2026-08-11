@@ -83,10 +83,7 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
    * looking at before the recipe is used on anyone's chart, and impossible to
    * find among a thousand rows without asking for it.
    */
-  const suspect = (d: DishRow) => {
-    const v = priced(d);
-    return v.priced && d.source_kcal != null && contradictsSource(v.perServing.kcal, Math.round(Number(d.source_kcal)));
-  };
+  const suspect = (d: DishRow) => figures(d).clash !== null;
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -123,20 +120,22 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
     const pub = d.source_kcal != null && d.source_protein_g != null
       ? { kcal: Math.round(Number(d.source_kcal)), protein: Math.round(Number(d.source_protein_g) * 10) / 10 }
       : null;
-    const clash = v.priced && pub ? contradictsSource(v.perServing.kcal, pub.kcal) : false;
+    // A published CALORIE figure alone is enough to contradict our sums —
+    // whether the source also recorded protein has nothing to do with it.
+    // Tying the two together let a cabbage kofta curry through at 4,212 kcal.
+    const clash = v.priced && d.source_kcal != null
+      && contradictsSource(v.perServing.kcal, Math.round(Number(d.source_kcal)));
+    const disagreement = clash && v.priced
+      ? `ingredients as listed come to ${v.perServing.kcal} kcal — check for frying oil that isn't eaten`
+      : null;
 
     if (v.priced && !clash) {
       return { kcal: v.perServing.kcal, protein: v.perServing.protein_g, quoted: false, clash: null, reason: null };
     }
-    if (pub) {
-      return {
-        ...pub, quoted: true, reason: null,
-        clash: clash && v.priced
-          ? `ingredients as listed come to ${v.perServing.kcal} kcal — check for frying oil that isn't eaten`
-          : null,
-      };
-    }
-    return { kcal: null, protein: null, quoted: false, clash: null, reason: v.priced ? null : v.reason };
+    if (pub) return { ...pub, quoted: true, reason: null, clash: disagreement };
+    // Contradicted with nothing complete to fall back on: no figures at all
+    // rather than ours kept by default.
+    return { kcal: null, protein: null, quoted: false, clash: disagreement, reason: v.priced ? null : v.reason };
   };
 
   const edit = (d: DishRow) => setDraft({
