@@ -8706,6 +8706,7 @@ export async function saveDietAssessment(id: string, patch: Record<string, unkno
   const ALLOWED = new Set([
     "consulted_on", "dietitian", "medical_history", "existing_condition", "medications", "allergies", "family_history",
     "occupation", "daily_activity", "exercise", "sleep_hours", "sleep_quality", "stress_level", "gut_health", "weight_change",
+    "region", "shift_pattern", "outside_meals",
     "diet_type", "food_allergies", "food_dislikes", "supplements",
     "height", "weight", "bmi", "bmr", "tee", "muscle_mass", "fat_mass", "body_fat", "visceral_fat", "waist_hip",
     "primary_goals", "target_weight", "timeline_weeks", "objectives",

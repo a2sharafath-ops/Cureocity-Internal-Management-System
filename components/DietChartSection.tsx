@@ -51,6 +51,7 @@ const pillOf = (status: string) => {
 const blankAssessment = (): Assessment => ({
   consulted_on: null, dietitian: null, medical_history: null, existing_condition: null, medications: [], allergies: null, family_history: null,
   occupation: null, daily_activity: null, exercise: [], sleep_hours: null, sleep_quality: null, stress_level: null, gut_health: null, weight_change: null,
+  region: null, shift_pattern: null, outside_meals: null,
   diet_type: null, food_allergies: null, food_dislikes: null, supplements: null,
   height: null, weight: null, bmi: null, bmr: null, tee: null, muscle_mass: null, fat_mass: null, body_fat: null, visceral_fat: null, waist_hip: null,
   primary_goals: null, target_weight: null, timeline_weeks: null, objectives: null,
@@ -392,6 +393,18 @@ export default function DietChartSection({
               dishes={dishes}
               medications={medsByClient[plan.client_id] ?? []}
               labs={labsByClient[plan.client_id] ?? []}
+              // The newest assessment for this client, whatever its status —
+              // a draft assessment is still the most recent thing anybody
+              // learned about them.
+              context={(() => {
+                const a = allAssess
+                  .filter((x) => x.client_id === plan.client_id)
+                  .sort((x, y) => y.version - x.version)[0];
+                return a
+                  ? { region: a.assessment.region, shift_pattern: a.assessment.shift_pattern,
+                      outside_meals: a.assessment.outside_meals }
+                  : null;
+              })()}
               // The chart before this one, whatever its status. A draft that
               // has not been published is still what the dietitian last
               // decided, and comparing against a published version two back

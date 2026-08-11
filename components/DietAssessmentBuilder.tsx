@@ -46,6 +46,7 @@ type FormState = Assessment & { issued_on: string | null };
 const SAVE_KEYS = [
   "consulted_on", "dietitian", "medical_history", "existing_condition", "medications", "allergies", "family_history",
   "occupation", "daily_activity", "exercise", "sleep_hours", "sleep_quality", "stress_level", "gut_health", "weight_change",
+  "region", "shift_pattern", "outside_meals",
   "diet_type", "food_allergies", "food_dislikes", "supplements",
   "height", "weight", "bmi", "bmr", "tee", "muscle_mass", "fat_mass", "body_fat", "visceral_fat", "waist_hip",
   "primary_goals", "target_weight", "timeline_weeks", "objectives",
@@ -356,6 +357,22 @@ export default function DietAssessmentBuilder({
             <textarea disabled={locked} rows={2} value={form.gut_health ?? ""} onChange={(e) => update("gut_health", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} /></div>
           <div><div style={label}>Recent weight change</div>
             <input disabled={locked} value={form.weight_change ?? ""} onChange={(e) => update("weight_change", e.target.value || null)} style={inpControl} /></div>
+        </div>
+
+        {/* The three things section 1 designs a chart from that had nowhere to
+            live. Each is blank by default on purpose, and the placeholder says
+            what blank means — an empty Region box is the Kerala default being
+            taken, not a question nobody asked. */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+          <div><div style={label}>Region</div>
+            <input disabled={locked} value={form.region ?? ""} placeholder="Kerala unless stated"
+              onChange={(e) => update("region", e.target.value || null)} style={inpControl} /></div>
+          <div><div style={label}>Shift pattern</div>
+            <input disabled={locked} value={form.shift_pattern ?? ""} placeholder="Ordinary daytime unless stated"
+              onChange={(e) => update("shift_pattern", e.target.value || null)} style={inpControl} /></div>
+          <div><div style={label}>Eats out / English meals</div>
+            <input disabled={locked} value={form.outside_meals ?? ""} placeholder="How often, and what"
+              onChange={(e) => update("outside_meals", e.target.value || null)} style={inpControl} /></div>
         </div>
       </div>
 

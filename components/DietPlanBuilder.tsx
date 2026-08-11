@@ -8,6 +8,7 @@ import {
 } from "@/lib/diet-plan";
 import { rulesFor, optionInteractions } from "@/lib/food-drug";
 import { labFindings, type LabResult } from "@/lib/lab-results";
+import { contextNotes, type ClientContext } from "@/lib/client-context";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
 
@@ -70,7 +71,7 @@ function slotRangeText(m: PlanMeal): string {
  */
 export default function DietPlanBuilder({
   planId, clientName, status, version, canReview, initial, dishes, medications = [],
-  labs = [], previousTargetKcal = null, readOnly = false, pdf, whatsapp }: {
+  labs = [], context = null, previousTargetKcal = null, readOnly = false, pdf, whatsapp }: {
   planId: string;
   /**
    * The recipe library, priced per serving. An option linked to one of these
@@ -89,6 +90,8 @@ export default function DietPlanBuilder({
   medications?: string[];
   /** This client's lab values, for section 4's deficiency panel. */
   labs?: LabResult[];
+  /** Region, shift pattern and eating-out habit, from the latest assessment. */
+  context?: ClientContext | null;
   /** The calorie target on the version before this one, for section 2's step rule. */
   previousTargetKcal?: number | null;
   status: string;
@@ -225,6 +228,12 @@ export default function DietPlanBuilder({
 
   // Section 4. Only what is out of range, latest result per marker.
   const findings = useMemo(() => labFindings(labs), [labs]);
+
+  // Sections 9, 6 and 10 — reminders, never refusals.
+  const notes = useMemo(
+    () => (context ? contextNotes(context, meals) : []),
+    [context, meals],
+  );
 
   /**
    * The chart read against what the client is taking.
@@ -657,6 +666,25 @@ export default function DietPlanBuilder({
           that the calcium at breakfast does not matter — and a gate that was
           wrong on most of the charts it stopped would train everybody to click
           through it. */}
+      {/* ---- WHO THIS CLIENT IS ----
+          Sections 9, 6 and 10. First of the three panels because it is the
+          thing most easily forgotten: the blood work and the medicines are
+          looked up, but "she is from Chennai" is the sort of fact that lives
+          in a conversation and then evaporates. */}
+      {notes.length > 0 && (
+        <div style={{ ...box, padding: 14, marginTop: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            Worth remembering about this client
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
+            From the latest diet assessment. Reminders — none of these stops the chart.
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
+            {notes.map((n) => <li key={n.id} style={{ marginBottom: 4 }}>{n.text}</li>)}
+          </ul>
+        </div>
+      )}
+
       {/* ---- WHAT THE BLOOD WORK SAYS ----
           Section 4: "Identify deficiencies from history/lab reports. Include
           appropriate food sources."

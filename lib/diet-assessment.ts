@@ -32,6 +32,16 @@ export type Assessment = {
   stress_level: StressLevel;
   gut_health: string | null;
   weight_change: string | null;
+  /**
+   * Where the client is from. Null means Kerala — the brief's stated default,
+   * so an empty box is the default being taken rather than a question nobody
+   * asked. See 0159.
+   */
+  region: string | null;
+  /** Night or rotating hours. Null means an ordinary daytime routine. */
+  shift_pattern: string | null;
+  /** How often they eat restaurant or English-style meals (section 10). */
+  outside_meals: string | null;
 
   // ---- dietary preference -------------------------------------------------
   diet_type: string | null;
@@ -206,6 +216,12 @@ export function draftAssessment(s: DraftSources, today: Date = new Date()): Asse
     stress_level: stressFrom(answerTo(s.answers, /stress/i)),
     gut_health: answerTo(s.answers, /gut health|bowel habits/i) ?? answerTo(s.answers, /gut\/digestive/i),
     weight_change: answerTo(s.answers, /weight patterns/i),
+    // Region is left empty rather than guessed: null means Kerala, so an
+    // unanswered question and the default read the same — which is right,
+    // because the default IS the answer until somebody says otherwise.
+    region: null,
+    shift_pattern: answerTo(s.answers, /shift|night duty|working hours/i),
+    outside_meals: answerTo(s.answers, /eating out|outside food|restaurant/i),
 
     diet_type: answerTo(s.answers, /special diets/i),
     food_allergies: answerTo(s.answers, /preferences \/ intolerances \/ allergies|food.*allerg/i),
