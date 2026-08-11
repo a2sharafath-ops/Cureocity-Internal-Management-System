@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   nutrientsOf, dishNutrients, portionOf, energyLooksWrong, roundNutrients,
   servingLooksTooBig, contradictsSource, suggestServings,
+  portionMedians, portionLooksOdd,
   type Food, type Dish,
 } from "@/lib/nutrition";
 
@@ -161,5 +162,40 @@ describe("suggesting a servings count", () => {
       expect(total / n).toBeGreaterThan(250);
       expect(total / n).toBeLessThan(600);
     }
+  });
+});
+
+describe("portion weight against the library's own distribution", () => {
+  const lib = [
+    { serving_label: "1 bowl", portion_g: 240 }, { serving_label: "1 bowl", portion_g: 259 },
+    { serving_label: "1 bowl", portion_g: 270 }, { serving_label: "2 bowls", portion_g: 250 },
+    { serving_label: "1 bowl", portion_g: 280 }, { serving_label: "1 plate", portion_g: 359 },
+  ];
+
+  it("takes the middle of each unit, and treats bowl and bowls alike", () => {
+    const m = portionMedians(lib);
+    expect(m.get("bowl")).toBe(259);
+  });
+
+  it("says nothing about a unit with too few examples to have a middle", () => {
+    // One plate is not a distribution. Comparing against it would be arithmetic
+    // dressed up as evidence.
+    expect(portionMedians(lib).has("plate")).toBe(false);
+  });
+
+  it("flags a portion far from its neighbours, in either direction", () => {
+    expect(portionLooksOdd(976, 259)).toMatch(/against about 259 g/);
+    expect(portionLooksOdd(45, 259)).toMatch(/^only 45 g/);
+  });
+
+  it("leaves ordinary variation alone — food is not uniform", () => {
+    // A bowl of biryani really is heavier than a bowl of rasam, and a check
+    // that fires on half the library teaches people to ignore it.
+    expect(portionLooksOdd(500, 259)).toBeNull();
+    expect(portionLooksOdd(120, 259)).toBeNull();
+  });
+
+  it("says nothing without a reference to compare against", () => {
+    expect(portionLooksOdd(976, null)).toBeNull();
   });
 });

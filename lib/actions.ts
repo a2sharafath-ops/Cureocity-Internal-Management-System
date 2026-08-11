@@ -7825,6 +7825,51 @@ export async function setDishServings(formData: FormData): Promise<{ error?: str
   return {};
 }
 
+/**
+ * Set what one portion of a recipe weighs, and what it is called.
+ *
+ * Both are the dietitian's to say. The weight arrives derived from the recipe
+ * — ingredients divided by servings — and the label arrives from whatever the
+ * source called it. Neither is a measurement anybody took, so both are hers to
+ * correct, and `portion_g_source` records the difference so a figure she
+ * weighed is never quietly replaced by one the app worked out.
+ *
+ * Unlike the servings count, this changes no chart's arithmetic: the nutrition
+ * comes from ingredients and servings, and the portion weight is how a person
+ * reads it. Worth knowing when deciding how carefully to check it.
+ */
+export async function setDishPortion(formData: FormData): Promise<{ error?: string }> {
+  const p = await dishGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "Missing dish." };
+
+  const rawG = String(formData.get("portion_g") || "").trim();
+  const label = String(formData.get("serving_label") || "").trim() || null;
+  const grams = rawG === "" ? null : Number(rawG);
+  if (grams !== null && (!Number.isFinite(grams) || grams <= 0)) {
+    return { error: "A portion weighs more than nothing." };
+  }
+
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("dishes").select("name, portion_g, serving_label").eq("id", id).maybeSingle();
+  const was = before as { name?: string; portion_g?: number | null; serving_label?: string | null } | null;
+
+  const { error } = await supabase.from("dishes").update({
+    portion_g: grams,
+    // Hers the moment she touches it, and it stays hers.
+    portion_g_source: grams === null ? null : "dietitian",
+    serving_label: label,
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  if (error) return { error: error.message };
+
+  await logAudit(p, "Dish portion set", was?.name ?? id,
+    `${was?.serving_label ?? "no label"} ${was?.portion_g ?? "—"} g → ${label ?? "no label"} ${grams ?? "—"} g`);
+  revalidatePath("/workspace");
+  return {};
+}
+
 /** Approve everything currently unapproved — the batch the dietitian just read. */
 export async function approveDishes(formData: FormData) {
   const p = await dishGuard();

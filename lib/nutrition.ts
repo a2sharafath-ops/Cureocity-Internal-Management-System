@@ -215,6 +215,58 @@ export function suggestServings(totalKcal: number): number | null {
 }
 
 /**
+ * A portion far heavier or lighter than others sharing its name.
+ *
+ * There is no published weight for "one bowl", so this is checked against the
+ * only reference that exists: what every other bowl in this library weighs.
+ * Stated plainly because it is a weaker claim than a citation — it says a dish
+ * is unlike its neighbours, not that it is wrong. A bowl of clear soup really
+ * is lighter than a bowl of biryani.
+ *
+ * The band is wide on purpose. Food varies, and a check that fires on half the
+ * library teaches the reader to ignore it.
+ */
+export const PORTION_OUTLIER_FACTOR = 3;
+
+export function portionLooksOdd(portionG: number, medianForUnit: number | null): string | null {
+  if (!medianForUnit || !(portionG > 0)) return null;
+  const ratio = portionG / medianForUnit;
+  if (ratio > PORTION_OUTLIER_FACTOR) {
+    return `${Math.round(portionG)} g of ingredients a portion, against about ${Math.round(medianForUnit)} g for others measured the same way`;
+  }
+  if (ratio < 1 / PORTION_OUTLIER_FACTOR) {
+    return `only ${Math.round(portionG)} g of ingredients a portion, against about ${Math.round(medianForUnit)} g for others measured the same way`;
+  }
+  return null;
+}
+
+/** The middle portion weight for each serving unit — "bowl", "plate", "piece". */
+export function portionMedians(
+  dishes: { serving_label: string | null; portion_g: number | null }[],
+): Map<string, number> {
+  const by = new Map<string, number[]>();
+  for (const d of dishes) {
+    const unit = servingUnit(d.serving_label);
+    if (!unit || !d.portion_g || d.portion_g <= 0) continue;
+    (by.get(unit) ?? by.set(unit, []).get(unit)!).push(d.portion_g);
+  }
+  const out = new Map<string, number>();
+  for (const [unit, vals] of by) {
+    // Too few to have a middle worth comparing against.
+    if (vals.length < 5) continue;
+    vals.sort((a, b) => a - b);
+    out.set(unit, vals[Math.floor(vals.length / 2)]);
+  }
+  return out;
+}
+
+/** "1 bowl" and "2 bowls" are the same unit for this purpose. */
+export function servingUnit(label: string | null): string | null {
+  const u = (label ?? "").toLowerCase().replace(/^[\d.\s]+/, "").trim().replace(/s$/, "");
+  return u || null;
+}
+
+/**
  * Everything mechanically wrong with one serving's figures, or null.
  *
  * One place, so the server and the library screen cannot drift apart, and so a

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings } from "@/lib/actions";
-import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, suggestServings, type Food, type Dish } from "@/lib/nutrition";
+import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings, setDishPortion } from "@/lib/actions";
+import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, suggestServings,
+  portionMedians, portionLooksOdd, servingUnit, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -20,6 +21,9 @@ export type DishRow = {
   source_protein_g: number | null;
   source_fat_g: number | null;
   source_fibre_g: number | null;
+  /** Raw ingredient weight of one serving, and whether a person set it. */
+  portion_g: number | null;
+  portion_g_source: string | null;
   /** Cleared for use on a client's chart. */
   approved: boolean;
   approved_by: string | null;
@@ -97,6 +101,34 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
   const wholeRecipe = (d: DishRow) => {
     const v = dishNutrients({ name: d.name, cooked_g: d.cooked_g, servings: 1, items: d.items }, foodMap);
     return v.priced ? v.perServing.kcal : null;
+  };
+
+  /**
+   * The middle portion weight for each unit, across the whole library.
+   *
+   * The only reference available: no one publishes what a bowl weighs, but
+   * 269 bowls in this library have an opinion between them.
+   */
+  const medians = useMemo(() => portionMedians(dishes), [dishes]);
+
+  const [portEdit, setPortEdit] = useState<Record<string, { g: string; label: string }>>({});
+  const [portSaving, setPortSaving] = useState<string | null>(null);
+
+  const savePortion = (d: DishRow) => {
+    const e = portEdit[d.id];
+    if (!e) return;
+    if (e.g.trim() === String(d.portion_g ?? "") && e.label.trim() === (d.serving_label ?? "")) return;
+    setErr(null);
+    setPortSaving(d.id);
+    start(async () => {
+      const fd = new FormData();
+      fd.set("id", d.id);
+      fd.set("portion_g", e.g.trim());
+      fd.set("serving_label", e.label.trim());
+      const r = await setDishPortion(fd);
+      setPortSaving(null);
+      if (r?.error) setErr(r.error);
+    });
   };
 
   const saveServings = (d: DishRow) => {
@@ -423,6 +455,17 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                 <div style={{ minWidth: 200, flex: 1 }}>
                   <b style={{ fontSize: 13 }}>{d.name}</b>
                   {d.serving_label && <span style={{ color: "var(--muted)", fontSize: 12 }}> · {d.serving_label}</span>}
+                  {d.portion_g != null && (
+                    // "of ingredients", always. Rice triples when boiled, so
+                    // calling this the weight of the served food would mislead.
+                    <span style={{ color: "var(--muted)", fontSize: 12 }} title={
+                      d.portion_g_source === "dietitian"
+                        ? "Set by the dietitian"
+                        : "Worked out from the recipe: ingredients ÷ servings"}>
+                      {" "}· ≈{Math.round(Number(d.portion_g))} g of ingredients
+                      {d.portion_g_source === "dietitian" ? " (set here)" : ""}
+                    </span>
+                  )}
                   <div style={{ fontSize: 11.5, color: "var(--muted)" }}>
                     {d.items.length} ingredient{d.items.length === 1 ? "" : "s"}
                     {d.source && <> · {d.source}</>}
@@ -471,6 +514,42 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                         : srvEdit[d.id] !== undefined && String(d.servings ?? "") !== srvEdit[d.id].trim()
                           ? <span style={{ color: "var(--amber-text)" }}>press Enter or click away to save</span>
                           : null}
+                    </div>
+                  )}
+
+                  {/* ---- WHAT ONE PORTION IS ----
+                      Both fields are hers. The weight arrives worked out from
+                      the recipe and the name from whatever the source called
+                      it; neither is a measurement anyone took, so neither is
+                      protected from being corrected. */}
+                  {canEdit && (
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--muted)" }}>One portion is</span>
+                      <input value={portEdit[d.id]?.label ?? (d.serving_label ?? "")}
+                        placeholder="1 bowl"
+                        onChange={(e) => setPortEdit((m) => ({ ...m, [d.id]: { g: m[d.id]?.g ?? String(d.portion_g ?? ""), label: e.target.value } }))}
+                        onBlur={() => savePortion(d)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={{ ...inp, width: 110, height: 26, fontSize: 12 }} />
+                      <input type="number" min="1" step="1"
+                        value={portEdit[d.id]?.g ?? (d.portion_g != null ? String(Math.round(Number(d.portion_g))) : "")}
+                        placeholder="g"
+                        onChange={(e) => setPortEdit((m) => ({ ...m, [d.id]: { label: m[d.id]?.label ?? (d.serving_label ?? ""), g: e.target.value } }))}
+                        onBlur={() => savePortion(d)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={{ ...inp, width: 72, height: 26, fontSize: 12 }}
+                        title="Raw ingredient weight of one portion" />
+                      <span style={{ color: "var(--muted)" }}>g of ingredients</span>
+                      {portSaving === d.id && <span style={{ color: "var(--muted)" }}>saving…</span>}
+                      {(() => {
+                        // Checked against other dishes measured the same way,
+                        // which is the only reference that exists. Says a dish
+                        // is unlike its neighbours, not that it is wrong.
+                        const odd = d.portion_g != null
+                          ? portionLooksOdd(Number(d.portion_g), medians.get(servingUnit(d.serving_label) ?? "") ?? null)
+                          : null;
+                        return odd ? <span style={{ color: "var(--amber-text)" }}>{odd}</span> : null;
+                      })()}
                     </div>
                   )}
                 </div>
