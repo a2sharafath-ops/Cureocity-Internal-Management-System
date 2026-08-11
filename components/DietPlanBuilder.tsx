@@ -6,6 +6,7 @@ import {
   mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
   MACROS, MACRO_LABELS, optionMicronutrients, micronutrientLine,
 } from "@/lib/diet-plan";
+import { rulesFor, optionInteractions } from "@/lib/food-drug";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
 
@@ -67,7 +68,8 @@ function slotRangeText(m: PlanMeal): string {
  * already eating from.
  */
 export default function DietPlanBuilder({
-  planId, clientName, status, version, canReview, initial, dishes, readOnly = false, pdf, whatsapp }: {
+  planId, clientName, status, version, canReview, initial, dishes, medications = [],
+  readOnly = false, pdf, whatsapp }: {
   planId: string;
   /**
    * The recipe library, priced per serving. An option linked to one of these
@@ -79,6 +81,11 @@ export default function DietPlanBuilder({
   pdf: { ready: boolean; missing: string[] };
   whatsapp?: { ready: boolean; missing: string[] };
   clientName: string;
+  /**
+   * What this client is currently taking, as somebody typed it. Free text on
+   * purpose — "Thyronorm 50mcg OD" is what a prescription actually says.
+   */
+  medications?: string[];
   status: string;
   version: number;
   /** Can approve/send-back a plan awaiting sign-off (Super Admin / Administrator). */
@@ -205,6 +212,34 @@ export default function DietPlanBuilder({
   const totals = planTotals(meals);
   const check = targetCheck(totals, targets.kcal);
   const problems = planProblems(meals, targets, dishes);
+
+  /**
+   * The chart read against what the client is taking.
+   *
+   * Separate from `problems` on purpose. Those are things wrong with the chart
+   * and they stop it being published; this is a clinical judgement the
+   * dietitian makes, and most of these are solved by timing rather than by
+   * changing the food. A chart that cannot go out until somebody overrides a
+   * warning teaches everybody to override warnings.
+   */
+  const drugWatch = useMemo(() => {
+    const rules = rulesFor(medications);
+    if (!rules.length) return null;
+    const found: { where: string; text: string }[] = [];
+    let unchecked = 0;
+    for (const m of meals) {
+      m.options.forEach((o, j) => {
+        if (!o.food_items.trim()) return;
+        const where = `${m.name || "Untitled slot"} · option ${j + 1}`;
+        const r = optionInteractions(where, o.food_items,
+          optionMicronutrients(o.components, dishMap), rules);
+        found.push(...r.found);
+        if (r.unchecked) unchecked++;
+      });
+    }
+    return { rules, found, unchecked };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meals, medications, dishes]);
 
   const handleSave = () => {
     setErr(null);
@@ -590,6 +625,53 @@ export default function DietPlanBuilder({
           <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red-text)", fontSize: 12.5 }}>
             {problems.map((p, i) => <li key={i} style={{ marginBottom: 3 }}>{p}</li>)}
           </ul>
+        </div>
+      )}
+
+      {/* ---- READ AGAINST WHAT THE CLIENT TAKES ----
+          Deliberately below the problems list and deliberately not blocking.
+          Almost every one of these is answered by timing rather than by
+          changing the food — thyroxine is taken an hour before breakfast so
+          that the calcium at breakfast does not matter — and a gate that was
+          wrong on most of the charts it stopped would train everybody to click
+          through it. */}
+      {drugWatch && (
+        <div style={{ ...box, padding: 14, marginTop: 12, background: "var(--blue-bg)" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+            Read against this client&apos;s medicines
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
+            Checked for {drugWatch.rules.map((r) => r.label).join(", ")}. These do not stop
+            the chart being sent — they are here to be read.
+          </div>
+
+          {drugWatch.found.length > 0 ? (
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5 }}>
+              {drugWatch.found.map((f, i) => <li key={i} style={{ marginBottom: 4 }}>{f.text}</li>)}
+            </ul>
+          ) : (
+            <div style={{ fontSize: 12.5 }}>
+              Nothing on this chart trips the {drugWatch.rules.length === 1 ? "rule" : "rules"} for{" "}
+              {drugWatch.rules.map((r) => r.label).join(" or ")}.
+            </div>
+          )}
+
+          {/* An option typed by hand has no minerals to read, and reporting
+              nothing found for it would look identical to a clean check. */}
+          {drugWatch.unchecked > 0 && (
+            <div style={{ fontSize: 11.5, color: "var(--amber-text)", marginTop: 8 }}>
+              {drugWatch.unchecked} option{drugWatch.unchecked === 1 ? " was" : "s were"} not
+              checked for minerals — {drugWatch.unchecked === 1 ? "it is" : "they are"} typed
+              by hand rather than built from recipes, so there is nothing to add up. Named
+              foods were still read.
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
+            This covers thyroid replacement, diuretics and statins only — the three the
+            clinic&apos;s brief names. It is not a drug interaction database, and finding
+            nothing here does not mean a chart has none.
+          </div>
         </div>
       )}
     </div>

@@ -454,12 +454,27 @@ export default async function WorkspacePage(
   // chart it could not price — so degrading here costs a picker, not a
   // safeguard. Throwing would cost the dietitian her whole Workspace.
   let chartDishes: DishOption[] = [];
+  // What each client is currently taking, for the food-drug check on a chart.
+  // Names only, and only the active ones — a medicine that was stopped last
+  // year should not put a warning on a chart written today.
+  const medsByClient: Record<string, string[]> = {};
   if (tab === "charts") {
     try {
       chartDishes = await pricedDishes(supabase);
     } catch {
       chartDishes = [];
     }
+    // A failure here must not take the chart screen down with it. Without the
+    // list the check simply reports that it could not run, which is honest and
+    // far better than a blank page — but it must never read as "no interaction".
+    try {
+      const { data } = await supabase.from("medications")
+        .select("client_id, name").eq("status", "active");
+      for (const m of (data ?? []) as { client_id: string | null; name: string }[]) {
+        if (!m.client_id) continue;
+        (medsByClient[m.client_id] ??= []).push(m.name);
+      }
+    } catch { /* left empty; the builder says the check could not run */ }
   }
 
   // Dietary Assessment Summary — the companion document to the diet plan,
@@ -1003,6 +1018,7 @@ export default async function WorkspacePage(
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Diet chart</div>
           <DietChartSection
             plans={dietPlans} assessments={dietAssessments} dishes={chartDishes}
+            medsByClient={medsByClient}
             clients={rosterRows.map((r) => ({ id: r.id, name: r.name }))}
             canReview={canReviewDietChart(me.role)} canCompose={canWriteNutrition(me.role) && !readOnly}
             pdf={pdfReadiness()} whatsapp={watiReadiness()} />

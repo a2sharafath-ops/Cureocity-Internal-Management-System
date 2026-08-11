@@ -76,12 +76,14 @@ type View = "assessment" | "chart";
  * older ones are one click away in the strip.
  */
 export default function DietChartSection({
-  plans, assessments, clients, dishes, canReview, canCompose, pdf, whatsapp }: {
+  plans, assessments, clients, dishes, medsByClient, canReview, canCompose, pdf, whatsapp }: {
   plans: DietPlanRow[];
   assessments: DietAssessmentRow[];
   clients: { id: string; name: string }[];
   /** The recipe library, priced per serving, for the chart's dish picker. */
   dishes: DishOption[];
+  /** Active medicine names per client, for the food-drug check. */
+  medsByClient: Record<string, string[]>;
   /** Can approve/send-back a document awaiting sign-off. */
   canReview: boolean;
   pdf: { ready: boolean; missing: string[] };
@@ -385,6 +387,7 @@ export default function DietChartSection({
               version={plan.version}
               canReview={canReview}
               dishes={dishes}
+              medications={medsByClient[plan.client_id] ?? []}
               initial={{ targets: plan.targets, meta: plan.meta, meals: plan.meals, sharedAt: plan.sharedAt }}
               readOnly={!canCompose}
             />
