@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, optionMicronutrients, micronutrientLine, MACRO_LABELS, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
+import { planTotals, targetCheck, planProblems, parseNotes, mealHeading, resequence, optionNutrients, optionMicronutrients, micronutrientLine, MACRO_LABELS,
+  targetStepProblem, GENTLE_STEP_KCAL, DEFAULT_MEALS, HOW_TO_USE, type PlanMeal, type PlanOption, type DishOption } from "@/lib/diet-plan";
 import { MICRONUTRIENTS, type MicroTotals } from "@/lib/nutrition";
 
 const opt = (seq: number, kcal: number, protein: number, items = `Option ${seq + 1}`) =>
@@ -582,5 +583,44 @@ describe("the early morning drink (section 8)", () => {
   it("names both when an option carries two of them", () => {
     expect(check("Upon waking", "Lemon water with a pinch of cinnamon water")[0])
       .toMatch(/lemon water and cinnamon water/);
+  });
+});
+
+describe("how far a target may move between reviews (section 2)", () => {
+  it("says nothing about a gentle step", () => {
+    // The brief asks for 100–200 kcal, so those must pass silently.
+    expect(targetStepProblem(1800, 1650)).toBeNull();
+    expect(targetStepProblem(1800, 2000)).toBeNull();
+    expect(targetStepProblem(1800, 1800)).toBeNull();
+  });
+
+  it("flags a sudden jump, in either direction", () => {
+    const down = targetStepProblem(1800, 1300)!;
+    expect(down).toMatch(/moves down 500 kcal/);
+    expect(down).toMatch(/last chart's 1800/);
+    expect(targetStepProblem(1800, 2400)).toMatch(/moves up 600 kcal/);
+  });
+
+  it("says nothing about a first chart", () => {
+    // Nothing to be gentle about — there is no step.
+    expect(targetStepProblem(null, 1800)).toBeNull();
+  });
+
+  it("says nothing when either figure is missing", () => {
+    expect(targetStepProblem(1800, null)).toBeNull();
+    expect(targetStepProblem(null, null)).toBeNull();
+  });
+
+  it("names the reason a big step can be right, so it reads as a question", () => {
+    // A target from an estimated BMR, corrected by a real InBody reading, can
+    // move 400 kcal and be more right afterwards. The message must not imply
+    // the chart is wrong.
+    expect(targetStepProblem(1800, 1300)).toMatch(/measured BMR replacing an estimate/);
+  });
+
+  it("uses the brief's own boundary", () => {
+    expect(GENTLE_STEP_KCAL).toBe(200);
+    expect(targetStepProblem(1800, 1600)).toBeNull();      // exactly 200 is asked for
+    expect(targetStepProblem(1800, 1599)).not.toBeNull();  // 201 is not
   });
 });

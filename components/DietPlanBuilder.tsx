@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   type PlanMeal, type PlanOption, type PlanTargets, type DishOption,
   mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
-  MACROS, MACRO_LABELS, optionMicronutrients, micronutrientLine,
+  MACROS, MACRO_LABELS, optionMicronutrients, micronutrientLine, targetStepProblem,
 } from "@/lib/diet-plan";
 import { rulesFor, optionInteractions } from "@/lib/food-drug";
 import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
@@ -69,7 +69,7 @@ function slotRangeText(m: PlanMeal): string {
  */
 export default function DietPlanBuilder({
   planId, clientName, status, version, canReview, initial, dishes, medications = [],
-  readOnly = false, pdf, whatsapp }: {
+  previousTargetKcal = null, readOnly = false, pdf, whatsapp }: {
   planId: string;
   /**
    * The recipe library, priced per serving. An option linked to one of these
@@ -86,6 +86,8 @@ export default function DietPlanBuilder({
    * purpose — "Thyronorm 50mcg OD" is what a prescription actually says.
    */
   medications?: string[];
+  /** The calorie target on the version before this one, for section 2's step rule. */
+  previousTargetKcal?: number | null;
   status: string;
   version: number;
   /** Can approve/send-back a plan awaiting sign-off (Super Admin / Administrator). */
@@ -212,6 +214,11 @@ export default function DietPlanBuilder({
   const totals = planTotals(meals);
   const check = targetCheck(totals, targets.kcal);
   const problems = planProblems(meals, targets, dishes);
+
+  // Section 2's step rule. A warning rather than a refusal: a target set from
+  // an estimated BMR and then corrected by a real InBody reading can move 400
+  // kcal in one step and be more right afterwards, not less.
+  const stepWarning = targetStepProblem(previousTargetKcal, targets.kcal);
 
   /**
    * The chart read against what the client is taking.
@@ -398,6 +405,15 @@ export default function DietPlanBuilder({
           ))}
         </div>
         {check.text && <div style={{ fontSize: 12, marginTop: 2, color: check.tone === "ok" ? "var(--green-text)" : "var(--amber-text)" }}>{check.text}</div>}
+
+        {/* Section 2's step rule, next to the target it is about rather than
+            in the problems list at the bottom — this is a remark on a number
+            she is looking at, not a fault in the chart. */}
+        {stepWarning && (
+          <div style={{ fontSize: 12, marginTop: 6, color: "var(--amber-text)" }}>
+            {stepWarning}
+          </div>
+        )}
       </div>
 
       {/* ---- MEAL SLOTS ---- */}

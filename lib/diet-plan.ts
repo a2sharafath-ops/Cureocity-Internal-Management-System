@@ -334,6 +334,53 @@ export function discouragedMorningDrinks(foodItems: string): string[] {
   return DISCOURAGED_MORNING.filter((d) => d.match.test(foodItems)).map((d) => d.called);
 }
 
+/* -------------------------------------------------------------------------
+   HOW FAR A TARGET MAY MOVE BETWEEN REVIEWS
+
+   Section 2 of the brief, marked Important:
+
+     "For muscle gain or fat loss, increase or decrease slowly in increments of
+      +100 to +200 kcal. Avoid sudden jumps (±300-500 kcal). Apply changes at
+      10th and 3rd week reviews."
+
+   The clinical reason is that a body adapts to a deficit, and a large step
+   loses the information a small one gives you: if 1,800 stops working and the
+   next chart says 1,300, nothing has been learned about what 1,600 would have
+   done, and the client has been made hungrier than they needed to be.
+
+   THIS WARNS, IT DOES NOT REFUSE. There are real reasons to move further — a
+   target set from an estimated BMR and then corrected by a real InBody reading
+   can move 400 kcal in one step and be more right afterwards, not less. What
+   the rule is for is the jump nobody meant to make.
+
+   Nothing here checks the 10th and 3rd week timing. Reviews are scheduled
+   elsewhere and a chart does not know when it is being written relative to the
+   last one.
+   ------------------------------------------------------------------------- */
+
+/** The step the brief asks for, and the one it names as a sudden jump. */
+export const GENTLE_STEP_KCAL = 200;
+
+/**
+ * Whether this chart's calorie target has moved too far from the last one.
+ *
+ * `previous` is the target on the version before this — null for a first
+ * chart, which is not a change and has nothing to be gentle about.
+ */
+export function targetStepProblem(
+  previous: number | null,
+  current: number | null,
+): string | null {
+  if (previous == null || current == null) return null;
+  if (!Number.isFinite(previous) || !Number.isFinite(current)) return null;
+  const step = current - previous;
+  if (Math.abs(step) <= GENTLE_STEP_KCAL) return null;
+  const dir = step > 0 ? "up" : "down";
+  return `The target moves ${dir} ${Math.abs(step)} kcal from the last chart's ${previous}. `
+    + `The brief asks for steps of 100–200 kcal and names ±300–500 as a sudden jump — `
+    + `worth a second look unless something specific changed, like a measured BMR replacing an estimate.`;
+}
+
 export const DEFAULT_MEALS: Omit<PlanMeal, "options">[] = [
   { seq: 0, name: "Upon waking", time_from: "8:00 am", time_to: "8:15 am", note: null, conditional: false },
   { seq: 1, name: "Morning milk tea", time_from: "8:30 am", time_to: "8:45 am", note: null, conditional: false },

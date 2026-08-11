@@ -388,6 +388,13 @@ export default function DietChartSection({
               canReview={canReview}
               dishes={dishes}
               medications={medsByClient[plan.client_id] ?? []}
+              // The chart before this one, whatever its status. A draft that
+              // has not been published is still what the dietitian last
+              // decided, and comparing against a published version two back
+              // would report a jump nobody is making.
+              previousTargetKcal={
+                planVersions.find((p) => p.version < plan.version)?.targets.kcal ?? null
+              }
               initial={{ targets: plan.targets, meta: plan.meta, meals: plan.meals, sharedAt: plan.sharedAt }}
               readOnly={!canCompose}
             />
