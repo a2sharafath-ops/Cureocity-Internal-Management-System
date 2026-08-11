@@ -547,9 +547,21 @@ export default async function WorkspacePage(
       // What a cup, spoon or piece of each food weighs. A volume means nothing
       // without one, so the detail screen offers those units only where a row
       // exists — and lets the dietitian add the missing ones as she works.
-      fetchAllRows<{ food_code: string; unit: string; grams: number; source: string; set_by: string | null }>(
-        (from, to) => supabase.from("food_measures")
-          .select("food_code, unit, grams, source, set_by").range(from, to), "the measures table"),
+      //
+      // Unlike the two above, a failure here is swallowed. The measures are an
+      // extra: without them every ingredient can still be weighed in grams and
+      // the whole screen works. Deploying the code before running the migration
+      // is a normal few minutes of any release, and the recipe library going
+      // white in that window would be a far worse bug than a missing cup.
+      (async () => {
+        try {
+          return await fetchAllRows<{ food_code: string; unit: string; grams: number; source: string; set_by: string | null }>(
+            (from, to) => supabase.from("food_measures")
+              .select("food_code, unit, grams, source, set_by").range(from, to), "the measures table");
+        } catch {
+          return [];
+        }
+      })(),
     ]);
     dishes = dsh.map(({ dish_items, ...d }) => ({
       ...d,
