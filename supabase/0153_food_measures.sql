@@ -336,3 +336,16 @@ insert into food_measures (food_code, unit, grams, source) values
   -- 1 piece Pizza base, raw
   ('X513', 'piece', 250, 'INDB Units.xlsx — INDB Units.xlsx')
 on conflict (food_code, unit) do nothing;
+
+-- Proof, on screen, that the whole file ran.
+--
+-- Supabase's SQL editor runs a script as ONE transaction: if any statement
+-- fails, everything before it is undone too, including the create table. So a
+-- half-applied migration is not possible — but neither is telling the two apart
+-- from "Success. No rows returned", which is what an insert alone reports.
+--
+-- Ending on a select means a good run shows 133 and 86. Anything else, or a red
+-- error, means nothing at all was written and the file can simply be run again.
+select count(*)                  as measures_loaded,
+       count(distinct food_code) as foods_covered
+  from food_measures;
