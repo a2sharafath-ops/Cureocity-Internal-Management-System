@@ -76,36 +76,6 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
   const [view, setView] = useState<"dishes" | "foods">("dishes");
 
   /**
-   * A recipe whose own ingredients contradict the figure its source publishes.
-   *
-   * Nearly always a recipe that lists something it does not contain: a pan of
-   * frying oil the food absorbs a little of, a marinade poured away. Worth
-   * looking at before the recipe is used on anyone's chart, and impossible to
-   * find among a thousand rows without asking for it.
-   */
-  const suspect = (d: DishRow) => figures(d).clash !== null;
-
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    let list = needle ? dishes.filter((d) => d.name.toLowerCase().includes(needle)) : dishes;
-    if (filter === "pending") list = list.filter((d) => !d.approved);
-    if (filter === "suspect") list = list.filter(suspect);
-    return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dishes, q, filter]);
-
-  const shownFoods = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return foods;
-    return foods.filter((f) => f.name.toLowerCase().includes(needle) || f.food_code.toLowerCase().includes(needle));
-  }, [foods, q]);
-
-  const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
-  const suspects = useMemo(() => dishes.filter(suspect).length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dishes, foodMap]);
-
-  /**
    * What one serving comes to, and whether we worked it out or quoted it.
    *
    * Mirrors the server's rule exactly (lib/dish-pricing.ts): our own
@@ -137,6 +107,36 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
     // rather than ours kept by default.
     return { kcal: null, protein: null, quoted: false, clash: disagreement, reason: v.priced ? null : v.reason };
   };
+
+  /**
+   * A recipe whose own ingredients contradict the figure its source publishes.
+   *
+   * Nearly always a recipe that lists something it does not contain: a pan of
+   * frying oil the food absorbs a little of, a marinade poured away. Worth
+   * looking at before the recipe is used on anyone's chart, and impossible to
+   * find among a thousand rows without asking for it.
+   */
+  const suspect = (d: DishRow) => figures(d).clash !== null;
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    let list = needle ? dishes.filter((d) => d.name.toLowerCase().includes(needle)) : dishes;
+    if (filter === "pending") list = list.filter((d) => !d.approved);
+    if (filter === "suspect") list = list.filter(suspect);
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dishes, q, filter]);
+
+  const shownFoods = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return foods;
+    return foods.filter((f) => f.name.toLowerCase().includes(needle) || f.food_code.toLowerCase().includes(needle));
+  }, [foods, q]);
+
+  const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
+  const suspects = useMemo(() => dishes.filter(suspect).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dishes, foodMap]);
 
   const edit = (d: DishRow) => setDraft({
     id: d.id, name: d.name, cuisine: d.cuisine ?? "", servings: String(d.servings ?? ""),
