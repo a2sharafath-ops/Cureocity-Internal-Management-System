@@ -399,3 +399,65 @@ describe("a chart cannot go out with blanks or mismatches", () => {
     expect(planProblems(m, targets).some((p) => /nothing to eat/.test(p))).toBe(true);
   });
 });
+
+describe("a typed option that disagrees with itself", () => {
+  const targets = { kcal: 1800, protein: "90 g", carbohydrate: "200 g", fats: "60 g", fibre: "25 g", water: "3 ltr" };
+  const typed = (o: Partial<PlanOption>): PlanOption => ({
+    seq: 0, food_items: "Rice and dal", qty: "1 cup", micronutrients: "iron, folate",
+    kcal: 400, carb_g: 60, protein_g: 15, fat_g: 8, fibre_g: 4, components: [], ...o,
+  });
+  const problems = (o: PlanOption) => planProblems([meal("Lunch", [o])], targets);
+  const complains = (o: PlanOption) => problems(o).some((p) => /come to about/.test(p));
+
+  it("catches calories that the macros beside them cannot explain", () => {
+    // 10 g carb, 5 g protein and 2 g fat is 78 kcal, not 400. Somebody has
+    // typed a figure remembered from a different portion.
+    expect(complains(typed({ kcal: 400, carb_g: 10, protein_g: 5, fat_g: 2, fibre_g: 1 }))).toBe(true);
+  });
+
+  it("catches a decimal point in the wrong place", () => {
+    expect(complains(typed({ kcal: 4000, carb_g: 60, protein_g: 15, fat_g: 8, fibre_g: 4 }))).toBe(true);
+  });
+
+  it("names the option and what the macros actually come to", () => {
+    const p = problems(typed({ kcal: 400, carb_g: 10, protein_g: 5, fat_g: 2, fibre_g: 1 }))
+      .find((x) => /come to about/.test(x))!;
+    expect(p).toMatch(/Lunch/);
+    expect(p).toMatch(/400 kcal/);
+    // 4×10 carb + 4×5 protein + 9×2 fat + 2×1 fibre = 80.
+    expect(p).toMatch(/about 80/);
+  });
+
+  it("leaves an option whose figures agree alone", () => {
+    expect(complains(typed({}))).toBe(false);
+  });
+
+  it("stays quiet on a small option, where a few calories is not a discrepancy", () => {
+    // A 20 kcal side salad: 25% of it is 5 kcal, which is rounding, and a
+    // warning that fires on those teaches everyone to ignore the warning.
+    expect(complains(typed({ kcal: 17, carb_g: 3.4, protein_g: 0.6, fat_g: 0.1, fibre_g: 1.9 }))).toBe(false);
+  });
+
+  it("says nothing until all five figures are there", () => {
+    // The missing-figure messages already cover this, and guessing at a total
+    // from four of five would report the wrong problem.
+    expect(complains(typed({ fat_g: null }))).toBe(false);
+  });
+
+  it("never fires on an option built from the library", () => {
+    // Those are summed from IFCT, which measures energy directly rather than
+    // deriving it from the macros, so the two differ a little by design. A
+    // warning on every linked option would be noise on the correct path.
+    const dish: DishOption = {
+      id: "d1", name: "Rice", serving_label: "1 cup",
+      perServing: { kcal: 400, carb_g: 10, protein_g: 5, fat_g: 2, fibre_g: 1 },
+      basis: "computed", source: null, reason: null, approved: true,
+    };
+    const linked = typed({
+      kcal: 400, carb_g: 10, protein_g: 5, fat_g: 2, fibre_g: 1,
+      components: [{ seq: 0, dish_id: "d1", servings: 1 }],
+    });
+    const p = planProblems([meal("Lunch", [linked])], targets, [dish]);
+    expect(p.some((x) => /come to about/.test(x))).toBe(false);
+  });
+});

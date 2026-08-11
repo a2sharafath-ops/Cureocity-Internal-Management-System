@@ -1,3 +1,5 @@
+import { energyLooksWrong } from "@/lib/nutrition";
+
 // The customised diet plan — shapes, defaults and the arithmetic.
 //
 // Modelled directly on the document the clinic issues today: meal slots with
@@ -445,6 +447,41 @@ export function planProblems(
             const v = o[key];
             if (v == null) out.push(`${where} has no ${label}.`);
             else if (Number(v) < 0) out.push(`${where} has negative ${label}.`);
+          }
+
+          // ---- DOES A TYPED OPTION AGREE WITH ITSELF? ----
+          //
+          // An option built from the library is arithmetic and needs no
+          // checking. One typed by hand has nothing behind its numbers at all,
+          // and this is the only question that can be asked of it without a
+          // source: do the calories match the food described beside them?
+          //
+          // Protein and carbohydrate carry 4 kcal a gram, fat 9. So the macros
+          // predict the energy, and a figure that misses by a wide margin is
+          // not a difference of opinion — it is a decimal point in the wrong
+          // place, or a number remembered from a different portion size.
+          //
+          // Deliberately NOT applied to linked options: those are summed from
+          // IFCT, which measures energy directly rather than deriving it, so
+          // the two disagree slightly by design and firing here would teach
+          // everyone to ignore the warning.
+          //
+          // The tolerance is the same 25% with a 15 kcal floor the recipe
+          // library uses (lib/nutrition.ts), so a 20 kcal side salad is not
+          // reported over a rounding difference of four.
+          if (!o.components.length && MACROS.every((k) => o[k] != null)) {
+            const n = {
+              kcal: Number(o.kcal), protein_g: Number(o.protein_g),
+              carb_g: Number(o.carb_g), fat_g: Number(o.fat_g), fibre_g: Number(o.fibre_g),
+            };
+            if (energyLooksWrong(n)) {
+              const est = Math.round(4 * n.protein_g + 4 * n.carb_g + 9 * n.fat_g + 2 * n.fibre_g);
+              out.push(
+                `${where} states ${Math.round(n.kcal)} kcal, but the carbohydrate, protein and fat ` +
+                `listed beside it come to about ${est}. One of the five figures is wrong — check ` +
+                `for a decimal point in the wrong place, or numbers taken from a different portion size.`,
+              );
+            }
           }
         }
         // Micronutrients are the dietitian's own words either way — no recipe
