@@ -54,6 +54,8 @@ export type DetailDish = {
   source_protein_g: number | null;
   source_fat_g: number | null;
   source_fibre_g: number | null;
+  /** Why the source's figures are no longer a second opinion. See 0154. */
+  source_superseded: string | null;
   approved: boolean;
   /** Raw ingredient weight of one portion, and whether a person set it. */
   portion_g: number | null;
@@ -246,7 +248,7 @@ export default function DishDetail({
 
   const portion = verdict.priced ? roundNutrients(verdict.perServing) : null;
   const problem = portion ? servingProblem(portion) : null;
-  const clash = portion && dish.source_kcal != null
+  const clash = portion && dish.source_superseded == null && dish.source_kcal != null
     && contradictsSource(portion.kcal, Math.round(Number(dish.source_kcal)));
 
   /** What one ingredient contributes to ONE portion. */
@@ -356,6 +358,15 @@ export default function DishDetail({
 
       {problem && (
         <div style={{ fontSize: 12, color: "var(--amber-text)", marginTop: 8 }}>{problem}</div>
+      )}
+      {/* A retired source is not a silent one. Anyone comparing this library
+          against INDB should be able to see exactly where the two part, and
+          why, without reading a migration. */}
+      {dish.source_superseded && dish.source_kcal != null && (
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 8 }}>
+          {dish.source} publishes {Math.round(Number(dish.source_kcal))} kcal for one portion,
+          which is not used here. {dish.source_superseded}
+        </div>
       )}
       {clash && portion && (
         <div style={{ fontSize: 12, color: "var(--amber-text)", marginTop: 4 }}>

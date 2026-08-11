@@ -22,6 +22,8 @@ export type DishRow = {
   source_protein_g: number | null;
   source_fat_g: number | null;
   source_fibre_g: number | null;
+  /** Why the source's figures are no longer a second opinion. See 0154. */
+  source_superseded: string | null;
   /** Raw ingredient weight of one serving, and whether a person set it. */
   portion_g: number | null;
   portion_g_source: string | null;
@@ -191,13 +193,15 @@ export default function DishLibrary({ dishes, foods, measures, canEdit }: {
    */
   const figures = (d: DishRow) => {
     const v = priced(d);
-    const pub = d.source_kcal != null && d.source_protein_g != null
+    // Retired sources take no part in either job — see lib/dish-pricing.ts.
+    const retired = d.source_superseded != null;
+    const pub = !retired && d.source_kcal != null && d.source_protein_g != null
       ? { kcal: Math.round(Number(d.source_kcal)), protein: Math.round(Number(d.source_protein_g) * 10) / 10 }
       : null;
     // A published CALORIE figure alone is enough to contradict our sums —
     // whether the source also recorded protein has nothing to do with it.
     // Tying the two together let a cabbage kofta curry through at 4,212 kcal.
-    const clash = v.priced && d.source_kcal != null
+    const clash = v.priced && !retired && d.source_kcal != null
       && contradictsSource(v.perServing.kcal, Math.round(Number(d.source_kcal)));
     const disagreement = clash && v.priced
       ? `ingredients as listed come to ${v.perServing.kcal} kcal — check for frying oil that isn't eaten`

@@ -537,7 +537,7 @@ export default async function WorkspacePage(
     // this screen, and out of the chart's picker with them.
     const [dsh, fds, mss] = await Promise.all([
       fetchAllRows<Raw>((from, to) => supabase.from("dishes")
-        .select("id, name, cuisine, cooked_g, servings, serving_label, notes, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, portion_g, portion_g_source, approved, approved_by, dish_items(food_code, name, raw_g, raw_g_source, note, seq)")
+        .select("id, name, cuisine, cooked_g, servings, serving_label, notes, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, source_superseded, portion_g, portion_g_source, approved, approved_by, dish_items(food_code, name, raw_g, raw_g_source, note, seq)")
         // Unapproved first: with an imported library in the table, the work
         // waiting to be done is what should be at the top of the screen.
         .order("approved").order("name").range(from, to), "the recipe library"),

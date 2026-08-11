@@ -63,6 +63,13 @@ type RawDish = {
   source_protein_g: number | null;
   source_fat_g: number | null;
   source_fibre_g: number | null;
+  /**
+   * Why the source's own figures are no longer a second opinion for this
+   * recipe. Set where we have deliberately corrected a quantity the source got
+   * wrong — currently the pan of frying oil — so that the two are no longer
+   * measuring the same thing.
+   */
+  source_superseded: string | null;
   approved: boolean;
   dish_items: { food_code: string | null; name: string; raw_g: number; seq: number }[] | null;
 };
@@ -82,7 +89,7 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
   // actually a database that did not answer.
   const [dsh, fds] = await Promise.all([
     fetchAllRows<RawDish>((from, to) => supabase.from("dishes")
-      .select("id, name, serving_label, cooked_g, servings, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, approved, dish_items(food_code, name, raw_g, seq)")
+      .select("id, name, serving_label, cooked_g, servings, source, source_kcal, source_carb_g, source_protein_g, source_fat_g, source_fibre_g, source_superseded, approved, dish_items(food_code, name, raw_g, seq)")
       .order("name").range(from, to), "the recipe library"),
     fetchAllRows<Food>((from, to) => supabase.from("foods")
       .select("food_code, name, protein_g, fat_g, carb_g, fibre_g, kcal")
@@ -114,9 +121,17 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     // came out at 4,212 kcal a bowl, computed, unflagged, and selectable for a
     // client's chart. The cross-check was switched off by a missing fibre
     // value, which has nothing to do with whether 4,212 kcal is plausible.
-    const published = [d.source_kcal, d.source_carb_g, d.source_protein_g, d.source_fat_g, d.source_fibre_g]
-      .every((v) => v != null);
-    const comparable = d.source_kcal != null;
+    //
+    // AND CAN IT DO EITHER? Not once we have corrected a quantity it got wrong.
+    // Fixing the frying oil turns a 2,368 kcal cutlet into a 300 kcal one; the
+    // published figure still counts the panful, so it would both contradict the
+    // right answer and then replace it. `source_superseded` retires it from
+    // both roles while leaving it on the row as the citation it is.
+    const retired = d.source_superseded != null;
+    const published = !retired
+      && [d.source_kcal, d.source_carb_g, d.source_protein_g, d.source_fat_g, d.source_fibre_g]
+        .every((v) => v != null);
+    const comparable = !retired && d.source_kcal != null;
 
     // Our own arithmetic first. It is the only figure that re-prices itself
     // when an ingredient is corrected, so wherever the recipe supports it, it
