@@ -27,7 +27,15 @@ export type DishRow = {
   /** Cleared for use on a client's chart. */
   approved: boolean;
   approved_by: string | null;
-  items: { food_code: string | null; name: string; raw_g: number; seq: number }[];
+  items: {
+    food_code: string | null; name: string; raw_g: number; seq: number;
+    /**
+     * Where the weight came from. Empty means a published table. "estimated"
+     * means it was inferred — currently only a ground spice at 2.5 g per
+     * teaspoon, the middle of USDA's own range for the ones it does publish.
+     */
+    raw_g_source: string | null;
+  }[];
 };
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -53,9 +61,15 @@ const blank = (): Draft => ({
  * coconut. This is where the two meet — a dish is its ingredients in grams, and
  * everything else is arithmetic.
  *
- * The panel never estimates. Where an ingredient hasn't been matched to the
- * food table, or a weight or serving count is missing, it says which — because
- * a plausible number with nothing behind it is precisely what this replaces.
+ * Where an ingredient hasn't been matched to the food table, or a weight or
+ * serving count is missing, it says which — because a plausible number with
+ * nothing behind it is precisely what this replaces.
+ *
+ * One exception, and it is labelled wherever it appears: a ground spice USDA
+ * publishes no teaspoon weight for is taken at 2.5 g, the middle of its range
+ * for the spices it does publish. Those rows read "Estimated weight for
+ * asafoetida" and name the culprit, so the reader can judge whether a quarter
+ * teaspoon of it is worth caring about. Usually it is worth about 2 kcal.
  */
 export default function DishLibrary({ dishes, foods, canEdit }: {
   dishes: DishRow[];
@@ -155,6 +169,15 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
 
   /** Which of the two tables this screen is showing. */
   const [view, setView] = useState<"dishes" | "foods">("dishes");
+
+  /**
+   * The ingredients on this dish whose weight was inferred rather than looked
+   * up. Declared above `figures` because these are `const` arrow functions and
+   * one used before its definition throws at run time, which no type-check
+   * catches.
+   */
+  const estimated = (d: DishRow) =>
+    d.items.filter((i) => i.raw_g_source === "estimated").map((i) => i.name);
 
   /**
    * What one serving comes to, and whether we worked it out or quoted it.
@@ -471,6 +494,16 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                     {d.source && <> · {d.source}</>}
                     {d.approved && d.approved_by && <> · approved by {d.approved_by}</>}
                   </div>
+                  {/* A weight nobody can trace must never look like one anybody
+                      can. Named, not just counted, because "asafoetida" tells
+                      her at a glance that it does not matter and "custard
+                      powder" tells her it might. */}
+                  {estimated(d).length > 0 && (
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}
+                         title="A ground spice USDA publishes no weight for. Taken as 2.5 g per teaspoon — the middle of its range for the spices it does publish.">
+                      Estimated weight for {estimated(d).join(", ")}
+                    </div>
+                  )}
                   {f.clash && (
                     <div style={{ fontSize: 11.5, color: "var(--amber-text)", marginTop: 2 }}>{f.clash}</div>
                   )}

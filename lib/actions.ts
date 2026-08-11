@@ -7729,6 +7729,10 @@ export async function saveDish(formData: FormData): Promise<{ error?: string; id
       food_code: i.food_code || null,
       name: String(i.name).trim(),
       raw_g: Number(i.raw_g) || 0,
+      // No raw_g_source: a weight typed by a person is not an estimate, so
+      // saving a recipe by hand clears the "estimated" mark on every row of
+      // it. That is the intent — she has just looked at the number and
+      // accepted or replaced it, which is exactly what the mark was asking for.
       seq,
     })));
     if (error) return { error: error.message };
