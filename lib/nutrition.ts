@@ -184,6 +184,37 @@ export const IMPLAUSIBLE_FAT_G = 90;
 export const IMPLAUSIBLE_PROTEIN_G = 75;
 
 /**
+ * A typical chart option, in calories.
+ *
+ * Not a rule about food — a reference point for arithmetic. The clinic's own
+ * charts run roughly six slots against an 1,800 kcal day, which puts most
+ * options between 200 and 500. 400 is the middle of that.
+ */
+export const TYPICAL_OPTION_KCAL = 400;
+
+/**
+ * How many servings a recipe looks like it makes, from its own total.
+ *
+ * A SUGGESTION and nothing more, for a recipe recorded as making one serving
+ * when it plainly feeds a family: divide what the whole dish comes to by a
+ * typical portion. A 4,653 kcal plate of pakora suggests twelve.
+ *
+ * Deliberately never applied by itself. Nobody measured this, and the app's
+ * whole point is that a figure with nothing behind it does not reach a chart —
+ * so it is offered in an empty box for a person to accept, alter or ignore,
+ * exactly as the BMR estimate is offered on the assessment. The moment she
+ * types a number, hers is the one that counts.
+ *
+ * Returns null where there is nothing to divide, or where the recipe is
+ * already a sensible size and needs no suggestion at all.
+ */
+export function suggestServings(totalKcal: number): number | null {
+  if (!(totalKcal > 0)) return null;
+  const n = Math.round(totalKcal / TYPICAL_OPTION_KCAL);
+  return n >= 2 ? n : null;
+}
+
+/**
  * Everything mechanically wrong with one serving's figures, or null.
  *
  * One place, so the server and the library screen cannot drift apart, and so a

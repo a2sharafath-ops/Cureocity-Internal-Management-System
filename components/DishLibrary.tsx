@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings } from "@/lib/actions";
-import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, type Food, type Dish } from "@/lib/nutrition";
+import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, suggestServings, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -86,6 +86,18 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
 
   const priced = (d: DishRow) => dishNutrients(
     { name: d.name, cooked_g: d.cooked_g, servings: servingsOf(d), items: d.items }, foodMap);
+
+  /**
+   * What the whole recipe comes to, whatever servings count is on it.
+   *
+   * Priced against one serving on purpose: `dishNutrients` divides by the
+   * count, so asking it for one gives the undivided total — which is the
+   * number a servings suggestion has to be derived from.
+   */
+  const wholeRecipe = (d: DishRow) => {
+    const v = dishNutrients({ name: d.name, cooked_g: d.cooked_g, servings: 1, items: d.items }, foodMap);
+    return v.priced ? v.perServing.kcal : null;
+  };
 
   const saveServings = (d: DishRow) => {
     const typed = srvEdit[d.id];
@@ -439,6 +451,21 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                         style={{ ...inp, width: 62, height: 26, fontSize: 12 }}
                         title="How many servings the whole recipe makes" />
                       <span style={{ color: "var(--muted)" }}>servings</span>
+                      {(() => {
+                        // Offered only into an untouched box, and only where the
+                        // recipe is plainly bigger than a portion. Once she has
+                        // typed anything, hers is the number that counts.
+                        const total = wholeRecipe(d);
+                        const hint = srvEdit[d.id] === undefined && total !== null ? suggestServings(total) : null;
+                        return hint && hint !== d.servings ? (
+                          <button type="button"
+                            onClick={() => setSrvEdit((m) => ({ ...m, [d.id]: String(hint) }))}
+                            style={{ ...ghost, padding: "2px 8px", fontSize: 11.5, fontWeight: 500 }}
+                            title={`The whole recipe comes to ${Math.round(total!)} kcal — about ${hint} portions. A suggestion, not a measurement.`}>
+                            looks like {hint} — use this?
+                          </button>
+                        ) : null;
+                      })()}
                       {srvSaving === d.id
                         ? <span style={{ color: "var(--muted)" }}>saving…</span>
                         : srvEdit[d.id] !== undefined && String(d.servings ?? "") !== srvEdit[d.id].trim()

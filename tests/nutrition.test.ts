@@ -1,4 +1,4 @@
-import { servingLooksTooBig, contradictsSource } from "@/lib/nutrition";
+import { servingLooksTooBig, contradictsSource, suggestServings } from "@/lib/nutrition";
 import { describe, it, expect } from "vitest";
 
 describe("a serving nobody eats at a sitting", () => {
@@ -138,5 +138,29 @@ describe("energyLooksWrong", () => {
   it("stays quiet on small numbers, where a few calories is not a discrepancy", () => {
     // A 20 kcal vegetable: 25% is 5 kcal, which is measurement noise.
     expect(energyLooksWrong({ kcal: 17, protein_g: 0.6, fat_g: 0.1, carb_g: 3.4, fibre_g: 1.9 })).toBe(false);
+  });
+});
+
+describe("suggesting a servings count", () => {
+  it("suggests portions for a recipe recorded as one huge serving", () => {
+    expect(suggestServings(4653)).toBe(12);   // bread pakora, "1 plate"
+    expect(suggestServings(2368)).toBe(6);    // peanut cutlet
+  });
+
+  it("says nothing about a recipe that is already a sensible size", () => {
+    // No suggestion beats a needless one: a 210 kcal puttu does not want
+    // dividing, and offering "1" would be noise on every clean row.
+    expect(suggestServings(210)).toBeNull();
+    expect(suggestServings(480)).toBeNull();
+    expect(suggestServings(0)).toBeNull();
+  });
+
+  it("is a suggestion, not a measurement — it only ever divides the total", () => {
+    // Whatever it returns, dividing by it must land near a real portion.
+    for (const total of [1600, 2400, 3200, 4800]) {
+      const n = suggestServings(total)!;
+      expect(total / n).toBeGreaterThan(250);
+      expect(total / n).toBeLessThan(600);
+    }
   });
 });
