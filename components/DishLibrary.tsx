@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { saveDish, deleteDish, setDishApproved, approveDishes } from "@/lib/actions";
-import { dishNutrients, energyLooksWrong, contradictsSource, type Food, type Dish } from "@/lib/nutrition";
+import { dishNutrients, energyLooksWrong, contradictsSource, servingLooksTooBig, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -99,22 +99,32 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
       ? `ingredients as listed come to ${v.perServing.kcal} kcal — check for frying oil that isn't eaten`
       : null;
 
+    // The other way a figure goes wrong: not a disagreement but an agreement
+    // on something nobody eats. A whole pot recorded as one serving comes out
+    // at four thousand calories from both sources at once, so only an absolute
+    // reading catches it.
+    const tooBig = (kcal: number | null) => kcal != null && servingLooksTooBig(kcal)
+      ? `${kcal} kcal for ${d.serving_label ? `“${d.serving_label}”` : "one serving"} — the recipe is probably recorded as ${d.servings ?? 1} serving${(d.servings ?? 1) === 1 ? "" : "s"} when it feeds more`
+      : null;
+
     if (v.priced && !clash) {
-      return { kcal: v.perServing.kcal, protein: v.perServing.protein_g, quoted: false, clash: null, reason: null };
+      const k = v.perServing.kcal;
+      return { kcal: k, protein: v.perServing.protein_g, quoted: false, clash: tooBig(k), reason: null };
     }
-    if (pub) return { ...pub, quoted: true, reason: null, clash: disagreement };
+    if (pub) return { ...pub, quoted: true, reason: null, clash: disagreement ?? tooBig(pub.kcal) };
     // Contradicted with nothing complete to fall back on: no figures at all
     // rather than ours kept by default.
     return { kcal: null, protein: null, quoted: false, clash: disagreement, reason: v.priced ? null : v.reason };
   };
 
   /**
-   * A recipe whose own ingredients contradict the figure its source publishes.
+   * A recipe worth reading before anyone puts it on a chart.
    *
-   * Nearly always a recipe that lists something it does not contain: a pan of
-   * frying oil the food absorbs a little of, a marinade poured away. Worth
-   * looking at before the recipe is used on anyone's chart, and impossible to
-   * find among a thousand rows without asking for it.
+   * Two ways in. Its ingredients contradict the figure its source publishes —
+   * usually a pan of frying oil the food absorbs a little of, or a marinade
+   * poured away. Or the figure is simply too large to be one serving, which is
+   * what a whole pot recorded with a servings count of one looks like. The
+   * second kind agrees with its source perfectly and is still wrong.
    */
   const suspect = (d: DishRow) => figures(d).clash !== null;
 

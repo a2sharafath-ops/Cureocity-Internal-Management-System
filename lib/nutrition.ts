@@ -147,6 +147,29 @@ export function contradictsSource(ours: number, published: number): boolean {
 }
 
 /**
+ * A serving nobody eats in one sitting.
+ *
+ * The check above compares two figures for the same recipe and distrusts ours
+ * when they disagree. It cannot help when they AGREE on something absurd — and
+ * they often do. Around one imported recipe in eight publishes a serving over
+ * 1,000 kcal, and the worst reach 4,900: a whole pot of kofta curry, frying
+ * oil included, recorded with `servings = 1` so the entire dish counts as one
+ * portion. Our arithmetic reproduces that faithfully, agrees with the source
+ * to within a few percent, and both are wrong about what a person eats.
+ *
+ * So this asks a different question: whatever the figure came from, is it a
+ * plausible amount for one serving? A chart of six slots against a 1,800 kcal
+ * day puts most options between 200 and 500. Past 1,200 the likeliest
+ * explanation is a serving count of one on a recipe that feeds four.
+ *
+ * It flags rather than refuses. A genuine feast dish is somebody's clinical
+ * call, not this file's.
+ */
+export const IMPLAUSIBLE_SERVING_KCAL = 1200;
+
+export const servingLooksTooBig = (kcal: number): boolean => kcal > IMPLAUSIBLE_SERVING_KCAL;
+
+/**
  * Does the energy on a row agree with its own macros?
  *
  * Atwater: 4 kcal per gram of protein and carbohydrate, 9 for fat, 2 for fibre.

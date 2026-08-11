@@ -1,4 +1,28 @@
+import { servingLooksTooBig, contradictsSource } from "@/lib/nutrition";
 import { describe, it, expect } from "vitest";
+
+describe("a serving nobody eats at a sitting", () => {
+  it("passes an ordinary chart option", () => {
+    expect(servingLooksTooBig(210)).toBe(false);   // puttu
+    expect(servingLooksTooBig(480)).toBe(false);   // a full breakfast option
+    expect(servingLooksTooBig(1200)).toBe(false);  // the line itself
+  });
+
+  it("catches a whole pot recorded as one serving", () => {
+    // INDB publishes these, and our own sums agree with them, so the
+    // disagreement check is silent. Only an absolute reading finds them.
+    expect(servingLooksTooBig(4563)).toBe(true);   // cabbage kofta curry, "1 bowl"
+    expect(servingLooksTooBig(4703)).toBe(true);   // paneer kofta curry, "1 bowl"
+    expect(servingLooksTooBig(4908)).toBe(true);   // spaghetti and cheese balls, "1 plate"
+  });
+
+  it("is a different question from whether two sources agree", () => {
+    // 4,212 computed against 4,563 published is agreement — within 25% — and
+    // both are absurd. That is exactly the case the relative check misses.
+    expect(contradictsSource(4212, 4563)).toBe(false);
+    expect(servingLooksTooBig(4212)).toBe(true);
+  });
+});
 import {
   nutrientsOf, dishNutrients, portionOf, energyLooksWrong, roundNutrients,
   type Food, type Dish,
