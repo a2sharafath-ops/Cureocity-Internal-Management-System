@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { saveDish, deleteDish, setDishApproved, approveDishes } from "@/lib/actions";
-import { dishNutrients, energyLooksWrong, contradictsSource, servingLooksTooBig, type Food, type Dish } from "@/lib/nutrition";
+import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
   id: string;
@@ -16,7 +16,10 @@ export type DishRow = {
   source: string | null;
   /** What the source says one serving contains, where we cannot compute it. */
   source_kcal: number | null;
+  source_carb_g: number | null;
   source_protein_g: number | null;
+  source_fat_g: number | null;
+  source_fibre_g: number | null;
   /** Cleared for use on a client's chart. */
   approved: boolean;
   approved_by: string | null;
@@ -99,19 +102,24 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
       ? `ingredients as listed come to ${v.perServing.kcal} kcal — check for frying oil that isn't eaten`
       : null;
 
-    // The other way a figure goes wrong: not a disagreement but an agreement
-    // on something nobody eats. A whole pot recorded as one serving comes out
-    // at four thousand calories from both sources at once, so only an absolute
-    // reading catches it.
-    const tooBig = (kcal: number | null) => kcal != null && servingLooksTooBig(kcal)
-      ? `${kcal} kcal for ${d.serving_label ? `“${d.serving_label}”` : "one serving"} — the recipe is probably recorded as ${d.servings ?? 1} serving${(d.servings ?? 1) === 1 ? "" : "s"} when it feeds more`
+    // The other way a figure goes wrong: not a disagreement but an agreement on
+    // something nobody eats. A whole pot recorded as one serving comes out at
+    // four thousand calories from both sources at once, so only reading the
+    // figures on their own terms catches it. Same test the server runs.
+    const implausible = (n: Parameters<typeof servingProblem>[0] | null) =>
+      n ? servingProblem(n) : null;
+
+    const published = d.source_kcal != null && d.source_carb_g != null
+      && d.source_protein_g != null && d.source_fat_g != null && d.source_fibre_g != null
+      ? { kcal: Math.round(Number(d.source_kcal)), carb_g: Number(d.source_carb_g),
+        protein_g: Number(d.source_protein_g), fat_g: Number(d.source_fat_g), fibre_g: Number(d.source_fibre_g) }
       : null;
 
     if (v.priced && !clash) {
       const k = v.perServing.kcal;
-      return { kcal: k, protein: v.perServing.protein_g, quoted: false, clash: tooBig(k), reason: null };
+      return { kcal: k, protein: v.perServing.protein_g, quoted: false, clash: implausible(v.perServing), reason: null };
     }
-    if (pub) return { ...pub, quoted: true, reason: null, clash: disagreement ?? tooBig(pub.kcal) };
+    if (pub) return { ...pub, quoted: true, reason: null, clash: disagreement ?? implausible(published) };
     // Contradicted with nothing complete to fall back on: no figures at all
     // rather than ours kept by default.
     return { kcal: null, protein: null, quoted: false, clash: disagreement, reason: v.priced ? null : v.reason };

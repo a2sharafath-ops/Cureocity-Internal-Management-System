@@ -10,7 +10,7 @@
 // browser can call. This is read-only reference data used by code that already
 // runs on the server, and there is no reason to open a door for it.
 
-import { dishNutrients, contradictsSource, servingLooksTooBig, type Food } from "@/lib/nutrition";
+import { dishNutrients, contradictsSource, servingProblem, type Food } from "@/lib/nutrition";
 import { type DishOption } from "@/lib/diet-plan";
 import { type createClient } from "@/lib/supabase/server";
 
@@ -137,11 +137,15 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
     const contradicted = verdict.priced && comparable
       && contradictsSource(verdict.perServing.kcal, Number(d.source_kcal));
 
-    // Said of whichever figure ends up on the dish, because a serving nobody
-    // could eat is worth flagging whether we worked it out or quoted it.
-    const oversized = (kcal: number) => servingLooksTooBig(kcal)
-      ? `${kcal} kcal for ${d.serving_label ? `“${d.serving_label}”` : "one serving"} is more than a person eats at a sitting — the recipe is probably recorded as ${d.servings ?? 1} serving${(d.servings ?? 1) === 1 ? "" : "s"} when it feeds more. Check the servings count.`
-      : null;
+    // Run over whichever figures end up on the dish, because a serving nobody
+    // could eat is worth flagging whether we worked it out or quoted it. The
+    // likely cause is named rather than left to be guessed at.
+    const implausible = (n: { kcal: number; carb_g: number; protein_g: number; fat_g: number; fibre_g: number }) => {
+      const problem = servingProblem(n);
+      return problem
+        ? `${problem}, for ${d.serving_label ? `“${d.serving_label}”` : "one serving"} — most often a recipe recorded as ${d.servings ?? 1} serving${(d.servings ?? 1) === 1 ? "" : "s"} when it feeds more, or frying oil counted as eaten. Check the servings count and the ingredients.`
+        : null;
+    };
 
     if (verdict.priced && !contradicted) {
       return {
@@ -151,7 +155,7 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
           protein_g: verdict.perServing.protein_g, fat_g: verdict.perServing.fat_g,
           fibre_g: verdict.perServing.fibre_g,
         },
-        basis: "computed", reason: oversized(verdict.perServing.kcal), approved: d.approved,
+        basis: "computed", reason: implausible(verdict.perServing), approved: d.approved,
       };
     }
 
@@ -176,7 +180,11 @@ export async function pricedDishes(supabase: Db): Promise<DishOption[]> {
         // marinade, and someone should look at the recipe.
         reason: contradicted
           ? `the ingredients as listed come to ${verdict.priced ? verdict.perServing.kcal : 0} kcal a serving, well away from the published ${Math.round(Number(d.source_kcal))} — check for uneaten frying oil or a discarded marinade`
-          : oversized(Math.round(Number(d.source_kcal))),
+          : implausible({
+            kcal: Math.round(Number(d.source_kcal)),
+            carb_g: r1(d.source_carb_g), protein_g: r1(d.source_protein_g),
+            fat_g: r1(d.source_fat_g), fibre_g: r1(d.source_fibre_g),
+          }),
         approved: d.approved,
       };
     }

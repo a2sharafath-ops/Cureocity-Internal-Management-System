@@ -170,6 +170,48 @@ export const IMPLAUSIBLE_SERVING_KCAL = 1200;
 export const servingLooksTooBig = (kcal: number): boolean => kcal > IMPLAUSIBLE_SERVING_KCAL;
 
 /**
+ * More fat or protein than a serving of anything plausibly holds.
+ *
+ * Both are set well clear of real food. The fattiest thing anyone would put on
+ * a chart — a fried snack, a coconut-heavy curry — lands nowhere near 90 g in
+ * one portion, and 75 g of protein is more than a whole grilled chicken. What
+ * they catch is the same fault the calorie limit does, seen from another
+ * angle: a pan of frying oil counted as eaten, or a whole dish recorded as one
+ * serving. Kept separate because a dish can pass on calories and still be
+ * obviously wrong on a single macro.
+ */
+export const IMPLAUSIBLE_FAT_G = 90;
+export const IMPLAUSIBLE_PROTEIN_G = 75;
+
+/**
+ * Everything mechanically wrong with one serving's figures, or null.
+ *
+ * One place, so the server and the library screen cannot drift apart, and so a
+ * recipe the dietitian writes herself is held to the same tests as an imported
+ * one. Returns the FIRST problem: they nearly always share a cause, and four
+ * sentences about one bad servings count is noise.
+ *
+ * Says nothing about whether a dish suits a particular client. That is not a
+ * question arithmetic can answer.
+ */
+export function servingProblem(n: Nutrients): string | null {
+  if (n.kcal > IMPLAUSIBLE_SERVING_KCAL) {
+    return `${Math.round(n.kcal)} kcal is more than a person eats at a sitting`;
+  }
+  if (n.fat_g > IMPLAUSIBLE_FAT_G) {
+    return `${r1(n.fat_g)} g of fat in one serving is more than any dish plausibly holds`;
+  }
+  if (n.protein_g > IMPLAUSIBLE_PROTEIN_G) {
+    return `${r1(n.protein_g)} g of protein in one serving is more than any dish plausibly holds`;
+  }
+  if (energyLooksWrong(n)) {
+    const est = Math.round(4 * n.protein_g + 4 * n.carb_g + 9 * n.fat_g + 2 * n.fibre_g);
+    return `the calories do not match the macros — ${Math.round(n.kcal)} stated against ${est} from the carbohydrate, protein and fat`;
+  }
+  return null;
+}
+
+/**
  * Does the energy on a row agree with its own macros?
  *
  * Atwater: 4 kcal per gram of protein and carbohydrate, 9 for fat, 2 for fibre.
