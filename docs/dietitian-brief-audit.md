@@ -47,16 +47,35 @@ nothing adjusts for condition, goal or genetic traits.
 
 ## 4. Micronutrient inclusion
 
-**Partly.** Every option carries a micronutrients column and a chart cannot be
-published with it blank. But it is the dietitian's own words — nothing derives
-it from the food table, and nothing reads deficiencies from lab reports,
-because lab results are not stored as values (see §12).
+**Mostly.** All 726 foods now carry 22 vitamins and minerals from IFCT 2017,
+with the non-IFCT ones filled from UK CoFID and USDA (0155, 0157). A recipe
+adds them up one nutrient at a time — sodium computes for 717 of 738 priceable
+recipes, calcium for 729, iron for 734 — and a chart option built from recipes
+offers the line it works out to, which the dietitian accepts with one click.
+
+Still hers to type, on purpose: the box carries things the ingredients cannot
+know, and filling it automatically would overwrite one of them.
+
+**Still missing:** nothing reads deficiencies from lab reports, because lab
+results are not stored as values (see §12). Vitamin D and oxalate compute for
+almost nothing — CoFID publishes neither.
 
 ## 5. Food–drug interactions
 
-**Missing entirely.** Medications are captured; nothing checks a chart against
-them. Thyroxine with calcium or iron, diuretics and potassium, statins and
-grapefruit — all unchecked. This is the largest clinical gap in the list.
+**Done, for the three the brief names.** `lib/food-drug.ts` reads a chart
+against the client's active medicines: thyroxine against calcium and iron,
+diuretics against potassium and sodium, statins against grapefruit. Matching is
+on the brand names a Kerala prescription actually carries — Thyronorm, Eltroxin,
+Dytor, Rosuvas — because nobody writes "levothyroxine".
+
+It warns and does not block, because almost every one of these is answered by
+timing rather than by changing the food, and a gate that was wrong on most of
+the charts it stopped would train everybody to click through it.
+
+**The boundary, which matters more than the feature:** it holds three rules and
+says so on screen. Silence from it means "none of these three", never "no
+interaction". Anything wider needs a real interaction database, which is a
+different undertaking and a licensing question.
 
 ## 6. Lifestyle-based structuring
 
@@ -157,15 +176,23 @@ due to high fibre"). Coaching notes are per chart, not per option.
 
 In rough order of how much each blocks it:
 
-1. **Add carbs, fat and fibre to a chart option.** Without them §11 cannot be
-   met, §3 cannot be checked, and §12's daily summary is calories only. Every
-   figure needed is already computed per dish.
-2. **Food–drug interaction checks (§5).** The only purely clinical safety rule
-   in the brief and it is absent.
-3. **A region field, and shift timing (§1, §9).**
-4. **The early-morning-drink prohibition (§8)** — a short, mechanical check.
+1. ~~**Add carbs, fat and fibre to a chart option.**~~ Done — 0144, and the
+   totals check all five.
+2. ~~**Food–drug interaction checks (§5).**~~ Done — `lib/food-drug.ts`, for
+   the three the brief names.
+3. **The early-morning-drink prohibition (§8)** — a short, mechanical check,
+   and the only rule in the brief phrased as an outright refusal. Needs no new
+   data.
+4. **A region field, and shift timing (§1, §9).** Two columns and two boxes;
+   what they unlock is a convention becoming a rule.
 5. **The ±100–200 kcal review increments (§2)** — needs the previous chart's
    target, which versioning already keeps.
-6. **Genetics (§1)** — a real feature in its own right, not a field.
-7. **Structured lab values (§4)** — today reports are uploaded files with a
+6. **Structured lab values (§4)** — today reports are uploaded files with a
    typed summary, so deficiencies can only be read if a human wrote them down.
+   This is what would let §4 read a deficiency rather than wait to be told one.
+7. **Genetics (§1)** — a real feature in its own right, not a field.
+
+**Not in the brief, but blocking it in practice:** the "Draft from
+consultations" button has never once run — it needs OPENAI_API_KEY in the
+environment. Everything above is written so a generator could honour it, and
+nobody has yet seen the generator work.
