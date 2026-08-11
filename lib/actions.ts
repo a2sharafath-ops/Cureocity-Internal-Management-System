@@ -7778,6 +7778,53 @@ export async function setDishApproved(formData: FormData) {
   revalidatePath("/workspace");
 }
 
+/**
+ * Set how many servings a recipe makes, from the library list.
+ *
+ * The one number that fixes most of what is wrong with an imported library.
+ * A recipe recorded as making one serving when it feeds six reports four
+ * thousand calories a portion, fails every plausibility test, and cannot be
+ * used — and the fix is not a review, it is somebody who cooks saying "that
+ * pakora feeds five".
+ *
+ * Deliberately here rather than only in the dish editor. Opening a recipe,
+ * changing one field and saving is a minute; doing it a hundred and sixty
+ * times is an afternoon nobody has. This makes it a number typed down a list.
+ *
+ * Every chart still open on the recipe re-prices, exactly as when an
+ * ingredient changes — the servings count is as much a part of what a portion
+ * contains as the ingredients are.
+ */
+export async function setDishServings(formData: FormData): Promise<{ error?: string }> {
+  const p = await dishGuard();
+  if (!p) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "Missing dish." };
+
+  const raw = String(formData.get("servings") || "").trim();
+  const n = Number(raw);
+  // Blank clears it back to unknown, which is honest — the dish then says it
+  // cannot work out a portion rather than carrying a made-up one.
+  const servings = raw === "" ? null : n;
+  if (servings !== null && (!Number.isFinite(servings) || servings <= 0)) {
+    return { error: "A recipe makes at least one serving." };
+  }
+
+  const supabase = await createClient();
+  const { data: before } = await supabase.from("dishes").select("name, servings").eq("id", id).maybeSingle();
+  const { error } = await supabase.from("dishes").update({ servings, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) return { error: error.message };
+
+  const was = (before as { name?: string; servings?: number | null } | null);
+  const repriced = await repriceOpenCharts(supabase, id);
+  await logAudit(p, "Dish servings corrected", was?.name ?? id,
+    [`${was?.servings ?? "none"} → ${servings ?? "none"}`,
+      repriced.changed ? `${repriced.changed} chart option${repriced.changed === 1 ? "" : "s"} re-priced` : null]
+      .filter(Boolean).join(" · "));
+  revalidatePath("/workspace");
+  return {};
+}
+
 /** Approve everything currently unapproved — the batch the dietitian just read. */
 export async function approveDishes(formData: FormData) {
   const p = await dishGuard();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { saveDish, deleteDish, setDishApproved, approveDishes } from "@/lib/actions";
+import { saveDish, deleteDish, setDishApproved, approveDishes, setDishServings } from "@/lib/actions";
 import { dishNutrients, energyLooksWrong, contradictsSource, servingProblem, type Food, type Dish } from "@/lib/nutrition";
 
 export type DishRow = {
@@ -66,8 +66,42 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
 
   const foodMap = useMemo(() => new Map(foods.map((f) => [f.food_code, f])), [foods]);
 
+  /**
+   * Servings being edited on the list, before they are saved.
+   *
+   * Held here so the figures move as she types. Correcting a servings count is
+   * guesswork without seeing what it does to a portion — "feeds six" is a
+   * different claim once you can see it makes each portion 780 kcal.
+   */
+  const [srvEdit, setSrvEdit] = useState<Record<string, string>>({});
+  const [srvSaving, setSrvSaving] = useState<string | null>(null);
+
+  /** What the row is currently claiming, edited or saved. */
+  const servingsOf = (d: DishRow): number | null => {
+    const typed = srvEdit[d.id];
+    if (typed === undefined) return d.servings;
+    const n = Number(typed.trim());
+    return typed.trim() === "" || !Number.isFinite(n) || n <= 0 ? null : n;
+  };
+
   const priced = (d: DishRow) => dishNutrients(
-    { name: d.name, cooked_g: d.cooked_g, servings: d.servings, items: d.items }, foodMap);
+    { name: d.name, cooked_g: d.cooked_g, servings: servingsOf(d), items: d.items }, foodMap);
+
+  const saveServings = (d: DishRow) => {
+    const typed = srvEdit[d.id];
+    if (typed === undefined) return;
+    if (String(d.servings ?? "") === typed.trim()) return;   // nothing changed
+    setErr(null);
+    setSrvSaving(d.id);
+    start(async () => {
+      const fd = new FormData();
+      fd.set("id", d.id);
+      fd.set("servings", typed.trim());
+      const r = await setDishServings(fd);
+      setSrvSaving(null);
+      if (r?.error) setErr(r.error);
+    });
+  };
 
   // Reviewing an imported library is the job this screen now has to support,
   // so the two questions worth asking of a thousand rows — what have I not
@@ -384,6 +418,33 @@ export default function DishLibrary({ dishes, foods, canEdit }: {
                   </div>
                   {f.clash && (
                     <div style={{ fontSize: 11.5, color: "var(--amber-text)", marginTop: 2 }}>{f.clash}</div>
+                  )}
+
+                  {/* ---- SERVINGS, EDITABLE IN PLACE ----
+                      Drawn only where it is the likely fix: a row that is
+                      flagged, or one with no figures at all. Everywhere else it
+                      would be clutter on a list of a thousand.
+
+                      The figures above update as she types, before anything is
+                      saved, because "feeds six" is a different claim once you
+                      can see it makes each portion 780 kcal. */}
+                  {canEdit && (f.clash || f.kcal == null) && (
+                    <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, fontSize: 11.5 }}>
+                      <span style={{ color: "var(--muted)" }}>Makes</span>
+                      <input type="number" min="0.25" step="0.25"
+                        value={srvEdit[d.id] ?? (d.servings ?? "")}
+                        onChange={(e) => setSrvEdit((m) => ({ ...m, [d.id]: e.target.value }))}
+                        onBlur={() => saveServings(d)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        style={{ ...inp, width: 62, height: 26, fontSize: 12 }}
+                        title="How many servings the whole recipe makes" />
+                      <span style={{ color: "var(--muted)" }}>servings</span>
+                      {srvSaving === d.id
+                        ? <span style={{ color: "var(--muted)" }}>saving…</span>
+                        : srvEdit[d.id] !== undefined && String(d.servings ?? "") !== srvEdit[d.id].trim()
+                          ? <span style={{ color: "var(--amber-text)" }}>press Enter or click away to save</span>
+                          : null}
+                    </div>
                   )}
                 </div>
 
