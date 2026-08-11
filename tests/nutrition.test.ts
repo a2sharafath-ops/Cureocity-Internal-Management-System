@@ -1,5 +1,9 @@
-import { servingLooksTooBig, contradictsSource, suggestServings } from "@/lib/nutrition";
 import { describe, it, expect } from "vitest";
+import {
+  nutrientsOf, dishNutrients, portionOf, energyLooksWrong, roundNutrients,
+  servingLooksTooBig, contradictsSource, suggestServings,
+  type Food, type Dish,
+} from "@/lib/nutrition";
 
 describe("a serving nobody eats at a sitting", () => {
   it("passes an ordinary chart option", () => {
@@ -23,11 +27,6 @@ describe("a serving nobody eats at a sitting", () => {
     expect(servingLooksTooBig(4212)).toBe(true);
   });
 });
-import {
-  nutrientsOf, dishNutrients, portionOf, energyLooksWrong, roundNutrients,
-  type Food, type Dish,
-} from "@/lib/nutrition";
-
 // Real IFCT 2017 values, per 100 g edible portion.
 const RICE: Food = { food_code: "B023", name: "Rice, raw, milled", protein_g: 7.94, fat_g: 0.52, carb_g: 78.24, fibre_g: 2.81, kcal: 356 };
 const COCONUT: Food = { food_code: "H012", name: "Coconut, kernel, fresh", protein_g: 3.84, fat_g: 41.38, carb_g: 6.3, fibre_g: 11.5, kcal: 409 };
