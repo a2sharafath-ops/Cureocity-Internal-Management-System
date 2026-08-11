@@ -8,6 +8,8 @@ import SummaryEditor from "@/components/SummaryEditor";
 import { deriveFlags, labsFromAnswers } from "@/lib/auto-flags";
 import { coachSignals } from "@/lib/coach-signals";
 import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
+import LabResults from "@/components/LabResults";
+import { type LabResult } from "@/lib/lab-results";
 import { sectionsFor, questionBody, answeredIn } from "@/lib/consult-sections";
 import { visibleQuestions, type QConditions } from "@/lib/consult-conditions";
 import { optionsOf, selectedOption, withOption, type QTypes } from "@/lib/answer-input";
@@ -60,8 +62,10 @@ const createPrescriptionForm = async (formData: FormData) => {
   await createPrescription(formData);
 };
 
+type LabRow = LabResult & { id: string; panel: string | null; notes: string | null; entered_by: string | null };
+
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, conditions, types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], orders = [], prescriptions = [], otherConsults = [],
+  id, kind, label, icon, client, questions, conditions, types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], labResults = [], orders = [], prescriptions = [], otherConsults = [],
 }: {
   id: string;
   kind: string;
@@ -98,6 +102,8 @@ export default function ConsoleView({
   /** WhatsApp readiness — see lib/wati.ts. */
   whatsapp?: { ready: boolean; missing: string[] };
   reports?: ReportRow[];
+  /** Lab values already typed in from those reports. */
+  labResults?: LabRow[];
   /** This client's completed consultations from the OTHER disciplines. */
   otherConsults?: OtherConsult[];
   orders?: { test: string; priority: string | null; created_at: string }[];
@@ -696,6 +702,16 @@ export default function ConsoleView({
               </button>
               <div style={{ display: repOpen ? "block" : "none", borderTop: "1px solid var(--border)", padding: "12px 18px 14px" }}>
                 <MedicalReports clientId={client.id} reports={reports} />
+
+                {/* The numbers off the report, typed in beside it. Section 4 of
+                    the dietitian's brief asks the chart to answer deficiencies
+                    found here, and it cannot do that from a PDF. */}
+                <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 14 }}>
+                  <b style={{ fontSize: 12.5 }}>Blood work, as figures</b>
+                  <div style={{ marginTop: 8 }}>
+                    <LabResults clientId={client.id} results={labResults} canEdit={canTools} />
+                  </div>
+                </div>
               </div>
             </div>
           )}

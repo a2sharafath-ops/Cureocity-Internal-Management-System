@@ -8011,6 +8011,97 @@ export async function setFoodMeasure(formData: FormData): Promise<{ error?: stri
   return {};
 }
 
+/**
+ * Record one lab value, transcribed from a report somebody is looking at.
+ *
+ * The uploaded report stays the record. This is a reading of it, so the guards
+ * below are about transcription rather than about medicine: a decimal point in
+ * the wrong place, a date typed as next year, a value entered against the wrong
+ * marker. None of them second-guesses the laboratory.
+ */
+export async function saveLabResult(formData: FormData): Promise<{ error?: string }> {
+  const p = await getProfile();
+  // Whoever runs a consultation. A dietitian reading the blood report in front
+  // of the client is exactly who transcribes these, so canEmr — which excludes
+  // her — would be the wrong gate.
+  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+
+  const clientId = String(formData.get("client_id") || "").trim();
+  const marker = String(formData.get("marker") || "").trim();
+  if (!clientId || !marker) return { error: "Missing the client or the marker." };
+
+  const raw = String(formData.get("value") || "").trim();
+  const value = Number(raw);
+  if (raw === "" || !Number.isFinite(value)) return { error: "That is not a number." };
+  if (value < 0) return { error: "A lab value is not negative." };
+
+  const takenOn = String(formData.get("taken_on") || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(takenOn)) return { error: "Give the date on the report." };
+  // A report cannot be from the future, and a date typed as 2027 instead of
+  // 2026 would make a resolved deficiency look like the latest word forever.
+  if (takenOn > new Date().toISOString().slice(0, 10)) {
+    return { error: "That date is in the future — check the year on the report." };
+  }
+
+  const num = (k: string) => {
+    const v = String(formData.get(k) || "").trim();
+    if (v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const low = num("low"), high = num("high");
+  if (low != null && high != null && low >= high) {
+    return { error: "The reference range reads backwards — check the low and high." };
+  }
+
+  const supabase = await createClient();
+  const row = {
+    client_id: clientId,
+    taken_on: takenOn,
+    marker,
+    label: String(formData.get("label") || "").trim() || null,
+    value,
+    unit: String(formData.get("unit") || "").trim() || "",
+    low, high,
+    panel: String(formData.get("panel") || "").trim() || null,
+    notes: String(formData.get("notes") || "").trim() || null,
+    entered_by: p.name,
+  };
+
+  const id = String(formData.get("id") || "");
+  const { error } = id
+    ? await supabase.from("lab_results").update(row).eq("id", id)
+    : await supabase.from("lab_results").insert(row);
+  if (error) return { error: error.message };
+
+  await logAudit(p, id ? "Lab value corrected" : "Lab value recorded",
+    `${marker} ${value} ${row.unit}`, `taken ${takenOn}`);
+  revalidatePath("/console");
+  revalidatePath("/workspace");
+  return {};
+}
+
+/** Remove a lab value — a transcription error, not a result being retracted. */
+export async function deleteLabResult(formData: FormData): Promise<{ error?: string }> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { error: "Not authorized." };
+  const id = String(formData.get("id") || "");
+  if (!id) return { error: "Missing the row." };
+
+  const supabase = await createClient();
+  const { data: was } = await supabase.from("lab_results")
+    .select("marker, value, unit, taken_on").eq("id", id).maybeSingle();
+  const { error } = await supabase.from("lab_results").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  const w = was as { marker?: string; value?: number; unit?: string; taken_on?: string } | null;
+  await logAudit(p, "Lab value removed", `${w?.marker ?? id} ${w?.value ?? ""} ${w?.unit ?? ""}`,
+    w?.taken_on ? `taken ${w.taken_on}` : null);
+  revalidatePath("/console");
+  revalidatePath("/workspace");
+  return {};
+}
+
 /** Approve everything currently unapproved — the batch the dietitian just read. */
 export async function approveDishes(formData: FormData) {
   const p = await dishGuard();

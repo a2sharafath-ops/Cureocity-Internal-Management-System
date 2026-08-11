@@ -146,6 +146,15 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
   // console and used by "Compile from record" to draft the summary.
   let reports: { id: string; name: string | null; kind: string | null; report_label: string | null; report_date: string | null; summary: string | null; created_at: string; url?: string | null }[] = [];
   let orders: { test: string; priority: string | null; created_at: string }[] = [];
+  // Lab values already typed off those reports. A failure here loses the panel,
+  // never the console — the table may not exist until 0158 has been run.
+  let labResults: { id: string; marker: string; label: string | null; value: number; unit: string; low: number | null; high: number | null; taken_on: string; panel: string | null; notes: string | null; entered_by: string | null }[] = [];
+  try {
+    const { data } = await supabase.from("lab_results")
+      .select("id, marker, label, value, unit, low, high, taken_on, panel, notes, entered_by")
+      .eq("client_id", row.client_id).order("taken_on", { ascending: false });
+    labResults = (data ?? []) as typeof labResults;
+  } catch { /* the panel simply does not appear */ }
   // The prescription written in THIS session, if any — what the print link
   // points at. Falls back to the client's latest, so a prescription added from
   // the EMR is still printable from here.
@@ -254,6 +263,7 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
       pdf={pdfReadiness()}
       whatsapp={watiReadiness()}
       reports={reports}
+      labResults={labResults}
       orders={orders}
       prescriptions={rxList}
       health={health}
