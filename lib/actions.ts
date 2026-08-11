@@ -7324,13 +7324,26 @@ export async function generateDietPlan(formData: FormData): Promise<{ ok?: boole
 
   const meas = m as { weight: number | null; bmi: number | null; bmr: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
   const answers = diet.answers ?? [];
-  const activity = answerFor(answers, /activity level|daily activity/i);
+
+  // Activity level comes off the ASSESSMENT SUMMARY, not the consultation.
+  //
+  // The intake questionnaire asks thirty questions about what the client eats
+  // and how they live, and none of them is "how active are you" — that is a
+  // field the dietitian fills on the Dietary Assessment Summary, which is
+  // where the multiplier belongs anyway. Reading only the consultation meant
+  // this refused on a client whose activity level was recorded perfectly well,
+  // one screen across.
+  const { data: assess } = await supabase.from("diet_assessments")
+    .select("daily_activity").eq("client_id", client_id)
+    .order("version", { ascending: false }).limit(1).maybeSingle();
+  const activity = (assess as { daily_activity: string | null } | null)?.daily_activity
+    ?? answerFor(answers, /activity level|daily activity/i);
   const bmr = meas?.bmr ?? null;
   const tdee = estimateTee(bmr, activity);
   if (!tdee) {
     return { error: bmr
-      ? "No activity level recorded on the diet consultation, so the day's calorie target cannot be worked out. Add it and try again."
-      : "No measured BMR for this client — record an InBody first. The clinic's brief requires the measured figure, not an estimate." };
+      ? "No daily activity level on this client's assessment summary, so the day's calorie target cannot be worked out. Set it on the Assessment tab and try again."
+      : "No measured BMR for this client. The InBody reading on file has height, weight and body fat but no BMR — open the assessment summary and enter the measured figure, or record a fresh InBody. The clinic's brief requires the measured value, not an estimate." };
   }
 
   let dishes: DishOption[];
