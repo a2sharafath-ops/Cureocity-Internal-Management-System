@@ -7325,25 +7325,30 @@ export async function generateDietPlan(formData: FormData): Promise<{ ok?: boole
   const meas = m as { weight: number | null; bmi: number | null; bmr: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
   const answers = diet.answers ?? [];
 
-  // Activity level comes off the ASSESSMENT SUMMARY, not the consultation.
+  // BMR and activity level both come off the ASSESSMENT SUMMARY.
   //
-  // The intake questionnaire asks thirty questions about what the client eats
-  // and how they live, and none of them is "how active are you" — that is a
-  // field the dietitian fills on the Dietary Assessment Summary, which is
-  // where the multiplier belongs anyway. Reading only the consultation meant
-  // this refused on a client whose activity level was recorded perfectly well,
-  // one screen across.
+  // That screen is where the dietitian settles them. Its BMR box is filled
+  // from the InBody where there is one and, where there is not, offers the
+  // Mifflin-St Jeor estimate as a hint she has to accept — so whichever number
+  // ends up there, a human has looked at it and owns it. The activity level
+  // has no other home at all: the intake questionnaire asks thirty questions
+  // about how the client lives and none of them is "how active are you".
+  //
+  // Reading the InBody row directly, as this did, ignored all of that and
+  // refused on clients whose figures were recorded perfectly well one tab
+  // across. The measurement is still the fallback, for a client whose
+  // assessment has not been written yet.
   const { data: assess } = await supabase.from("diet_assessments")
-    .select("daily_activity").eq("client_id", client_id)
+    .select("bmr, daily_activity").eq("client_id", client_id)
     .order("version", { ascending: false }).limit(1).maybeSingle();
-  const activity = (assess as { daily_activity: string | null } | null)?.daily_activity
-    ?? answerFor(answers, /activity level|daily activity/i);
-  const bmr = meas?.bmr ?? null;
+  const a = assess as { bmr: number | null; daily_activity: string | null } | null;
+  const activity = a?.daily_activity ?? answerFor(answers, /activity level|daily activity/i);
+  const bmr = a?.bmr ?? meas?.bmr ?? null;
   const tdee = estimateTee(bmr, activity);
   if (!tdee) {
     return { error: bmr
       ? "No daily activity level on this client's assessment summary, so the day's calorie target cannot be worked out. Set it on the Assessment tab and try again."
-      : "No measured BMR for this client. The InBody reading on file has height, weight and body fat but no BMR — open the assessment summary and enter the measured figure, or record a fresh InBody. The clinic's brief requires the measured value, not an estimate." };
+      : "No BMR on this client's assessment summary. Open the Assessment tab — where the InBody has one it is already filled in, and where it does not the screen offers an estimate for you to accept. The chart is built on whichever figure you settle there." };
   }
 
   let dishes: DishOption[];
