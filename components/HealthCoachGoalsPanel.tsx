@@ -11,6 +11,7 @@ import {
 } from "@/lib/coach-goals";
 import { last7Count } from "@/lib/habits";
 import { COACH_OVERRIDE_REASON_MIN_LENGTH } from "@/lib/coach-access";
+import type { ClientGoalOutcome } from "@/lib/client-goal-outcome";
 
 export type CoachingGoalView = {
   id: string; name: string; icon: string | null; cadence: string; target_per_week: number;
@@ -37,9 +38,10 @@ const label: React.CSSProperties = { display: "grid", gap: 4, color: "var(--mute
 const button: React.CSSProperties = { border: 0, borderRadius: 8, padding: "8px 12px", background: "var(--ink)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" };
 const quietButton: React.CSSProperties = { ...button, border: "1px solid var(--border)", background: "#fff", color: "var(--ink)" };
 
-export default function HealthCoachGoalsPanel({ clientId, goals, events, barriers, canManage, today, supervisorOverride = false }: {
+export default function HealthCoachGoalsPanel({ clientId, goals, events, barriers, outcomes, canManage, today, supervisorOverride = false }: {
   clientId: string; goals: CoachingGoalView[]; events: CoachingAdherenceView[];
-  barriers: CoachingBarrierView[]; canManage: boolean; today: string; supervisorOverride?: boolean;
+  barriers: CoachingBarrierView[]; outcomes: ClientGoalOutcome[];
+  canManage: boolean; today: string; supervisorOverride?: boolean;
 }) {
   const [confidence, setConfidence] = useState(7);
   const [overrideReason, setOverrideReason] = useState("");
@@ -50,6 +52,12 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
   const active = goals.filter((goal) => goal.status === "Active");
   const openBarriers = barriers.filter((barrier) => barrier.status !== "Resolved");
   const recentEvents = events.slice(0, 20);
+  const outcomesByGoal = new Map<string, ClientGoalOutcome[]>();
+  for (const outcome of outcomes) {
+    const rows = outcomesByGoal.get(outcome.goal_id) ?? [];
+    rows.push(outcome);
+    outcomesByGoal.set(outcome.goal_id, rows);
+  }
 
   return (
     <section id="coaching-goals" onSubmitCapture={(event) => { if (!overrideReady) event.preventDefault(); }} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
@@ -98,6 +106,8 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
         {goals.map((goal) => {
           const week = last7Count(goal.doneDates, today);
           const due = goal.status === "Active" && reviewIsDue(goal.review_date, today);
+          const clientReports = outcomesByGoal.get(goal.id) ?? [];
+          const latestClientReport = clientReports[0] ?? null;
           return (
             <div key={goal.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, opacity: goal.status === "Stopped" ? .65 : 1 }}>
               <div style={{ display: "flex", alignItems: "start", gap: 10, flexWrap: "wrap" }}>
@@ -109,6 +119,12 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
                   {goal.if_then_plan && <div style={{ fontSize: 12, marginTop: 3 }}><b>If–then:</b> {goal.if_then_plan}</div>}
                   {(goal.barrier_code || goal.barrier_detail) && <div style={{ fontSize: 12, marginTop: 3, color: "var(--amber-text)" }}><b>Barrier:</b> {[goal.barrier_code, goal.barrier_detail].filter(Boolean).join(" — ")}</div>}
                   <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 5 }}>Next review: {goal.review_date || "not scheduled"}</div>
+                  {latestClientReport && <div style={{ marginTop: 7, borderRadius: 8, padding: "7px 9px", background: latestClientReport.support_requested ? "var(--amber-bg)" : "#eff6ff", color: latestClientReport.support_requested ? "var(--amber-text)" : "#1e3a8a", fontSize: 11.5 }}>
+                    <b>Client self-report: {latestClientReport.achievement_rating}/10</b> · {new Date(latestClientReport.reported_at).toLocaleDateString("en-GB")}
+                    {latestClientReport.support_requested && <b> · support requested</b>}
+                    {latestClientReport.progress_note && <div style={{ marginTop: 3 }}>{latestClientReport.progress_note}</div>}
+                    {clientReports.length > 1 && <details style={{ marginTop: 4 }}><summary style={{ cursor: "pointer", fontWeight: 700 }}>Earlier client reports ({clientReports.length - 1})</summary>{clientReports.slice(1).map((report) => <div key={report.id} style={{ borderTop: "1px solid currentColor", marginTop: 4, paddingTop: 4 }}><b>{report.achievement_rating}/10 · {new Date(report.reported_at).toLocaleDateString("en-GB")}</b>{report.support_requested ? " · support requested" : ""}{report.progress_note ? ` — ${report.progress_note}` : ""}</div>)}</details>}
+                  </div>}
                 </div>
               </div>
               {canManage && goal.status === "Active" && <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 10 }}>

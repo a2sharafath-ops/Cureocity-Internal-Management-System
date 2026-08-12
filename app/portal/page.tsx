@@ -9,6 +9,8 @@ import MessageThread, { type Msg } from "@/components/MessageThread";
 import MessageReply from "@/components/MessageReply";
 import ClassBookButton from "@/components/ClassBookButton";
 import HabitCheck from "@/components/HabitCheck";
+import ClientGoalOutcomeForm from "@/components/ClientGoalOutcomeForm";
+import type { ClientGoalOutcome } from "@/lib/client-goal-outcome";
 import { FormFill } from "@/components/FormComponents";
 import { fmtDate } from "@/lib/datetime";
 import { currentStreak, last7Count } from "@/lib/habits";
@@ -195,11 +197,19 @@ export default async function PortalHome() {
   const myAppts = (apptRows ?? []) as unknown as { id: string; type: string | null; title: string | null; date: string; hour: number; status: string; staff: { name: string } | null }[];
   const apptHour = (h: number) => { const am = h < 12; const hr = h % 12 === 0 ? 12 : h % 12; return `${hr}:00 ${am ? "AM" : "PM"}`; };
 
-  const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
+  const [{ data: habitRows }, { data: habitLogRows }, { data: goalOutcomeRows }] = await Promise.all([
     supabase.from("habits").select("id, name, icon, target_per_week").eq("client_id", client.id).eq("active", true).order("created_at"),
     supabase.from("habit_logs").select("habit_id, date").eq("client_id", client.id).eq("done", true),
+    supabase.from("client_goal_outcomes").select("id, goal_id, client_id, goal_name, achievement_rating, progress_note, support_requested, reporter_name, reported_at").eq("client_id", client.id).order("reported_at", { ascending: false }).limit(100),
   ]);
   const myHabits = (habitRows ?? []) as { id: string; name: string; icon: string | null; target_per_week: number }[];
+  const myGoalOutcomes = (goalOutcomeRows ?? []) as ClientGoalOutcome[];
+  const goalOutcomesByGoal = new Map<string, ClientGoalOutcome[]>();
+  for (const outcome of myGoalOutcomes) {
+    const reports = goalOutcomesByGoal.get(outcome.goal_id) ?? [];
+    reports.push(outcome);
+    goalOutcomesByGoal.set(outcome.goal_id, reports);
+  }
   const habitDoneDates = new Map<string, Set<string>>();
   for (const l of ((habitLogRows ?? []) as { habit_id: string; date: string }[])) {
     (habitDoneDates.get(l.habit_id) ?? habitDoneDates.set(l.habit_id, new Set()).get(l.habit_id)!).add(l.date);
@@ -246,7 +256,7 @@ export default async function PortalHome() {
     <div>
       {/* Hero */}
       <div style={{ background: "linear-gradient(135deg, var(--brand-text), var(--brand-fill))", color: "#fff", borderRadius: "var(--radius)", padding: "22px 24px", marginBottom: 18 }}>
-        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","wearable_readings","client_workouts","form_responses","prescriptions","meal_day_summaries","diet_plans","diet_assessments"]} />
+        <RealtimeRefresh tables={["meal_logs","consultations","blueprints","blood_requests","sessions","measurements","files","invoices","messages","class_bookings","classes","problems","allergies","medications","appointments","habits","habit_logs","client_goal_outcomes","wearable_readings","client_workouts","form_responses","prescriptions","meal_day_summaries","diet_plans","diet_assessments"]} />
       <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>Hi {client.name.split(" ")[0]}</h1>
         <div style={{ opacity: 0.92, fontSize: 13 }}>
           {pkg?.name ?? "—"}
@@ -421,14 +431,17 @@ export default async function PortalHome() {
               const streak = currentStreak(dates, TODAY);
               const week = last7Count(dates, TODAY);
               return (
-                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
-                  <HabitCheck habitId={h.id} doneToday={doneToday} />
-                  <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
-                  <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{h.name}</div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)", fontSize: 14 }}>{streak}d</div>
-                    <div style={{ fontSize: 12, color: "var(--muted)" }}>{week}/{h.target_per_week} this week</div>
+                <div key={h.id} style={{ borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <HabitCheck habitId={h.id} doneToday={doneToday} />
+                    <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
+                    <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{h.name}</div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)", fontSize: 14 }}>{streak}d</div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{week}/{h.target_per_week} this week</div>
+                    </div>
                   </div>
+                  <ClientGoalOutcomeForm goalId={h.id} reports={goalOutcomesByGoal.get(h.id) ?? []} />
                 </div>
               );
             })}

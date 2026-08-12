@@ -7,6 +7,7 @@ import {
 const base = (patch: Partial<CoachQualityInput> = {}): CoachQualityInput => ({
   clientCount: 2,
   appointments: [], followups: [], goals: [], adherenceCurrent: [], adherencePrevious: [],
+  clientGoalOutcomes: [],
   barriers: [], referrals: [], safetyEvents: [], mdtTasks: [], baselines: [], assessments: [],
   sessions: [], huddles: [], huddleTaskIds: [], ...patch,
 });
@@ -42,6 +43,19 @@ describe("Health Coach quality metrics", () => {
     expect(metrics.ifThenPlanning.percent).toBe(50);
     expect(metrics.barriersAddressed.percent).toBe(50);
     expect(metrics.mdtCoordination.percent).toBe(50);
+  });
+
+  it("keeps client-reported progress separate from Coach-marked completion", () => {
+    const metrics = calculateCoachQuality(base({
+      goals: [{ name: "Walk", cadence: "daily", target_per_week: 5, status: "Active", if_then_plan: null }],
+      clientGoalOutcomes: [
+        { goal_id: "walk", achievement_rating: 2, support_requested: false, reported_at: "2026-08-01T08:00:00Z" },
+        { goal_id: "walk", achievement_rating: 3, support_requested: true, reported_at: "2026-08-02T08:00:00Z" },
+        { goal_id: "water", achievement_rating: 8, support_requested: false, reported_at: "2026-08-02T09:00:00Z" },
+      ],
+    }));
+    expect(metrics.goalCompletion.percent).toBe(0);
+    expect(metrics.clientReportedProgress).toEqual({ averageRating: 5.5, total: 2, supportRequested: 1 });
   });
 
   it("reports safety acknowledgement coverage and elapsed minutes", () => {

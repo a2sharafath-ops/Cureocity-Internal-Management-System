@@ -1,4 +1,5 @@
 import type { AdherenceOutcome } from "@/lib/coach-goals";
+import { clientGoalOutcomeSummary } from "@/lib/client-goal-outcome";
 
 export const COACH_AUDIT_DOMAINS = [
   { key: "assessment_completeness", label: "Assessment completeness", question: "Was the correct baseline module completed?" },
@@ -26,6 +27,7 @@ export type CoachQualityInput = {
   goals: { name: string; cadence: string; target_per_week: number; status: string; if_then_plan: string | null }[];
   adherenceCurrent: { outcome: AdherenceOutcome }[];
   adherencePrevious: { outcome: AdherenceOutcome }[];
+  clientGoalOutcomes: { goal_id: string; achievement_rating: number; support_requested: boolean; reported_at: string }[];
   barriers: { status: string }[];
   referrals: { status: string }[];
   safetyEvents: { opened_at: string; acknowledged_at: string | null }[];
@@ -41,6 +43,7 @@ export type CoachQualityMetrics = {
   scheduledCheckins: RateMetric;
   responseRate: RateMetric;
   goalCompletion: RateMetric;
+  clientReportedProgress: { averageRating: number | null; total: number; supportRequested: number };
   adherence: RateMetric & { previousPercent: number | null; change: number | null };
   ifThenPlanning: RateMetric;
   barriersAddressed: RateMetric;
@@ -87,11 +90,17 @@ export function calculateCoachQuality(input: CoachQualityInput): CoachQualityMet
     Math.max(0, Math.round((Date.parse(event.acknowledged_at!) - Date.parse(event.opened_at)) / 60_000)),
   );
   const huddleTaskIds = new Set(input.huddleTaskIds);
+  const latestClientGoalOutcomes = new Map<string, (typeof input.clientGoalOutcomes)[number]>();
+  for (const outcome of input.clientGoalOutcomes) {
+    const current = latestClientGoalOutcomes.get(outcome.goal_id);
+    if (!current || outcome.reported_at > current.reported_at) latestClientGoalOutcomes.set(outcome.goal_id, outcome);
+  }
 
   return {
     scheduledCheckins: rate(appointments.filter((row) => row.status === "completed").length, appointments.length),
     responseRate: rate(knownContacts.filter((row) => row.status === "done").length, knownContacts.length),
     goalCompletion: rate(currentGoals.filter((goal) => goal.status === "Completed").length, currentGoals.length),
+    clientReportedProgress: clientGoalOutcomeSummary([...latestClientGoalOutcomes.values()]),
     adherence: {
       ...currentAdherence,
       previousPercent: previousAdherence.percent,

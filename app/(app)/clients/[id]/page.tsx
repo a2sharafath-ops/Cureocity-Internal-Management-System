@@ -43,6 +43,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { DISCIPLINES, disciplineLabel } from "@/lib/disciplines";
 import HealthCoachCarePanel, { type ClinicalReferralView, type SafetyEventView } from "@/components/HealthCoachCarePanel";
 import HealthCoachGoalsPanel, { type CoachingAdherenceView, type CoachingBarrierView, type CoachingGoalView } from "@/components/HealthCoachGoalsPanel";
+import type { ClientGoalOutcome } from "@/lib/client-goal-outcome";
 import HealthCoachBaselinePanel, { type CoachBaselineView, type ScreeningResultView } from "@/components/HealthCoachBaselinePanel";
 
 // Report types, told apart at a glance in the timeline.
@@ -194,12 +195,13 @@ export default async function ClientDetailPage(
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: true }).limit(1).maybeSingle();
 
   const canEditFitness = !ro && canWriteFitness(me?.role ?? "");
-  const [{ data: habitRows }, { data: habitLogRows }, { data: adherenceRows }, { data: barrierRows }, { data: goalEventRows }] = await Promise.all([
+  const [{ data: habitRows }, { data: habitLogRows }, { data: adherenceRows }, { data: barrierRows }, { data: goalEventRows }, { data: clientGoalOutcomeRows }] = await Promise.all([
     supabase.from("habits").select("id, name, icon, cadence, target_per_week, active, cue, time_place, importance, confidence, barrier_code, barrier_detail, if_then_plan, review_date, status").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("habit_logs").select("habit_id, date").eq("client_id", params.id).eq("done", true),
     supabase.from("coach_adherence_events").select("id, goal_id, category, event_date, outcome, source, note, recorder_name, created_at").eq("client_id", params.id).order("event_date", { ascending: false }).order("created_at", { ascending: false }).limit(200),
     supabase.from("coach_barriers").select("id, goal_id, category, detail, coach_response, status, identified_at, resolved_by, resolved_at, resolution_note").eq("client_id", params.id).order("identified_at", { ascending: false }),
     supabase.from("coach_goal_events").select("goal_id, event_type, note, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+    supabase.from("client_goal_outcomes").select("id, goal_id, client_id, goal_name, achievement_rating, progress_note, support_requested, reporter_name, reported_at").eq("client_id", params.id).order("reported_at", { ascending: false }).limit(200),
   ]);
   const habitBase = (habitRows ?? []) as Omit<CoachingGoalView, "doneDates">[];
   const habitDates = new Map<string, Set<string>>();
@@ -211,6 +213,7 @@ export default async function ClientDetailPage(
   const coachingAdherence = (adherenceRows ?? []) as CoachingAdherenceView[];
   const coachingBarriers = (barrierRows ?? []) as CoachingBarrierView[];
   const coachingGoalEvents = (goalEventRows ?? []) as { goal_id: string; event_type: string; note: string | null; actor_name: string; created_at: string }[];
+  const clientGoalOutcomes = (clientGoalOutcomeRows ?? []) as ClientGoalOutcome[];
 
   const [
     { data: coachBaselineRow }, { data: coachScreeningRows },
@@ -712,7 +715,7 @@ export default async function ClientDetailPage(
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","coach_baselines","coach_baseline_events","coach_assessments","coach_session_workflows","coach_session_events","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","client_goal_outcomes","coach_baselines","coach_baseline_events","coach_assessments","coach_session_workflows","coach_session_events","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
             <ClientStatusBadge status={detailStatus} />
@@ -798,6 +801,7 @@ export default async function ClientDetailPage(
           goals={habits}
           events={coachingAdherence}
           barriers={coachingBarriers}
+          outcomes={clientGoalOutcomes}
           canManage={canManageCoaching}
           today={habToday}
           supervisorOverride={coachSupervisorOverride}

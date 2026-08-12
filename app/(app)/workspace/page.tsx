@@ -386,6 +386,7 @@ export default async function WorkspacePage(
   const emptyQualityInput = {
     clientCount: scoped.length,
     appointments: [], followups: [], goals: [], adherenceCurrent: [], adherencePrevious: [],
+    clientGoalOutcomes: [],
     barriers: [], referrals: [], safetyEvents: [], mdtTasks: [], baselines: [], assessments: [],
     sessions: [], huddles: [], huddleTaskIds: [],
   };
@@ -419,7 +420,7 @@ export default async function WorkspacePage(
       { data: qualityAppointments }, { data: qualityFollowups }, { data: qualityGoals },
       { data: qualityAdherence }, { data: qualityBarriers }, { data: qualityReferrals },
       { data: qualitySafety }, { data: qualityTasks }, { data: qualityBaselines },
-      { data: qualityAssessments }, { data: qualityWorkflows }, { data: qualityHuddles },
+      { data: qualityAssessments }, { data: qualityWorkflows }, { data: qualityGoalOutcomes }, { data: qualityHuddles },
       { data: reviewRows },
     ] = await Promise.all([
       supabase.from("appointments").select("status, staff:provider_id(role)").in("client_id", scopedIds).gte("date", currentStart).lte("date", today),
@@ -433,6 +434,7 @@ export default async function WorkspacePage(
       supabase.from("coach_baselines").select("status").in("client_id", scopedIds),
       supabase.from("coach_assessments").select("instrument_version, administration_mode").in("client_id", scopedIds).gte("date", currentStart),
       supabase.from("coach_session_workflows").select("id, client_id, session_number, status, completion_percent, completed_by_name, completed_at, clients(name)").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`).order("completed_at", { ascending: false }),
+      supabase.from("client_goal_outcomes").select("goal_id, achievement_rating, support_requested, reported_at").in("client_id", scopedIds).gte("reported_at", `${currentStart}T00:00:00Z`),
       supabase.from("mdt_huddles").select("id").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`),
       supabase.from("coach_quality_reviews").select("id, workflow_id, client_id, coach_name, session_number, ratings, overall_result, reviewer_note, reviewer_name, reviewed_at, clients(name)").in("client_id", scopedIds).order("reviewed_at", { ascending: false }).limit(100),
     ]);
@@ -446,6 +448,7 @@ export default async function WorkspacePage(
       goals: ((qualityGoals ?? []) as { name: string; cadence: string | null; target_per_week: number; status: string; if_then_plan: string | null }[]).map((goal) => ({ ...goal, cadence: goal.cadence ?? "" })),
       adherenceCurrent: adherenceRows.filter((row) => row.event_date >= currentStart).map((row) => ({ outcome: row.outcome })),
       adherencePrevious: adherenceRows.filter((row) => row.event_date >= previousStart && row.event_date <= previousEnd).map((row) => ({ outcome: row.outcome })),
+      clientGoalOutcomes: (qualityGoalOutcomes ?? []) as { goal_id: string; achievement_rating: number; support_requested: boolean; reported_at: string }[],
       barriers: (qualityBarriers ?? []) as { status: string }[],
       referrals: (qualityReferrals ?? []) as { status: string }[],
       safetyEvents: (qualitySafety ?? []) as { opened_at: string; acknowledged_at: string | null }[],
@@ -1019,7 +1022,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_quality_standards", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_quality_standards", "client_goal_outcomes", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director

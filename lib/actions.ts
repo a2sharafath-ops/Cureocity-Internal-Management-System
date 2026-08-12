@@ -5691,6 +5691,78 @@ export async function toggleHabitSelf(formData: FormData) {
   revalidatePath("/portal");
 }
 
+export type ClientGoalOutcomeState = { ok?: string; error?: string };
+
+// Portal: preserve the client's own view of goal progress separately from
+// action check-offs and the Coach's lifecycle status.
+export async function recordClientGoalOutcome(
+  _previous: ClientGoalOutcomeState,
+  formData: FormData,
+): Promise<ClientGoalOutcomeState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sign in to share your progress." };
+  const { data: profile } = await supabase.from("profiles")
+    .select("client_id, name, role").eq("id", user.id).maybeSingle();
+  if (!profile?.client_id || profile.role !== "Client") {
+    return { error: "This action is only available in a linked client portal." };
+  }
+
+  const goalId = String(formData.get("goal_id") || "");
+  const { clientGoalOutcomeFromValues } = await import("@/lib/client-goal-outcome");
+  const parsed = clientGoalOutcomeFromValues({
+    rating: formData.get("achievement_rating"),
+    note: formData.get("progress_note"),
+    supportRequested: formData.get("support_requested"),
+  });
+  if (!goalId) return { error: "Choose one of your current coaching goals." };
+  if (!parsed.outcome) return { error: parsed.error ?? "Check the progress report." };
+
+  const { data: goal } = await supabase.from("habits")
+    .select("id, name, client_id, active, status")
+    .eq("id", goalId).eq("client_id", profile.client_id).maybeSingle();
+  if (!goal || !goal.active || goal.status !== "Active") {
+    return { error: "This coaching goal is no longer active." };
+  }
+
+  const { error } = await supabase.rpc("record_client_goal_outcome", {
+    target_goal_id: goalId,
+    target_rating: parsed.outcome.rating,
+    target_note: parsed.outcome.note,
+    target_support_requested: parsed.outcome.supportRequested,
+  });
+  if (error) return { error: error.message };
+  if (parsed.outcome.supportRequested) {
+    try {
+      const { data: assignment } = await supabase.from("client_assignments")
+        .select("staff_id").eq("client_id", profile.client_id).eq("discipline", "coach").maybeSingle();
+      if (assignment?.staff_id) {
+        const admin = createAdminClient();
+        await notifyStaff(admin, assignment.staff_id, {
+          title: `Goal support requested — ${profile.name ?? "Client"}`,
+          body: `${goal.name} · client self-rating ${parsed.outcome.rating}/10`,
+          href: `/clients/${profile.client_id}#coaching-goals`,
+          icon: "🤝",
+          link: { kind: "client", ref: profile.client_id },
+        });
+      }
+    } catch {
+      // The immutable report is already saved and remains visible in the client
+      // record; a notification outage must not invite a duplicate submission.
+    }
+  }
+  await logAudit(
+    { id: user.id, name: profile.name ?? undefined, role: "Client" },
+    "Client goal progress reported",
+    profile.name ?? undefined,
+    `${goal.name}: ${parsed.outcome.rating}/10${parsed.outcome.supportRequested ? " · support requested" : ""}`,
+  );
+  revalidatePath("/portal");
+  revalidatePath(`/clients/${profile.client_id}`);
+  revalidatePath("/workspace");
+  return { ok: "Your progress report was shared with your care team." };
+}
+
 // ---- appointments / calendar -----------------------------------------------
 
 export async function createAppointment(formData: FormData): Promise<{ ok: boolean; error?: string }> {
