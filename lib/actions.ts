@@ -36,7 +36,6 @@ import { notifyRoles, notifyStaff, notifyClient } from "@/lib/notify";
 import { BP_BOOKING_TASKS, BP_BOOKING_DUE_DAYS } from "@/lib/blueprint-sla";
 import { BOOKING_OWNER } from "@/lib/work-owners";
 import { SUGGESTED_OFFSET, type RemarkOutcome } from "@/lib/lead-followup";
-import { nextStageKey, stageForConsult, AUTO_WINDOW_DAYS, JOURNEY_STAGES } from "@/lib/live-journey";
 import { leadScore } from "@/lib/leadscore";
 import {
   EXPERIENCE_ASSESSMENT_TYPE, EXPERIENCE_ASSESSMENT_TITLE,
@@ -934,14 +933,6 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
       } else if (cat0 === PT_CATEGORY) {
         await startPTJourney(supabase, inserted.id, lead.name, joined, p.name);
       }
-      // BluePrint only. It is the one same-day product: the client comes in and
-      // does all three assessments in a single visit, which is exactly what the
-      // board exists to run. Comprehensive and PT were tried here and removed —
-      // Front Desk has two days just to BOOK their assessments, so those clients
-      // sat on the board for a week before ever walking in.
-      if (cat0 === "blueprint") {
-        await startLiveJourney(supabase, inserted.id, p.name);
-      }
     }
   }
   // record referral attribution
@@ -1040,9 +1031,6 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     if (cat === "blueprint") await startBlueprintJourney(supabase, client_id, who, p.name);
     else if (cat === COMPREHENSIVE_CATEGORY) await startComprehensiveJourney(supabase, client_id, who, start, p.name);
     else await startPTJourney(supabase, client_id, who, start, p.name);
-    // BluePrint only — see the note in convertLeadVerified. It is the one
-    // same-day product, so it is the only one the board can meaningfully track.
-    if (cat === "blueprint") await startLiveJourney(supabase, client_id, p.name);
   }
   await logAudit(p, "Package purchased", pkg.name, client_id);
   const { data: pcli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
@@ -1259,9 +1247,6 @@ export async function startConsult(formData: FormData) {
   }).select("id").maybeSingle();
   const { data: c } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   await logAudit(p, "Consultation started", c?.name, kind);
-  // Opening the consult IS the client arriving at that assessment. Must run
-  // before the redirect below — redirect() throws to unwind the request.
-  await syncJourneyFromConsult(supabase, client_id, kind, "start", p.name);
   if (row?.id) redirect(`/console/${row.id}`);
   redirect("/workspace?tab=summaries");
 }
@@ -1321,9 +1306,6 @@ export async function startConsultFromAppointment(formData: FormData) {
     ? (await supabase.from("clients").select("name").eq("id", appt.client_id).maybeSingle()).data?.name
     : (await supabase.from("leads").select("name").eq("id", appt.lead_id).maybeSingle()).data?.name;
   await logAudit(p, "Consultation started", subjName, kind);
-  // Same as startConsult, and before the redirect for the same reason. A trial
-  // booked against a lead has no client_id — the helper no-ops on null.
-  await syncJourneyFromConsult(supabase, appt.client_id, kind, "start", p.name);
   if (consultId) redirect(`/console/${consultId}`);
   redirect("/pro");
 }
@@ -1376,8 +1358,6 @@ export async function markConsultDone(formData: FormData) {
     ? (await supabase.from("clients").select("name").eq("id", appt.client_id).maybeSingle()).data?.name
     : (await supabase.from("leads").select("name").eq("id", appt.lead_id).maybeSingle()).data?.name;
   await logAudit(p, "Consultation completed", subjName, kind);
-  // Closing out the consult is the handover back to the coach.
-  await syncJourneyFromConsult(supabase, appt.client_id, kind, "complete", p.name);
   await notifyCareTeamOfConsult(supabase, appt.client_id, kind, p.staffId ?? null, p.name);
   revalidatePath("/workspace");
   revalidatePath("/appointments");
@@ -1649,9 +1629,7 @@ export async function completeConsultation(formData: FormData) {
   // Keep the booked appointment's "done" state in step with the consultation.
   const apptId = (row as { appointment_id?: string | null }).appointment_id ?? null;
   if (apptId) await supabase.from("appointments").update({ status: "completed" }).eq("id", apptId);
-  // Handover back to the coach — the console's own close-out path.
   const consultClientId = (row as { client_id?: string | null }).client_id ?? null;
-  await syncJourneyFromConsult(supabase, consultClientId, row.kind, "complete", p.name);
   await notifyCareTeamOfConsult(supabase, consultClientId, row.kind, p.staffId ?? null, p.name);
   revalidatePath("/pro");
   revalidatePath("/appointments");
@@ -8952,70 +8930,6 @@ export async function shareDietAssessment(formData: FormData): Promise<{ ok?: bo
   return { ok: true };
 }
 
-// ============================================================================
-// Live Journey — automatic tracking.
-//
-// The board is fed by work the team already does, never by a second form:
-//   * a PT / Comprehensive / BluePrint purchase opens the journey and hands the
-//     client to their Health Coach (a facility membership does NOT — the coach
-//     journey is a paid-package entitlement);
-//   * opening and completing the consultations moves the client along.
-// The manual controls on the board remain, but only as an override.
-// ============================================================================
-
-/**
- * Open the Live Journey for a client who has just bought BluePrint.
- *
- * BluePrint only, deliberately. It is the single-visit diagnostic product — the
- * client comes in and does fitness, medical and diet in one day, which is the
- * flow this board runs. Comprehensive and PT were included at first and taken
- * out: their assessments are booked over the following days, so those clients
- * appeared on the board on purchase day and sat there unarrived for a week.
- *
- * Starts at "Front Desk", not "Awaiting Coach". "Awaiting Coach" is a *wait*
- * stage: entering it starts the SOP's three-minute coach-present clock. The
- * desk still has paperwork to finish after the sale, so opening the journey
- * straight into it would start that clock at the moment of purchase and report
- * a breach for time the coach was never called for. journeyHandover moves the
- * client on when the desk actually hands them over, which is when the three
- * minutes genuinely begin.
- *
- * Idempotent: a client with a journey already open is left alone.
- */
-async function startLiveJourney(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  clientId: string,
-  actor: string,
-) {
-  const { data: open } = await supabase
-    .from("journeys").select("id").eq("client_id", clientId).eq("status", "active").limit(1);
-  if (((open ?? []) as { id: string }[]).length) return;
-
-  // The coach the assignment engine just gave this client (all three package
-  // journeys call assignCareTeam with "coach" before this runs).
-  const { data: asg } = await supabase
-    .from("client_assignments").select("staff_id").eq("client_id", clientId).eq("discipline", "coach").maybeSingle();
-  const coachId = (asg as { staff_id?: string | null } | null)?.staff_id ?? null;
-
-  const { data: row } = await supabase.from("journeys").insert({
-    client_id: clientId,
-    coach_id: coachId,
-    stage: "front_desk",
-    status: "active",
-    source: "Package purchase",
-    created_by: actor,
-  }).select("id").maybeSingle();
-
-  const jid = (row as { id: string } | null)?.id;
-  if (!jid) return;
-  // Only the arrival at the desk. journeyHandover logs the handover itself when
-  // the desk passes the client to the coach; stamping it here would record a
-  // handover that hasn't happened yet.
-  await supabase.from("journey_events").insert({
-    journey_id: jid, kind: "stage_enter", stage: "front_desk", by_name: actor,
-  });
-}
-
 /**
  * Tell the rest of this client's care team that a consultation has been closed.
  *
@@ -9075,196 +8989,3 @@ const CONSULT_LABEL: Record<string, string> = {
   Trainer: "Fitness assessment",
   Coach: "Coach session",
 };
-
-/**
- * Move a client's open journey in step with their consultations. A no-op when
- * the client has no journey open, so consults outside a coached package (and
- * follow-ups long after the visit) never touch the board.
- */
-async function syncJourneyFromConsult(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  clientId: string | null,
-  kind: string,
-  phase: "start" | "complete",
-  actor: string,
-) {
-  if (!clientId) return;
-
-  // The journey is read BEFORE the stage is decided: a Coach consult means the
-  // opening briefing or the closing review depending on where the client
-  // already is, and the kind alone cannot tell them apart.
-  const since = new Date(Date.now() - AUTO_WINDOW_DAYS * 86_400_000).toISOString();
-  const { data: rows } = await supabase
-    .from("journeys").select("id, stage").eq("client_id", clientId).eq("status", "active")
-    .gte("created_at", since).order("created_at", { ascending: false }).limit(1);
-  const j = ((rows ?? []) as { id: string; stage: string }[])[0];
-  if (!j) return;                       // nothing open — consults outside a coached visit
-
-  const stage = stageForConsult(kind, phase, j.stage);
-  if (!stage || j.stage === stage) return;  // not a board-moving kind, or already there
-
-  await supabase.from("journeys").update({
-    stage,
-    stage_entered_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    ...(stage === "done" ? { status: "done" } : {}),
-  }).eq("id", j.id);
-  await supabase.from("journey_events").insert({ journey_id: j.id, kind: "stage_enter", stage, by_name: actor });
-  revalidatePath("/journey");
-}
-
-// ============================================================================
-// Live Journey — the D0 concierge board (SOP: Core Assessment Journey).
-// The Health Coach owns the walk-in's journey; Front Desk starts it, the
-// professionals ping the coach as their session ends, and the coach advances
-// the client at each handover. See supabase/0135_live_journey.sql and
-// lib/live-journey.ts (the pure stage/KPI logic).
-// ============================================================================
-
-async function logJourneyEvent(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  journeyId: string,
-  kind: "stage_enter" | "notify_coach" | "handover" | "cancel" | "note",
-  stage: string | null,
-  byName: string,
-) {
-  await supabase.from("journey_events").insert({ journey_id: journeyId, kind, stage, by_name: byName });
-}
-
-// NOTE: `createWalkIn` lived here — Front Desk registered a walk-in straight
-// onto the board, independently of the client record. Removed deliberately: it
-// was a second registration path, and a journey created that way had no client,
-// no package and no care team, so it drifted out of step with the CRM. A client
-// now joins the board via startLiveJourney when a coached package is sold.
-// Deliberately not reinstated — the board is a projection, not an entry point.
-
-// Front Desk hands the client to the Health Coach: captures the goal/source/
-// concerns and moves the journey from the desk to "Awaiting Coach".
-export async function journeyHandover(formData: FormData): Promise<{ ok: boolean; error?: string }> {
-  const p = await getProfile();
-  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
-  const id = String(formData.get("id") || "");
-  if (!id) return { ok: false, error: "Missing journey" };
-  const supabase = await createClient();
-
-  const goal = String(formData.get("goal") || "").trim();
-
-  await supabase.from("journeys").update({
-    goal: goal || null,
-    source: String(formData.get("source") || "") || null,
-    concerns: String(formData.get("concerns") || "") || null,
-    stage: "await_coach",
-    stage_entered_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("id", id).eq("stage", "front_desk");
-
-  // The goal belongs to the client, not to this one visit: the clinician
-  // console and the client portal both read clients.goals, so writing it back
-  // is what actually gets it in front of Fitness / Doctor / Dietitian.
-  //
-  // Only ever writes a non-empty value. A coach who clears the box, or a
-  // journey with no client (legacy walk-in rows), must not wipe what intake
-  // captured — losing the client's stated goal is far worse than a stale one.
-  if (goal) {
-    const { data: jrow } = await supabase
-      .from("journeys").select("client_id").eq("id", id).maybeSingle();
-    const cid = (jrow as { client_id?: string | null } | null)?.client_id ?? null;
-    // Editing the client record is `canWrite`, which this action's own guard
-    // (canEditAppointments) is wider than — it includes the Health Coach, who
-    // cannot edit a client anywhere else in the app. And this REPLACES the
-    // goals captured at intake rather than adding to them. So the visit always
-    // records the goal; the client record is only rewritten by someone allowed
-    // to rewrite it.
-    if (cid && canWrite(p.role)) {
-      // clients.goals is text[]; the board edits it as one line. Comma-split so
-      // a coach typing "Fat loss, Sleep" round-trips as two goals, not one.
-      const goals = goal.split(",").map((g) => g.trim()).filter(Boolean);
-      await supabase.from("clients").update({ goals }).eq("id", cid);
-      revalidatePath(`/clients/${cid}`);
-    }
-  }
-
-  await logJourneyEvent(supabase, id, "handover", "front_desk", p.name);
-  await logJourneyEvent(supabase, id, "stage_enter", "await_coach", p.name);
-  revalidatePath("/journey");
-  return { ok: true };
-}
-
-// The Health Coach advances the client to the next stage of the flow.
-export async function journeyAdvance(formData: FormData): Promise<{ ok: boolean; error?: string }> {
-  const p = await getProfile();
-  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
-  const id = String(formData.get("id") || "");
-  if (!id) return { ok: false, error: "Missing journey" };
-  const supabase = await createClient();
-
-  const { data: cur } = await supabase.from("journeys").select("stage").eq("id", id).maybeSingle();
-  const stage = (cur as { stage?: string } | null)?.stage;
-  if (!stage) return { ok: false, error: "Journey not found" };
-
-  const next = nextStageKey(stage);
-  if (next === stage) return { ok: true }; // already at the end
-  const patch: Record<string, unknown> = {
-    stage: next,
-    stage_entered_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-  if (next === "done") patch.status = "done";
-
-  await supabase.from("journeys").update(patch).eq("id", id);
-  await logJourneyEvent(supabase, id, "stage_enter", next, p.name);
-  revalidatePath("/journey");
-  return { ok: true };
-}
-
-// A professional signals the coach that their session is ending. Any staff on
-// the floor can send it (the doctor/dietitian/trainer running the assessment).
-export async function journeyNotifyCoach(formData: FormData): Promise<{ ok: boolean; error?: string }> {
-  const p = await getProfile();
-  // The people who can actually be at a handover: the clinician finishing a
-  // session, or the desk/coach running the board. It used to accept ANY staff
-  // account — HR and Finance included, neither of whom can even see the board.
-  // The cost was not data but noise: pings at a coach for a client they are not
-  // with, and a `notify_coach` row that makes the board read as though the coach
-  // had been summoned, which hides the three-minute breach.
-  if (!p || !(canConsult(p.role) || canEditAppointments(p.role))) return { ok: false, error: "Not permitted" };
-  const id = String(formData.get("id") || "");
-  if (!id) return { ok: false, error: "Missing journey" };
-  // Free text from the form, and the board reads it back to decide whether the
-  // coach has been called for the stage the client is actually in.
-  const posted = String(formData.get("stage") || "");
-  const stage = JOURNEY_STAGES.some((s) => s.key === posted) ? posted : null;
-  const supabase = await createClient();
-
-  await logJourneyEvent(supabase, id, "notify_coach", stage, p.name);
-
-  // Push a notification to the coach behind this journey, if there is one.
-  const { data: jr } = await supabase.from("journeys").select("coach_id, walk_in_name, client_id, clients(name)").eq("id", id).maybeSingle();
-  const j = jr as { coach_id?: string | null; walk_in_name?: string | null; clients?: { name?: string } | null } | null;
-  if (j?.coach_id) {
-    const who = j.clients?.name ?? j.walk_in_name ?? "A client";
-    try {
-      await notifyStaff(supabase, j.coach_id, {
-        title: "Session ending — please return",
-        body: `${who} is finishing their assessment. Return to escort them to the next one.`,
-        href: "/journey",
-        icon: "🔔",
-      });
-    } catch { /* notification is best-effort */ }
-  }
-  revalidatePath("/journey");
-  return { ok: true };
-}
-
-// Remove a walk-in from the board (left, or logged in error).
-export async function journeyCancel(formData: FormData): Promise<{ ok: boolean; error?: string }> {
-  const p = await getProfile();
-  if (!p || !canEditAppointments(p.role)) return { ok: false, error: "Not permitted" };
-  const id = String(formData.get("id") || "");
-  if (!id) return { ok: false, error: "Missing journey" };
-  const supabase = await createClient();
-  await supabase.from("journeys").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
-  await logJourneyEvent(supabase, id, "cancel", null, p.name);
-  revalidatePath("/journey");
-  return { ok: true };
-}

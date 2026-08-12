@@ -10,7 +10,6 @@ export const PAGE_META: Record<string, PageMeta> = {
   "/leads":         { title: "CRM & Leads" },
   "/clients":       { title: "Clients" },
   "/appointments":  { title: "Appointment Calendar" },
-  "/journey":       { title: "Live Journey" },
   "/sessions":      { title: "Training Schedule" },
   "/classes":       { title: "Group Classes" },
   "/messages":      { title: "Communications" },

@@ -24,7 +24,7 @@ Rules for that block:
   tree genuinely belongs in the commit. Sharafath often has unrelated
   work-in-progress sitting uncommitted; sweeping it into a commit is a real
   cost. Check `git status` first and stage only what changed for this task.
-- **Quote paths containing parentheses**, e.g. `"app/(app)/journey/page.tsx"`.
+- **Quote paths containing parentheses**, e.g. `"app/(app)/workspace/page.tsx"`.
 - **One block, in order, ready to paste.** Not prose describing the steps.
 - **Say what will happen after** — e.g. "Vercel will rebuild in a minute or two,
   then hard-refresh with Cmd+Shift+R."
@@ -42,14 +42,6 @@ lives on.
 | Don't say | Say |
 |---|---|
 | `clients.goals` | the **Primary goal** on the client's page |
-| `journeys.concerns` | the **Concerns / urgency** box on the Live Journey board |
-| `journeys.stage` | which **Current stage** chip the client is showing |
-| `startLiveJourney` | the client appearing on the board when a package is sold |
-| `syncJourneyFromConsult` | the board moving when a consultation starts or ends |
-| `journeyHandover` | the **Hand to Coach** button |
-| `createWalkIn` | the old **+ Walk-in** button |
-| `status = 'active'` | still on the board / not finished yet |
-| `AUTO_WINDOW_DAYS` | the 14-day limit on auto-tracking |
 | the `consultations` table | consultations in **Workspace → Summaries** |
 | RLS / a policy | who's allowed to see or change it |
 | a null value | the field is empty |

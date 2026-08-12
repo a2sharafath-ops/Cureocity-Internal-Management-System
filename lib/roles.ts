@@ -62,9 +62,6 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/sessions": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/classes": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/appointments": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
-  // The D0 concierge board — Front Desk starts the walk-in, the coach owns the
-  // journey, and every professional pings the coach as their session ends.
-  "/journey": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/followups": ["Administrator", "Manager", "Front Desk", "Health Coach"],
   "/intake": ["Administrator", "Manager", "Front Desk"],
   "/access": ["Administrator", "Manager", "Front Desk"],
@@ -368,7 +365,7 @@ export const ROLE_LIST: Role[] = [
 
 // Short area labels for each nav route (mirrors the prototype's area codes).
 const AREA_LABEL: Record<string, string> = {
-  "/dashboard": "dash", "/leads": "crm", "/clients": "clients", "/onboarding": "clients", "/appointments": "booking", "/journey": "journey",
+  "/dashboard": "dash", "/leads": "crm", "/clients": "clients", "/onboarding": "clients", "/appointments": "booking",
   "/sessions": "training", "/followups": "followups", "/messages": "comms", "/retention": "retention",
   "/targets": "targets", "/intake": "intake", "/access": "access", "/workspace": "workspace",
   "/careteam": "careteam", "/whiteboard": "whiteboard", "/telehealth": "telehealth", "/pro": "consults", "/meals": "meals",
