@@ -7830,6 +7830,10 @@ export async function setDishApproved(formData: FormData) {
   const approve = String(formData.get("approve") || "") === "true";
 
   const supabase = await createClient();
+  if (approve) {
+    const priced = (await pricedDishes(supabase)).find((dish) => dish.id === id);
+    if (!priced?.perServing || priced.reason) return { error: priced?.reason ?? "This recipe has no trustworthy per-serving nutrition yet." };
+  }
   const { data: d } = await supabase.from("dishes").select("name").eq("id", id).maybeSingle();
   await supabase.from("dishes").update({
     approved: approve,
@@ -8170,12 +8174,24 @@ export async function approveDishes(formData: FormData) {
   if (!ids.length) return;
 
   const supabase = await createClient();
+  // Form ids are untrusted, and an old browser tab can still submit rows whose
+  // source data changed after it rendered. Re-run the chart's pricing and
+  // plausibility gates here; a bulk button can never clear a held recipe.
+  const requested = new Set(ids);
+  const safe = (await pricedDishes(supabase))
+    .filter((dish) => requested.has(dish.id) && dish.perServing && !dish.reason)
+    .map((dish) => dish.id);
+  if (!safe.length) return { error: "None of these recipes has trustworthy per-serving nutrition yet." };
   await supabase.from("dishes").update({
     approved: true, approved_by: p.name, approved_at: new Date().toISOString(),
-  }).in("id", ids);
+  }).in("id", safe);
 
-  await logAudit(p, "Dishes approved for charts", `${ids.length} recipe${ids.length === 1 ? "" : "s"}`, null);
+  await logAudit(p, "Dishes approved for charts", `${safe.length} recipe${safe.length === 1 ? "" : "s"}`,
+    safe.length < ids.length ? `${ids.length - safe.length} held by nutrition checks` : null);
   revalidatePath("/workspace");
+  return safe.length < ids.length
+    ? { error: `${safe.length} approved; ${ids.length - safe.length} held because their nutrition is incomplete or implausible.` }
+    : {};
 }
 
 export async function deleteDish(formData: FormData) {

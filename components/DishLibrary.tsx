@@ -158,7 +158,7 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
   // so the two questions worth asking of a thousand rows — what have I not
   // cleared, and what looks wrong — are filters rather than something to find
   // by scrolling.
-  const [filter, setFilter] = useState<"all" | "pending" | "suspect">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "held" | "suspect">("all");
 
   /** Which of the two tables this screen is showing. */
   const [view, setView] = useState<"dishes" | "foods">("dishes");
@@ -243,10 +243,17 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
    */
   const suspect = (d: DishRow) => figures(d).clash !== null;
 
+  /** Cleared by the same two gates used when a chart reads the library. */
+  const approvalReady = (d: DishRow) => {
+    const f = figures(d);
+    return f.kcal !== null && f.clash === null;
+  };
+
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let list = needle ? dishes.filter((d) => d.name.toLowerCase().includes(needle)) : dishes;
-    if (filter === "pending") list = list.filter((d) => !d.approved);
+    if (filter === "pending") list = list.filter((d) => !d.approved && approvalReady(d));
+    if (filter === "held") list = list.filter((d) => !d.approved && !approvalReady(d));
     if (filter === "suspect") list = list.filter(suspect);
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,6 +266,10 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
   }, [foods, q]);
 
   const pending = useMemo(() => dishes.filter((d) => !d.approved).length, [dishes]);
+  const ready = useMemo(() => dishes.filter((d) => !d.approved && approvalReady(d)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dishes, foodMap]);
+  const held = pending - ready;
   const suspects = useMemo(() => dishes.filter(suspect).length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dishes, foodMap]);
@@ -300,6 +311,22 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
       const r = await saveDish(fd);
       if (r?.error) { setErr(r.error); return; }
       setDraft(null);
+    });
+  };
+
+  const approveShown = (formData: FormData) => {
+    setErr(null);
+    start(async () => {
+      const result = await approveDishes(formData);
+      if (result?.error) setErr(result.error);
+    });
+  };
+
+  const toggleApproval = (formData: FormData) => {
+    setErr(null);
+    start(async () => {
+      const result = await setDishApproved(formData);
+      if (result?.error) setErr(result.error);
     });
   };
 
@@ -425,8 +452,8 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
           <div style={{ fontSize: 13 }}>
             {pending > 0 && (
               <>
-                <b>{pending} recipe{pending === 1 ? "" : "s"} waiting to be approved.</b>
-                <span style={{ color: "var(--amber-text)" }}> Nothing here can be used on a client&apos;s chart until you approve it.</span>
+                <b>{ready} recipe{ready === 1 ? "" : "s"} ready for approval.</b>
+                {held > 0 && <span style={{ color: "var(--amber-text)" }}> {held} held because a serving or trustworthy nutrition figure is still missing.</span>}
               </>
             )}
             {pending === 0 && <b>All recipes approved.</b>}
@@ -439,7 +466,8 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
               something different, and nobody would notice by scrolling. */}
           {([
             ["all", `All ${dishes.length}`, dishes.length],
-            ["pending", `Not approved (${pending})`, pending],
+            ["pending", `Ready (${ready})`, ready],
+            ["held", `Source data needed (${held})`, held],
             ["suspect", `Needs a look (${suspects})`, suspects],
           ] as const).filter(([, , n]) => n > 0).map(([key, label]) => (
             <button key={key} type="button" onClick={() => setFilter(key)}
@@ -453,11 +481,11 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
               "dosa", read the eleven results, approve those eleven — which is
               how a thousand recipes actually get worked through. A button that
               silently cleared all 1,014 would make the gate pointless. */}
-          {shown.some((d) => !d.approved) && (
-            <form action={approveDishes}>
-              <input type="hidden" name="ids" value={shown.filter((d) => !d.approved).map((d) => d.id).join(",")} />
+          {shown.some((d) => !d.approved && approvalReady(d)) && (
+            <form action={approveShown}>
+              <input type="hidden" name="ids" value={shown.filter((d) => !d.approved && approvalReady(d)).map((d) => d.id).join(",")} />
               <button style={darkBtn}>
-                Approve the {shown.filter((d) => !d.approved).length} shown
+                Approve the {shown.filter((d) => !d.approved && approvalReady(d)).length} ready
               </button>
             </form>
           )}
@@ -641,11 +669,14 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
                   <>
                     {/* Approving is what puts a recipe in front of a client, so
                         it sits with the other things that change the dish. */}
-                    <form action={setDishApproved}>
+                    <form action={toggleApproval}>
                       <input type="hidden" name="id" value={d.id} />
                       <input type="hidden" name="approve" value={d.approved ? "false" : "true"} />
-                      <button style={d.approved ? ghost : { ...darkBtn, padding: "6px 12px", fontSize: 12.5 }}>
-                        {d.approved ? "Withdraw" : "Approve"}
+                      <button disabled={!d.approved && !approvalReady(d)} title={!d.approved && !approvalReady(d) ? "Add a reliable serving and nutrition figure before approval" : undefined}
+                        style={d.approved ? ghost : approvalReady(d)
+                          ? { ...darkBtn, padding: "6px 12px", fontSize: 12.5 }
+                          : { ...ghost, color: "var(--muted)", cursor: "not-allowed" }}>
+                        {d.approved ? "Withdraw" : approvalReady(d) ? "Approve" : "Held"}
                       </button>
                     </form>
                     <button type="button" onClick={() => { setOpenId(d.id); setDetailErr(null); }} style={ghost}>Edit</button>
