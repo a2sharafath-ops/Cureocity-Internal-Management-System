@@ -141,9 +141,14 @@ export function portionOf(perServing: Nutrients, servings: number): Nutrients {
  * it does, the fault is in the recipe, not in the arithmetic.
  */
 export const TRUST_COMPUTED_WITHIN = 0.25;
+/** Small calorie gaps are rounding/table noise, even when the percentage is large. */
+export const SOURCE_DISAGREEMENT_FLOOR_KCAL = 15;
 
 export function contradictsSource(ours: number, published: number): boolean {
-  return published > 0 && Math.abs(ours - published) / published > TRUST_COMPUTED_WITHIN;
+  const gap = Math.abs(ours - published);
+  return published > 0
+    && gap > SOURCE_DISAGREEMENT_FLOOR_KCAL
+    && gap / published > TRUST_COMPUTED_WITHIN;
 }
 
 /**

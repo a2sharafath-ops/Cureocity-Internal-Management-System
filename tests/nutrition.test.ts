@@ -30,6 +30,12 @@ describe("a serving nobody eats at a sitting", () => {
     expect(contradictsSource(4212, 4563)).toBe(false);
     expect(servingLooksTooBig(4212)).toBe(true);
   });
+
+  it("does not flag harmless rounding gaps on low-calorie foods", () => {
+    expect(contradictsSource(29, 19)).toBe(false); // small onion pickle
+    expect(contradictsSource(27, 19)).toBe(false); // green chutney
+    expect(contradictsSource(106, 142)).toBe(true); // a material gap still needs review
+  });
 });
 // Real IFCT 2017 values, per 100 g edible portion.
 const RICE: Food = { food_code: "B023", name: "Rice, raw, milled", protein_g: 7.94, fat_g: 0.52, carb_g: 78.24, fibre_g: 2.81, kcal: 356 };
