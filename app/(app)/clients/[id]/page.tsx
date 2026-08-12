@@ -9,10 +9,8 @@ import { fmtDate, fmtTime, IST } from "@/lib/datetime";
 import FilesGrid from "@/components/FilesGrid";
 import MeasurementForm from "@/components/MeasurementForm";
 import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
-import HabitForm from "@/components/HabitForm";
 import { WearableForm, WearableConnect } from "@/components/WearableForm";
-import { archiveHabit, removeWorkout } from "@/lib/actions";
-import { currentStreak, last7Count } from "@/lib/habits";
+import { removeWorkout } from "@/lib/actions";
 import { todayISO } from "@/lib/today";
 import { packageCategory } from "@/lib/packages";
 import { ageFromDob } from "@/lib/dob";
@@ -44,6 +42,7 @@ import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
 import { DISCIPLINES, disciplineLabel } from "@/lib/disciplines";
 import HealthCoachCarePanel, { type ClinicalReferralView, type SafetyEventView } from "@/components/HealthCoachCarePanel";
+import HealthCoachGoalsPanel, { type CoachingAdherenceView, type CoachingBarrierView, type CoachingGoalView } from "@/components/HealthCoachGoalsPanel";
 
 // Report types, told apart at a glance in the timeline.
 const REPORT_LABEL: Record<string, string> = {
@@ -195,16 +194,23 @@ export default async function ClientDetailPage(
 
   const canManageCoaching = !ro && canManageHealthCoaching(me?.role ?? "");
   const canEditFitness = !ro && canWriteFitness(me?.role ?? "");
-  const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
-    supabase.from("habits").select("id, name, icon, cadence, target_per_week, active").eq("client_id", params.id).eq("active", true).order("created_at"),
+  const [{ data: habitRows }, { data: habitLogRows }, { data: adherenceRows }, { data: barrierRows }, { data: goalEventRows }] = await Promise.all([
+    supabase.from("habits").select("id, name, icon, cadence, target_per_week, active, cue, time_place, importance, confidence, barrier_code, barrier_detail, if_then_plan, review_date, status").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("habit_logs").select("habit_id, date").eq("client_id", params.id).eq("done", true),
+    supabase.from("coach_adherence_events").select("id, goal_id, category, event_date, outcome, source, note, recorder_name, created_at").eq("client_id", params.id).order("event_date", { ascending: false }).order("created_at", { ascending: false }).limit(200),
+    supabase.from("coach_barriers").select("id, goal_id, category, detail, coach_response, status, identified_at, resolved_by, resolved_at, resolution_note").eq("client_id", params.id).order("identified_at", { ascending: false }),
+    supabase.from("coach_goal_events").select("goal_id, event_type, note, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
   ]);
-  const habits = (habitRows ?? []) as { id: string; name: string; icon: string | null; cadence: string; target_per_week: number; active: boolean }[];
+  const habitBase = (habitRows ?? []) as Omit<CoachingGoalView, "doneDates">[];
   const habitDates = new Map<string, Set<string>>();
   for (const l of ((habitLogRows ?? []) as { habit_id: string; date: string }[])) {
     (habitDates.get(l.habit_id) ?? habitDates.set(l.habit_id, new Set()).get(l.habit_id)!).add(l.date);
   }
   const habToday = todayISO();
+  const habits: CoachingGoalView[] = habitBase.map((goal) => ({ ...goal, doneDates: [...(habitDates.get(goal.id) ?? new Set<string>())] }));
+  const coachingAdherence = (adherenceRows ?? []) as CoachingAdherenceView[];
+  const coachingBarriers = (barrierRows ?? []) as CoachingBarrierView[];
+  const coachingGoalEvents = (goalEventRows ?? []) as { goal_id: string; event_type: string; note: string | null; actor_name: string; created_at: string }[];
 
   const [{ data: wearConns }, { data: wearReads }] = await Promise.all([
     supabase.from("wearable_connections").select("provider, status").eq("client_id", params.id),
@@ -513,6 +519,35 @@ export default async function ClientDetailPage(
         href: `/clients/${params.id}?tab=overview#care-coordination`,
       };
     }),
+    coachingGoalEvents.map((event) => ({
+      at: event.created_at, kind: "note" as const,
+      title: `Coaching goal ${event.event_type.toLowerCase()}`,
+      detail: event.note, by: event.actor_name,
+      href: `/clients/${params.id}?tab=overview#coaching-goals`,
+    })),
+    coachingAdherence.map((event) => ({
+      at: atDay(event.event_date) ?? "", kind: "task" as const,
+      title: `${event.category} — ${event.outcome.toLowerCase()}`,
+      detail: event.note, by: event.recorder_name,
+      href: `/clients/${params.id}?tab=overview#coaching-goals`,
+      pending: event.outcome === "Missed",
+    })),
+    coachingBarriers.flatMap((barrier) => {
+      const rows: TimelineEvent[] = [{
+        at: barrier.identified_at, kind: "concern" as const,
+        title: `Coaching barrier recorded — ${barrier.category}`,
+        detail: barrier.detail,
+        href: `/clients/${params.id}?tab=overview#coaching-goals`,
+        pending: barrier.status !== "Resolved",
+      }];
+      if (barrier.resolved_at) rows.push({
+        at: barrier.resolved_at, kind: "note" as const,
+        title: `Coaching barrier resolved — ${barrier.category}`,
+        detail: barrier.resolution_note, by: barrier.resolved_by,
+        href: `/clients/${params.id}?tab=overview#coaching-goals`,
+      });
+      return rows;
+    }),
     // Blood report — requested, then received.
     bloodRowsAll.flatMap((b) => {
       const panel = b.panel === "comprehensive" ? "Comprehensive" : "BluePrint";
@@ -612,7 +647,7 @@ export default async function ClientDetailPage(
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
             <ClientStatusBadge status={detailStatus} />
@@ -675,6 +710,17 @@ export default async function ClientDetailPage(
             showOpenSafety={false}
           />
         </div>
+      )}
+
+      {canConsult(me?.role ?? "") && (
+        <HealthCoachGoalsPanel
+          clientId={params.id}
+          goals={habits}
+          events={coachingAdherence}
+          barriers={coachingBarriers}
+          canManage={canManageCoaching}
+          today={habToday}
+        />
       )}
 
       {/* ---- What's pending (the single journey tracker + the actionable items) ---- */}
@@ -1363,7 +1409,7 @@ export default async function ClientDetailPage(
           keeping to it. Three separate cards asked one question between them,
           each gated on the same role check; a coach reads them together or not
           at all. */}
-      {(canManageCoaching || workouts.length > 0 || habits.length > 0 || reads.length > 0) && (
+      {(canManageCoaching || workouts.length > 0 || reads.length > 0) && (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Adherence &amp; coaching</div>
           <div style={{ marginTop: 0 }}>
@@ -1397,45 +1443,6 @@ export default async function ClientDetailPage(
                   </table>
                 </div>
               ))}
-            </div>
-          )}
-          </div>
-          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontWeight: 700 }}>Habits &amp; streaks</div>
-            <span style={{ flex: 1 }} />
-            {canManageCoaching && <HabitForm clientId={params.id} />}
-          </div>
-          {habits.length === 0 ? (
-            <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>No habits assigned yet.</div>
-          ) : (
-            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-              {habits.map((h) => {
-                const dates = habitDates.get(h.id) ?? new Set<string>();
-                const streak = currentStreak(dates, habToday);
-                const week = last7Count(dates, habToday);
-                const hit = week >= h.target_per_week;
-
-                return (
-                  <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
-                    <div style={{ fontSize: 18 }}>{h.icon ?? "✅"}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{h.name}</div>
-                      <div style={{ color: "var(--muted)", fontSize: 12 }}>{h.cadence} · target {h.target_per_week}/wk</div>
-                    </div>
-                    <div style={{ textAlign: "right", minWidth: 88 }}>
-                      <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>{streak}d streak</div>
-                      <div style={{ fontSize: 12, color: hit ? "var(--green-text)" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
-                    </div>
-                    {canManageCoaching && (
-                      <form action={archiveHabit}>
-                        <input type="hidden" name="id" value={h.id} /><input type="hidden" name="client_id" value={params.id} />
-                        <button type="submit" title="Archive" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>Archive</button>
-                      </form>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           )}
           </div>

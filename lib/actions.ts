@@ -18,7 +18,7 @@ import { draftAssessment, assessmentGaps, estimateTee, type Assessment } from "@
 import {
   SYSTEM_PROMPT, clientBrief, dishMenu, parseGeneratedPlan, type PlanContext,
 } from "@/lib/diet-plan-ai";
-import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageHealthCoaching, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -5081,30 +5081,157 @@ export async function setWearableConnection(formData: FormData) {
 
 export async function createHabit(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canManageHealthCoaching(p.role)) return;
   const client_id = String(formData.get("client_id"));
   const name = String(formData.get("name") ?? "").trim();
   if (!client_id || !name) return;
+  const target = Math.min(7, Math.max(1, Number(formData.get("target_per_week")) || 1));
+  const importance = Math.min(10, Math.max(0, Number(formData.get("importance")) || 0));
+  const confidence = Math.min(10, Math.max(0, Number(formData.get("confidence")) || 0));
   const supabase = await createClient();
-  await supabase.from("habits").insert({
+  const goal = {
     client_id, name,
     cadence: String(formData.get("cadence") || "daily"),
-    target_per_week: Number(formData.get("target_per_week")) || 7,
+    target_per_week: target,
     icon: String(formData.get("icon") || "✅"),
-    active: true, created_by: p.name,
-  });
-  await logAudit(p, "Habit assigned", await clientName(supabase, client_id), name);
+    cue: String(formData.get("cue") || "").trim() || null,
+    time_place: String(formData.get("time_place") || "").trim() || null,
+    importance,
+    confidence,
+    barrier_code: String(formData.get("barrier_code") || "").trim() || null,
+    barrier_detail: String(formData.get("barrier_detail") || "").trim() || null,
+    if_then_plan: String(formData.get("if_then_plan") || "").trim() || null,
+    review_date: String(formData.get("review_date") || "") || null,
+    owner_staff_id: p.staffId ?? null,
+    active: true, status: "Active", created_by: p.name, updated_at: new Date().toISOString(),
+  };
+  const { data } = await supabase.from("habits").insert(goal).select("id").single();
+  if (data?.id) {
+    await supabase.from("coach_goal_events").insert({
+      goal_id: data.id, client_id, event_type: "Created", snapshot: goal,
+      actor_id: p.id, actor_name: p.name, actor_role: p.role,
+    });
+  }
+  await logAudit(p, "Coaching goal created", await clientName(supabase, client_id), name);
   revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/workspace");
 }
 
 export async function archiveHabit(formData: FormData) {
   const p = await getProfile();
-  if (!p || !canConsult(p.role)) return;
+  if (!p || !canManageHealthCoaching(p.role)) return;
   const id = String(formData.get("id"));
   const client_id = String(formData.get("client_id"));
   const supabase = await createClient();
-  await supabase.from("habits").update({ active: false }).eq("id", id);
-  await logAudit(p, "Habit archived", null, null);
+  await supabase.from("habits").update({ active: false, status: "Stopped", updated_at: new Date().toISOString() }).eq("id", id).eq("client_id", client_id);
+  await supabase.from("coach_goal_events").insert({ goal_id: id, client_id, event_type: "Stopped", actor_id: p.id, actor_name: p.name, actor_role: p.role });
+  await logAudit(p, "Coaching goal stopped", await clientName(supabase, client_id), null);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/workspace");
+}
+
+export async function setCoachingGoalStatus(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const status = String(formData.get("status"));
+  if (!id || !client_id || !["Active", "Paused", "Completed", "Stopped"].includes(status)) return;
+  const supabase = await createClient();
+  const { data: current } = await supabase.from("habits").select("status").eq("id", id).eq("client_id", client_id).maybeSingle();
+  if (!current) return;
+  const eventType = status === "Active" ? "Reactivated" : status;
+  await supabase.from("habits").update({ status, active: status === "Active", updated_at: new Date().toISOString() }).eq("id", id);
+  await supabase.from("coach_goal_events").insert({
+    goal_id: id, client_id, event_type: eventType,
+    note: String(formData.get("note") || "").trim() || null,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await logAudit(p, `Coaching goal ${status.toLowerCase()}`, await clientName(supabase, client_id), null);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/workspace");
+}
+
+export async function reviewCoachingGoal(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const review_date = String(formData.get("review_date") || "");
+  if (!id || !client_id || !review_date) return;
+  const supabase = await createClient();
+  await supabase.from("habits").update({ review_date, updated_at: new Date().toISOString() }).eq("id", id).eq("client_id", client_id);
+  await supabase.from("coach_goal_events").insert({
+    goal_id: id, client_id, event_type: "Reviewed",
+    note: String(formData.get("note") || "").trim() || `Next review ${review_date}`,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await logAudit(p, "Coaching goal reviewed", await clientName(supabase, client_id), review_date);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/workspace");
+}
+
+export async function recordCoachingAdherence(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const goal_id = String(formData.get("goal_id") || "") || null;
+  const category = String(formData.get("category") || "Coaching goal");
+  const outcome = String(formData.get("outcome") || "Completed");
+  const event_date = String(formData.get("event_date") || todayISO());
+  if (!client_id || !["Completed", "Missed", "Excused"].includes(outcome)) return;
+  const supabase = await createClient();
+  if (goal_id) {
+    const { data: goal } = await supabase.from("habits").select("id").eq("id", goal_id).eq("client_id", client_id).maybeSingle();
+    if (!goal) return;
+  }
+  await supabase.from("coach_adherence_events").insert({
+    client_id, goal_id, category, outcome, event_date, source: "Coach",
+    note: String(formData.get("note") || "").trim() || null,
+    recorded_by: p.id, recorder_name: p.name,
+  });
+  if (goal_id && category === "Coaching goal" && outcome !== "Excused") {
+    await supabase.from("habit_logs").upsert(
+      { habit_id: goal_id, client_id, date: event_date, done: outcome === "Completed" },
+      { onConflict: "habit_id,date" }
+    );
+  }
+  await logAudit(p, `Adherence ${outcome.toLowerCase()}`, await clientName(supabase, client_id), category);
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath("/workspace");
+}
+
+export async function addCoachingBarrier(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return;
+  const client_id = String(formData.get("client_id"));
+  const detail = String(formData.get("detail") || "").trim();
+  if (!client_id || !detail) return;
+  const supabase = await createClient();
+  await supabase.from("coach_barriers").insert({
+    client_id,
+    goal_id: String(formData.get("goal_id") || "") || null,
+    category: String(formData.get("category") || "Other"),
+    detail,
+    coach_response: String(formData.get("coach_response") || "").trim() || null,
+    created_by: p.id, creator_name: p.name,
+  });
+  await logAudit(p, "Coaching barrier recorded", await clientName(supabase, client_id), detail);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function resolveCoachingBarrier(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return;
+  const id = String(formData.get("id"));
+  const client_id = String(formData.get("client_id"));
+  const note = String(formData.get("resolution_note") || "").trim();
+  if (!id || !client_id || !note) return;
+  const supabase = await createClient();
+  await supabase.from("coach_barriers").update({
+    status: "Resolved", resolved_by: p.name, resolved_at: new Date().toISOString(), resolution_note: note,
+  }).eq("id", id).eq("client_id", client_id);
+  await logAudit(p, "Coaching barrier resolved", await clientName(supabase, client_id), note);
   revalidatePath(`/clients/${client_id}`);
 }
 

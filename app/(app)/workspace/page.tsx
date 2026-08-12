@@ -48,6 +48,7 @@ import { careWorkFlags } from "@/lib/care-attention";
 import { withChaseHistory } from "@/lib/chase-log";
 import { disciplineLabel } from "@/lib/disciplines";
 import { canWriteNutrition } from "@/lib/discipline";
+import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
   visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
@@ -215,6 +216,33 @@ export default async function WorkspacePage(
           href: "/workspace?tab=approvals", cta: "Review",
         });
       }
+    }
+  }
+
+  type CoachGoalReview = { id: string; client_id: string; name: string; review_date: string; confidence: number | null; clients: { name: string } | null };
+  let coachGoalReviews: CoachGoalReview[] = [];
+  let coachWeekAdherence: { outcome: AdherenceOutcome }[] = [];
+  if (roleKey === "coach" && scoped.length) {
+    const scopedIds = scoped.map((client) => client.id);
+    const start = new Date(`${today}T00:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - 6);
+    const weekStart = start.toISOString().slice(0, 10);
+    const [{ data: goalRows }, { data: adherenceRows }] = await Promise.all([
+      supabase.from("habits").select("id, client_id, name, review_date, confidence, clients(name)")
+        .in("client_id", scopedIds).eq("status", "Active").not("review_date", "is", null).lte("review_date", today).order("review_date"),
+      supabase.from("coach_adherence_events").select("outcome")
+        .in("client_id", scopedIds).gte("event_date", weekStart).lte("event_date", today),
+    ]);
+    coachGoalReviews = (goalRows ?? []) as unknown as CoachGoalReview[];
+    coachWeekAdherence = (adherenceRows ?? []) as { outcome: AdherenceOutcome }[];
+    for (const goal of coachGoalReviews) {
+      myAttention.push({
+        sev: "med",
+        title: `${goal.clients?.name ?? "Client"} — goal review due`,
+        detail: `${goal.name} · due ${goal.review_date}`,
+        href: `/clients/${goal.client_id}?tab=overview#coaching-goals`,
+        cta: "Review goal",
+      });
     }
   }
 
@@ -848,6 +876,25 @@ export default async function WorkspacePage(
               <AttentionPanel flags={myAttention} viewerRole={me.role} viewerStaffId={me.staffId ?? null} />
             </div>
           )}
+
+          {roleKey === "coach" && (() => {
+            const adherence = adherenceSummary(coachWeekAdherence);
+            return (
+              <div style={{ ...box, padding: "14px 16px", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "start", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 220 }}>
+                    <div style={{ fontWeight: 700 }}>Goal reviews &amp; adherence</div>
+                    <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>Last 7 days, based only on events recorded as completed or missed.</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ background: "var(--neutral-bg)", color: "var(--ink)", borderRadius: 999, padding: "4px 10px", fontSize: 11.5, fontWeight: 700 }}>{coachGoalReviews.length} review{coachGoalReviews.length === 1 ? "" : "s"} due</span>
+                    <span style={{ background: "var(--neutral-bg)", color: "var(--ink)", borderRadius: 999, padding: "4px 10px", fontSize: 11.5, fontWeight: 700 }}>{adherence.percent == null ? "No adherence % yet" : `${adherence.percent}% adherence · ${adherence.completed}/${adherence.reviewed}`}</span>
+                  </div>
+                </div>
+                {coachGoalReviews.length > 0 ? <div style={{ display: "grid", gap: 0, marginTop: 10 }}>{coachGoalReviews.slice(0, 6).map((goal) => <div key={goal.id} style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", padding: "8px 0", fontSize: 12.5 }}><div style={{ flex: 1 }}><b>{goal.clients?.name ?? "Client"}</b><span style={{ color: "var(--muted)" }}> · {goal.name} · due {goal.review_date}</span></div><Link href={`/clients/${goal.client_id}?tab=overview#coaching-goals`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>Review →</Link></div>)}</div> : <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 10 }}>No goal reviews are due.</div>}
+              </div>
+            );
+          })()}
 
           {overdueAppts.length > 0 && (
             <div style={{ ...box, overflow: "hidden", marginBottom: 16, border: "1px solid var(--red-bg)" }}>
