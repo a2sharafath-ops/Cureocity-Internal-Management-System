@@ -213,16 +213,19 @@ export default async function ClientDetailPage(
   const coachingBarriers = (barrierRows ?? []) as CoachingBarrierView[];
   const coachingGoalEvents = (goalEventRows ?? []) as { goal_id: string; event_type: string; note: string | null; actor_name: string; created_at: string }[];
 
-  const [{ data: coachBaselineRow }, { data: coachScreeningRows }, { data: coachBaselineEventRows }] = canConsult(me?.role ?? "")
+  const [{ data: coachBaselineRow }, { data: coachScreeningRows }, { data: coachBaselineEventRows }, { data: coachSessionEventRows }] = canConsult(me?.role ?? "")
     ? await Promise.all([
       supabase.from("coach_baselines").select("id, version, status, answers, triggered_pathways, completion_percent, completed_by_name, completed_at, updated_at").eq("client_id", params.id).maybeSingle(),
       supabase.from("coach_assessments").select("id, marker, score, band, tone, date, instrument, instrument_version, interpretation, recommended_action, reviewer_name, next_review_date, source_url").eq("client_id", params.id).order("date", { ascending: false }).order("created_at", { ascending: false }),
       supabase.from("coach_baseline_events").select("event_type, percent, pathways, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+      supabase.from("coach_session_events").select("consultation_id, event_type, percent, note, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
     ])
-    : [{ data: null }, { data: [] }, { data: [] }];
+    : [{ data: null }, { data: [] }, { data: [] }, { data: [] }];
   const coachBaseline = (coachBaselineRow ?? null) as CoachBaselineView | null;
   const coachScreenings = (coachScreeningRows ?? []) as ScreeningResultView[];
   const coachBaselineEvents = (coachBaselineEventRows ?? []) as { event_type: string; percent: number; pathways: string[]; actor_name: string; created_at: string }[];
+  const coachSessionEvents = (coachSessionEventRows ?? []) as { consultation_id: string; event_type: string; percent: number; note: string | null; actor_name: string; created_at: string }[];
+  const structuredCoachConsults = new Set(coachSessionEvents.map((event) => event.consultation_id));
 
   const [{ data: wearConns }, { data: wearReads }] = await Promise.all([
     supabase.from("wearable_connections").select("provider, status").eq("client_id", params.id),
@@ -489,7 +492,7 @@ export default async function ClientDetailPage(
           pending: sess.some((x) => x.status === "scheduled"),
         }]
       : [],
-    consults.map((c) => ({
+    consults.filter((c) => !structuredCoachConsults.has(c.id)).map((c) => ({
       at: atDay(c.created_at) ?? "", kind: "consultation" as const,
       title: `${c.kind} consultation`, detail: c.status,
       pending: c.status !== "completed",
@@ -552,6 +555,13 @@ export default async function ClientDetailPage(
       by: screening.reviewer_name,
       href: `/clients/${params.id}?tab=overview#coach-baseline`,
       pending: screening.tone === "bad",
+    })),
+    coachSessionEvents.filter((event) => event.event_type !== "Saved").map((event) => ({
+      at: event.created_at, kind: "consultation" as const,
+      title: `Health Coach session ${event.event_type.toLowerCase()} — ${event.percent}%`,
+      detail: event.note, by: event.actor_name,
+      href: `/console/${event.consultation_id}`,
+      pending: event.event_type !== "Completed",
     })),
     coachingAdherence.map((event) => ({
       at: atDay(event.event_date) ?? "", kind: "task" as const,
@@ -675,7 +685,7 @@ export default async function ClientDetailPage(
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","coach_baselines","coach_baseline_events","coach_assessments","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","coach_baselines","coach_baseline_events","coach_assessments","coach_session_workflows","coach_session_events","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
             <ClientStatusBadge status={detailStatus} />

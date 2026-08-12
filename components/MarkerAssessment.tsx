@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { saveCoachAssessment } from "@/lib/actions";
 import { bandFor, TONE_STYLE, type MarkerKey } from "@/lib/coach-markers";
 import { INSTRUMENTS, instrumentIsComplete, visibleInstrumentItems } from "@/lib/coach-instruments";
@@ -9,6 +10,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
   clientId: string; marker: MarkerKey; tool: string; range: string; gender?: string | null;
 }) {
   const instrument = INSTRUMENTS[marker];
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [manual, setManual] = useState("");
@@ -55,7 +57,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
     if (safetyTrigger) form.set("safety_trigger", "1");
     if (safetyAction.trim()) form.set("immediate_action", safetyAction.trim());
     if (note.trim()) form.set("note", note.trim());
-    start(async () => { await saveCoachAssessment(form); reset(); });
+    start(async () => { await saveCoachAssessment(form); reset(); router.refresh(); });
   };
 
   const input: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "6px 8px", fontSize: 12.5, background: "#fff" };

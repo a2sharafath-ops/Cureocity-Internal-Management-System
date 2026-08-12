@@ -223,17 +223,20 @@ export default async function WorkspacePage(
   let coachGoalReviews: CoachGoalReview[] = [];
   let coachWeekAdherence: { outcome: AdherenceOutcome }[] = [];
   let coachBaselineDue: { id: string; name: string; percent: number; status: string }[] = [];
+  let coachSessionDrafts: { consultationId: string; clientId: string; name: string; percent: number; status: string }[] = [];
   if (roleKey === "coach" && scoped.length) {
     const scopedIds = scoped.map((client) => client.id);
     const start = new Date(`${today}T00:00:00Z`);
     start.setUTCDate(start.getUTCDate() - 6);
     const weekStart = start.toISOString().slice(0, 10);
-    const [{ data: goalRows }, { data: adherenceRows }, { data: baselineRows }] = await Promise.all([
+    const [{ data: goalRows }, { data: adherenceRows }, { data: baselineRows }, { data: sessionRows }] = await Promise.all([
       supabase.from("habits").select("id, client_id, name, review_date, confidence, clients(name)")
         .in("client_id", scopedIds).eq("status", "Active").not("review_date", "is", null).lte("review_date", today).order("review_date"),
       supabase.from("coach_adherence_events").select("outcome")
         .in("client_id", scopedIds).gte("event_date", weekStart).lte("event_date", today),
       supabase.from("coach_baselines").select("client_id, status, completion_percent").in("client_id", scopedIds),
+      supabase.from("coach_session_workflows").select("consultation_id, client_id, status, completion_percent, clients(name)")
+        .in("client_id", scopedIds).neq("status", "Completed").order("updated_at", { ascending: false }),
     ]);
     coachGoalReviews = (goalRows ?? []) as unknown as CoachGoalReview[];
     coachWeekAdherence = (adherenceRows ?? []) as { outcome: AdherenceOutcome }[];
@@ -242,6 +245,10 @@ export default async function WorkspacePage(
       const baseline = baselineByClient.get(client.id);
       return baseline?.status === "Completed" ? [] : [{ id: client.id, name: client.name, percent: baseline?.completion_percent ?? 0, status: baseline?.status ?? "Not started" }];
     });
+    coachSessionDrafts = ((sessionRows ?? []) as unknown as { consultation_id: string; client_id: string; status: string; completion_percent: number; clients: { name: string } | null }[]).map((session) => ({
+      consultationId: session.consultation_id, clientId: session.client_id,
+      name: session.clients?.name ?? "Client", percent: session.completion_percent, status: session.status,
+    }));
     for (const goal of coachGoalReviews) {
       myAttention.push({
         sev: "med",
@@ -890,17 +897,19 @@ export default async function WorkspacePage(
               <div style={{ ...box, padding: "14px 16px", marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "start", gap: 12, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 220 }}>
-                    <div style={{ fontWeight: 700 }}>Baseline, goal reviews &amp; adherence</div>
-                    <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>Baseline completion and due goal work; adherence uses only recorded completed or missed events.</div>
+                    <div style={{ fontWeight: 700 }}>Session drafts, baseline, goal reviews &amp; adherence</div>
+                    <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 2 }}>Resume unfinished sessions, complete baselines and review due goals; adherence uses only recorded completed or missed events.</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ background: "var(--neutral-bg)", color: "var(--ink)", borderRadius: 999, padding: "4px 10px", fontSize: 11.5, fontWeight: 700 }}>{coachGoalReviews.length} review{coachGoalReviews.length === 1 ? "" : "s"} due</span>
                     <span style={{ background: coachBaselineDue.length ? "var(--amber-bg)" : "var(--neutral-bg)", color: coachBaselineDue.length ? "var(--amber-text)" : "var(--ink)", borderRadius: 999, padding: "4px 10px", fontSize: 11.5, fontWeight: 700 }}>{coachBaselineDue.length} baseline{coachBaselineDue.length === 1 ? "" : "s"} incomplete</span>
+                    <span style={{ background: coachSessionDrafts.length ? "var(--amber-bg)" : "var(--neutral-bg)", color: coachSessionDrafts.length ? "var(--amber-text)" : "var(--ink)", borderRadius: 999, padding: "4px 10px", fontSize: 11.5, fontWeight: 700 }}>{coachSessionDrafts.length} session draft{coachSessionDrafts.length === 1 ? "" : "s"}</span>
                     <span style={{ background: "var(--neutral-bg)", color: "var(--ink)", borderRadius: 999, padding: "4px 10px", fontSize: 11.5, fontWeight: 700 }}>{adherence.percent == null ? "No adherence % yet" : `${adherence.percent}% adherence · ${adherence.completed}/${adherence.reviewed}`}</span>
                   </div>
                 </div>
                 {coachGoalReviews.length > 0 ? <div style={{ display: "grid", gap: 0, marginTop: 10 }}>{coachGoalReviews.slice(0, 6).map((goal) => <div key={goal.id} style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", padding: "8px 0", fontSize: 12.5 }}><div style={{ flex: 1 }}><b>{goal.clients?.name ?? "Client"}</b><span style={{ color: "var(--muted)" }}> · {goal.name} · due {goal.review_date}</span></div><Link href={`/clients/${goal.client_id}?tab=overview#coaching-goals`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>Review →</Link></div>)}</div> : <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 10 }}>No goal reviews are due.</div>}
                 {coachBaselineDue.length > 0 && <div style={{ display: "grid", gap: 0, marginTop: 6 }}>{coachBaselineDue.slice(0, 6).map((baseline) => <div key={baseline.id} style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", padding: "8px 0", fontSize: 12.5 }}><div style={{ flex: 1 }}><b>{baseline.name}</b><span style={{ color: "var(--muted)" }}> · baseline {baseline.status.toLowerCase()} · {baseline.percent}%</span></div><Link href={`/clients/${baseline.id}?tab=overview#coach-baseline`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>Continue →</Link></div>)}</div>}
+                {coachSessionDrafts.length > 0 && <div style={{ display: "grid", gap: 0, marginTop: 6 }}>{coachSessionDrafts.slice(0, 6).map((session) => <div key={session.consultationId} style={{ display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--border)", padding: "8px 0", fontSize: 12.5 }}><div style={{ flex: 1 }}><b>{session.name}</b><span style={{ color: "var(--muted)" }}> · session {session.status.toLowerCase()} · {session.percent}%</span></div><Link href={`/console/${session.consultationId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 700 }}>Resume →</Link></div>)}</div>}
               </div>
             );
           })()}

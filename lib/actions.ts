@@ -4005,6 +4005,247 @@ export async function saveCoachBaseline(formData: FormData) {
   revalidatePath("/workspace");
 }
 
+export type CoachSessionSaveResult = { ok?: boolean; completed?: boolean; error?: string; missing?: string[] };
+
+/** Save or complete the dedicated Phase-4 Health Coach session workflow. */
+export async function saveHealthCoachSession(formData: FormData): Promise<CoachSessionSaveResult> {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return { error: "Not authorized." };
+  const consultation_id = String(formData.get("consultation_id") || "");
+  const requestedComplete = String(formData.get("intent") || "Draft") === "Completed";
+  if (!consultation_id) return { error: "Consultation is missing." };
+  let raw: Record<string, unknown> = {};
+  try { raw = JSON.parse(String(formData.get("session") || "{}")) as Record<string, unknown>; }
+  catch { return { error: "Session data could not be read." }; }
+
+  const {
+    COACH_SESSION_VERSION, coachSessionProgress, coachSessionSummary,
+    dueCoachScreenings, sanitizeCoachSession,
+  } = await import("@/lib/coach-session");
+  const data = sanitizeCoachSession(raw);
+  const supabase = await createClient();
+  const { data: consultation } = await supabase.from("consultations")
+    .select("id, client_id, kind, status, appointment_id, created_at")
+    .eq("id", consultation_id).maybeSingle();
+  if (!consultation || consultation.kind !== "Coach" || !consultation.client_id) return { error: "This is not a client Health Coach consultation." };
+
+  const client_id = consultation.client_id;
+  if (p.role === "Health Coach") {
+    if (!p.staffId) return { error: "Your Health Coach staff profile is not linked." };
+    const { data: assignment } = await supabase.from("client_assignments").select("staff_id")
+      .eq("client_id", client_id).eq("discipline", "coach").maybeSingle();
+    if (assignment?.staff_id !== p.staffId) return { error: "This client is assigned to another Health Coach." };
+  }
+  const [{ data: existing }, { data: baseline }, { data: screeningRows }, { data: coachConsults }] = await Promise.all([
+    supabase.from("coach_session_workflows")
+      .select("id, status, goal_id, barrier_id, followup_id, safety_event_id, clinical_referral_id")
+      .eq("consultation_id", consultation_id).maybeSingle(),
+    supabase.from("coach_baselines").select("triggered_pathways").eq("client_id", client_id).maybeSingle(),
+    supabase.from("coach_assessments").select("marker, date, next_review_date")
+      .eq("client_id", client_id).order("date", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("consultations").select("id").eq("client_id", client_id).eq("kind", "Coach").order("created_at", { ascending: true }),
+  ]);
+  if (existing?.status === "Completed" || consultation.status === "completed") return { error: "This session is already completed." };
+  const dueScreenings = dueCoachScreenings(
+    (baseline?.triggered_pathways ?? []) as string[],
+    (screeningRows ?? []) as { marker: string; next_review_date: string | null }[],
+    todayISO(),
+  );
+  const progress = coachSessionProgress(data, dueScreenings.length);
+  if (progress.urgent && !data.check_in.immediate_action) return { error: "Record the immediate safety action before saving." };
+  if (requestedComplete && progress.percent !== 100) return { error: "Complete the required closeout fields first.", missing: progress.missing };
+  if (requestedComplete && !progress.urgent) {
+    const { data: openSafety } = await supabase.from("safety_events").select("id")
+      .eq("client_id", client_id).neq("status", "Resolved").limit(1).maybeSingle();
+    if (openSafety?.id) return { error: "Routine coaching cannot be completed while a safety hard stop remains open." };
+  }
+  if (requestedComplete && data.action_plan.review_date && data.action_plan.review_date < todayISO()) return { error: "The action-plan review date cannot be in the past." };
+  if (requestedComplete && data.closeout.followup_date && data.closeout.followup_date < todayISO()) return { error: "The follow-up date cannot be in the past." };
+  if (requestedComplete && data.review.screening_disposition === "Completed today") {
+    const completedToday = new Set(((screeningRows ?? []) as { marker: string; date?: string }[])
+      .filter((assessment) => assessment.date === todayISO()).map((assessment) => assessment.marker));
+    const unverified = dueScreenings.filter((marker) => !completedToday.has(marker));
+    if (unverified.length) return { error: "Complete every due screening before marking the screening work completed today." };
+  }
+
+  const ids = ((coachConsults ?? []) as { id: string }[]).map((row) => row.id);
+  const sessionNumber = Math.max(1, ids.indexOf(consultation_id) + 1 || ids.length + 1);
+  const now = new Date().toISOString();
+  const base = {
+    consultation_id, client_id, version: COACH_SESSION_VERSION, session_number: sessionNumber,
+    check_in: data.check_in, review: data.review, barrier: data.barrier,
+    action_plan: data.action_plan, closeout: data.closeout, due_screenings: dueScreenings,
+    completion_percent: progress.percent, creator_name: p.name, updated_at: now,
+  };
+  const savedResult = existing?.id
+    ? await supabase.from("coach_session_workflows").update(base as never).eq("id", existing.id).select("id").single()
+    : await supabase.from("coach_session_workflows").insert(base as never).select("id").single();
+  const workflowId = savedResult.data?.id as string | undefined;
+  if (!workflowId || savedResult.error) return { error: savedResult.error?.message ?? "The session draft could not be saved." };
+
+  let safetyEventId = existing?.safety_event_id ?? null;
+  if (progress.urgent && !safetyEventId) {
+    const trigger = String(data.check_in.urgent_concern);
+    const { data: openEvent } = await supabase.from("safety_events").select("id")
+      .eq("client_id", client_id).eq("trigger_type", trigger).neq("status", "Resolved")
+      .order("opened_at", { ascending: false }).limit(1).maybeSingle();
+    if (openEvent?.id) {
+      safetyEventId = openEvent.id;
+      const { error } = await supabase.from("safety_event_actions").insert({
+        event_id: safetyEventId, action_type: "Escalated", note: data.check_in.immediate_action,
+        actor_id: p.id, actor_name: p.name, actor_role: p.role,
+      });
+      if (error) return { error: "The safety action could not be recorded; the session remains a draft." };
+    } else {
+      if (!canOpenSafetyEvent(p.role)) return { error: "A clinician must open the safety event before this session can continue." };
+      const { data: opened, error } = await supabase.from("safety_events").insert({
+        client_id, trigger_type: trigger,
+        concern_summary: `Urgent concern recorded during Health Coach session ${sessionNumber}.`,
+        immediate_action: data.check_in.immediate_action,
+        recipient_role: "Medical Director", status: "Open",
+        opened_by: p.id, opened_by_name: p.name, opened_by_role: p.role,
+      }).select("id").single();
+      if (error || !opened?.id) return { error: "The safety event could not be opened; the session remains a draft." };
+      safetyEventId = opened.id;
+      await supabase.from("safety_event_actions").insert({
+        event_id: safetyEventId, action_type: "Created", note: data.check_in.immediate_action,
+        actor_id: p.id, actor_name: p.name, actor_role: p.role,
+      });
+    }
+    await supabase.from("coach_session_workflows").update({ safety_event_id: safetyEventId }).eq("id", workflowId);
+  }
+
+  let referralId = existing?.clinical_referral_id ?? null;
+  if (requestedComplete && !progress.urgent && data.closeout.handoff_needed === "Yes" && data.closeout.consent_status !== "Declined" && !referralId) {
+    if (!canCreateClinicalReferral(p.role)) return { error: "A clinician must create the warm handoff before the session can be completed." };
+    const destination = String(data.closeout.handoff_destination);
+    const discipline = REFERRAL_DISCIPLINE[destination];
+    const { data: assignment } = discipline
+      ? await supabase.from("client_assignments").select("staff_id").eq("client_id", client_id).eq("discipline", discipline).maybeSingle()
+      : { data: null };
+    const assignedTo = (assignment as { staff_id?: string | null } | null)?.staff_id ?? null;
+    const { data: referral, error } = await supabase.from("clinical_referrals").insert({
+      client_id, reason: data.closeout.handoff_reason, destination_role: destination,
+      urgency: data.closeout.handoff_urgency, requested_action: `Review the Health Coach session and advise the next care step.`,
+      consent_status: data.closeout.consent_status, assigned_to_staff_id: assignedTo,
+      created_by: p.id, created_by_name: p.name, status: "Sent",
+    }).select("id").single();
+    if (error || !referral?.id) return { error: "The clinical handoff could not be sent; the session remains a draft." };
+    referralId = referral.id;
+    await supabase.from("clinical_referral_events").insert({
+      referral_id: referralId, from_status: null, to_status: "Sent", note: data.closeout.handoff_reason,
+      actor_id: p.id, actor_name: p.name, actor_role: p.role,
+    });
+    const { data: client } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+    const notice = {
+      title: `${data.closeout.handoff_urgency} clinical referral`,
+      body: `${client?.name ?? "Client"}: ${data.closeout.handoff_reason}`,
+      icon: data.closeout.handoff_urgency === "Urgent" ? "🔴" : data.closeout.handoff_urgency === "Priority" ? "🟠" : "🔵",
+      link: { kind: "clinical-referral", ref: client_id },
+    };
+    if (assignedTo) await notifyStaff(supabase, assignedTo, notice); else await notifyRoles(supabase, [destination], notice);
+    await supabase.from("coach_session_workflows").update({ clinical_referral_id: referralId }).eq("id", workflowId);
+  }
+
+  let goalId = existing?.goal_id ?? null;
+  let barrierId = existing?.barrier_id ?? null;
+  if (requestedComplete && !progress.urgent) {
+    const selectedGoal = String(data.action_plan.goal_id || "");
+    if (selectedGoal) {
+      const { data: goal } = await supabase.from("habits").select("id").eq("id", selectedGoal).eq("client_id", client_id).maybeSingle();
+      if (!goal) return { error: "The selected coaching goal is no longer available." };
+      goalId = goal.id;
+      await supabase.from("habits").update({
+        name: data.action_plan.action_name, target_per_week: data.action_plan.target_per_week,
+        cue: data.action_plan.cue, time_place: data.action_plan.time_place,
+        confidence: data.action_plan.confidence, if_then_plan: data.action_plan.if_then_plan,
+        review_date: data.action_plan.review_date, status: "Active", active: true, updated_at: now,
+      }).eq("id", goalId);
+      await supabase.from("coach_goal_events").insert({
+        goal_id: goalId, client_id, event_type: "Reviewed", note: `Reviewed in Health Coach session ${sessionNumber}`,
+        snapshot: data.action_plan, actor_id: p.id, actor_name: p.name, actor_role: p.role,
+      });
+    } else if (!goalId) {
+      const goal = {
+        client_id, name: data.action_plan.action_name, cadence: "weekly",
+        target_per_week: data.action_plan.target_per_week, icon: "✅",
+        cue: data.action_plan.cue, time_place: data.action_plan.time_place,
+        confidence: data.action_plan.confidence, if_then_plan: data.action_plan.if_then_plan,
+        review_date: data.action_plan.review_date, owner_staff_id: p.staffId ?? null,
+        active: true, status: "Active", created_by: p.name, updated_at: now,
+      };
+      const { data: created, error } = await supabase.from("habits").insert(goal).select("id").single();
+      if (error || !created?.id) return { error: "The agreed coaching goal could not be created." };
+      goalId = created.id;
+      await supabase.from("coach_goal_events").insert({
+        goal_id: goalId, client_id, event_type: "Created", note: `Created in Health Coach session ${sessionNumber}`,
+        snapshot: goal, actor_id: p.id, actor_name: p.name, actor_role: p.role,
+      });
+    }
+    if (data.barrier.detail && !barrierId) {
+      const { data: created } = await supabase.from("coach_barriers").insert({
+        client_id, goal_id: goalId, category: data.barrier.category || "Other",
+        detail: data.barrier.detail, coach_response: data.barrier.coach_response,
+        status: "Addressed", created_by: p.id, creator_name: p.name,
+      }).select("id").single();
+      barrierId = created?.id ?? null;
+    }
+    await supabase.from("coach_session_workflows").update({ goal_id: goalId, barrier_id: barrierId }).eq("id", workflowId);
+  }
+
+  let followupId = existing?.followup_id ?? null;
+  if (requestedComplete && !followupId) {
+    const { data: followup, error } = await supabase.from("followups").insert({
+      client_id, kind: "custom", label: `Health Coach follow-up · session ${sessionNumber}`,
+      due_date: data.closeout.followup_date, priority: progress.urgent ? "mandatory" : "normal",
+      status: "pending", category: "Health Coaching", mode: data.closeout.followup_channel || "Phone",
+      note: progress.urgent ? `Safety follow-up after ${data.check_in.urgent_concern}` : data.closeout.client_recap,
+      created_by: p.name,
+    }).select("id").single();
+    if (error || !followup?.id) return { error: "The agreed follow-up could not be scheduled; the session remains a draft." };
+    followupId = followup.id;
+    await supabase.from("coach_session_workflows").update({ followup_id: followupId }).eq("id", workflowId);
+  }
+
+  if (!requestedComplete) {
+    await supabase.from("coach_session_events").insert({
+      workflow_id: workflowId, consultation_id, client_id,
+      event_type: existing ? "Saved" : "Started", percent: progress.percent,
+      actor_id: p.id, actor_name: p.name, actor_role: p.role,
+    });
+    await logAudit(p, "Health Coach session draft saved", await clientName(supabase, client_id), `${progress.percent}% complete`);
+    revalidatePath(`/console/${consultation_id}`);
+    return { ok: true };
+  }
+
+  const summary = coachSessionSummary(data, sessionNumber);
+  const { error: completeError } = await supabase.from("coach_session_workflows").update({
+    status: "Completed", completion_percent: 100, goal_id: goalId, barrier_id: barrierId,
+    followup_id: followupId, safety_event_id: safetyEventId, clinical_referral_id: referralId,
+    completed_by: p.id, completed_by_name: p.name, completed_at: now, updated_at: now,
+  }).eq("id", workflowId);
+  if (completeError) return { error: "The session closeout could not be completed." };
+  await supabase.from("coach_session_events").insert({
+    workflow_id: workflowId, consultation_id, client_id, event_type: "Completed", percent: 100,
+    note: progress.urgent ? "Routine coaching stopped and safety escalation recorded." : data.closeout.client_recap,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await supabase.from("consultations").update({ status: "completed", summary, completed_at: now }).eq("id", consultation_id);
+  await supabase.from("coach_adherence_events").insert({
+    client_id, goal_id: goalId, category: "Coach check-in", outcome: "Completed",
+    event_date: todayISO(), source: "Coach", note: `Health Coach session ${sessionNumber} completed`,
+    recorded_by: p.id, recorder_name: p.name,
+  });
+  if (consultation.appointment_id) await supabase.from("appointments").update({ status: "completed" }).eq("id", consultation.appointment_id);
+  await notifyCareTeamOfConsult(supabase, client_id, "Coach", p.staffId ?? null, p.name);
+  await logAudit(p, "Health Coach session completed", await clientName(supabase, client_id), progress.urgent ? "Safety stop" : `Session ${sessionNumber}`);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${client_id}`);
+  revalidatePath(`/console/${consultation_id}`);
+  revalidatePath("/appointments");
+  return { ok: true, completed: true };
+}
+
 // ---- attendance kiosk ------------------------------------------------------
 
 type PunchResult = { ok?: boolean; name?: string; action?: "in" | "out" | "already"; at?: string; hours?: number; error?: string };

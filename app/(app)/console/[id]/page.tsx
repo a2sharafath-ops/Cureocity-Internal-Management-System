@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canConsult } from "@/lib/roles";
+import { canConsult, canManageHealthCoaching } from "@/lib/roles";
 import { consultQ, consultQFor } from "@/lib/consult-questions";
 import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
 import ConsoleView, { type ConsoleHealth, type OtherConsult } from "@/components/ConsoleView";
@@ -9,6 +9,9 @@ import { todayISO } from "@/lib/today";
 import { pdfReadiness } from "@/lib/pdf";
 import { watiReadiness } from "@/lib/wati";
 import { fmtTime } from "@/lib/datetime";
+import HealthCoachSessionWorkspace, { type CoachWorkflowView } from "@/components/HealthCoachSessionWorkspace";
+import { dueCoachScreenings, type CoachSessionData } from "@/lib/coach-session";
+import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
 
 export const dynamic = "force-dynamic";
 
@@ -234,6 +237,72 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
   // clinical tables; every other clinical panel here is already gated the same
   // way.
   const canTools = row.kind === "Doctor" && Boolean(row.client_id);
+
+  // Repeat Health Coach encounters use the Phase-4 workflow rather than
+  // replaying the initial scripted intake. It remains the same consultation
+  // and appointment underneath, so completion, summaries and timelines stay
+  // unified with every other discipline.
+  if (row.kind === "Coach" && row.client_id) {
+    const [
+      { data: workflowRow }, { data: coachBaseline }, { data: screeningRows },
+      { data: goalRows }, { data: adherenceRows }, { data: barrierRows },
+      { data: referralRows }, { data: safetyRows }, { data: previousRow },
+      { data: coachConsultRows },
+    ] = await Promise.all([
+      supabase.from("coach_session_workflows")
+        .select("id, status, session_number, completion_percent, check_in, review, barrier, action_plan, closeout, completed_by_name, completed_at")
+        .eq("consultation_id", row.id).maybeSingle(),
+      supabase.from("coach_baselines").select("status, completion_percent, updated_at, triggered_pathways").eq("client_id", row.client_id).maybeSingle(),
+      supabase.from("coach_assessments").select("marker, score, interpretation, date, next_review_date")
+        .eq("client_id", row.client_id).order("date", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("habits").select("id, name, target_per_week, confidence, review_date")
+        .eq("client_id", row.client_id).eq("status", "Active").order("created_at", { ascending: false }),
+      supabase.from("coach_adherence_events").select("outcome").eq("client_id", row.client_id).order("event_date", { ascending: false }).limit(100),
+      supabase.from("coach_barriers").select("id, category, detail").eq("client_id", row.client_id).neq("status", "Resolved").order("identified_at", { ascending: false }),
+      supabase.from("clinical_referrals").select("id, destination_role, urgency, reason, status")
+        .eq("client_id", row.client_id).not("status", "in", '("Completed","Declined","Cancelled")').order("created_at", { ascending: false }),
+      supabase.from("safety_events").select("id, trigger_type, status").eq("client_id", row.client_id).neq("status", "Resolved").order("opened_at", { ascending: false }),
+      supabase.from("coach_session_workflows").select("session_number, closeout, action_plan, completed_at")
+        .eq("client_id", row.client_id).eq("status", "Completed").neq("consultation_id", row.id)
+        .order("completed_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("consultations").select("id").eq("client_id", row.client_id).eq("kind", "Coach").order("created_at", { ascending: true }),
+    ]);
+    const assessments = (screeningRows ?? []) as { marker: string; score: number | null; interpretation: string | null; date: string; next_review_date: string | null }[];
+    const due = dueCoachScreenings(
+      ((coachBaseline as { triggered_pathways?: string[] } | null)?.triggered_pathways ?? []),
+      assessments,
+      todayISO(),
+    );
+    const consultIds = ((coachConsultRows ?? []) as { id: string }[]).map((item) => item.id);
+    const calculatedSessionNumber = Math.max(1, consultIds.indexOf(row.id) + 1 || consultIds.length + 1);
+    const outcomes = ((adherenceRows ?? []) as { outcome: AdherenceOutcome }[]);
+    const adherence = adherenceSummary(outcomes);
+    const previous = previousRow as { session_number: number; closeout: CoachSessionData["closeout"]; action_plan: CoachSessionData["action_plan"]; completed_at: string | null } | null;
+    // The original scripted intake remains the first Health Coach encounter,
+    // as requested. Phase 4 takes over from session two onward; an already
+    // created workflow always reopens in its dedicated workspace.
+    if (workflowRow || (calculatedSessionNumber > 1 && row.status !== "completed")) return <HealthCoachSessionWorkspace
+      consultationId={row.id}
+      client={{ id: row.client_id, name: subject.name, code: subject.code }}
+      sessionNumber={(workflowRow as CoachWorkflowView | null)?.session_number ?? calculatedSessionNumber}
+      workflow={(workflowRow ?? null) as CoachWorkflowView | null}
+      baseline={coachBaseline ? {
+        status: String(coachBaseline.status), completion_percent: Number(coachBaseline.completion_percent), updated_at: String(coachBaseline.updated_at),
+      } : null}
+      dueScreenings={due}
+      latestScreenings={assessments}
+      goals={(goalRows ?? []) as { id: string; name: string; target_per_week: number; confidence: number | null; review_date: string | null }[]}
+      adherence={{ completed: adherence.completed, missed: adherence.missed, excused: adherence.excused, percent: adherence.percent }}
+      openBarriers={(barrierRows ?? []) as { id: string; category: string; detail: string }[]}
+      openReferrals={(referralRows ?? []) as { id: string; destination_role: string; urgency: string; reason: string; status: string }[]}
+      openSafety={(safetyRows ?? []) as { id: string; trigger_type: string; status: string }[]}
+      previousSession={previous}
+      gender={health?.gender ?? null}
+      today={todayISO()}
+      canManage={canManageHealthCoaching(me.role)}
+      consultationCompleted={row.status === "completed"}
+    />;
+  }
 
   return (
     <ConsoleView
