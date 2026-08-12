@@ -216,7 +216,7 @@ export default function DishLibrary({ dishes, foods, measures, micros, canEdit }
     const implausible = (n: Parameters<typeof servingProblem>[0] | null) =>
       n ? servingProblem(n) : null;
 
-    const published = d.source_kcal != null && d.source_carb_g != null
+    const published = !retired && d.source_kcal != null && d.source_carb_g != null
       && d.source_protein_g != null && d.source_fat_g != null && d.source_fibre_g != null
       ? { kcal: Math.round(Number(d.source_kcal)), carb_g: Number(d.source_carb_g),
         protein_g: Number(d.source_protein_g), fat_g: Number(d.source_fat_g), fibre_g: Number(d.source_fibre_g) }
