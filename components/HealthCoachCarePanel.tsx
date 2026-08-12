@@ -59,6 +59,7 @@ function when(value: string | null) {
 
 export default function HealthCoachCarePanel({
   clientId, referrals, safetyEvents, role, userId, staffId, readOnly = false,
+  showOpenSafety = true, showPanel = true,
 }: {
   clientId: string;
   referrals: ClinicalReferralView[];
@@ -67,6 +68,10 @@ export default function HealthCoachCarePanel({
   userId: string;
   staffId: string | null;
   readOnly?: boolean;
+  /** Persistent hard-stop banner, used above every client tab. */
+  showOpenSafety?: boolean;
+  /** Full referral/safety working area, shown only on Overview. */
+  showPanel?: boolean;
 }) {
   const openSafety = safetyEvents.filter((x) => x.status !== "Resolved");
   const closedSafety = safetyEvents.filter((x) => x.status === "Resolved");
@@ -75,8 +80,8 @@ export default function HealthCoachCarePanel({
   const mayResolve = !readOnly && canResolveSafetyEvent(role);
 
   return (
-    <section id="care-coordination" style={{ display: "grid", gap: 12 }}>
-      {openSafety.map((event) => (
+    <section id={showPanel ? "care-coordination" : "safety-alerts"} style={{ display: "grid", gap: 12, marginBottom: showPanel ? 0 : 16 }}>
+      {showOpenSafety && openSafety.map((event) => (
         <div key={event.id} style={{ background: "#fff1f2", border: "2px solid #ef4444", borderRadius: 12, padding: 16 }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
             <b style={{ color: "#991b1b" }}>🔴 Safety escalation — {event.status}</b>
@@ -122,7 +127,7 @@ export default function HealthCoachCarePanel({
         </div>
       ))}
 
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
+      {showPanel && <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontWeight: 700 }}>Clinical referrals &amp; safety</div>
@@ -243,7 +248,7 @@ export default function HealthCoachCarePanel({
             </div>
           </details>
         )}
-      </div>
+      </div>}
     </section>
   );
 }

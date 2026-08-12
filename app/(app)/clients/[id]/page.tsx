@@ -228,6 +228,28 @@ export default async function ClientDetailPage(
     : [{ data: [] }, { data: [] }];
   const clinicalReferrals = (clinicalReferralRows ?? []) as ClinicalReferralView[];
   const safetyEvents = (safetyEventRows ?? []) as SafetyEventView[];
+  const referralIds = clinicalReferrals.map((x) => x.id);
+  const safetyEventIds = safetyEvents.map((x) => x.id);
+  const [{ data: clinicalReferralEventRows }, { data: safetyEventActionRows }] = await Promise.all([
+    referralIds.length
+      ? supabase.from("clinical_referral_events")
+        .select("referral_id, from_status, to_status, note, actor_name, created_at")
+        .in("referral_id", referralIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    safetyEventIds.length
+      ? supabase.from("safety_event_actions")
+        .select("event_id, action_type, note, actor_name, created_at")
+        .in("event_id", safetyEventIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+  ]);
+  const clinicalReferralEvents = (clinicalReferralEventRows ?? []) as {
+    referral_id: string; from_status: string | null; to_status: string;
+    note: string | null; actor_name: string; created_at: string;
+  }[];
+  const safetyEventActions = (safetyEventActionRows ?? []) as {
+    event_id: string; action_type: string; note: string | null;
+    actor_name: string; created_at: string;
+  }[];
 
   const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
   // Prescriptions rendered only on the EMR chart before this — invisible on the
@@ -425,6 +447,8 @@ export default async function ClientDetailPage(
     trainer_id: string; staff: { name: string } | null;
   }[];
   const done = sess.filter((s) => s.status === "completed").length;
+  const referralById = new Map(clinicalReferrals.map((x) => [x.id, x]));
+  const safetyById = new Map(safetyEvents.map((x) => [x.id, x]));
 
   // One activity stream. Assembled from rows the page already fetches, so it
   // costs nothing extra — the data was always here, it was just displayed as
@@ -467,6 +491,28 @@ export default async function ClientDetailPage(
       at: w.created_at, kind: "note" as const,
       title: `Workout assigned — ${w.name}`, by: w.assigned_by,
     })),
+    clinicalReferralEvents.map((event) => {
+      const referral = referralById.get(event.referral_id);
+      const destination = referral?.destination_role ?? "care team";
+      return {
+        at: event.created_at, kind: "concern" as const,
+        title: `Clinical referral ${event.to_status.toLowerCase()} — ${destination}`,
+        detail: event.note ?? referral?.reason ?? null,
+        by: event.actor_name,
+        href: `/clients/${params.id}?tab=overview#care-coordination`,
+      };
+    }),
+    safetyEventActions.map((action) => {
+      const event = safetyById.get(action.event_id);
+      const verb = action.action_type === "Created" ? "opened" : action.action_type.toLowerCase();
+      return {
+        at: action.created_at, kind: "concern" as const,
+        title: `Safety concern ${verb}${event ? ` — ${event.trigger_type}` : ""}`,
+        detail: action.note,
+        by: action.actor_name,
+        href: `/clients/${params.id}?tab=overview#care-coordination`,
+      };
+    }),
     // Blood report — requested, then received.
     bloodRowsAll.flatMap((b) => {
       const panel = b.panel === "comprehensive" ? "Comprehensive" : "BluePrint";
@@ -602,7 +648,35 @@ export default async function ClientDetailPage(
         ]} />
       </div>
 
+      {canConsult(me?.role ?? "") && safetyEvents.some((event) => event.status !== "Resolved") && (
+        <HealthCoachCarePanel
+          clientId={params.id}
+          referrals={clinicalReferrals}
+          safetyEvents={safetyEvents}
+          role={me?.role ?? ""}
+          userId={me?.id ?? ""}
+          staffId={me?.staffId ?? null}
+          readOnly={ro}
+          showPanel={false}
+        />
+      )}
+
       {tab === "overview" && (<>
+      {canConsult(me?.role ?? "") && (
+        <div style={{ marginBottom: 16 }}>
+          <HealthCoachCarePanel
+            clientId={params.id}
+            referrals={clinicalReferrals}
+            safetyEvents={safetyEvents}
+            role={me?.role ?? ""}
+            userId={me?.id ?? ""}
+            staffId={me?.staffId ?? null}
+            readOnly={ro}
+            showOpenSafety={false}
+          />
+        </div>
+      )}
+
       {/* ---- What's pending (the single journey tracker + the actionable items) ---- */}
       {/* Package status — the one place the client's journey & to-dos live */}
       {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
@@ -1283,18 +1357,6 @@ export default async function ClientDetailPage(
             <PTProtocol clientId={params.id} view={ptView} canHold={canManageCoaching} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
           )}
         </>
-      )}
-
-      {canConsult(me?.role ?? "") && (
-        <HealthCoachCarePanel
-          clientId={params.id}
-          referrals={clinicalReferrals}
-          safetyEvents={safetyEvents}
-          role={me?.role ?? ""}
-          userId={me?.id ?? ""}
-          staffId={me?.staffId ?? null}
-          readOnly={ro}
-        />
       )}
 
       {/* Adherence & coaching — what the client has been given and how they are
