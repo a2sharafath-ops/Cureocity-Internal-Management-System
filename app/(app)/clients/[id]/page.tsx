@@ -120,7 +120,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default async function ClientDetailPage(
-  props: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; ro?: string }> }
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; ro?: string; referral?: string; referral_reason?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
@@ -746,6 +746,8 @@ export default async function ClientDetailPage(
             staffId={me?.staffId ?? null}
             readOnly={ro}
             showOpenSafety={false}
+            prefillReferralRole={searchParams.referral}
+            prefillReferralReason={searchParams.referral_reason}
           />
         </div>
       )}

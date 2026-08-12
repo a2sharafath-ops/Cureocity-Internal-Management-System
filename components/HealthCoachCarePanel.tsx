@@ -59,7 +59,7 @@ function when(value: string | null) {
 
 export default function HealthCoachCarePanel({
   clientId, referrals, safetyEvents, role, userId, staffId, readOnly = false,
-  showOpenSafety = true, showPanel = true,
+  showOpenSafety = true, showPanel = true, prefillReferralRole, prefillReferralReason,
 }: {
   clientId: string;
   referrals: ClinicalReferralView[];
@@ -72,12 +72,18 @@ export default function HealthCoachCarePanel({
   showOpenSafety?: boolean;
   /** Full referral/safety working area, shown only on Overview. */
   showPanel?: boolean;
+  /** Phase-5 rule links open the warm-referral form with safe fields filled. */
+  prefillReferralRole?: string;
+  prefillReferralReason?: string;
 }) {
   const openSafety = safetyEvents.filter((x) => x.status !== "Resolved");
   const closedSafety = safetyEvents.filter((x) => x.status === "Resolved");
   const mayRefer = !readOnly && canCreateClinicalReferral(role);
   const mayOpen = !readOnly && canOpenSafetyEvent(role);
   const mayResolve = !readOnly && canResolveSafetyEvent(role);
+  const referralRoles = ["Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Medical Director"];
+  const referralDefault = referralRoles.includes(prefillReferralRole ?? "") ? prefillReferralRole! : "Doctor";
+  const prefilledReferral = Boolean(prefillReferralRole && referralRoles.includes(prefillReferralRole));
 
   return (
     <section id={showPanel ? "care-coordination" : "safety-alerts"} style={{ display: "grid", gap: 12, marginBottom: showPanel ? 0 : 16 }}>
@@ -137,12 +143,12 @@ export default function HealthCoachCarePanel({
           </div>
           <span style={{ flex: 1 }} />
           {mayRefer && (
-            <details style={{ position: "relative" }}>
+            <details open={prefilledReferral} style={{ position: "relative" }}>
               <summary style={{ ...button, listStyle: "none" }}>+ Clinical referral</summary>
               <form action={createClinicalReferral} style={{ position: "absolute", right: 28, zIndex: 5, width: "min(440px, calc(100vw - 48px))", background: "white", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-lg, 0 16px 40px rgba(0,0,0,.16))", padding: 14, display: "grid", gap: 10 }}>
                 <input type="hidden" name="client_id" value={clientId} />
                 <label style={label}>Destination
-                  <select name="destination_role" required style={input} defaultValue="Doctor">
+                  <select name="destination_role" required style={input} defaultValue={referralDefault}>
                     <option>Doctor</option><option>Dietitian</option><option>Fitness Trainer</option>
                     <option>Psychologist</option><option>Medical Director</option>
                   </select>
@@ -153,7 +159,7 @@ export default function HealthCoachCarePanel({
                   </select>
                 </label>
                 <label style={label}>Reason
-                  <textarea name="reason" required rows={3} style={input} placeholder="What changed, and why this hand-off is needed" />
+                  <textarea name="reason" required rows={3} style={input} defaultValue={prefillReferralReason} placeholder="What changed, and why this hand-off is needed" />
                 </label>
                 <label style={label}>Requested action
                   <input name="requested_action" style={input} placeholder="What the receiving professional should do" />

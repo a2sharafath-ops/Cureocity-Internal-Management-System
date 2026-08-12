@@ -49,6 +49,12 @@ import { withChaseHistory } from "@/lib/chase-log";
 import { disciplineLabel } from "@/lib/disciplines";
 import { canWriteNutrition } from "@/lib/discipline";
 import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
+import CoachPriorityBoard from "@/components/CoachPriorityBoard";
+import {
+  buildCoachAlerts, type CoachRuleAlert, type CoachAlertAssessment,
+  type CoachAlertSafety, type CoachAlertReferral, type CoachAlertAdherence,
+  type CoachAlertGoal,
+} from "@/lib/coach-alerts";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
   visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
@@ -185,7 +191,8 @@ export default async function WorkspacePage(
     const withNote = await withChaseHistory(allFlags.filter(mine));
     myAttention = withNote.map((f) => ({
       sev: f.sev, title: f.title, detail: f.detail, href: f.href,
-      cta: f.cta ?? "View", dueLabel: f.dueLabel, overdue: f.overdue, chaseNote: f.chaseNote,
+      cta: f.cta ?? "View", dueLabel: f.dueLabel, overdue: f.overdue,
+      chaseNote: f.chaseNote, dedupeKey: f.dedupeKey,
     }));
   }
 
@@ -224,22 +231,42 @@ export default async function WorkspacePage(
   let coachWeekAdherence: { outcome: AdherenceOutcome }[] = [];
   let coachBaselineDue: { id: string; name: string; percent: number; status: string }[] = [];
   let coachSessionDrafts: { consultationId: string; clientId: string; name: string; percent: number; status: string }[] = [];
+  let coachAlerts: CoachRuleAlert[] = [];
   if (roleKey === "coach" && scoped.length) {
     const scopedIds = scoped.map((client) => client.id);
     const start = new Date(`${today}T00:00:00Z`);
     start.setUTCDate(start.getUTCDate() - 6);
     const weekStart = start.toISOString().slice(0, 10);
-    const [{ data: goalRows }, { data: adherenceRows }, { data: baselineRows }, { data: sessionRows }] = await Promise.all([
+    const lookback = new Date(`${today}T00:00:00Z`);
+    lookback.setUTCDate(lookback.getUTCDate() - 28);
+    const lookbackStart = lookback.toISOString().slice(0, 10);
+    const recent = new Date(`${today}T00:00:00Z`);
+    recent.setUTCDate(recent.getUTCDate() - 7);
+    const recentStart = recent.toISOString();
+    const [
+      { data: goalRows }, { data: adherenceRows }, { data: baselineRows },
+      { data: sessionRows }, { data: assessmentRows }, { data: safetyRows },
+      { data: referralRows }, { data: completedGoalRows },
+    ] = await Promise.all([
       supabase.from("habits").select("id, client_id, name, review_date, confidence, clients(name)")
         .in("client_id", scopedIds).eq("status", "Active").not("review_date", "is", null).lte("review_date", today).order("review_date"),
-      supabase.from("coach_adherence_events").select("outcome")
-        .in("client_id", scopedIds).gte("event_date", weekStart).lte("event_date", today),
+      supabase.from("coach_adherence_events").select("client_id, event_date, outcome, category")
+        .in("client_id", scopedIds).gte("event_date", lookbackStart).lte("event_date", today),
       supabase.from("coach_baselines").select("client_id, status, completion_percent").in("client_id", scopedIds),
       supabase.from("coach_session_workflows").select("consultation_id, client_id, status, completion_percent, clients(name)")
         .in("client_id", scopedIds).neq("status", "Completed").order("updated_at", { ascending: false }),
+      supabase.from("coach_assessments").select("client_id, marker, date, tone, band, next_review_date, recommended_action")
+        .in("client_id", scopedIds).order("date", { ascending: false }),
+      supabase.from("safety_events").select("id, client_id, status, trigger_type, concern_summary, opened_at")
+        .in("client_id", scopedIds).neq("status", "Resolved").order("opened_at", { ascending: false }),
+      supabase.from("clinical_referrals").select("id, client_id, destination_role, urgency, status, reason, created_at, updated_at")
+        .in("client_id", scopedIds).order("updated_at", { ascending: false }).limit(500),
+      supabase.from("habits").select("client_id, name, status, updated_at")
+        .in("client_id", scopedIds).eq("status", "Completed").gte("updated_at", recentStart),
     ]);
     coachGoalReviews = (goalRows ?? []) as unknown as CoachGoalReview[];
-    coachWeekAdherence = (adherenceRows ?? []) as { outcome: AdherenceOutcome }[];
+    const adherenceSignals = (adherenceRows ?? []) as unknown as CoachAlertAdherence[];
+    coachWeekAdherence = adherenceSignals.filter((row) => row.event_date >= weekStart).map((row) => ({ outcome: row.outcome }));
     const baselineByClient = new Map(((baselineRows ?? []) as { client_id: string; status: string; completion_percent: number }[]).map((row) => [row.client_id, row]));
     coachBaselineDue = scoped.flatMap((client) => {
       const baseline = baselineByClient.get(client.id);
@@ -249,6 +276,19 @@ export default async function WorkspacePage(
       consultationId: session.consultation_id, clientId: session.client_id,
       name: session.clients?.name ?? "Client", percent: session.completion_percent, status: session.status,
     }));
+    coachAlerts = buildCoachAlerts({
+      today,
+      clients: scoped.map((client) => ({ id: client.id, name: client.name })),
+      assessments: (assessmentRows ?? []) as unknown as CoachAlertAssessment[],
+      safetyEvents: (safetyRows ?? []) as unknown as CoachAlertSafety[],
+      referrals: (referralRows ?? []) as unknown as CoachAlertReferral[],
+      adherenceEvents: adherenceSignals,
+      goals: (completedGoalRows ?? []) as unknown as CoachAlertGoal[],
+    });
+    // Marker alerts now have a richer, action-specific home in Coach priorities.
+    // Keep them in the clinic-wide operations queue, but avoid showing the same
+    // result twice to the Health Coach on this page.
+    myAttention = myAttention.filter((flag) => !flag.dedupeKey?.startsWith("marker-"));
     for (const goal of coachGoalReviews) {
       myAttention.push({
         sev: "med",
@@ -884,6 +924,8 @@ export default async function WorkspacePage(
             <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} href={`/workspace?role=${roleKey}&tab=concerns`} />
             <MetricCard label="MDT updates" value={mdtNotes.length} href={`/workspace?role=${roleKey}&tab=board`} />
           </div>
+
+          {roleKey === "coach" && <CoachPriorityBoard alerts={coachAlerts} />}
 
           {myAttention.length > 0 && (
             <div style={{ marginBottom: 16 }}>
