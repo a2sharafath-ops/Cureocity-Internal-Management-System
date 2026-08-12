@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
-import { canSee, isClinician, canReviewDietChart, canDeliverDoc } from "@/lib/roles";
+import { canSee, isClinician, isAdminish, canReviewDietChart, canDeliverDoc } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
@@ -15,7 +15,7 @@ import BlueprintSection from "@/components/BlueprintSection";
 import WhiteboardSection from "@/components/WhiteboardSection";
 import ExerciseLibrarySection from "@/components/ExerciseLibrarySection";
 import ConcernsPanel, { type ConcernRow } from "@/components/ConcernsPanel";
-import MdtBoard, { type MdtRow } from "@/components/MdtBoard";
+import MdtBoard, { type MdtRow, type MdtHuddleRow, type MdtTaskRow } from "@/components/MdtBoard";
 import ResourceLibrary, { type ResourceRow } from "@/components/ResourceLibrary";
 import DietChartSection, { type DietPlanRow, type DietAssessmentRow } from "@/components/DietChartSection";
 import ApprovalsQueue, { type ApprovalRow } from "@/components/ApprovalsQueue";
@@ -122,7 +122,11 @@ export default async function WorkspacePage(
   const WS_ROLE_TO_KIND: Record<string, string> = { Doctor: "Doctor", Dietitian: "Diet", "Fitness Trainer": "Trainer", "Health Coach": "Coach", Psychologist: "Psychologist" };
   const scopeToStaff = Boolean(me.staffId) && isClinician(me.role);
 
-  const [{ data: clientData }, { data: enrollData }, { count: pendingSummaries }, todayRes, { data: concernData }, { data: mdtData }] = await Promise.all([
+  const [
+    { data: clientData }, { data: enrollData }, { count: pendingSummaries },
+    todayRes, { data: concernData }, { data: mdtData },
+    { data: mdtHuddleData }, { data: mdtTaskData },
+  ] = await Promise.all([
     supabase.from("clients").select("id, name, code, package_id, pro_id, conditions, goals, used, packages(name, sessions)").order("name"),
     supabase.from("enrollments").select("client_id"),
     supabase.from("consultations").select("id", { count: "exact", head: true }).eq("kind", role.kind).eq("approved", false),
@@ -131,6 +135,8 @@ export default async function WorkspacePage(
     supabase.from("appointments").select("id, hour, type, title, status, provider_id, client_id, clients(name), staff(role)").eq("date", today).eq("status", "scheduled").order("hour"),
     supabase.from("concerns").select("id, client_id, category, body, raised_by, status, created_at, clients(name)").in("role", [roleKey, "general"]).order("created_at", { ascending: false }),
     supabase.from("mdt_notes").select("id, client_id, author, body, escalated, to_role, status, created_at, clients(name)").order("created_at", { ascending: false }).limit(60),
+    supabase.from("mdt_huddles").select("id, client_id, huddle_date, current_plan, progress_status, progress_reason, issue_category, new_issue, barrier_category, barrier_detail, safety_status, referral_status, today_owner_role, coach_next_move, team_decision_required, team_decision, author_name, created_at, clients(name)").order("created_at", { ascending: false }).limit(100),
+    supabase.from("mdt_tasks").select("id, client_id, owner_role, assigned_to_staff_id, task, due_date, priority, status, decision, created_by, creator_name, updated_at, clients(name), assigned:assigned_to_staff_id(name)").order("status").order("due_date").limit(300),
   ]);
 
   const allClients = (clientData ?? []) as unknown as ClientRow[];
@@ -465,6 +471,16 @@ export default async function WorkspacePage(
     id: r.id, client_id: r.client_id, client_name: r.clients?.name ?? null,
     author: r.author, body: r.body, escalated: r.escalated, to_role: r.to_role, status: r.status, created_at: r.created_at,
   }));
+  const mdtHuddles: MdtHuddleRow[] = ((mdtHuddleData ?? []) as unknown as (Omit<MdtHuddleRow, "client_name"> & CJoin)[]).map((row) => ({
+    ...row, client_name: row.clients?.name ?? "Client",
+  }));
+  type MdtTaskJoin = Omit<MdtTaskRow, "client_name" | "assigned_name"> & CJoin & { assigned: { name: string } | null };
+  const mdtTasks: MdtTaskRow[] = ((mdtTaskData ?? []) as unknown as MdtTaskJoin[]).map((row) => ({
+    ...row, client_name: row.clients?.name ?? "Client", assigned_name: row.assigned?.name ?? null,
+  }));
+  const myOpenMdtTasks = mdtTasks.filter((task) => !["Completed", "Cancelled"].includes(task.status) && (
+    isAdminish(me.role) || task.assigned_to_staff_id === me.staffId || (!task.assigned_to_staff_id && task.owner_role === me.role)
+  ));
   const openConcerns = concerns.filter((c) => c.status === "Open").length;
   const clientOpts = allClients.map((c) => ({ id: c.id, name: c.name }));
 
@@ -885,7 +901,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
@@ -922,7 +938,7 @@ export default async function WorkspacePage(
             <MetricCard label={isTrainer ? "Scheduled today" : "Appointments today"} value={todayList.length + myExperienceToday.length} href={`/workspace?role=${roleKey}&tab=appts`} />
             <MetricCard label="Pending summaries" value={pendingSummaries ?? 0} color="var(--amber-text-soft)" href={`/workspace?role=${roleKey}&tab=summaries`} />
             <MetricCard label="Client concerns" value={openConcerns} color={openConcerns ? "var(--amber-text-soft)" : undefined} href={`/workspace?role=${roleKey}&tab=concerns`} />
-            <MetricCard label="MDT updates" value={mdtNotes.length} href={`/workspace?role=${roleKey}&tab=board`} />
+            <MetricCard label="My MDT tasks" value={myOpenMdtTasks.length} color={myOpenMdtTasks.length ? "var(--amber-text-soft)" : undefined} href={`/workspace?role=${roleKey}&tab=board`} />
           </div>
 
           {roleKey === "coach" && <CoachPriorityBoard alerts={coachAlerts} />}
@@ -1109,7 +1125,7 @@ export default async function WorkspacePage(
       {tab === "concerns" && <ConcernsPanel concerns={concerns} />}
 
       {/* ---- MDT BOARD ---- */}
-      {tab === "board" && <MdtBoard notes={mdtNotes} clients={clientOpts} />}
+      {tab === "board" && <MdtBoard notes={mdtNotes} huddles={mdtHuddles} tasks={mdtTasks} clients={clientOpts} role={me.role} userId={me.id} staffId={me.staffId ?? null} today={today} />}
 
       {/* ---- RESOURCE LIBRARY ---- */}
       {tab === "library" && <ResourceLibrary role={roleKey} roleLabel={role.short} files={resources} />}

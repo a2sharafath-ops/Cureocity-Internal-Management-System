@@ -213,18 +213,26 @@ export default async function ClientDetailPage(
   const coachingBarriers = (barrierRows ?? []) as CoachingBarrierView[];
   const coachingGoalEvents = (goalEventRows ?? []) as { goal_id: string; event_type: string; note: string | null; actor_name: string; created_at: string }[];
 
-  const [{ data: coachBaselineRow }, { data: coachScreeningRows }, { data: coachBaselineEventRows }, { data: coachSessionEventRows }] = canConsult(me?.role ?? "")
+  const [
+    { data: coachBaselineRow }, { data: coachScreeningRows },
+    { data: coachBaselineEventRows }, { data: coachSessionEventRows },
+    { data: mdtHuddleRows }, { data: mdtTaskEventRows },
+  ] = canConsult(me?.role ?? "")
     ? await Promise.all([
       supabase.from("coach_baselines").select("id, version, status, answers, triggered_pathways, completion_percent, completed_by_name, completed_at, updated_at").eq("client_id", params.id).maybeSingle(),
       supabase.from("coach_assessments").select("id, marker, score, band, tone, date, instrument, instrument_version, interpretation, recommended_action, reviewer_name, next_review_date, source_url").eq("client_id", params.id).order("date", { ascending: false }).order("created_at", { ascending: false }),
       supabase.from("coach_baseline_events").select("event_type, percent, pathways, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
       supabase.from("coach_session_events").select("consultation_id, event_type, percent, note, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+      supabase.from("mdt_huddles").select("progress_status, progress_reason, today_owner_role, coach_next_move, author_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+      supabase.from("mdt_task_events").select("to_status, decision, actor_name, created_at, mdt_tasks(task, owner_role)").eq("client_id", params.id).order("created_at", { ascending: false }),
     ])
-    : [{ data: null }, { data: [] }, { data: [] }, { data: [] }];
+    : [{ data: null }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }];
   const coachBaseline = (coachBaselineRow ?? null) as CoachBaselineView | null;
   const coachScreenings = (coachScreeningRows ?? []) as ScreeningResultView[];
   const coachBaselineEvents = (coachBaselineEventRows ?? []) as { event_type: string; percent: number; pathways: string[]; actor_name: string; created_at: string }[];
   const coachSessionEvents = (coachSessionEventRows ?? []) as { consultation_id: string; event_type: string; percent: number; note: string | null; actor_name: string; created_at: string }[];
+  const mdtHuddles = (mdtHuddleRows ?? []) as { progress_status: string; progress_reason: string; today_owner_role: string; coach_next_move: string; author_name: string; created_at: string }[];
+  const mdtTaskEvents = (mdtTaskEventRows ?? []) as unknown as { to_status: string; decision: string | null; actor_name: string; created_at: string; mdt_tasks: { task: string; owner_role: string } | null }[];
   const structuredCoachConsults = new Set(coachSessionEvents.map((event) => event.consultation_id));
 
   const [{ data: wearConns }, { data: wearReads }] = await Promise.all([
@@ -562,6 +570,22 @@ export default async function ClientDetailPage(
       detail: event.note, by: event.actor_name,
       href: `/console/${event.consultation_id}`,
       pending: event.event_type !== "Completed",
+    })),
+    mdtHuddles.map((huddle) => ({
+      at: huddle.created_at, kind: huddle.progress_status === "Red" ? "concern" as const : "note" as const,
+      title: `MDT huddle — ${huddle.progress_status.toLowerCase()} · owner ${huddle.today_owner_role}`,
+      detail: `${huddle.progress_reason} · Coach next: ${huddle.coach_next_move}`,
+      by: huddle.author_name,
+      href: "/workspace?tab=board",
+      pending: huddle.progress_status === "Red",
+    })),
+    mdtTaskEvents.map((event) => ({
+      at: event.created_at, kind: "task" as const,
+      title: `MDT action ${event.to_status.toLowerCase()} — ${event.mdt_tasks?.task ?? "team action"}`,
+      detail: event.decision ?? `Owned by ${event.mdt_tasks?.owner_role ?? "care team"}`,
+      by: event.actor_name,
+      href: "/workspace?tab=board",
+      pending: !["Completed", "Cancelled"].includes(event.to_status),
     })),
     coachingAdherence.map((event) => ({
       at: atDay(event.event_date) ?? "", kind: "task" as const,

@@ -6874,6 +6874,170 @@ export async function acknowledgeMdt(formData: FormData) {
   revalidatePath("/workspace");
 }
 
+export type MdtHuddleActionState = { ok?: string; error?: string };
+
+const MDT_OWNER_DISCIPLINE: Record<string, string> = {
+  "Health Coach": "coach", Doctor: "doctor", Dietitian: "dietitian",
+  "Fitness Trainer": "trainer", Psychologist: "psychologist",
+};
+
+/** Record one structured huddle and create its owned, dated team action. */
+export async function addMdtHuddle(
+  _previous: MdtHuddleActionState,
+  formData: FormData,
+): Promise<MdtHuddleActionState> {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return { error: "You are not authorized to record an MDT huddle." };
+  const input = {
+    clientId: String(formData.get("client_id") || ""),
+    currentPlan: String(formData.get("current_plan") || "").trim(),
+    progressStatus: String(formData.get("progress_status") || ""),
+    progressReason: String(formData.get("progress_reason") || "").trim(),
+    issueCategory: String(formData.get("issue_category") || "None"),
+    newIssue: String(formData.get("new_issue") || "").trim(),
+    barrierCategory: String(formData.get("barrier_category") || "None"),
+    barrierDetail: String(formData.get("barrier_detail") || "").trim(),
+    safetyStatus: String(formData.get("safety_status") || "None"),
+    referralStatus: String(formData.get("referral_status") || "Not required"),
+    ownerRole: String(formData.get("owner_role") || ""),
+    coachNextMove: String(formData.get("coach_next_move") || "").trim(),
+    teamDecisionRequired: String(formData.get("team_decision_required") || "") === "on",
+    teamDecision: String(formData.get("team_decision") || "").trim(),
+    task: String(formData.get("task") || "").trim(),
+    dueDate: String(formData.get("due_date") || ""),
+    priority: String(formData.get("priority") || "Routine"),
+  };
+  const { mdtHuddleProblems } = await import("@/lib/mdt");
+  const problems = mdtHuddleProblems(input, todayISO());
+  if (problems.length) return { error: `Complete: ${problems.join(", ")}.` };
+
+  const supabase = await createClient();
+  if (input.safetyStatus !== "None") {
+    const { data: activeSafety } = await supabase.from("safety_events").select("id")
+      .eq("client_id", input.clientId).neq("status", "Resolved").limit(1).maybeSingle();
+    if (!activeSafety) return { error: "Open the safety concern on the client's Overview first, then record this huddle." };
+  }
+
+  const { data: huddle, error: huddleError } = await supabase.from("mdt_huddles").insert({
+    client_id: input.clientId,
+    huddle_date: todayISO(),
+    current_plan: input.currentPlan,
+    progress_status: input.progressStatus,
+    progress_reason: input.progressReason,
+    issue_category: input.issueCategory,
+    new_issue: input.issueCategory === "None" ? null : input.newIssue,
+    barrier_category: input.barrierCategory,
+    barrier_detail: input.barrierCategory === "None" ? null : input.barrierDetail,
+    safety_status: input.safetyStatus,
+    referral_status: input.referralStatus,
+    today_owner_role: input.ownerRole,
+    coach_next_move: input.coachNextMove,
+    team_decision_required: input.teamDecisionRequired,
+    team_decision: input.teamDecisionRequired ? input.teamDecision : null,
+    author_id: p.id,
+    author_name: p.name,
+    author_role: p.role,
+  }).select("id").single();
+  if (huddleError || !huddle?.id) return { error: huddleError?.message ?? "The huddle could not be saved." };
+
+  const discipline = MDT_OWNER_DISCIPLINE[input.ownerRole];
+  const { data: assignment } = discipline
+    ? await supabase.from("client_assignments").select("staff_id")
+      .eq("client_id", input.clientId).eq("discipline", discipline).maybeSingle()
+    : { data: null };
+  const assignedTo = (assignment as { staff_id?: string | null } | null)?.staff_id ?? null;
+  const { data: task, error: taskError } = await supabase.from("mdt_tasks").insert({
+    huddle_id: huddle.id,
+    client_id: input.clientId,
+    owner_role: input.ownerRole,
+    assigned_to_staff_id: assignedTo,
+    task: input.task,
+    due_date: input.dueDate,
+    priority: input.priority,
+    status: "Open",
+    created_by: p.id,
+    creator_name: p.name,
+  }).select("id").single();
+  if (taskError || !task?.id) return { error: taskError?.message ?? "The huddle was saved, but its team action could not be created." };
+
+  await supabase.from("mdt_task_events").insert({
+    task_id: task.id,
+    client_id: input.clientId,
+    from_status: null,
+    to_status: "Open",
+    decision: input.teamDecisionRequired ? input.teamDecision : null,
+    actor_id: p.id,
+    actor_name: p.name,
+    actor_role: p.role,
+  });
+  const clientLabel = await clientName(supabase, input.clientId);
+  const notice = {
+    title: `${input.priority} MDT action assigned`,
+    body: `${clientLabel}: ${input.task} · due ${input.dueDate}`,
+    icon: input.priority === "Urgent" ? "🔴" : "🤝",
+    href: "/workspace?tab=board",
+    link: { kind: "client", ref: input.clientId },
+  };
+  if (assignedTo) await notifyStaff(supabase, assignedTo, notice);
+  else await notifyRoles(supabase, [input.ownerRole], notice);
+  await logAudit(p, "Structured MDT huddle recorded", clientLabel, `${input.progressStatus} · ${input.ownerRole}`);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${input.clientId}`);
+  return { ok: "Huddle recorded and the team action was assigned." };
+}
+
+export async function updateMdtTask(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id") || "");
+  const status = String(formData.get("status") || "");
+  const decision = String(formData.get("decision") || "").trim();
+  const { mdtTaskUpdateProblems } = await import("@/lib/mdt");
+  if (!id || mdtTaskUpdateProblems(status, decision).length) return;
+
+  const supabase = await createClient();
+  const { data: current } = await supabase.from("mdt_tasks")
+    .select("client_id, status, owner_role, assigned_to_staff_id, created_by, creator_name, task")
+    .eq("id", id).maybeSingle();
+  if (!current || ["Completed", "Cancelled"].includes(current.status)) return;
+  const allowed = isAdminish(p.role) || current.created_by === p.id
+    || current.owner_role === p.role
+    || (!!p.staffId && current.assigned_to_staff_id === p.staffId);
+  if (!allowed || current.status === status) return;
+
+  const now = new Date().toISOString();
+  const patch: Record<string, string | null> = { status, decision: decision || null, updated_at: now };
+  if (status === "Completed") {
+    patch.completed_by = p.name;
+    patch.completed_at = now;
+  }
+  const { error } = await supabase.from("mdt_tasks").update(patch).eq("id", id);
+  if (error) return;
+  await supabase.from("mdt_task_events").insert({
+    task_id: id,
+    client_id: current.client_id,
+    from_status: current.status,
+    to_status: status,
+    decision: decision || null,
+    actor_id: p.id,
+    actor_name: p.name,
+    actor_role: p.role,
+  });
+  if (current.created_by !== p.id) {
+    await supabase.from("notifications").insert({
+      user_id: current.created_by,
+      title: `MDT action ${status.toLowerCase()}`,
+      body: `${current.task}${decision ? ` · ${decision}` : ""}`,
+      icon: status === "Completed" ? "✅" : "🤝",
+      link_kind: "client",
+      link_ref: current.client_id,
+    });
+  }
+  await logAudit(p, "MDT task updated", current.task, `${current.status} → ${status}`);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${current.client_id}`);
+}
+
 // ---- Health Coach 360: clinical referrals + safety hard stops --------------
 
 const CLINICAL_REFERRAL_DESTINATIONS = new Set([
