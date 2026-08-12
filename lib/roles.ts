@@ -229,8 +229,16 @@ export function canConsult(role: string): boolean {
 // Who owns behaviour goals, habits, adherence inputs and wearable setup. Other
 // clinicians may read those records for coordination, but should not silently
 // change the Health Coach's plan. Mirrors the write policies in migration 0165.
+export const HEALTH_COACH_SUPERVISOR_ROLES = [
+  "Super Admin", "Administrator", "Manager", "Medical Director",
+] as const;
+
+export function isHealthCoachSupervisor(role: string): boolean {
+  return (HEALTH_COACH_SUPERVISOR_ROLES as readonly string[]).includes(role);
+}
+
 export function canManageHealthCoaching(role: string): boolean {
-  return role === "Super Admin" || ["Administrator", "Manager", "Medical Director", "Health Coach"].includes(role);
+  return role === "Health Coach" || isHealthCoachSupervisor(role);
 }
 
 // A clinical concern can be recognised by any clinician. Commercial and

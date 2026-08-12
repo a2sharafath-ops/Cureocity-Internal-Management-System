@@ -8,6 +8,7 @@ import {
 } from "@/lib/coach-baseline";
 import { applicableMarkerKeys, MARKER_BY_KEY, MARKERS } from "@/lib/coach-markers";
 import MarkerAssessment from "@/components/MarkerAssessment";
+import { COACH_OVERRIDE_REASON_MIN_LENGTH } from "@/lib/coach-access";
 
 export type CoachBaselineView = {
   id: string; version: string; status: string; answers: BaselineAnswers;
@@ -37,13 +38,14 @@ function Question({ question, value, setValue }: { question: BaselineQuestion; v
   </label>;
 }
 
-export default function HealthCoachBaselinePanel({ clientId, baseline, screenings, canManage, gender }: {
+export default function HealthCoachBaselinePanel({ clientId, baseline, screenings, canManage, gender, supervisorOverride = false }: {
   clientId: string; baseline: CoachBaselineView | null; screenings: ScreeningResultView[];
-  canManage: boolean; gender?: string | null;
+  canManage: boolean; gender?: string | null; supervisorOverride?: boolean;
 }) {
   const [answers, setAnswers] = useState<BaselineAnswers>(baseline?.answers ?? {});
   const [editing, setEditing] = useState(!baseline);
   const [message, setMessage] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [busy, start] = useTransition();
   const progress = useMemo(() => baselineProgress(answers), [answers]);
   const pathways = useMemo(() => triggeredBaselinePathways(answers), [answers]);
@@ -57,6 +59,7 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
     form.set("client_id", clientId);
     form.set("answers", JSON.stringify(answers));
     form.set("intent", intent);
+    if (supervisorOverride) form.set("override_reason", overrideReason.trim());
     start(async () => {
       await saveCoachBaseline(form);
       setMessage(intent === "Completed" && progress.percent === 100 ? "Baseline completed." : "Draft saved.");
@@ -75,6 +78,11 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
     <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 4 }}>{progress.completed} of {progress.total} applicable required answers recorded{baseline?.completed_at ? ` · completed by ${baseline.completed_by_name ?? "coach"}` : ""}</div>
 
     {editing && canManage && <div style={{ marginTop: 14 }}>
+      {supervisorOverride && <label style={{ display: "grid", gap: 4, marginBottom: 12, color: "var(--amber-text)", fontSize: 12 }}>
+        Supervisor override reason
+        <input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} required minLength={COACH_OVERRIDE_REASON_MIN_LENGTH} placeholder="Why the assigned coach cannot update this baseline" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", background: "#fff" }} />
+        <span style={{ fontSize: 10.5 }}>This reason is written to the audit log.</span>
+      </label>}
       <div style={{ display: "grid", gap: 9 }}>
         {BASELINE_MODULES.map((module) => {
           const visible = module.questions.filter((question) => questionIsVisible(question, answers));
@@ -88,8 +96,8 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
-        <button type="button" onClick={() => save("Draft")} disabled={busy} style={secondary}>{busy ? "Saving…" : "Save draft"}</button>
-        <button type="button" onClick={() => save("Completed")} disabled={busy || progress.percent !== 100} style={{ ...primary, opacity: busy || progress.percent !== 100 ? .5 : 1 }}>{progress.percent === 100 ? "Complete baseline" : `${progress.missing.length} answers remaining`}</button>
+        <button type="button" onClick={() => save("Draft")} disabled={busy || (supervisorOverride && overrideReason.trim().length < COACH_OVERRIDE_REASON_MIN_LENGTH)} style={secondary}>{busy ? "Saving…" : "Save draft"}</button>
+        <button type="button" onClick={() => save("Completed")} disabled={busy || progress.percent !== 100 || (supervisorOverride && overrideReason.trim().length < COACH_OVERRIDE_REASON_MIN_LENGTH)} style={{ ...primary, opacity: busy || progress.percent !== 100 || (supervisorOverride && overrideReason.trim().length < COACH_OVERRIDE_REASON_MIN_LENGTH) ? .5 : 1 }}>{progress.percent === 100 ? "Complete baseline" : `${progress.missing.length} answers remaining`}</button>
         {baseline && <button type="button" onClick={() => { setAnswers(baseline.answers); setEditing(false); }} style={{ ...secondary, color: "var(--muted)" }}>Cancel</button>}
         {message && <span style={{ color: "var(--green-text)", fontSize: 12, fontWeight: 650 }}>{message}</span>}
       </div>
@@ -103,7 +111,7 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
       {triggeredMarkers.size > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 10, marginTop: 10 }}>{Array.from(triggeredMarkers).map((key) => {
         const marker = MARKER_BY_KEY[key];
         const result = latest.get(key);
-        return <div key={key} style={{ border: "1px solid var(--border)", borderRadius: 9, padding: 10 }}><div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 6 }}><b style={{ fontSize: 12.5 }}>{marker.icon} {marker.label}</b><span style={{ color: "var(--muted)", fontSize: 11 }}>{result ? `last ${result.date} · ${result.score} · ${result.interpretation ?? result.band}` : "not recorded"}</span></div>{canManage && <MarkerAssessment clientId={clientId} marker={key} tool={marker.tool} range={marker.range} gender={gender} />}</div>;
+        return <div key={key} style={{ border: "1px solid var(--border)", borderRadius: 9, padding: 10 }}><div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 6 }}><b style={{ fontSize: 12.5 }}>{marker.icon} {marker.label}</b><span style={{ color: "var(--muted)", fontSize: 11 }}>{result ? `last ${result.date} · ${result.score} · ${result.interpretation ?? result.band}` : "not recorded"}</span></div>{canManage && <MarkerAssessment clientId={clientId} marker={key} tool={marker.tool} range={marker.range} gender={gender} supervisorOverride={supervisorOverride} />}</div>;
       })}</div>}
     </div>}
 
@@ -111,7 +119,7 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
       <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Screening record ({screenings.length})</summary>
       <div style={{ display: "grid", gap: 7, marginTop: 9 }}>{MARKERS.map((marker) => {
         const result = latest.get(marker.key);
-        return <div key={marker.key} style={{ display: "flex", alignItems: "start", gap: 9, borderTop: "1px solid var(--border)", paddingTop: 7, fontSize: 12 }}><span>{marker.icon}</span><div style={{ flex: 1 }}><b>{marker.label}</b><span style={{ color: applicableMarkers.has(marker.key) ? "var(--amber-text)" : "var(--muted)", fontSize: 10.5, fontWeight: 700 }}> · {applicableMarkers.has(marker.key) ? "applicable" : "not currently indicated"}</span>{result ? <><span style={{ color: "var(--muted)" }}> · {result.instrument ?? marker.tool} · {result.date} · score {result.score ?? "—"} · {result.interpretation ?? result.band ?? "—"}</span>{result.recommended_action && <div style={{ marginTop: 2 }}>{result.recommended_action}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5 }}>Version: {result.instrument_version ?? "not recorded"} · reviewer: {result.reviewer_name ?? "not recorded"} · next review: {result.next_review_date ?? "not set"}</div></> : <span style={{ color: "var(--muted)" }}> · no result</span>}</div>{canManage && !triggeredMarkers.has(marker.key) && <MarkerAssessment clientId={clientId} marker={marker.key} tool={marker.tool} range={marker.range} gender={gender} />}</div>;
+        return <div key={marker.key} style={{ display: "flex", alignItems: "start", gap: 9, borderTop: "1px solid var(--border)", paddingTop: 7, fontSize: 12 }}><span>{marker.icon}</span><div style={{ flex: 1 }}><b>{marker.label}</b><span style={{ color: applicableMarkers.has(marker.key) ? "var(--amber-text)" : "var(--muted)", fontSize: 10.5, fontWeight: 700 }}> · {applicableMarkers.has(marker.key) ? "applicable" : "not currently indicated"}</span>{result ? <><span style={{ color: "var(--muted)" }}> · {result.instrument ?? marker.tool} · {result.date} · score {result.score ?? "—"} · {result.interpretation ?? result.band ?? "—"}</span>{result.recommended_action && <div style={{ marginTop: 2 }}>{result.recommended_action}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5 }}>Version: {result.instrument_version ?? "not recorded"} · reviewer: {result.reviewer_name ?? "not recorded"} · next review: {result.next_review_date ?? "not set"}</div></> : <span style={{ color: "var(--muted)" }}> · no result</span>}</div>{canManage && !triggeredMarkers.has(marker.key) && <MarkerAssessment clientId={clientId} marker={marker.key} tool={marker.tool} range={marker.range} gender={gender} supervisorOverride={supervisorOverride} />}</div>;
       })}</div>
     </details>
   </section>;

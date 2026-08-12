@@ -5,6 +5,7 @@ import { applicableMarkerKeys, MARKERS, TONE_STYLE, markerOverdueDays, type Mark
 import { MARKER_BASELINE_GRACE_DAYS } from "@/lib/work-owners";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MarkerAssessment from "@/components/MarkerAssessment";
+import { isHealthCoachSupervisor } from "@/lib/roles";
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
@@ -15,6 +16,7 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
   const supabase = await createClient();
   const today = todayISO();
   const isCoach = me.role === "Health Coach";
+  const supervisorOverride = isHealthCoachSupervisor(me.role);
 
   // Coach → their assigned clients; overseers → all clients on a coach's caseload.
   let clientIds: string[] = [];
@@ -144,7 +146,7 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
                         <span style={{ flex: 1 }} />
                         <span style={{ fontSize: 10.5, fontWeight: 600, color: dueBad ? "var(--amber-text)" : applicable ? "var(--brand-text)" : "var(--muted)" }}>{dueLabel}</span>
                       </div>
-                      <MarkerAssessment clientId={c.id} marker={m.key} tool={m.tool} range={m.range} gender={c.gender} />
+                      <MarkerAssessment clientId={c.id} marker={m.key} tool={m.tool} range={m.range} gender={c.gender} supervisorOverride={supervisorOverride} />
                     </div>
                   );
                 })}

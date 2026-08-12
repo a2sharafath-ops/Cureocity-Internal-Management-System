@@ -10,6 +10,7 @@ import {
   confidenceNeedsSmallerGoal, reviewIsDue, type AdherenceOutcome,
 } from "@/lib/coach-goals";
 import { last7Count } from "@/lib/habits";
+import { COACH_OVERRIDE_REASON_MIN_LENGTH } from "@/lib/coach-access";
 
 export type CoachingGoalView = {
   id: string; name: string; icon: string | null; cadence: string; target_per_week: number;
@@ -36,17 +37,22 @@ const label: React.CSSProperties = { display: "grid", gap: 4, color: "var(--mute
 const button: React.CSSProperties = { border: 0, borderRadius: 8, padding: "8px 12px", background: "var(--ink)", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" };
 const quietButton: React.CSSProperties = { ...button, border: "1px solid var(--border)", background: "#fff", color: "var(--ink)" };
 
-export default function HealthCoachGoalsPanel({ clientId, goals, events, barriers, canManage, today }: {
+export default function HealthCoachGoalsPanel({ clientId, goals, events, barriers, canManage, today, supervisorOverride = false }: {
   clientId: string; goals: CoachingGoalView[]; events: CoachingAdherenceView[];
-  barriers: CoachingBarrierView[]; canManage: boolean; today: string;
+  barriers: CoachingBarrierView[]; canManage: boolean; today: string; supervisorOverride?: boolean;
 }) {
   const [confidence, setConfidence] = useState(7);
+  const [overrideReason, setOverrideReason] = useState("");
+  const overrideReady = !supervisorOverride || overrideReason.trim().length >= COACH_OVERRIDE_REASON_MIN_LENGTH;
+  const overrideField = () => supervisorOverride
+    ? <input type="hidden" name="override_reason" value={overrideReason.trim()} />
+    : null;
   const active = goals.filter((goal) => goal.status === "Active");
   const openBarriers = barriers.filter((barrier) => barrier.status !== "Resolved");
   const recentEvents = events.slice(0, 20);
 
   return (
-    <section id="coaching-goals" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+    <section id="coaching-goals" onSubmitCapture={(event) => { if (!overrideReady) event.preventDefault(); }} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "start", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 250 }}>
           <div style={{ fontWeight: 750 }}>Goals &amp; adherence</div>
@@ -55,11 +61,18 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
         <span style={{ fontSize: 11.5, padding: "4px 9px", borderRadius: 999, background: "var(--neutral-bg)", color: "var(--muted)" }}>{active.length} active · {openBarriers.length} open barrier{openBarriers.length === 1 ? "" : "s"}</span>
       </div>
 
+      {canManage && supervisorOverride && <label style={{ display: "grid", gap: 4, marginTop: 12, color: "var(--amber-text)", fontSize: 12 }}>
+        Supervisor override reason
+        <input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} required minLength={COACH_OVERRIDE_REASON_MIN_LENGTH} placeholder="Why the assigned coach cannot perform these actions" style={field} />
+        <span style={{ fontSize: 10.5 }}>Applied to the next action and written to the audit log.</span>
+      </label>}
+
       {canManage && (
         <details style={{ marginTop: 14, border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>
           <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 13 }}>+ Create a behaviour goal</summary>
           <form action={createHabit} style={{ marginTop: 12 }}>
             <input type="hidden" name="client_id" value={clientId} />
+            {overrideField()}
             <input type="hidden" name="icon" value="◎" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
               <label style={{ ...label, gridColumn: "span 2" }}>Target behaviour<input name="name" required style={field} placeholder="Walk for 15 minutes after lunch" /></label>
@@ -99,11 +112,11 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
                 </div>
               </div>
               {canManage && goal.status === "Active" && <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 10 }}>
-                {(["Completed", "Missed", "Excused"] as const).map((outcome) => <form action={recordCoachingAdherence} key={outcome}><input type="hidden" name="client_id" value={clientId} /><input type="hidden" name="goal_id" value={goal.id} /><input type="hidden" name="category" value="Coaching goal" /><input type="hidden" name="event_date" value={today} /><input type="hidden" name="outcome" value={outcome} /><button style={outcome === "Completed" ? button : quietButton}>{outcome} today</button></form>)}
-                <details style={{ fontSize: 12 }}><summary style={{ ...quietButton, listStyle: "none" }}>Review goal</summary><form action={reviewCoachingGoal} style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}><input type="hidden" name="id" value={goal.id} /><input type="hidden" name="client_id" value={clientId} /><input name="review_date" type="date" min={today} required style={{ ...field, width: 150 }} /><input name="note" placeholder="Review note" style={{ ...field, width: 210 }} /><button style={button}>Save review</button></form></details>
-                {(["Paused", "Completed"] as const).map((status) => <form action={setCoachingGoalStatus} key={status}><input type="hidden" name="id" value={goal.id} /><input type="hidden" name="client_id" value={clientId} /><input type="hidden" name="status" value={status} /><button style={quietButton}>{status === "Paused" ? "Pause" : "Close as completed"}</button></form>)}
+                {(["Completed", "Missed", "Excused"] as const).map((outcome) => <form action={recordCoachingAdherence} key={outcome}><input type="hidden" name="client_id" value={clientId} />{overrideField()}<input type="hidden" name="goal_id" value={goal.id} /><input type="hidden" name="category" value="Coaching goal" /><input type="hidden" name="event_date" value={today} /><input type="hidden" name="outcome" value={outcome} /><button style={outcome === "Completed" ? button : quietButton}>{outcome} today</button></form>)}
+                <details style={{ fontSize: 12 }}><summary style={{ ...quietButton, listStyle: "none" }}>Review goal</summary><form action={reviewCoachingGoal} style={{ display: "flex", gap: 6, marginTop: 7, flexWrap: "wrap" }}><input type="hidden" name="id" value={goal.id} /><input type="hidden" name="client_id" value={clientId} />{overrideField()}<input name="review_date" type="date" min={today} required style={{ ...field, width: 150 }} /><input name="note" placeholder="Review note" style={{ ...field, width: 210 }} /><button style={button}>Save review</button></form></details>
+                {(["Paused", "Completed"] as const).map((status) => <form action={setCoachingGoalStatus} key={status}><input type="hidden" name="id" value={goal.id} /><input type="hidden" name="client_id" value={clientId} />{overrideField()}<input type="hidden" name="status" value={status} /><button style={quietButton}>{status === "Paused" ? "Pause" : "Close as completed"}</button></form>)}
               </div>}
-              {canManage && goal.status === "Paused" && <form action={setCoachingGoalStatus} style={{ marginTop: 10 }}><input type="hidden" name="id" value={goal.id} /><input type="hidden" name="client_id" value={clientId} /><input type="hidden" name="status" value="Active" /><button style={button}>Reactivate</button></form>}
+              {canManage && goal.status === "Paused" && <form action={setCoachingGoalStatus} style={{ marginTop: 10 }}><input type="hidden" name="id" value={goal.id} /><input type="hidden" name="client_id" value={clientId} />{overrideField()}<input type="hidden" name="status" value="Active" /><button style={button}>Reactivate</button></form>}
             </div>
           );
         })}
@@ -116,7 +129,7 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
           <div style={{ display: "grid", gap: 5 }}>
             {ADHERENCE_CATEGORIES.map((category) => { const summary = adherenceSummary(events.filter((event) => event.category === category)); return <div key={category} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 12, padding: "5px 0", borderTop: "1px solid var(--border)" }}><span>{category}</span><b>{summary.percent == null ? "No reviewed events" : `${summary.percent}% · ${summary.completed}/${summary.reviewed}`}</b></div>; })}
           </div>
-          {canManage && <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 12 }}>+ Record another adherence event</summary><form action={recordCoachingAdherence} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginTop: 8 }}><input type="hidden" name="client_id" value={clientId} /><select name="category" style={field}>{ADHERENCE_CATEGORIES.filter((x) => x !== "Coaching goal").map((x) => <option key={x}>{x}</option>)}</select><select name="outcome" style={field}><option>Completed</option><option>Missed</option><option>Excused</option></select><input name="event_date" type="date" max={today} defaultValue={today} style={field} /><input name="note" placeholder="Evidence or context" style={field} /><button style={{ ...button, gridColumn: "span 2" }}>Record event</button></form></details>}
+          {canManage && <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 12 }}>+ Record another adherence event</summary><form action={recordCoachingAdherence} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginTop: 8 }}><input type="hidden" name="client_id" value={clientId} />{overrideField()}<select name="category" style={field}>{ADHERENCE_CATEGORIES.filter((x) => x !== "Coaching goal").map((x) => <option key={x}>{x}</option>)}</select><select name="outcome" style={field}><option>Completed</option><option>Missed</option><option>Excused</option></select><input name="event_date" type="date" max={today} defaultValue={today} style={field} /><input name="note" placeholder="Evidence or context" style={field} /><button style={{ ...button, gridColumn: "span 2" }}>Record event</button></form></details>}
           {recentEvents.length > 0 && <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Recent event history ({recentEvents.length})</summary>{recentEvents.map((event) => <div key={event.id} style={{ fontSize: 11.5, borderTop: "1px solid var(--border)", padding: "5px 0" }}><b>{event.event_date} · {event.outcome}</b> — {event.category}{event.note ? ` · ${event.note}` : ""}</div>)}</details>}
         </div>
 
@@ -124,9 +137,9 @@ export default function HealthCoachGoalsPanel({ clientId, goals, events, barrier
           <div style={{ fontWeight: 700, fontSize: 13 }}>Barriers</div>
           <div style={{ display: "grid", gap: 7, marginTop: 9 }}>
             {openBarriers.length === 0 && <div style={{ color: "var(--muted)", fontSize: 12 }}>No open barriers recorded.</div>}
-            {openBarriers.map((barrier) => <div key={barrier.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 9, fontSize: 12 }}><b>{barrier.category}</b><div>{barrier.detail}</div>{barrier.coach_response && <div style={{ color: "var(--muted)", marginTop: 3 }}>Response: {barrier.coach_response}</div>}{canManage && <form action={resolveCoachingBarrier} style={{ display: "flex", gap: 6, marginTop: 7 }}><input type="hidden" name="id" value={barrier.id} /><input type="hidden" name="client_id" value={clientId} /><input name="resolution_note" required placeholder="How was it resolved?" style={{ ...field, flex: 1 }} /><button style={quietButton}>Resolve</button></form>}</div>)}
+            {openBarriers.map((barrier) => <div key={barrier.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 9, fontSize: 12 }}><b>{barrier.category}</b><div>{barrier.detail}</div>{barrier.coach_response && <div style={{ color: "var(--muted)", marginTop: 3 }}>Response: {barrier.coach_response}</div>}{canManage && <form action={resolveCoachingBarrier} style={{ display: "flex", gap: 6, marginTop: 7 }}><input type="hidden" name="id" value={barrier.id} /><input type="hidden" name="client_id" value={clientId} />{overrideField()}<input name="resolution_note" required placeholder="How was it resolved?" style={{ ...field, flex: 1 }} /><button style={quietButton}>Resolve</button></form>}</div>)}
           </div>
-          {canManage && <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 12 }}>+ Record a barrier</summary><form action={addCoachingBarrier} style={{ display: "grid", gap: 7, marginTop: 8 }}><input type="hidden" name="client_id" value={clientId} /><select name="goal_id" style={field}><option value="">Whole coaching plan</option>{active.map((goal) => <option key={goal.id} value={goal.id}>{goal.name}</option>)}</select><select name="category" style={field}>{BARRIER_CATEGORIES.map((x) => <option key={x}>{x}</option>)}</select><textarea name="detail" required placeholder="What is getting in the way?" style={area} /><textarea name="coach_response" placeholder="Agreed response or experiment" style={area} /><button style={button}>Record barrier</button></form></details>}
+          {canManage && <details style={{ marginTop: 9 }}><summary style={{ cursor: "pointer", fontWeight: 700, fontSize: 12 }}>+ Record a barrier</summary><form action={addCoachingBarrier} style={{ display: "grid", gap: 7, marginTop: 8 }}><input type="hidden" name="client_id" value={clientId} />{overrideField()}<select name="goal_id" style={field}><option value="">Whole coaching plan</option>{active.map((goal) => <option key={goal.id} value={goal.id}>{goal.name}</option>)}</select><select name="category" style={field}>{BARRIER_CATEGORIES.map((x) => <option key={x}>{x}</option>)}</select><textarea name="detail" required placeholder="What is getting in the way?" style={area} /><textarea name="coach_response" placeholder="Agreed response or experiment" style={area} /><button style={button}>Record barrier</button></form></details>}
         </div>
       </div>
     </section>

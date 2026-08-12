@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { canConsult, canManageHealthCoaching } from "@/lib/roles";
+import { canConsult, isHealthCoachSupervisor } from "@/lib/roles";
 import { consultQ, consultQFor } from "@/lib/consult-questions";
 import { milestoneDates, cyclesFor, COMPREHENSIVE_CATEGORY } from "@/lib/comprehensive";
 import ConsoleView, { type ConsoleHealth, type OtherConsult } from "@/components/ConsoleView";
@@ -247,7 +247,7 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
       { data: workflowRow }, { data: coachBaseline }, { data: screeningRows },
       { data: goalRows }, { data: adherenceRows }, { data: barrierRows },
       { data: referralRows }, { data: safetyRows }, { data: previousRow },
-      { data: coachConsultRows },
+      { data: coachConsultRows }, { data: coachAssignment },
     ] = await Promise.all([
       supabase.from("coach_session_workflows")
         .select("id, status, session_number, completion_percent, check_in, review, barrier, action_plan, closeout, completed_by_name, completed_at")
@@ -266,6 +266,7 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
         .eq("client_id", row.client_id).eq("status", "Completed").neq("consultation_id", row.id)
         .order("completed_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("consultations").select("id").eq("client_id", row.client_id).eq("kind", "Coach").order("created_at", { ascending: true }),
+      supabase.from("client_assignments").select("staff_id").eq("client_id", row.client_id).eq("discipline", "coach").maybeSingle(),
     ]);
     const assessments = (screeningRows ?? []) as { marker: string; score: number | null; interpretation: string | null; date: string; next_review_date: string | null }[];
     const due = dueCoachScreenings(
@@ -278,6 +279,9 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
     const outcomes = ((adherenceRows ?? []) as { outcome: AdherenceOutcome }[]);
     const adherence = adherenceSummary(outcomes);
     const previous = previousRow as { session_number: number; closeout: CoachSessionData["closeout"]; action_plan: CoachSessionData["action_plan"]; completed_at: string | null } | null;
+    const supervisorOverride = isHealthCoachSupervisor(me.role);
+    const assignedCoachCanManage = me.role === "Health Coach" && Boolean(me.staffId)
+      && coachAssignment?.staff_id === me.staffId;
     // The original scripted intake remains the first Health Coach encounter,
     // as requested. Phase 4 takes over from session two onward; an already
     // created workflow always reopens in its dedicated workspace.
@@ -299,8 +303,9 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
       previousSession={previous}
       gender={health?.gender ?? null}
       today={todayISO()}
-      canManage={canManageHealthCoaching(me.role)}
+      canManage={assignedCoachCanManage || supervisorOverride}
       consultationCompleted={row.status === "completed"}
+      supervisorOverride={supervisorOverride}
     />;
   }
 

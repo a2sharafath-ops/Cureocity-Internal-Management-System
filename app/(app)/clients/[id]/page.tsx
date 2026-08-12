@@ -19,7 +19,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
 import VoidPackageButton from "@/components/VoidPackageButton";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee, canManageHealthCoaching } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee, isHealthCoachSupervisor } from "@/lib/roles";
 import { canWriteFitness } from "@/lib/discipline";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -193,7 +193,6 @@ export default async function ClientDetailPage(
   const { data: baselineRow } = await supabase
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: true }).limit(1).maybeSingle();
 
-  const canManageCoaching = !ro && canManageHealthCoaching(me?.role ?? "");
   const canEditFitness = !ro && canWriteFitness(me?.role ?? "");
   const [{ data: habitRows }, { data: habitLogRows }, { data: adherenceRows }, { data: barrierRows }, { data: goalEventRows }] = await Promise.all([
     supabase.from("habits").select("id, name, icon, cadence, target_per_week, active, cue, time_place, importance, confidence, barrier_code, barrier_detail, if_then_plan, review_date, status").eq("client_id", params.id).order("created_at", { ascending: false }),
@@ -364,6 +363,10 @@ export default async function ClientDetailPage(
   const assignByDisc = new Map(((assignRows ?? []) as { discipline: string; staff_id: string | null }[]).map((r) => [r.discipline, r.staff_id]));
   const coachId = assignByDisc.get("coach");
   const coachName = coachId ? (staffMap.get(String(coachId)) ?? null) : null;
+  const coachSupervisorOverride = isHealthCoachSupervisor(me?.role ?? "");
+  const assignedCoachCanManage = me?.role === "Health Coach" && Boolean(me.staffId)
+    && coachId === me.staffId;
+  const canManageCoaching = !ro && (assignedCoachCanManage || coachSupervisorOverride);
   // The full care team assigned to this client, per discipline, in a stable order.
   const CT_LABEL: Record<string, string> = { doctor: "Doctor", dietitian: "Dietitian", trainer: "Fitness Trainer", coach: "Health Coach", psychologist: "Psychologist" };
   const careTeam = ["doctor", "dietitian", "trainer", "coach", "psychologist"]
@@ -755,6 +758,7 @@ export default async function ClientDetailPage(
           staffId={me?.staffId ?? null}
           readOnly={ro}
           showPanel={false}
+          coachCanManage={canManageCoaching}
         />
       )}
 
@@ -772,6 +776,7 @@ export default async function ClientDetailPage(
             showOpenSafety={false}
             prefillReferralRole={searchParams.referral}
             prefillReferralReason={searchParams.referral_reason}
+            coachCanManage={canManageCoaching}
           />
         </div>
       )}
@@ -783,6 +788,7 @@ export default async function ClientDetailPage(
           screenings={coachScreenings}
           canManage={canManageCoaching}
           gender={client.gender}
+          supervisorOverride={coachSupervisorOverride}
         />
       )}
 
@@ -794,6 +800,7 @@ export default async function ClientDetailPage(
           barriers={coachingBarriers}
           canManage={canManageCoaching}
           today={habToday}
+          supervisorOverride={coachSupervisorOverride}
         />
       )}
 
@@ -1525,7 +1532,7 @@ export default async function ClientDetailPage(
             <div style={{ fontWeight: 700 }}>⌚ Wearables</div>
             {latestRead && <span style={{ color: "var(--muted)", fontSize: 12 }}>· latest {latestRead.date}</span>}
             <span style={{ flex: 1 }} />
-            {canManageCoaching && <WearableForm clientId={params.id} />}
+            {canManageCoaching && <WearableForm clientId={params.id} supervisorOverride={coachSupervisorOverride} />}
           </div>
 
           {latestRead ? (
@@ -1558,7 +1565,7 @@ export default async function ClientDetailPage(
           {canManageCoaching && (
             <>
               <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 14, marginBottom: 2 }}>Linked devices (integration-ready)</div>
-              <WearableConnect clientId={params.id} connected={connMap} />
+              <WearableConnect clientId={params.id} connected={connMap} supervisorOverride={coachSupervisorOverride} />
             </>
           )}
           </div>

@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { saveCoachAssessment } from "@/lib/actions";
 import { bandFor, TONE_STYLE, type MarkerKey } from "@/lib/coach-markers";
 import { INSTRUMENTS, instrumentIsComplete, visibleInstrumentItems } from "@/lib/coach-instruments";
+import { COACH_OVERRIDE_REASON_MIN_LENGTH } from "@/lib/coach-access";
 
-export default function MarkerAssessment({ clientId, marker, tool, range, gender }: {
+export default function MarkerAssessment({ clientId, marker, tool, range, gender, supervisorOverride = false }: {
   clientId: string; marker: MarkerKey; tool: string; range: string; gender?: string | null;
+  supervisorOverride?: boolean;
 }) {
   const instrument = INSTRUMENTS[marker];
   const router = useRouter();
@@ -18,6 +20,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
   const [note, setNote] = useState("");
   const [nextReviewDate, setNextReviewDate] = useState("");
   const [safetyAction, setSafetyAction] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [busy, start] = useTransition();
 
   const applicableItems = instrument ? visibleInstrumentItems(instrument, answers) : [];
@@ -43,9 +46,10 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
     ? TONE_STYLE[tone as keyof typeof TONE_STYLE]
     : { bg: "var(--neutral-bg)", text: "var(--muted)" };
 
-  const reset = () => { setOpen(false); setAnswers({}); setManual(""); setExternalResult(""); setNote(""); setNextReviewDate(""); setSafetyAction(""); };
+  const overrideReady = !supervisorOverride || overrideReason.trim().length >= COACH_OVERRIDE_REASON_MIN_LENGTH;
+  const reset = () => { setOpen(false); setAnswers({}); setManual(""); setExternalResult(""); setNote(""); setNextReviewDate(""); setSafetyAction(""); setOverrideReason(""); };
   const save = () => {
-    if (!validScore || (safetyTrigger && !safetyAction.trim())) return;
+    if (!validScore || (safetyTrigger && !safetyAction.trim()) || !overrideReady) return;
     const detail = instrument?.mode === "external"
       ? { official_score: score, external_result: externalResult }
       : { ...(computed?.detail ?? { manual: score }), answers, external_result: externalResult || null };
@@ -59,6 +63,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
     if (safetyAction.trim()) form.set("immediate_action", safetyAction.trim());
     if (note.trim()) form.set("note", note.trim());
     if (marker === "mood" && nextReviewDate) form.set("next_review_date", nextReviewDate);
+    if (supervisorOverride) form.set("override_reason", overrideReason.trim());
     start(async () => { await saveCoachAssessment(form); reset(); router.refresh(); });
   };
 
@@ -118,11 +123,17 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
         <span style={{ color: "var(--muted)", fontSize: 10.5 }}>PHQ-9 is not placed on an automatic 14-day cycle. Leave blank when the clinical plan does not schedule a repeat.</span>
       </label>}
 
+      {supervisorOverride && <label style={{ display: "grid", gap: 4, marginTop: 10, fontSize: 12, color: "var(--amber-text)" }}>
+        Supervisor override reason
+        <input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} required minLength={COACH_OVERRIDE_REASON_MIN_LENGTH} placeholder="Why the assigned coach cannot perform this assessment" style={{ ...input, width: "100%", boxSizing: "border-box" }} />
+        <span style={{ fontSize: 10.5 }}>This reason is written to the audit log.</span>
+      </label>}
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12 }}>Score <b>{validScore ? score : "—"}</b></span>
         {validScore && <span style={{ background: toneStyle.bg, color: toneStyle.text, borderRadius: 999, padding: "1px 9px", fontSize: 11, fontWeight: 700 }}>{bandLabel}</span>}
         <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Context or action taken (optional)" style={{ ...input, flex: 1, minWidth: 170 }} />
-        <button type="button" onClick={save} disabled={busy || !validScore || (safetyTrigger && !safetyAction.trim())} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 13px", fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy || !validScore || (safetyTrigger && !safetyAction.trim()) ? .55 : 1 }}>{busy ? "Saving…" : "Save assessment"}</button>
+        <button type="button" onClick={save} disabled={busy || !validScore || (safetyTrigger && !safetyAction.trim()) || !overrideReady} style={{ border: "none", background: "var(--ink)", color: "#fff", borderRadius: 8, padding: "6px 13px", fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy || !validScore || (safetyTrigger && !safetyAction.trim()) || !overrideReady ? .55 : 1 }}>{busy ? "Saving…" : "Save assessment"}</button>
       </div>
     </div>
   );

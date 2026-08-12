@@ -4,7 +4,9 @@ import {
 } from "@/lib/actions";
 import {
   canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent, isAdminish,
+  isHealthCoachSupervisor,
 } from "@/lib/roles";
+import { COACH_OVERRIDE_REASON_MIN_LENGTH } from "@/lib/coach-access";
 
 export type ClinicalReferralView = {
   id: string;
@@ -60,6 +62,7 @@ function when(value: string | null) {
 export default function HealthCoachCarePanel({
   clientId, referrals, safetyEvents, role, userId, staffId, readOnly = false,
   showOpenSafety = true, showPanel = true, prefillReferralRole, prefillReferralReason,
+  coachCanManage = true,
 }: {
   clientId: string;
   referrals: ClinicalReferralView[];
@@ -75,12 +78,16 @@ export default function HealthCoachCarePanel({
   /** Phase-5 rule links open the warm-referral form with safe fields filled. */
   prefillReferralRole?: string;
   prefillReferralReason?: string;
+  /** False for an unassigned Health Coach; never applied to urgent safety actions. */
+  coachCanManage?: boolean;
 }) {
   const openSafety = safetyEvents.filter((x) => x.status !== "Resolved");
   const closedSafety = safetyEvents.filter((x) => x.status === "Resolved");
-  const mayRefer = !readOnly && canCreateClinicalReferral(role);
+  const mayRefer = !readOnly && canCreateClinicalReferral(role)
+    && (role !== "Health Coach" || coachCanManage);
   const mayOpen = !readOnly && canOpenSafetyEvent(role);
   const mayResolve = !readOnly && canResolveSafetyEvent(role);
+  const supervisorOverride = isHealthCoachSupervisor(role);
   const referralRoles = ["Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Medical Director"];
   const referralDefault = referralRoles.includes(prefillReferralRole ?? "") ? prefillReferralRole! : "Doctor";
   const prefilledReferral = Boolean(prefillReferralRole && referralRoles.includes(prefillReferralRole));
@@ -172,6 +179,10 @@ export default function HealthCoachCarePanel({
                 <div style={{ color: "var(--muted)", fontSize: 11 }}>
                   Declined consent is recorded as cancelled and is not sent or notified to the destination.
                 </div>
+                {supervisorOverride && <label style={{ ...label, color: "var(--amber-text)" }}>Supervisor override reason
+                  <input name="override_reason" required minLength={COACH_OVERRIDE_REASON_MIN_LENGTH} style={input} placeholder="Why the assigned coach cannot create this referral" />
+                  <span style={{ fontSize: 10.5 }}>Written to the audit log.</span>
+                </label>}
                 <button type="submit" style={button}>Submit referral decision</button>
               </form>
             </details>
@@ -211,7 +222,7 @@ export default function HealthCoachCarePanel({
                 isAdminish(role) || referral.created_by === userId
                 || referral.destination_role === role
                 || (!!staffId && referral.assigned_to_staff_id === staffId)
-              );
+              ) && (role !== "Health Coach" || coachCanManage);
               return (
                 <div key={referral.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "grid", gap: 5 }}>
                   <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -228,6 +239,7 @@ export default function HealthCoachCarePanel({
                     <form action={updateClinicalReferral} style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                       <input type="hidden" name="id" value={referral.id} />
                       <input type="hidden" name="client_id" value={clientId} />
+                      {supervisorOverride && <input name="override_reason" required minLength={COACH_OVERRIDE_REASON_MIN_LENGTH} placeholder="Supervisor override reason" style={{ ...input, flex: "1 1 230px", borderColor: "var(--amber-text)" }} />}
                       <select name="status" defaultValue={referral.status} style={{ ...input, width: "auto" }}>
                         <option>Sent</option><option>Acknowledged</option><option>Scheduled</option>
                         <option>Completed</option><option>Declined</option><option>Unable to contact</option><option>Cancelled</option>
