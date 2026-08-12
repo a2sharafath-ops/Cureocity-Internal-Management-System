@@ -21,6 +21,8 @@ export function resolveNotificationTarget(kind: string | null, ref: string | nul
     // discipline; oversight roles land on their default workspace).
     case "appointment": return `/workspace?tab=appts`;
     case "client":      return `/clients/${ref}`;
+    case "clinical-referral": return `/clients/${ref}#care-coordination`;
+    case "safety-event":      return `/clients/${ref}#care-coordination`;
     default:            return null;
   }
 }

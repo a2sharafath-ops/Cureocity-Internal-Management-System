@@ -21,7 +21,8 @@ import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
 import VoidPackageButton from "@/components/VoidPackageButton";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee, canManageHealthCoaching } from "@/lib/roles";
+import { canWriteFitness } from "@/lib/discipline";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import ComprehensiveProtocol from "@/components/ComprehensiveProtocol";
@@ -42,6 +43,7 @@ import { RingMeter, Gauge } from "@/components/Meters";
 import SegTabs from "@/components/SegTabs";
 import { BP_SCORES } from "@/lib/blueprint";
 import { DISCIPLINES, disciplineLabel } from "@/lib/disciplines";
+import HealthCoachCarePanel, { type ClinicalReferralView, type SafetyEventView } from "@/components/HealthCoachCarePanel";
 
 // Report types, told apart at a glance in the timeline.
 const REPORT_LABEL: Record<string, string> = {
@@ -191,7 +193,8 @@ export default async function ClientDetailPage(
   const { data: baselineRow } = await supabase
     .from("measurements").select("*").eq("client_id", params.id).order("date", { ascending: true }).limit(1).maybeSingle();
 
-  const canCoach = !ro && canConsult(me?.role ?? "");
+  const canManageCoaching = !ro && canManageHealthCoaching(me?.role ?? "");
+  const canEditFitness = !ro && canWriteFitness(me?.role ?? "");
   const [{ data: habitRows }, { data: habitLogRows }] = await Promise.all([
     supabase.from("habits").select("id, name, icon, cadence, target_per_week, active").eq("client_id", params.id).eq("active", true).order("created_at"),
     supabase.from("habit_logs").select("habit_id, date").eq("client_id", params.id).eq("done", true),
@@ -212,6 +215,19 @@ export default async function ClientDetailPage(
   const reads = (wearReads ?? []) as { date: string; steps: number | null; resting_hr: number | null; sleep_min: number | null; active_min: number | null; calories: number | null; source: string }[];
   const latestRead = reads[0] ?? null;
   const stepTrend = reads.slice(0, 7).reverse(); // oldest→newest of last 7
+
+  const [{ data: clinicalReferralRows }, { data: safetyEventRows }] = canConsult(me?.role ?? "")
+    ? await Promise.all([
+      supabase.from("clinical_referrals")
+        .select("id, reason, destination_role, urgency, requested_action, consent_status, assigned_to_staff_id, status, created_by, created_by_name, created_at, updated_at")
+        .eq("client_id", params.id).order("created_at", { ascending: false }),
+      supabase.from("safety_events")
+        .select("id, trigger_type, concern_summary, immediate_action, recipient_role, status, opened_by_name, opened_at, acknowledged_by, acknowledged_at, resolved_by, resolved_at, resolution_note")
+        .eq("client_id", params.id).order("opened_at", { ascending: false }),
+    ])
+    : [{ data: [] }, { data: [] }];
+  const clinicalReferrals = (clinicalReferralRows ?? []) as ClinicalReferralView[];
+  const safetyEvents = (safetyEventRows ?? []) as SafetyEventView[];
 
   const { data: cwData } = await supabase.from("client_workouts").select("id, name, mode, type, items, assigned_by, created_at").eq("client_id", params.id).order("created_at", { ascending: false });
   // Prescriptions rendered only on the EMR chart before this — invisible on the
@@ -550,7 +566,7 @@ export default async function ClientDetailPage(
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
             <ClientStatusBadge status={detailStatus} />
@@ -1261,29 +1277,42 @@ export default async function ClientDetailPage(
       {(compView || ptView) && (
         <>
           {compView && (
-            <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+            <ComprehensiveProtocol clientId={params.id} view={compView} canHold={canManageCoaching} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
           )}
           {ptView && (
-            <PTProtocol clientId={params.id} view={ptView} canHold={canCoach} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
+            <PTProtocol clientId={params.id} view={ptView} canHold={canManageCoaching} canBook={!ro && canWrite(me?.role ?? "")} overseer={!ro && isBillingOverseer(me?.role ?? "")} services={bookServices} />
           )}
         </>
+      )}
+
+      {canConsult(me?.role ?? "") && (
+        <HealthCoachCarePanel
+          clientId={params.id}
+          referrals={clinicalReferrals}
+          safetyEvents={safetyEvents}
+          role={me?.role ?? ""}
+          userId={me?.id ?? ""}
+          staffId={me?.staffId ?? null}
+          readOnly={ro}
+        />
       )}
 
       {/* Adherence & coaching — what the client has been given and how they are
           keeping to it. Three separate cards asked one question between them,
           each gated on the same role check; a coach reads them together or not
           at all. */}
-      {(canCoach || workouts.length > 0 || habits.length > 0 || reads.length > 0) && (
+      {(canManageCoaching || workouts.length > 0 || habits.length > 0 || reads.length > 0) && (
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px" }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Adherence &amp; coaching</div>
           <div style={{ marginTop: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>Assigned workouts</div>
             <span style={{ flex: 1 }} />
-            {canCoach && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
+            {canEditFitness && <Link href="/exlib" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Exercise Library →</Link>}
+            {!canEditFitness && canManageCoaching && workouts.length > 0 && <a href="#care-coordination" style={{ color: "var(--brand-text)", fontSize: 12, textDecoration: "none", fontWeight: 600 }}>Request trainer review ↑</a>}
           </div>
           {workouts.length === 0 ? (
-            <div style={{ color: "var(--muted)", fontSize: 13 }}>No workouts assigned. Assign a template from the Exercise Library.</div>
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>{canEditFitness ? "No workouts assigned. Assign a template from the Exercise Library." : "No workout plan has been published yet."}</div>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
               {workouts.map((w) => (
@@ -1292,7 +1321,7 @@ export default async function ClientDetailPage(
                     <b style={{ fontSize: 14 }}>{w.name}</b>
                     <span style={{ color: "var(--muted)", fontSize: 12 }}>{w.type} · {w.mode} · {w.items.length} exercises</span>
                     <span style={{ flex: 1 }} />
-                    {canCoach && <form action={removeWorkout}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="client_id" value={params.id} /><button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form>}
+                    {canEditFitness && <form action={removeWorkout}><input type="hidden" name="id" value={w.id} /><input type="hidden" name="client_id" value={params.id} /><button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>✕</button></form>}
                   </div>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <tbody>
@@ -1313,7 +1342,7 @@ export default async function ClientDetailPage(
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontWeight: 700 }}>Habits &amp; streaks</div>
             <span style={{ flex: 1 }} />
-            {canCoach && <HabitForm clientId={params.id} />}
+            {canManageCoaching && <HabitForm clientId={params.id} />}
           </div>
           {habits.length === 0 ? (
             <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>No habits assigned yet.</div>
@@ -1336,7 +1365,7 @@ export default async function ClientDetailPage(
                       <div style={{ fontWeight: 700, color: streak > 0 ? "var(--brand-text)" : "var(--muted)" }}>{streak}d streak</div>
                       <div style={{ fontSize: 12, color: hit ? "var(--green-text)" : "var(--muted)" }}>{week}/{h.target_per_week} this week{hit ? " ✓" : ""}</div>
                     </div>
-                    {canCoach && (
+                    {canManageCoaching && (
                       <form action={archiveHabit}>
                         <input type="hidden" name="id" value={h.id} /><input type="hidden" name="client_id" value={params.id} />
                         <button type="submit" title="Archive" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "3px 9px", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>Archive</button>
@@ -1353,7 +1382,7 @@ export default async function ClientDetailPage(
             <div style={{ fontWeight: 700 }}>⌚ Wearables</div>
             {latestRead && <span style={{ color: "var(--muted)", fontSize: 12 }}>· latest {latestRead.date}</span>}
             <span style={{ flex: 1 }} />
-            {canCoach && <WearableForm clientId={params.id} />}
+            {canManageCoaching && <WearableForm clientId={params.id} />}
           </div>
 
           {latestRead ? (
@@ -1383,7 +1412,7 @@ export default async function ClientDetailPage(
             <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>No wearable data yet.</div>
           )}
 
-          {canCoach && (
+          {canManageCoaching && (
             <>
               <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 14, marginBottom: 2 }}>Linked devices (integration-ready)</div>
               <WearableConnect clientId={params.id} connected={connMap} />

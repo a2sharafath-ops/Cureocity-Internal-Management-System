@@ -18,7 +18,7 @@ import { draftAssessment, assessmentGaps, estimateTee, type Assessment } from "@
 import {
   SYSTEM_PROMPT, clientBrief, dishMenu, parseGeneratedPlan, type PlanContext,
 } from "@/lib/diet-plan-ai";
-import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, LEAD_OWNER_ROLES } from "@/lib/roles";
+import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
@@ -6383,6 +6383,219 @@ export async function acknowledgeMdt(formData: FormData) {
   await supabase.from("mdt_notes").update({ status: "Acknowledged" }).eq("id", id);
   await logAudit(p, "MDT escalation acknowledged", id, null);
   revalidatePath("/workspace");
+}
+
+// ---- Health Coach 360: clinical referrals + safety hard stops --------------
+
+const CLINICAL_REFERRAL_DESTINATIONS = new Set([
+  "Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Medical Director",
+]);
+const CLINICAL_REFERRAL_URGENCY = new Set(["Routine", "Priority", "Urgent"]);
+const CLINICAL_REFERRAL_STATUS = new Set([
+  "Draft", "Sent", "Acknowledged", "Scheduled", "Completed",
+  "Declined", "Unable to contact", "Cancelled",
+]);
+const REFERRAL_DISCIPLINE: Record<string, string> = {
+  Doctor: "doctor", Dietitian: "dietitian", "Fitness Trainer": "trainer",
+  Psychologist: "psychologist",
+};
+const SAFETY_TRIGGERS = new Set([
+  "Positive self-harm response", "New exercise symptom",
+  "Substance or withdrawal concern", "Other urgent concern",
+]);
+
+export async function createClinicalReferral(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canCreateClinicalReferral(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  const reason = String(formData.get("reason") || "").trim();
+  const destination_role = String(formData.get("destination_role") || "");
+  const urgency = String(formData.get("urgency") || "Routine");
+  const requested_action = String(formData.get("requested_action") || "").trim() || null;
+  const consent_status = String(formData.get("consent_status") || "Not recorded");
+  if (!client_id || !reason || !CLINICAL_REFERRAL_DESTINATIONS.has(destination_role)) return;
+  if (!CLINICAL_REFERRAL_URGENCY.has(urgency)) return;
+  if (!["Not recorded", "Obtained", "Declined", "Not required"].includes(consent_status)) return;
+
+  const supabase = await createClient();
+  const discipline = REFERRAL_DISCIPLINE[destination_role];
+  const { data: assignment } = discipline
+    ? await supabase.from("client_assignments").select("staff_id").eq("client_id", client_id).eq("discipline", discipline).maybeSingle()
+    : { data: null };
+  const assignedTo = (assignment as { staff_id?: string | null } | null)?.staff_id ?? null;
+  const { data: referral, error } = await supabase.from("clinical_referrals").insert({
+    client_id, reason, destination_role, urgency, requested_action,
+    consent_status, assigned_to_staff_id: assignedTo,
+    created_by: p.id, created_by_name: p.name, status: "Sent",
+  }).select("id").single();
+  if (error || !referral) return;
+
+  await supabase.from("clinical_referral_events").insert({
+    referral_id: referral.id, from_status: null, to_status: "Sent",
+    note: requested_action, actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  const { data: client } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  const clientLabel = (client as { name?: string } | null)?.name ?? "Client";
+  const notification = {
+    title: `${urgency} clinical referral`,
+    body: `${clientLabel}: ${reason}`,
+    icon: urgency === "Urgent" ? "🔴" : urgency === "Priority" ? "🟠" : "🔵",
+    link: { kind: "clinical-referral", ref: client_id },
+  };
+  if (assignedTo) await notifyStaff(supabase, assignedTo, notification);
+  else await notifyRoles(supabase, [destination_role], notification);
+  await logAudit(p, "Clinical referral created", clientLabel, `${destination_role} · ${urgency}`);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function updateClinicalReferral(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canConsult(p.role)) return;
+  const id = String(formData.get("id") || "");
+  const client_id = String(formData.get("client_id") || "");
+  const status = String(formData.get("status") || "");
+  const note = String(formData.get("note") || "").trim() || null;
+  if (!id || !client_id || !CLINICAL_REFERRAL_STATUS.has(status)) return;
+  const supabase = await createClient();
+  const { data: current } = await supabase.from("clinical_referrals")
+    .select("status, destination_role, assigned_to_staff_id, created_by")
+    .eq("id", id).maybeSingle();
+  if (!current) return;
+  const row = current as { status: string; destination_role: string; assigned_to_staff_id: string | null; created_by: string };
+  const allowed = isAdminish(p.role) || row.created_by === p.id
+    || row.destination_role === p.role
+    || (!!p.staffId && row.assigned_to_staff_id === p.staffId);
+  if (!allowed || row.status === status) return;
+
+  const now = new Date().toISOString();
+  const patch: Record<string, string | null> = { status, updated_at: now };
+  if (status === "Acknowledged") {
+    patch.acknowledged_by = p.name;
+    patch.acknowledged_at = now;
+  }
+  if (status === "Completed") {
+    patch.completed_by = p.name;
+    patch.completed_at = now;
+  }
+  const { error } = await supabase.from("clinical_referrals").update(patch).eq("id", id);
+  if (error) return;
+  await supabase.from("clinical_referral_events").insert({
+    referral_id: id, from_status: row.status, to_status: status, note,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  if (row.created_by !== p.id) {
+    await supabase.from("notifications").insert({
+      user_id: row.created_by, title: `Referral ${status.toLowerCase()}`,
+      body: note, icon: status === "Completed" ? "✅" : "🔵",
+      link_kind: "clinical-referral", link_ref: client_id,
+    });
+  }
+  await logAudit(p, "Clinical referral updated", id, `${row.status} → ${status}`);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function createSafetyEvent(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canOpenSafetyEvent(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  const trigger_type = String(formData.get("trigger_type") || "");
+  const concern_summary = String(formData.get("concern_summary") || "").trim();
+  const immediate_action = String(formData.get("immediate_action") || "").trim();
+  if (!client_id || !SAFETY_TRIGGERS.has(trigger_type) || !concern_summary || !immediate_action) return;
+
+  const supabase = await createClient();
+  const { data: doctorAssignment } = await supabase.from("client_assignments")
+    .select("staff_id").eq("client_id", client_id).eq("discipline", "doctor").maybeSingle();
+  const assignedDoctor = (doctorAssignment as { staff_id?: string | null } | null)?.staff_id ?? null;
+  const recipient_role = assignedDoctor ? "Doctor" : "Medical Director";
+  const { data: event, error } = await supabase.from("safety_events").insert({
+    client_id, trigger_type, concern_summary, immediate_action,
+    recipient_role, assigned_to_staff_id: assignedDoctor,
+    opened_by: p.id, opened_by_name: p.name, opened_by_role: p.role, status: "Open",
+  }).select("id").single();
+  if (error || !event) return;
+  await supabase.from("safety_event_actions").insert({
+    event_id: event.id, action_type: "Created",
+    note: immediate_action, actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+
+  const { data: client } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+  const clientLabel = (client as { name?: string } | null)?.name ?? "Client";
+  const notification = {
+    title: "Safety escalation — immediate acknowledgement required",
+    body: `${clientLabel}: ${trigger_type}. ${concern_summary}`,
+    icon: "🔴", link: { kind: "safety-event", ref: client_id },
+  };
+  if (assignedDoctor) await notifyStaff(supabase, assignedDoctor, notification);
+  else await notifyRoles(supabase, ["Doctor"], notification);
+  await notifyRoles(supabase, ["Medical Director"], notification);
+  await logAudit(p, "Safety event opened", clientLabel, trigger_type);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function addSafetyEventNote(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canOpenSafetyEvent(p.role)) return;
+  const event_id = String(formData.get("event_id") || "");
+  const client_id = String(formData.get("client_id") || "");
+  const note = String(formData.get("note") || "").trim();
+  if (!event_id || !client_id || !note) return;
+  const supabase = await createClient();
+  await supabase.from("safety_event_actions").insert({
+    event_id, action_type: "Note", note,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await logAudit(p, "Safety event note added", event_id, null);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function acknowledgeSafetyEvent(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canResolveSafetyEvent(p.role)) return;
+  const id = String(formData.get("id") || "");
+  const client_id = String(formData.get("client_id") || "");
+  if (!id || !client_id) return;
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data: current } = await supabase.from("safety_events").select("status").eq("id", id).maybeSingle();
+  if (!current || current.status !== "Open") return;
+  const { error } = await supabase.from("safety_events").update({
+    status: "Acknowledged", acknowledged_by: p.name, acknowledged_at: now, updated_at: now,
+  }).eq("id", id);
+  if (error) return;
+  await supabase.from("safety_event_actions").insert({
+    event_id: id, action_type: "Acknowledged", note: "Clinical owner acknowledged the escalation.",
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await logAudit(p, "Safety event acknowledged", id, null);
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function resolveSafetyEvent(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canResolveSafetyEvent(p.role)) return;
+  const id = String(formData.get("id") || "");
+  const client_id = String(formData.get("client_id") || "");
+  const resolution_note = String(formData.get("resolution_note") || "").trim();
+  if (!id || !client_id || !resolution_note) return;
+  const supabase = await createClient();
+  const { data: current } = await supabase.from("safety_events")
+    .select("status, acknowledged_by, acknowledged_at").eq("id", id).maybeSingle();
+  if (!current || current.status === "Resolved") return;
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("safety_events").update({
+    status: "Resolved",
+    acknowledged_by: current.acknowledged_by ?? p.name,
+    acknowledged_at: current.acknowledged_at ?? now,
+    resolved_by: p.name, resolved_at: now, resolution_note, updated_at: now,
+  }).eq("id", id);
+  if (error) return;
+  await supabase.from("safety_event_actions").insert({
+    event_id: id, action_type: "Resolved", note: resolution_note,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await logAudit(p, "Safety event resolved", id, null);
+  revalidatePath(`/clients/${client_id}`);
 }
 
 // ---- workspace: resource library -------------------------------------------

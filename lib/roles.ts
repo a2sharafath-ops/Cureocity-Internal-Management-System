@@ -226,6 +226,29 @@ export function canConsult(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager"].includes(role) || isClinician(role) || isMedicalDirector(role);
 }
 
+// Who owns behaviour goals, habits, adherence inputs and wearable setup. Other
+// clinicians may read those records for coordination, but should not silently
+// change the Health Coach's plan. Mirrors the write policies in migration 0165.
+export function canManageHealthCoaching(role: string): boolean {
+  return role === "Super Admin" || ["Administrator", "Manager", "Medical Director", "Health Coach"].includes(role);
+}
+
+// A clinical concern can be recognised by any clinician. Commercial and
+// front-desk roles deliberately stay out of this workflow.
+export function canCreateClinicalReferral(role: string): boolean {
+  return isClinician(role) || isMedicalDirector(role);
+}
+
+export function canOpenSafetyEvent(role: string): boolean {
+  return isClinician(role) || isMedicalDirector(role);
+}
+
+// A safety event is never closed by the coach who raised it. The SOP requires
+// human confirmation from the clinical escalation path.
+export function canResolveSafetyEvent(role: string): boolean {
+  return role === "Medical Director" || role === "Doctor";
+}
+
 // Who can drive the BluePrint flow (blood reports, generate).
 export function canManageBlueprint(role: string): boolean {
   return role === "Super Admin" || ["Administrator", "Manager", "Front Desk"].includes(role) || isClinician(role) || isMedicalDirector(role);

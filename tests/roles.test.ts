@@ -4,7 +4,8 @@ import {
   canAppointments, canEditAppointments, canPos, canConsult, canReviewDietChart,
   canRecordPayment, canVoidPackage, canSetTargets, canHr, canManageBlueprint,
   canManageSessions, canMessage, hasNoReviewer, isClinician, isMedicalDirector,
-  ROLE_LIST, canDeliverDoc, isStaffRole, isAdminish,
+  ROLE_LIST, canDeliverDoc, isStaffRole, isAdminish, canManageHealthCoaching,
+  canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent,
 } from "@/lib/roles";
 import { roleFromStaffRole, visibleWorkspaces, canEditWorkspace } from "@/lib/workspaces";
 import { canWriteMedical, canWriteNutrition, canWriteFitness, ownsConsultKind } from "@/lib/discipline";
@@ -106,6 +107,30 @@ describe("permission helpers", () => {
     // No calendar access at all.
     expect(canEditAppointments("Finance")).toBe(false);
     expect(canEditAppointments("HR")).toBe(false);
+  });
+
+  it("coaching tools are owned by the Health Coach and clinical oversight", () => {
+    for (const r of ["Super Admin", "Administrator", "Manager", "Medical Director", "Health Coach"]) {
+      expect(canManageHealthCoaching(r)).toBe(true);
+    }
+    for (const r of ["Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Front Desk", "Finance", "HR"]) {
+      expect(canManageHealthCoaching(r)).toBe(false);
+    }
+  });
+
+  it("any clinician may open a safety event, but only Doctor or Medical Director may close it", () => {
+    for (const r of ["Doctor", "Dietitian", "Fitness Trainer", "Health Coach", "Psychologist", "Medical Director"]) {
+      expect(canCreateClinicalReferral(r)).toBe(true);
+      expect(canOpenSafetyEvent(r)).toBe(true);
+    }
+    for (const r of ["Administrator", "Manager", "Front Desk", "Finance", "HR"]) {
+      expect(canCreateClinicalReferral(r)).toBe(false);
+      expect(canOpenSafetyEvent(r)).toBe(false);
+    }
+    expect(canResolveSafetyEvent("Doctor")).toBe(true);
+    expect(canResolveSafetyEvent("Medical Director")).toBe(true);
+    expect(canResolveSafetyEvent("Health Coach")).toBe(false);
+    expect(canResolveSafetyEvent("Administrator")).toBe(false);
   });
 });
 
