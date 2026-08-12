@@ -50,11 +50,13 @@ import { disciplineLabel } from "@/lib/disciplines";
 import { canWriteNutrition } from "@/lib/discipline";
 import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
 import CoachPriorityBoard from "@/components/CoachPriorityBoard";
+import CoachQualityDashboard, { type CoachQualityReview, type CoachQualitySession } from "@/components/CoachQualityDashboard";
 import {
   buildCoachAlerts, type CoachRuleAlert, type CoachAlertAssessment,
   type CoachAlertSafety, type CoachAlertReferral, type CoachAlertAdherence,
   type CoachAlertGoal,
 } from "@/lib/coach-alerts";
+import { calculateCoachQuality, type CoachQualityMetrics } from "@/lib/coach-quality";
 import {
   WS_ROLES, WS_TABS, wsRole, roleFromPersonaKind, roleFromStaffRole, scopeClients,
   visibleWorkspaces, canEditWorkspace, type WsClient, type WsRoleKey,
@@ -362,6 +364,78 @@ export default async function WorkspacePage(
         cta: "Follow-ups",
       });
     }
+  }
+
+  const emptyQualityInput = {
+    clientCount: scoped.length,
+    appointments: [], followups: [], goals: [], adherenceCurrent: [], adherencePrevious: [],
+    barriers: [], referrals: [], safetyEvents: [], mdtTasks: [], baselines: [], assessments: [],
+    sessions: [], huddles: [], huddleTaskIds: [],
+  };
+  let coachQuality: CoachQualityMetrics = calculateCoachQuality(emptyQualityInput);
+  let coachQualitySessions: CoachQualitySession[] = [];
+  let coachQualityReviews: CoachQualityReview[] = [];
+  const qualityPeriodDays = 30;
+  if (roleKey === "coach" && tab === "quality" && scoped.length) {
+    const scopedIds = scoped.map((client) => client.id);
+    const currentStartDate = new Date(`${today}T00:00:00Z`);
+    currentStartDate.setUTCDate(currentStartDate.getUTCDate() - (qualityPeriodDays - 1));
+    const currentStart = currentStartDate.toISOString().slice(0, 10);
+    const previousEndDate = new Date(`${currentStart}T00:00:00Z`);
+    previousEndDate.setUTCDate(previousEndDate.getUTCDate() - 1);
+    const previousEnd = previousEndDate.toISOString().slice(0, 10);
+    const previousStartDate = new Date(`${previousEnd}T00:00:00Z`);
+    previousStartDate.setUTCDate(previousStartDate.getUTCDate() - (qualityPeriodDays - 1));
+    const previousStart = previousStartDate.toISOString().slice(0, 10);
+    const [
+      { data: qualityAppointments }, { data: qualityFollowups }, { data: qualityGoals },
+      { data: qualityAdherence }, { data: qualityBarriers }, { data: qualityReferrals },
+      { data: qualitySafety }, { data: qualityTasks }, { data: qualityBaselines },
+      { data: qualityAssessments }, { data: qualityWorkflows }, { data: qualityHuddles },
+      { data: reviewRows },
+    ] = await Promise.all([
+      supabase.from("appointments").select("status, staff:provider_id(role)").in("client_id", scopedIds).gte("date", currentStart).lte("date", today),
+      supabase.from("followups").select("status, no_answer").in("client_id", scopedIds).eq("category", "Health Coaching").gte("due_date", currentStart).lte("due_date", today),
+      supabase.from("habits").select("name, cadence, target_per_week, status, if_then_plan").in("client_id", scopedIds),
+      supabase.from("coach_adherence_events").select("event_date, outcome").in("client_id", scopedIds).gte("event_date", previousStart).lte("event_date", today),
+      supabase.from("coach_barriers").select("status").in("client_id", scopedIds).gte("identified_at", `${currentStart}T00:00:00Z`),
+      supabase.from("clinical_referrals").select("status").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`),
+      supabase.from("safety_events").select("opened_at, acknowledged_at").in("client_id", scopedIds).gte("opened_at", `${currentStart}T00:00:00Z`),
+      supabase.from("mdt_tasks").select("huddle_id, status").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`),
+      supabase.from("coach_baselines").select("status").in("client_id", scopedIds),
+      supabase.from("coach_assessments").select("instrument_version, administration_mode").in("client_id", scopedIds).gte("date", currentStart),
+      supabase.from("coach_session_workflows").select("id, client_id, session_number, status, completion_percent, completed_by_name, completed_at, clients(name)").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`).order("completed_at", { ascending: false }),
+      supabase.from("mdt_huddles").select("id").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`),
+      supabase.from("coach_quality_reviews").select("id, workflow_id, client_id, coach_name, session_number, ratings, overall_result, reviewer_note, reviewer_name, reviewed_at, clients(name)").in("client_id", scopedIds).order("reviewed_at", { ascending: false }).limit(100),
+    ]);
+    const adherenceRows = (qualityAdherence ?? []) as { event_date: string; outcome: AdherenceOutcome }[];
+    const workflowRows = (qualityWorkflows ?? []) as unknown as { id: string; client_id: string; session_number: number; status: string; completion_percent: number; completed_by_name: string | null; completed_at: string | null; clients: { name: string } | null }[];
+    const taskRows = (qualityTasks ?? []) as { huddle_id: string; status: string }[];
+    coachQuality = calculateCoachQuality({
+      clientCount: scoped.length,
+      appointments: ((qualityAppointments ?? []) as unknown as { status: string; staff: { role: string } | null }[]).filter((row) => row.staff?.role === "Health Coach").map((row) => ({ status: row.status })),
+      followups: (qualityFollowups ?? []) as { status: string; no_answer: boolean }[],
+      goals: ((qualityGoals ?? []) as { name: string; cadence: string | null; target_per_week: number; status: string; if_then_plan: string | null }[]).map((goal) => ({ ...goal, cadence: goal.cadence ?? "" })),
+      adherenceCurrent: adherenceRows.filter((row) => row.event_date >= currentStart).map((row) => ({ outcome: row.outcome })),
+      adherencePrevious: adherenceRows.filter((row) => row.event_date >= previousStart && row.event_date <= previousEnd).map((row) => ({ outcome: row.outcome })),
+      barriers: (qualityBarriers ?? []) as { status: string }[],
+      referrals: (qualityReferrals ?? []) as { status: string }[],
+      safetyEvents: (qualitySafety ?? []) as { opened_at: string; acknowledged_at: string | null }[],
+      mdtTasks: taskRows.map((row) => ({ status: row.status })),
+      baselines: (qualityBaselines ?? []) as { status: string }[],
+      assessments: (qualityAssessments ?? []) as { instrument_version: string | null; administration_mode: string | null }[],
+      sessions: workflowRows.map((row) => ({ status: row.status, completion_percent: row.completion_percent })),
+      huddles: (qualityHuddles ?? []) as { id: string }[],
+      huddleTaskIds: taskRows.map((row) => row.huddle_id),
+    });
+    coachQualitySessions = workflowRows.filter((row) => row.status === "Completed" && row.completed_at && row.completed_by_name).map((row) => ({
+      id: row.id, client_name: row.clients?.name ?? "Client", coach_name: row.completed_by_name!, session_number: row.session_number, completed_at: row.completed_at!,
+    }));
+    coachQualityReviews = ((reviewRows ?? []) as unknown as { id: string; workflow_id: string; coach_name: string; session_number: number; ratings: CoachQualityReview["ratings"]; overall_result: string; reviewer_note: string | null; reviewer_name: string; reviewed_at: string; clients: { name: string } | null }[]).map((review) => ({
+      id: review.id, workflow_id: review.workflow_id, client_name: review.clients?.name ?? "Client", coach_name: review.coach_name,
+      session_number: review.session_number, ratings: review.ratings, overall_result: review.overall_result,
+      reviewer_note: review.reviewer_note, reviewer_name: review.reviewer_name, reviewed_at: review.reviewed_at,
+    }));
   }
 
   const rosterRows: WsClientRow[] = scoped.map((c) => ({
@@ -901,7 +975,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
@@ -1117,6 +1191,9 @@ export default async function WorkspacePage(
 
       {/* ---- FOLLOW-UPS (coach) ---- */}
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
+
+      {/* ---- QUALITY & OUTCOMES (coach) ---- */}
+      {tab === "quality" && <CoachQualityDashboard metrics={coachQuality} sessions={coachQualitySessions} reviews={coachQualityReviews} canReview={isAdminish(me.role)} periodDays={qualityPeriodDays} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
       {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} canSend={canDeliverDoc(me.role, "summary") && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />}

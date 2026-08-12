@@ -7038,6 +7038,62 @@ export async function updateMdtTask(formData: FormData) {
   revalidatePath(`/clients/${current.client_id}`);
 }
 
+export type CoachQualityReviewState = { ok?: string; error?: string };
+
+/** Save an immutable human audit of one completed structured Coach session. */
+export async function addCoachQualityReview(
+  _previous: CoachQualityReviewState,
+  formData: FormData,
+): Promise<CoachQualityReviewState> {
+  const p = await getProfile();
+  if (!p || !isAdminish(p.role)) return { error: "Only clinical or operational oversight can record a quality review." };
+  const workflowId = String(formData.get("workflow_id") || "");
+  const overall = String(formData.get("overall_result") || "");
+  const note = String(formData.get("reviewer_note") || "").trim();
+  const { COACH_AUDIT_DOMAINS, auditReviewProblems } = await import("@/lib/coach-quality");
+  const ratings = Object.fromEntries(COACH_AUDIT_DOMAINS.map((domain) => [
+    domain.key, String(formData.get(`rating_${domain.key}`) || ""),
+  ]));
+  const problems = auditReviewProblems(ratings, overall, note);
+  if (!workflowId || problems.length) return { error: `Complete: ${[...(!workflowId ? ["Session"] : []), ...problems].join(", ")}.` };
+
+  const supabase = await createClient();
+  const { data: workflow } = await supabase.from("coach_session_workflows")
+    .select("id, consultation_id, client_id, completed_by, completed_by_name, session_number, status, clients(name)")
+    .eq("id", workflowId).maybeSingle();
+  if (!workflow || workflow.status !== "Completed" || !workflow.completed_by || !workflow.completed_by_name) {
+    return { error: "Choose a completed structured Health Coach session." };
+  }
+  const { error } = await supabase.from("coach_quality_reviews").insert({
+    workflow_id: workflow.id,
+    consultation_id: workflow.consultation_id,
+    client_id: workflow.client_id,
+    coach_id: workflow.completed_by,
+    coach_name: workflow.completed_by_name,
+    session_number: workflow.session_number,
+    ratings,
+    overall_result: overall,
+    reviewer_note: note || null,
+    reviewer_id: p.id,
+    reviewer_name: p.name,
+    reviewer_role: p.role,
+  });
+  if (error) return { error: error.message };
+  const clientLabel = (workflow.clients as { name?: string } | null)?.name ?? "Client";
+  await supabase.from("notifications").insert({
+    user_id: workflow.completed_by,
+    title: `Session quality review — ${overall}`,
+    body: `${clientLabel} · session ${workflow.session_number}${note ? ` · ${note}` : ""}`,
+    icon: overall === "Meets standard" ? "✅" : overall === "Clinical review required" ? "🔴" : "🟠",
+    link_kind: "client",
+    link_ref: workflow.client_id,
+  });
+  await logAudit(p, "Health Coach quality review recorded", workflow.completed_by_name, `${clientLabel} · session ${workflow.session_number} · ${overall}`);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${workflow.client_id}`);
+  return { ok: "Quality review recorded. The Health Coach has been notified." };
+}
+
 // ---- Health Coach 360: clinical referrals + safety hard stops --------------
 
 const CLINICAL_REFERRAL_DESTINATIONS = new Set([
