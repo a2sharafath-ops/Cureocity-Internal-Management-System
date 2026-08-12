@@ -3842,45 +3842,166 @@ export async function uploadDocTemplate(formData: FormData): Promise<{ url?: str
 
 // ---- health-coach marker assessments ---------------------------------------
 
-/** Record a coach marker score (stress/sleep/activity/nutrition/substance/anxiety).
- *  Bands are derived from the SOP; a "bad" band raises a concern on the client. */
+/** Record a complete, versioned Health Coach screening result. */
 export async function saveCoachAssessment(formData: FormData) {
   const p = await getProfile();
-  if (!p || !["Administrator", "Super Admin", "Manager", "Health Coach"].includes(p.role)) return;
+  if (!p || !canManageHealthCoaching(p.role)) return;
   const client_id = String(formData.get("client_id") || "");
   const marker = String(formData.get("marker") || "");
   const { MARKER_BY_KEY, bandFor } = await import("@/lib/coach-markers");
-  const m = (MARKER_BY_KEY as Record<string, { label: string }>)[marker];
+  const { INSTRUMENTS, instrumentIsComplete } = await import("@/lib/coach-instruments");
+  const m = (MARKER_BY_KEY as Record<string, { label: string; reassessDays: number }>)[marker];
   if (!client_id || !m) return;
-  const score = Number(formData.get("score"));
-  if (!Number.isFinite(score)) return;
+  const instrument = INSTRUMENTS[marker as keyof typeof INSTRUMENTS];
+  let detail: Record<string, unknown> = {};
+  try { detail = JSON.parse(String(formData.get("detail") || "{}")) as Record<string, unknown>; } catch { return; }
+  const answers = detail.answers && typeof detail.answers === "object" ? detail.answers as Record<string, number> : {};
+  const externalResult = String(detail.external_result ?? "");
+  if (instrument?.mode === "hybrid" && instrument.externalResultOptions && !instrument.externalResultOptions.includes(externalResult)) return;
+  if (instrument && !instrumentIsComplete(instrument, answers, instrument.mode === "external" ? String(detail.official_score ?? "") : externalResult)) return;
+  const computed = instrument?.compute ? instrument.compute(answers) : null;
+  const score = instrument?.mode === "external" ? Number(detail.official_score) : computed?.score ?? Number(formData.get("score"));
+  if (!Number.isFinite(score) || (instrument && (score < instrument.scoreMin || score > instrument.scoreMax))) return;
   // Gender matters for AUDIT-C (≥3 for women, ≥4 for men). Read it from the
   // record rather than trusting the form — the banding is a clinical decision.
-  const sbGender = await createClient();
-  const { data: cg } = await sbGender.from("clients").select("gender").eq("id", client_id).maybeSingle();
+  const supabase = await createClient();
+  const { data: cg } = await supabase.from("clients").select("gender").eq("id", client_id).maybeSingle();
   const gender = (cg as { gender: string | null } | null)?.gender ?? null;
   const b = bandFor(marker as never, score, gender);
   const note = String(formData.get("note") || "").trim() || null;
-  // The instrument may override the band (e.g. DAST-10 ≥3 makes substance use
-  // "positive" even when AUDIT-C alone is low).
-  const forceBad = String(formData.get("force_bad") || "") === "1";
-  const tone = forceBad ? "bad" : (b?.tone ?? null);
-  const band = forceBad ? "Positive" : (b?.label ?? null);
-  let detail: unknown = null;
-  try { const d = String(formData.get("detail") || ""); if (d) detail = JSON.parse(d); } catch { detail = null; }
-  const supabase = await createClient();
-  await supabase.from("coach_assessments").insert({
-    client_id, marker, score, band, tone, note, detail, assessed_by: p.name,
-  });
-  // A "bad" band is an SOP action/referral trigger — surface it as a concern.
-  if (tone === "bad") {
-    await supabase.from("concerns").insert({
-      client_id, role: "coach", category: "Health Coaching",
-      body: `${m.label}: ${band ?? "flagged"} (score ${score}) — SOP action/referral trigger.`,
-      raised_by: p.name, status: "Open",
-    });
+  const subDetail = computed?.detail ?? {};
+  const forceBad = marker === "substance"
+    ? Number(subDetail.dast ?? 0) >= 3 || Number(subDetail.fagerstrom ?? 0) >= 3
+    : marker === "activity" && externalResult === "Follow-up required";
+  // The SOP does not refer a single high PSS-10 result. It requires a repeat
+  // at the next session and escalation only when the result remains high.
+  // Determine that from the previous stored reading rather than trusting the
+  // browser or treating the generic high band as an immediate referral.
+  let sustainedHighStress = false;
+  if (marker === "stress" && score >= 27) {
+    const { data: previous } = await supabase.from("coach_assessments").select("score")
+      .eq("client_id", client_id).eq("marker", "stress")
+      .order("date", { ascending: false }).order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    sustainedHighStress = Number(previous?.score) >= 27;
   }
+  const tone = forceBad ? "bad" : marker === "stress" && score >= 27
+    ? sustainedHighStress ? "bad" : "warn"
+    : (b?.tone ?? null);
+  const band = forceBad ? "Action required" : marker === "stress" && score >= 27
+    ? sustainedHighStress ? "High · sustained" : "High · repeat next session"
+    : (b?.label ?? null);
+  const safetyTrigger = marker === "mood" && Boolean(computed?.safetyTrigger);
+  const recommendedAction = safetyTrigger
+    ? "Stop routine coaching; keep the client engaged and escalate to the designated senior clinician immediately."
+    : marker === "stress" && score >= 27
+      ? sustainedHighStress
+        ? "High PSS-10 result persisted across two sessions; open the psychology referral pathway."
+        : "Repeat at the next session; open the psychology pathway only if the high result is sustained across two sessions."
+      : marker === "sleep" && score > 10
+        ? "Open the medical referral pathway and plan the approved follow-up interval."
+        : marker === "activity" && externalResult === "Follow-up required"
+          ? "Do not progress exercise; obtain the appropriate PAR-Q+ follow-up/clinical clearance."
+          : marker === "anxiety" && score >= 15
+            ? "Open the psychology pathway and arrange faster clinical review."
+            : marker === "anxiety" && score >= 10
+              ? "Open the psychology referral pathway; continue safe routine support."
+              : marker === "mood" && score >= 15
+                ? "Open psychology and psychiatry review pathways; do not diagnose."
+                : marker === "mood" && score >= 10
+                  ? "Open the psychology referral pathway; do not diagnose."
+                  : marker === "substance" && forceBad
+                    ? "Open the approved substance/nicotine clinical referral pathway."
+                    : tone === "bad" ? "Review the SOP action with the appropriate clinician." : "Continue coaching and reassess on the approved cadence.";
+
+  let safetyEventId: string | null = null;
+  if (safetyTrigger) {
+    const immediateAction = String(formData.get("immediate_action") || "").trim();
+    if (!immediateAction) return;
+    const { data: existing } = await supabase.from("safety_events").select("id")
+      .eq("client_id", client_id).eq("trigger_type", "Positive self-harm response").neq("status", "Resolved")
+      .order("opened_at", { ascending: false }).limit(1).maybeSingle();
+    if (existing?.id) {
+      safetyEventId = existing.id;
+      const { error: actionError } = await supabase.from("safety_event_actions").insert({
+        event_id: safetyEventId, action_type: "Escalated", note: `Repeat PHQ-9 item 9 response. ${immediateAction}`,
+        actor_id: p.id, actor_name: p.name, actor_role: p.role,
+      });
+      if (actionError) return;
+    } else {
+      const { data: opened, error: openError } = await supabase.from("safety_events").insert({
+        client_id, trigger_type: "Positive self-harm response",
+        concern_summary: "PHQ-9 item 9 recorded above zero. This is a screening response, not a diagnosis.",
+        immediate_action: immediateAction, recipient_role: "Medical Director", status: "Open",
+        opened_by: p.id, opened_by_name: p.name, opened_by_role: p.role,
+      }).select("id").single();
+      if (openError || !opened?.id) return;
+      safetyEventId = opened?.id ?? null;
+      if (safetyEventId) {
+        const { error: actionError } = await supabase.from("safety_event_actions").insert({
+          event_id: safetyEventId, action_type: "Created", note: immediateAction,
+          actor_id: p.id, actor_name: p.name, actor_role: p.role,
+        });
+        if (actionError) return;
+      }
+    }
+  }
+  const nextReview = addDaysISO(todayISO(), m.reassessDays);
+  const { error: assessmentError } = await supabase.from("coach_assessments").insert({
+    client_id, marker, score, band, tone, note,
+    detail: { ...detail, ...(computed?.detail ?? {}), safety_trigger: safetyTrigger },
+    assessed_by: p.name,
+    instrument: instrument?.title ?? m.label,
+    instrument_version: instrument?.version ?? "Manual structured result",
+    source_url: instrument?.sourceUrl ?? null,
+    administration_mode: instrument?.administrationMode ?? "Manual verified result",
+    interpretation: band,
+    recommended_action: recommendedAction,
+    reviewer_id: p.id, reviewer_name: p.name,
+    next_review_date: nextReview,
+    safety_event_id: safetyEventId,
+  });
+  if (assessmentError) return;
   await logAudit(p, "Coach assessment recorded", `${marker}=${score}`, client_id);
+  revalidatePath("/workspace");
+  revalidatePath(`/clients/${client_id}`);
+}
+
+export async function saveCoachBaseline(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) return;
+  const client_id = String(formData.get("client_id") || "");
+  if (!client_id) return;
+  const { BASELINE_VERSION, baselineProgress, sanitizeBaselineAnswers, triggeredBaselinePathways } = await import("@/lib/coach-baseline");
+  type BaselineAnswers = import("@/lib/coach-baseline").BaselineAnswers;
+  let raw: Record<string, unknown> = {};
+  try { raw = JSON.parse(String(formData.get("answers") || "{}")) as Record<string, unknown>; } catch { return; }
+  const answers = sanitizeBaselineAnswers(raw) as BaselineAnswers;
+  const progress = baselineProgress(answers);
+  const pathways = triggeredBaselinePathways(answers);
+  const requestedComplete = String(formData.get("intent") || "Draft") === "Completed";
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("coach_baselines").select("id, status").eq("client_id", client_id).maybeSingle();
+  const status = requestedComplete && progress.percent === 100 ? "Completed" : existing?.status === "Completed" ? "Reopened" : "Draft";
+  const now = new Date().toISOString();
+  const completed = status === "Completed";
+  const row = {
+    client_id, version: BASELINE_VERSION, status, answers, triggered_pathways: pathways,
+    completion_percent: progress.percent, creator_name: p.name,
+    completed_by: completed ? p.id : null,
+    completed_by_name: completed ? p.name : null,
+    completed_at: completed ? now : null,
+    updated_at: now,
+  };
+  const { data: saved } = await supabase.from("coach_baselines").upsert(row as never, { onConflict: "client_id" }).select("id").single();
+  if (!saved?.id) return;
+  const eventType = !existing ? "Started" : status === "Completed" && existing.status !== "Completed" ? "Completed" : status === "Reopened" ? "Reopened" : "Saved";
+  await supabase.from("coach_baseline_events").insert({
+    baseline_id: saved.id, client_id, event_type: eventType, percent: progress.percent, pathways,
+    actor_id: p.id, actor_name: p.name, actor_role: p.role,
+  });
+  await logAudit(p, `Health Coach baseline ${status.toLowerCase()}`, await clientName(supabase, client_id), `${progress.percent}% complete`);
+  revalidatePath(`/clients/${client_id}`);
   revalidatePath("/workspace");
 }
 

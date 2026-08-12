@@ -178,9 +178,8 @@ describe("the psychologist owes something", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The six coach markers raised nothing anywhere — not to the coach's queue, not
-// to the manager, not to the Super Admin. The HAM-A self-harm referral band was
-// among them.
+// The coach screening markers raised nothing anywhere — not to the coach's
+// queue, not to the manager, not to the Super Admin.
 // ---------------------------------------------------------------------------
 import { MARKERS, markerOverdueDays, markerNeedsReferral, MARKER_KEYS } from "@/lib/coach-markers";
 import { MARKER_BASELINE_GRACE_DAYS } from "@/lib/work-owners";
@@ -188,9 +187,9 @@ import { MARKER_BASELINE_GRACE_DAYS } from "@/lib/work-owners";
 describe("coach markers", () => {
   const stress = MARKERS.find((m) => m.key === "stress")!;
 
-  it("covers all six markers", () => {
-    expect(MARKER_KEYS).toHaveLength(6);
-    expect(MARKERS).toHaveLength(6);
+  it("covers the original six markers plus the updated SOP mood screen", () => {
+    expect(MARKER_KEYS).toHaveLength(7);
+    expect(MARKERS).toHaveLength(7);
   });
 
   it("is overdue once the cadence has elapsed", () => {

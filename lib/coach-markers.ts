@@ -1,8 +1,8 @@
-// Health-Coach SOP model — the six markers the coach tracks per client, with the
+// Health-Coach SOP model — the screening markers the coach tracks per client, with the
 // validated tool, cadence, scoring bands and referral thresholds from the
 // Cureocity Health Coaching Handbook. Pure data + banding helpers.
 
-export const MARKER_KEYS = ["stress", "sleep", "activity", "nutrition", "substance", "anxiety"] as const;
+export const MARKER_KEYS = ["stress", "sleep", "activity", "nutrition", "substance", "anxiety", "mood"] as const;
 export type MarkerKey = (typeof MARKER_KEYS)[number];
 
 export type Band = { min: number; max: number; label: string; tone: "good" | "warn" | "bad" };
@@ -43,8 +43,8 @@ export const MARKERS: Marker[] = [
     reassessDays: 14,
   },
   {
-    key: "activity", label: "Physical Activity", icon: "🏃", tool: "PAR-Q + IPAQ-SF", range: "MET-min/week",
-    frequency: "PAR-Q + IPAQ-SF at S1 · weekly in Month 1 · biweekly from Month 2",
+    key: "activity", label: "Physical Activity", icon: "🏃", tool: "Official PAR-Q+ + IPAQ-SF", range: "MET-min/week",
+    frequency: "Official PAR-Q+ + IPAQ-SF at S1 · weekly in Month 1 · biweekly from Month 2",
     bands: [
       { min: 0, max: 599, label: "Low", tone: "warn" },
       { min: 600, max: 2999, label: "Moderate", tone: "good" },
@@ -75,14 +75,28 @@ export const MARKERS: Marker[] = [
     reassessDays: 14,
   },
   {
-    key: "anxiety", label: "Anxiety", icon: "💬", tool: "HAM-A", range: "0–56",
+    key: "anxiety", label: "Anxiety", icon: "💬", tool: "GAD-7", range: "0–21",
     frequency: "Baseline S1 · weekly in Month 1 · biweekly from Month 2",
     bands: [
-      { min: 0, max: 17, label: "Mild", tone: "good" },
-      { min: 18, max: 24, label: "Moderate", tone: "warn" },
-      { min: 25, max: 56, label: "Severe", tone: "bad" },
+      { min: 0, max: 4, label: "Minimal", tone: "good" },
+      { min: 5, max: 9, label: "Mild", tone: "warn" },
+      { min: 10, max: 14, label: "Moderate", tone: "bad" },
+      { min: 15, max: 21, label: "Severe", tone: "bad" },
     ],
-    referral: "HAM-A ≥25 (severe) — activate referral pathway. Any self-harm disclosure → emergency protocol.",
+    referral: "GAD-7 ≥10 — psychology referral pathway; ≥15 requires faster clinical review.",
+    reassessDays: 14,
+  },
+  {
+    key: "mood", label: "Mood", icon: "🌤️", tool: "PHQ-9", range: "0–27",
+    frequency: "At baseline when indicated · repeat per clinical plan",
+    bands: [
+      { min: 0, max: 4, label: "Minimal", tone: "good" },
+      { min: 5, max: 9, label: "Mild", tone: "warn" },
+      { min: 10, max: 14, label: "Moderate", tone: "bad" },
+      { min: 15, max: 19, label: "Moderately severe", tone: "bad" },
+      { min: 20, max: 27, label: "Severe", tone: "bad" },
+    ],
+    referral: "PHQ-9 ≥10 — psychology pathway; any item 9 response overrides the routine flow and opens safety escalation.",
     reassessDays: 14,
   },
 ];
@@ -155,10 +169,11 @@ export function markerOverdueDays(
 /**
  * A marker whose LAST reading was in the referral band.
  *
- * This is the one that matters most and the one nothing surfaced: a HAM-A of
- * 25+ or an AUDIT-C of 4+ sat in the coach's tab with a red chip and raised
+ * This is the one that matters most and the one nothing surfaced: a GAD-7 of
+ * 10+ or an AUDIT-C of 4+ sat in the coach's tab with a red chip and raised
  * nothing anywhere else. `tone: "bad"` is the stored form of "referral band"
- * (see saveCoachAssessment, which also opens a concern on it).
+ * (see saveCoachAssessment, which stores the validated interpretation and
+ * recommended action used by the attention queue).
  */
 export function markerNeedsReferral(last: MarkerState | undefined): boolean {
   return last?.tone === "bad";

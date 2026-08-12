@@ -115,9 +115,9 @@ export const CONCERN_ESCALATION_DAYS = 3;
 /**
  * How long a new client has before a never-assessed coach marker is chased.
  *
- * The six markers are baselined in the first sessions, not on the day the
+ * The screening markers are baselined in the first sessions, not on the day the
  * package is sold. Without a grace window every new Comprehensive client would
- * arrive on the coach's queue with six red flags on day one, which trains
+ * arrive on the coach's queue with a wall of red flags on day one, which trains
  * people to ignore the panel.
  */
 export const MARKER_BASELINE_GRACE_DAYS = 7;

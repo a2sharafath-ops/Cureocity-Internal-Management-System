@@ -43,6 +43,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { DISCIPLINES, disciplineLabel } from "@/lib/disciplines";
 import HealthCoachCarePanel, { type ClinicalReferralView, type SafetyEventView } from "@/components/HealthCoachCarePanel";
 import HealthCoachGoalsPanel, { type CoachingAdherenceView, type CoachingBarrierView, type CoachingGoalView } from "@/components/HealthCoachGoalsPanel";
+import HealthCoachBaselinePanel, { type CoachBaselineView, type ScreeningResultView } from "@/components/HealthCoachBaselinePanel";
 
 // Report types, told apart at a glance in the timeline.
 const REPORT_LABEL: Record<string, string> = {
@@ -211,6 +212,17 @@ export default async function ClientDetailPage(
   const coachingAdherence = (adherenceRows ?? []) as CoachingAdherenceView[];
   const coachingBarriers = (barrierRows ?? []) as CoachingBarrierView[];
   const coachingGoalEvents = (goalEventRows ?? []) as { goal_id: string; event_type: string; note: string | null; actor_name: string; created_at: string }[];
+
+  const [{ data: coachBaselineRow }, { data: coachScreeningRows }, { data: coachBaselineEventRows }] = canConsult(me?.role ?? "")
+    ? await Promise.all([
+      supabase.from("coach_baselines").select("id, version, status, answers, triggered_pathways, completion_percent, completed_by_name, completed_at, updated_at").eq("client_id", params.id).maybeSingle(),
+      supabase.from("coach_assessments").select("id, marker, score, band, tone, date, instrument, instrument_version, interpretation, recommended_action, reviewer_name, next_review_date, source_url").eq("client_id", params.id).order("date", { ascending: false }).order("created_at", { ascending: false }),
+      supabase.from("coach_baseline_events").select("event_type, percent, pathways, actor_name, created_at").eq("client_id", params.id).order("created_at", { ascending: false }),
+    ])
+    : [{ data: null }, { data: [] }, { data: [] }];
+  const coachBaseline = (coachBaselineRow ?? null) as CoachBaselineView | null;
+  const coachScreenings = (coachScreeningRows ?? []) as ScreeningResultView[];
+  const coachBaselineEvents = (coachBaselineEventRows ?? []) as { event_type: string; percent: number; pathways: string[]; actor_name: string; created_at: string }[];
 
   const [{ data: wearConns }, { data: wearReads }] = await Promise.all([
     supabase.from("wearable_connections").select("provider, status").eq("client_id", params.id),
@@ -525,6 +537,22 @@ export default async function ClientDetailPage(
       detail: event.note, by: event.actor_name,
       href: `/clients/${params.id}?tab=overview#coaching-goals`,
     })),
+    coachBaselineEvents.map((event) => ({
+      at: event.created_at, kind: "note" as const,
+      title: `Health Coach baseline ${event.event_type.toLowerCase()} — ${event.percent}%`,
+      detail: event.pathways.length ? `${event.pathways.length} pathway${event.pathways.length === 1 ? "" : "s"} opened` : null,
+      by: event.actor_name,
+      href: `/clients/${params.id}?tab=overview#coach-baseline`,
+      pending: event.percent < 100,
+    })),
+    coachScreenings.map((screening) => ({
+      at: atDay(screening.date) ?? "", kind: screening.tone === "bad" ? "concern" as const : "note" as const,
+      title: `${screening.instrument ?? screening.marker} screening — ${screening.interpretation ?? screening.band ?? "recorded"}`,
+      detail: `Score ${screening.score}${screening.recommended_action ? ` · ${screening.recommended_action}` : ""}`,
+      by: screening.reviewer_name,
+      href: `/clients/${params.id}?tab=overview#coach-baseline`,
+      pending: screening.tone === "bad",
+    })),
     coachingAdherence.map((event) => ({
       at: atDay(event.event_date) ?? "", kind: "task" as const,
       title: `${event.category} — ${event.outcome.toLowerCase()}`,
@@ -647,7 +675,7 @@ export default async function ClientDetailPage(
           {client.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
         </div>
         <div>
-          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
+          <RealtimeRefresh tables={["sessions","consultations","files","measurements","meal_logs","invoices","habits","habit_logs","coach_goal_events","coach_adherence_events","coach_barriers","coach_baselines","coach_baseline_events","coach_assessments","wearable_readings","wearable_connections","client_workouts","prescriptions","blood_requests","client_packages","client_assignments","clinical_referrals","safety_events"]} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <h1 style={{ fontSize: 20, margin: 0 }}>{client.name}</h1>
             <ClientStatusBadge status={detailStatus} />
@@ -710,6 +738,16 @@ export default async function ClientDetailPage(
             showOpenSafety={false}
           />
         </div>
+      )}
+
+      {canConsult(me?.role ?? "") && (
+        <HealthCoachBaselinePanel
+          clientId={params.id}
+          baseline={coachBaseline}
+          screenings={coachScreenings}
+          canManage={canManageCoaching}
+          gender={client.gender}
+        />
       )}
 
       {canConsult(me?.role ?? "") && (

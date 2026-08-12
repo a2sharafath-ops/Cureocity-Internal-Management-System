@@ -1,7 +1,7 @@
 // What the Health Coach intake conversation should raise.
 //
-// The six markers (lib/coach-markers.ts) are scored with validated instruments
-// — PSS-10, PSQI, PAR-Q + IPAQ-SF, AUDIT-C + DAST-10, HAM-A. This file does NOT
+// The screening markers (lib/coach-markers.ts) are scored with validated instruments
+// — PSS-10, PSQI, PAR-Q+ + IPAQ-SF, AUDIT-C + DAST-10, GAD-7 and PHQ-9. This file does NOT
 // try to produce those scores from the conversation, and that is deliberate:
 // "stress: high" is not a PSS-10 of 28, and writing a number into a clinical
 // record because it feels about right is how a record stops being worth having.
@@ -87,11 +87,10 @@ export function coachSignals(pairs: AnswerPairs): Suggestion[] {
       out.push({ severity: "info", source: "Intake", text: "Sleep complaints reported — run PSQI to set the Sleep baseline." });
     }
   }
-  if (yes(COACH_Q.tobacco) || yes(COACH_Q.alcohol)) {
-    out.push({ severity: "info", source: "Intake", text: "Tobacco or alcohol use reported — run AUDIT-C and DAST-10 and record the Substance marker." });
-  }
+  if (yes(COACH_Q.alcohol)) out.push({ severity: "info", source: "Intake", text: "Alcohol use reported — run AUDIT-C and record the Substance marker." });
+  if (yes(COACH_Q.tobacco)) out.push({ severity: "info", source: "Intake", text: "Tobacco use reported — run the Fagerström assessment and record the Substance marker." });
   if (yes(COACH_Q.worried) || yes(COACH_Q.panic)) {
-    out.push({ severity: "info", source: "Intake", text: "Worry or panic symptoms reported — run HAM-A to set the Anxiety baseline." });
+    out.push({ severity: "info", source: "Intake", text: "Worry or panic symptoms reported — run GAD-7 to set the Anxiety baseline." });
   }
   if (yes(COACH_Q.emotionalLoad)) {
     out.push({ severity: "info", source: "Intake", text: "Something emotionally heavy disclosed — check in on it next session, and offer psychology support." });

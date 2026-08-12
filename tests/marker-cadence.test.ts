@@ -17,7 +17,7 @@ const dueOnScreen = (opts: { lastDate?: string; sinceStart: number }) => {
 
 describe("a brand-new client does not arrive covered in warnings", () => {
   it("says nothing on day one", () => {
-    // The coach's screen flagged all six markers the moment a client existed,
+    // The coach's screen flagged every marker the moment a client existed,
     // while the attention queue said nothing for a week. Two screens, one
     // client, opposite answers on their first morning.
     expect(dueOnScreen({ sinceStart: 0 })).toBeNull();

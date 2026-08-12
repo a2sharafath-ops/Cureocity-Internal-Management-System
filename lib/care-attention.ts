@@ -272,10 +272,10 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
       });
     }
 
-    // ---- the Health Coach's six markers ----------------------------------
+    // ---- the Health Coach's screening markers -----------------------------
     //
     // These raised NOTHING anywhere: no follow-up, no task, no flag. The only
-    // place an overdue PSS-10 or HAM-A appeared was inside the coach's own tab,
+    // place an overdue PSS-10 or GAD-7 appeared was inside the coach's own tab,
     // so if that coach was on leave the whole clinic was blind to it —
     // including the referral pathway for severe anxiety and substance use.
     //

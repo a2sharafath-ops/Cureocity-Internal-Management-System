@@ -53,10 +53,11 @@ describe("coachSignals — which instruments to run", () => {
     expect(texts({ [COACH_Q.freshOnWaking]: "Yes" }).some((t) => /PSQI/.test(t))).toBe(false);
   });
 
-  it("asks for AUDIT-C on either habit, once", () => {
+  it("routes alcohol and tobacco to their own validated tools", () => {
     const both = texts({ [COACH_Q.tobacco]: "Yes", [COACH_Q.alcohol]: "Yes" });
     expect(both.filter((t) => /AUDIT-C/.test(t)).length).toBe(1);
-    expect(texts({ [COACH_Q.tobacco]: "No", [COACH_Q.alcohol]: "No" }).some((t) => /AUDIT-C/.test(t))).toBe(false);
+    expect(both.filter((t) => /Fagerström/.test(t)).length).toBe(1);
+    expect(texts({ [COACH_Q.tobacco]: "Yes", [COACH_Q.alcohol]: "No" }).some((t) => /AUDIT-C/.test(t))).toBe(false);
   });
 
   it("counts a social drinker as a drinker", () => {

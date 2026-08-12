@@ -9,7 +9,7 @@ import MarkerAssessment from "@/components/MarkerAssessment";
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
-// Health-Coach workspace board — the six SOP markers per client with the latest
+// Health-Coach workspace board — the SOP screening markers per client with the latest
 // score, band, due-status and quick score entry, plus the SOP guide.
 export default async function CoachMarkersSection({ me, heading = false }: { me: { role: string; staffId?: string | null }; heading?: boolean }) {
   const supabase = await createClient();
@@ -66,7 +66,7 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
       <RealtimeRefresh tables={["coach_assessments"]} />
       {heading && <h1 style={{ fontSize: 20, margin: "0 0 4px" }}>Health Coaching</h1>}
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "0 0 16px" }}>
-        Track the six SOP markers per client — score with the validated tool on cadence; the band flags action &amp; referral.
+        Track the SOP screening markers per client. Complete every applicable item or record the verified official-form result; partial questionnaires are never scored.
       </p>
 
       {/* SOP guide */}

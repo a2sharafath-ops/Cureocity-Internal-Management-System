@@ -194,7 +194,7 @@ export const CONSULT_QUESTIONS: Record<string, ConsultQ> = {
   // The clinic's "Initial Health Coach Consultation Question Flow" — a scripted
   // conversation, not a form. It covers the same ground as the scored
   // instruments in lib/coach-instruments.ts (PSS-10, PSQI, PAR-Q, AUDIT-C,
-  // HAM-A) but in the client's own words; the instruments produce the six
+  // GAD-7 / PHQ-9) but in the client's own words; the instruments produce the
   // marker scores, this produces the understanding behind them.
   Coach: {
     label: "Health Coaching Intake", icon: "🌿",
