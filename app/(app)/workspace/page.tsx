@@ -51,6 +51,7 @@ import { canWriteNutrition } from "@/lib/discipline";
 import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
 import CoachPriorityBoard from "@/components/CoachPriorityBoard";
 import CoachQualityDashboard, { type CoachQualityReview, type CoachQualitySession } from "@/components/CoachQualityDashboard";
+import CoachCopilot, { type CoachCopilotHistory } from "@/components/CoachCopilot";
 import {
   buildCoachAlerts, type CoachRuleAlert, type CoachAlertAssessment,
   type CoachAlertSafety, type CoachAlertReferral, type CoachAlertAdherence,
@@ -71,7 +72,12 @@ export default async function WorkspacePage(
 ) {
   const searchParams = await props.searchParams;
   const me = await getProfile();
-  if (!me || !canSee(me.role, "/workspace")) redirect("/dashboard");
+  if (!me) redirect("/dashboard");
+  // Managers normally use their operational dashboard rather than entering a
+  // discipline workspace. The sole exception is the restricted Coach quality
+  // oversight screen; the tab clamp below prevents access to the other tools.
+  const managerQualityOnly = me.role === "Manager";
+  if (!canSee(me.role, "/workspace") && !managerQualityOnly) redirect("/dashboard");
 
   // Resolve active role: ?role → own discipline → persona → default —
   // constrained to the disciplines this login role is allowed to view.
@@ -87,6 +93,7 @@ export default async function WorkspacePage(
     ?? roleFromStaffRole(visibilityRole)
     ?? roleFromPersonaKind(persona?.kind)
     ?? "doctor";
+  if (managerQualityOnly) roleKey = "coach";
   if (!allowed.includes(roleKey)) roleKey = roleFromStaffRole(visibilityRole) ?? allowed[0] ?? "doctor";
   const role = wsRole(roleKey);
 
@@ -96,7 +103,14 @@ export default async function WorkspacePage(
 
   // Read-only cross-discipline view is limited to the client-detail tabs.
   const RO_TABS = ["dash", "clients"];
-  const baseTabs = readOnly ? WS_TABS[roleKey].filter((t) => RO_TABS.includes(t.key)) : WS_TABS[roleKey];
+  const allowedTabs = managerQualityOnly
+    ? WS_TABS.coach.filter((t) => t.key === "quality")
+    : readOnly ? WS_TABS[roleKey].filter((t) => RO_TABS.includes(t.key))
+      : WS_TABS[roleKey].filter((t) => t.key !== "copilot" || me.role === "Health Coach");
+  const canOverseeCoachQuality = isAdminish(me.role);
+  const baseTabs = allowedTabs.map((item) => item.key === "quality"
+    ? { ...item, label: canOverseeCoachQuality ? "Quality oversight" : "Practice insights" }
+    : item);
 
   // The reviewer's queue needs a home of its own. Sign-off lives in sections of
   // the DIETITIAN's "Diet charts" tab, which is the right place for the person
@@ -112,7 +126,9 @@ export default async function WorkspacePage(
   // Resolve active tab. An unknown ?tab= falls back to Today rather than
   // rendering nothing — which is also why a tab branch with no entry here is
   // unreachable even by typing the URL.
-  const tab = tabs.find((t) => t.key === searchParams.tab) ? searchParams.tab! : "dash";
+  const tab = tabs.find((t) => t.key === searchParams.tab)
+    ? searchParams.tab!
+    : managerQualityOnly ? "quality" : "dash";
 
   const supabase = await createClient();
   const today = todayISO();
@@ -435,6 +451,22 @@ export default async function WorkspacePage(
       id: review.id, workflow_id: review.workflow_id, client_name: review.clients?.name ?? "Client", coach_name: review.coach_name,
       session_number: review.session_number, ratings: review.ratings, overall_result: review.overall_result,
       reviewer_note: review.reviewer_note, reviewer_name: review.reviewer_name, reviewed_at: review.reviewed_at,
+    }));
+  }
+
+  let coachCopilotHistory: CoachCopilotHistory[] = [];
+  if (roleKey === "coach" && tab === "copilot" && scoped.length) {
+    const { data: copilotRows } = await supabase.from("coach_copilot_drafts")
+      .select("id, client_id, task_type, title, draft_text, accepted_text, status, created_at, accepted_at, clients(name)")
+      .in("client_id", scoped.map((client) => client.id))
+      .order("created_at", { ascending: false }).limit(50);
+    coachCopilotHistory = ((copilotRows ?? []) as unknown as {
+      id: string; task_type: string; title: string; draft_text: string; accepted_text: string | null;
+      status: string; created_at: string; accepted_at: string | null; clients: { name: string } | null;
+    }[]).map((row) => ({
+      id: row.id, client_name: row.clients?.name ?? "Client", task_type: row.task_type,
+      title: row.title, draft_text: row.draft_text, accepted_text: row.accepted_text,
+      status: row.status, created_at: row.created_at, accepted_at: row.accepted_at,
     }));
   }
 
@@ -975,7 +1007,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
@@ -1192,8 +1224,11 @@ export default async function WorkspacePage(
       {/* ---- FOLLOW-UPS (coach) ---- */}
       {tab === "followups" && <FollowupsBoard rows={fuRows} today={today} />}
 
+      {/* ---- AI-ASSISTED DRAFTS (coach) ---- */}
+      {tab === "copilot" && <CoachCopilot clients={scoped.map((client) => ({ id: client.id, name: client.name, code: client.code }))} history={coachCopilotHistory} enabled={Boolean(process.env.OPENAI_API_KEY) && process.env.HEALTH_COACH_COPILOT_ENABLED === "true"} />}
+
       {/* ---- QUALITY & OUTCOMES (coach) ---- */}
-      {tab === "quality" && <CoachQualityDashboard metrics={coachQuality} sessions={coachQualitySessions} reviews={coachQualityReviews} canReview={isAdminish(me.role)} periodDays={qualityPeriodDays} />}
+      {tab === "quality" && <CoachQualityDashboard metrics={coachQuality} sessions={coachQualitySessions} reviews={coachQualityReviews} oversight={canOverseeCoachQuality} periodDays={qualityPeriodDays} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
       {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} canSend={canDeliverDoc(me.role, "summary") && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />}

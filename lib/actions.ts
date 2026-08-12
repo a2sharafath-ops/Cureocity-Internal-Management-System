@@ -7080,18 +7080,161 @@ export async function addCoachQualityReview(
   });
   if (error) return { error: error.message };
   const clientLabel = (workflow.clients as { name?: string } | null)?.name ?? "Client";
-  await supabase.from("notifications").insert({
-    user_id: workflow.completed_by,
-    title: `Session quality review — ${overall}`,
-    body: `${clientLabel} · session ${workflow.session_number}${note ? ` · ${note}` : ""}`,
-    icon: overall === "Meets standard" ? "✅" : overall === "Clinical review required" ? "🔴" : "🟠",
-    link_kind: "client",
-    link_ref: workflow.client_id,
-  });
   await logAudit(p, "Health Coach quality review recorded", workflow.completed_by_name, `${clientLabel} · session ${workflow.session_number} · ${overall}`);
   revalidatePath("/workspace");
   revalidatePath(`/clients/${workflow.client_id}`);
-  return { ok: "Quality review recorded. The Health Coach has been notified." };
+  return { ok: "Quality review recorded for the oversight team." };
+}
+
+export type CoachCopilotState = {
+  error?: string;
+  draft?: {
+    id: string;
+    title: string;
+    text: string;
+    evidence: string[];
+    caution: string | null;
+  };
+};
+
+async function healthCoachOwnsClient(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  profile: NonNullable<Awaited<ReturnType<typeof getProfile>>>,
+  clientId: string,
+) {
+  if (profile.role !== "Health Coach") return isAdminish(profile.role);
+  if (!profile.staffId) return false;
+  const { data } = await supabase.from("client_assignments").select("staff_id")
+    .eq("client_id", clientId).eq("discipline", "coach").maybeSingle();
+  return data?.staff_id === profile.staffId;
+}
+
+/** Generate a draft from behavioural-coordination records only. */
+export async function generateCoachCopilotDraft(
+  _previous: CoachCopilotState,
+  formData: FormData,
+): Promise<CoachCopilotState> {
+  const p = await getProfile();
+  if (!p || p.role !== "Health Coach") {
+    return { error: "Only the assigned Health Coach can use this Copilot." };
+  }
+  if (process.env.HEALTH_COACH_COPILOT_ENABLED !== "true") {
+    return { error: "Coach Copilot is awaiting privacy and clinical-governance approval." };
+  }
+  const clientId = String(formData.get("client_id") || "");
+  const task = String(formData.get("task_type") || "");
+  const instruction = String(formData.get("instruction") || "").trim();
+  const {
+    COACH_COPILOT_SYSTEM_PROMPT, coachCopilotHasSafetyStop, coachCopilotRequestProblem, coachCopilotSafetyProblem,
+    coachCopilotUserPrompt, parseCoachCopilotOutput,
+  } = await import("@/lib/coach-copilot");
+  const requestProblem = coachCopilotRequestProblem(task, clientId, instruction);
+  if (requestProblem) return { error: requestProblem };
+
+  const supabase = await createClient();
+  if (!await healthCoachOwnsClient(supabase, p, clientId)) return { error: "This client is assigned to another Health Coach." };
+  const [
+    { data: client }, { data: goals }, { data: adherence }, { data: barriers },
+    { data: assessments }, { data: workflows }, { data: referrals }, { data: safety },
+    { data: tasks }, { data: huddles },
+  ] = await Promise.all([
+    supabase.from("clients").select("name, code").eq("id", clientId).maybeSingle(),
+    supabase.from("habits").select("name, cadence, target_per_week, status, cue, time_place, confidence, if_then_plan, review_date").eq("client_id", clientId).order("updated_at", { ascending: false }).limit(30),
+    supabase.from("coach_adherence_events").select("event_date, category, outcome, note").eq("client_id", clientId).order("event_date", { ascending: false }).limit(60),
+    supabase.from("coach_barriers").select("category, detail, coach_response, status, identified_at").eq("client_id", clientId).order("identified_at", { ascending: false }).limit(30),
+    supabase.from("coach_assessments").select("marker, date, band, next_review_date, recommended_action").eq("client_id", clientId).order("date", { ascending: false }).limit(30),
+    supabase.from("coach_session_workflows").select("session_number, status, completion_percent, check_in, review, barrier, action_plan, closeout, due_screenings, updated_at").eq("client_id", clientId).order("updated_at", { ascending: false }).limit(8),
+    supabase.from("clinical_referrals").select("destination_role, urgency, status, reason, requested_action, updated_at").eq("client_id", clientId).order("updated_at", { ascending: false }).limit(20),
+    // Safety context deliberately excludes concern narrative. The model only
+    // needs to know a hard stop exists and whether a human acknowledged it.
+    supabase.from("safety_events").select("trigger_type, status, opened_at, acknowledged_at").eq("client_id", clientId).order("opened_at", { ascending: false }).limit(10),
+    supabase.from("mdt_tasks").select("owner_role, task, due_date, priority, status, decision").eq("client_id", clientId).order("due_date", { ascending: false }).limit(30),
+    supabase.from("mdt_huddles").select("huddle_date, progress_status, progress_reason, issue_category, new_issue, barrier_category, barrier_detail, safety_status, referral_status, today_owner_role, coach_next_move, team_decision").eq("client_id", clientId).order("huddle_date", { ascending: false }).limit(10),
+  ]);
+  if (!client) return { error: "Client not found." };
+  if (coachCopilotHasSafetyStop(safety ?? [])) {
+    await logAudit(p, "Health Coach Copilot paused for safety hard stop", client.name, task);
+    return { error: "Copilot is paused because this client has an open safety item. Follow the recorded safety protocol and wait for a Doctor or Medical Director to resolve it." };
+  }
+  const context = {
+    client,
+    goals: goals ?? [], adherence: adherence ?? [], barriers: barriers ?? [], assessments: assessments ?? [],
+    workflows: workflows ?? [], referrals: referrals ?? [], safety: safety ?? [], tasks: tasks ?? [], huddles: huddles ?? [],
+  };
+  // Do not send direct identifiers to the model. The behavioural record can
+  // still be sensitive, so production remains separately feature-gated.
+  const modelContext = { ...context, client: { name: "Client", code: null } };
+  const modelName = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+  const result = await openaiComplete(
+    COACH_COPILOT_SYSTEM_PROMPT,
+    coachCopilotUserPrompt(task as import("@/lib/coach-copilot").CoachCopilotTask, modelContext, instruction),
+    { model: modelName, json: true, maxTokens: 1400, temperature: 0.2 },
+  );
+  if (result.error || !result.text) return { error: result.error ?? "The Copilot returned no draft." };
+  const parsed = parseCoachCopilotOutput(result.text);
+  if ("error" in parsed) return { error: parsed.error };
+  const safetyProblem = coachCopilotSafetyProblem(parsed);
+  if (safetyProblem) {
+    await logAudit(p, "Health Coach Copilot draft blocked", client.name, task);
+    return { error: safetyProblem };
+  }
+  const { data: saved, error } = await supabase.from("coach_copilot_drafts").insert({
+    client_id: clientId,
+    task_type: task,
+    coach_instruction: instruction || null,
+    context_snapshot: context,
+    model_name: modelName,
+    title: parsed.title,
+    draft_text: parsed.draft,
+    evidence: parsed.evidence,
+    caution: parsed.caution,
+    created_by: p.id,
+    creator_name: p.name,
+  }).select("id").single();
+  if (error || !saved?.id) return { error: error?.message ?? "The Copilot draft could not be saved." };
+  await logAudit(p, "Health Coach Copilot draft generated", client.name, task);
+  return { draft: { id: saved.id, title: parsed.title, text: parsed.draft, evidence: parsed.evidence, caution: parsed.caution } };
+}
+
+/** Human acceptance labels the edited text; it does not send or apply it. */
+export async function acceptCoachCopilotDraft(draftId: string, editedText: string) {
+  const p = await getProfile();
+  if (!p || p.role !== "Health Coach") return { error: "Only the assigned Health Coach can accept a Copilot draft." };
+  const { acceptedCoachCopilotText, coachCopilotHasSafetyStop, coachCopilotSafetyProblem } = await import("@/lib/coach-copilot");
+  const accepted = acceptedCoachCopilotText(editedText);
+  if (!draftId || !accepted) return { error: "Review the draft and keep the text you want to accept." };
+  const editedSafetyProblem = coachCopilotSafetyProblem({ title: "Edited draft", draft: accepted, evidence: [], caution: null });
+  if (editedSafetyProblem) return { error: editedSafetyProblem };
+  const supabase = await createClient();
+  const { data: draft } = await supabase.from("coach_copilot_drafts")
+    .select("id, client_id, task_type, status, created_by, clients(name)").eq("id", draftId).maybeSingle();
+  if (!draft || draft.status !== "Draft" || draft.created_by !== p.id) return { error: "This draft is no longer available for acceptance." };
+  if (!await healthCoachOwnsClient(supabase, p, draft.client_id)) return { error: "This client is assigned to another Health Coach." };
+  const { data: safety } = await supabase.from("safety_events").select("status").eq("client_id", draft.client_id).neq("status", "Resolved");
+  if (coachCopilotHasSafetyStop(safety ?? [])) return { error: "This draft cannot be accepted while the client has an open safety item. Follow the recorded safety protocol." };
+  const { error } = await supabase.from("coach_copilot_drafts").update({
+    status: "Accepted", accepted_text: accepted, accepted_by: p.id,
+    accepted_by_name: p.name, accepted_at: new Date().toISOString(),
+  }).eq("id", draftId).eq("status", "Draft");
+  if (error) return { error: error.message };
+  const clientLabel = (draft.clients as { name?: string } | null)?.name ?? "Client";
+  await logAudit(p, "Health Coach accepted AI-assisted draft", clientLabel, draft.task_type);
+  revalidatePath("/workspace");
+  return { ok: "Accepted as AI-assisted working text. Nothing was sent or applied automatically." };
+}
+
+export async function discardCoachCopilotDraft(draftId: string) {
+  const p = await getProfile();
+  if (!p || p.role !== "Health Coach") return { error: "Only the Health Coach can discard this draft." };
+  const supabase = await createClient();
+  const { data: draft } = await supabase.from("coach_copilot_drafts")
+    .select("id, client_id, task_type, status, created_by, clients(name)").eq("id", draftId).maybeSingle();
+  if (!draft || draft.status !== "Draft" || draft.created_by !== p.id) return { error: "This draft is no longer available." };
+  const { error } = await supabase.from("coach_copilot_drafts").update({ status: "Discarded" }).eq("id", draftId).eq("status", "Draft");
+  if (error) return { error: error.message };
+  await logAudit(p, "Health Coach discarded Copilot draft", (draft.clients as { name?: string } | null)?.name ?? "Client", draft.task_type);
+  revalidatePath("/workspace");
+  return { ok: "Draft discarded." };
 }
 
 // ---- Health Coach 360: clinical referrals + safety hard stops --------------

@@ -54,6 +54,14 @@ export type CoachQualityMetrics = {
   mdtCoordination: RateMetric;
 };
 
+export type CoachPracticeAction = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  cta: string;
+};
+
 export function rate(met: number, total: number): RateMetric {
   return { met, total, percent: total ? Math.round((met / total) * 100) : null };
 }
@@ -110,6 +118,69 @@ export function calculateCoachQuality(input: CoachQualityInput): CoachQualityMet
     documentation: rate(input.sessions.filter((session) => session.status === "Completed" && session.completion_percent === 100).length, input.sessions.filter((session) => session.status === "Completed").length),
     mdtCoordination: rate(input.huddles.filter((huddle) => huddleTaskIds.has(huddle.id)).length, input.huddles.length),
   };
+}
+
+/** Turn recorded caseload gaps into neutral, practical prompts for the coach. */
+export function buildCoachPracticeActions(metrics: CoachQualityMetrics): CoachPracticeAction[] {
+  const actions: CoachPracticeAction[] = [];
+  const addGap = (
+    key: string, metric: RateMetric, title: (open: number) => string,
+    detail: string, href: string, cta: string,
+  ) => {
+    const open = metric.total - metric.met;
+    if (open <= 0) return;
+    actions.push({ key, title: title(open), detail, href, cta });
+  };
+
+  addGap(
+    "checkins", metrics.scheduledCheckins,
+    (open) => `${open} check-in${open === 1 ? "" : "s"} to close the loop on`,
+    "Review today’s appointment outcome and record what happened.",
+    "/workspace?role=coach&tab=appts", "Review check-ins",
+  );
+  addGap(
+    "responses", metrics.responseRate,
+    (open) => `${open} client${open === 1 ? "" : "s"} did not respond`,
+    "Choose the next appropriate contact step without increasing message volume for its own sake.",
+    "/workspace?role=coach&tab=followups", "Plan follow-up",
+  );
+  addGap(
+    "goals", metrics.goalCompletion,
+    (open) => `${open} current goal${open === 1 ? " is" : "s are"} still in progress`,
+    "Use the next conversation to confirm that the goal is still realistic and meaningful to the client.",
+    "/workspace?role=coach&tab=coaching", "Review goals",
+  );
+  addGap(
+    "adherence", metrics.adherence,
+    (open) => `${open} reviewed action${open === 1 ? " needs" : "s need"} support`,
+    "Explore what got in the way and agree a smaller or better-timed next step.",
+    "/workspace?role=coach&tab=coaching", "Explore barriers",
+  );
+  addGap(
+    "barriers", metrics.barriersAddressed,
+    (open) => `${open} recorded barrier${open === 1 ? " is" : "s are"} still open`,
+    "Return to the barrier with the client and record the agreed response.",
+    "/workspace?role=coach&tab=coaching", "Address barriers",
+  );
+  addGap(
+    "referrals", metrics.referralCompletion,
+    (open) => `${open} referral${open === 1 ? " needs" : "s need"} follow-through`,
+    "Check whether the receiving clinician has acknowledged, scheduled or completed it.",
+    "/workspace?role=coach&tab=coaching", "Check referrals",
+  );
+  addGap(
+    "safety", metrics.safetyAcknowledgement,
+    (open) => `${open} safety item${open === 1 ? " needs" : "s need"} acknowledgement`,
+    "Open the safety record now and follow the escalation protocol.",
+    "/workspace?role=coach&tab=coaching", "Open safety items",
+  );
+  addGap(
+    "mdt", metrics.mdtClosure,
+    (open) => `${open} MDT action${open === 1 ? " remains" : "s remain"} open`,
+    "Confirm the owner, decision and next step with the care team.",
+    "/workspace?role=coach&tab=board", "Open MDT board",
+  );
+  return actions;
 }
 
 export function auditReviewProblems(

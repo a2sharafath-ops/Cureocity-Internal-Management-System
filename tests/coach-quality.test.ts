@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { auditReviewProblems, calculateCoachQuality, type CoachQualityInput } from "@/lib/coach-quality";
+import {
+  auditReviewProblems, buildCoachPracticeActions, calculateCoachQuality,
+  type CoachQualityInput,
+} from "@/lib/coach-quality";
 
 const base = (patch: Partial<CoachQualityInput> = {}): CoachQualityInput => ({
   clientCount: 2,
@@ -55,5 +58,26 @@ describe("Health Coach quality metrics", () => {
 
   it("requires every human audit domain and a note for a failed review", () => {
     expect(auditReviewProblems({}, "Needs coaching", "")).toContain("Reviewer note");
+  });
+
+  it("turns incomplete records into supportive actions without audit language", () => {
+    const actions = buildCoachPracticeActions(calculateCoachQuality(base({
+      appointments: [{ status: "scheduled" }],
+      barriers: [{ status: "Open" }],
+      safetyEvents: [{ opened_at: "2026-08-12T08:00:00Z", acknowledged_at: null }],
+    })));
+    expect(actions.map((action) => action.key)).toEqual(["checkins", "barriers", "safety"]);
+    expect(actions.map((action) => action.title).join(" ")).not.toMatch(/score|fail|audit/i);
+  });
+
+  it("shows no suggested action when every recorded item is complete", () => {
+    const actions = buildCoachPracticeActions(calculateCoachQuality(base({
+      appointments: [{ status: "completed" }],
+      followups: [{ status: "done", no_answer: false }],
+      barriers: [{ status: "Resolved" }],
+      referrals: [{ status: "Completed" }],
+      mdtTasks: [{ status: "Completed" }],
+    })));
+    expect(actions).toEqual([]);
   });
 });

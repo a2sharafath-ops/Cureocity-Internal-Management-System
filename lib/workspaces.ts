@@ -145,7 +145,8 @@ export const WS_TABS: Record<WsRoleKey, WsTab[]> = {
   coach: withRoleTabs([
     { key: "coaching", label: "Health coaching" },
     { key: "followups", label: "Follow-ups" },
-    { key: "quality", label: "Quality" },
+    { key: "copilot", label: "Coach Copilot" },
+    { key: "quality", label: "Practice insights" },
   ]),
 };
 

@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import {
   addCoachQualityReview, type CoachQualityReviewState,
 } from "@/lib/actions";
 import {
-  COACH_AUDIT_DOMAINS, type CoachAuditRatings, type CoachQualityMetrics, type RateMetric,
+  buildCoachPracticeActions, COACH_AUDIT_DOMAINS,
+  type CoachAuditRatings, type CoachQualityMetrics, type RateMetric,
 } from "@/lib/coach-quality";
 
 export type CoachQualitySession = {
@@ -67,15 +69,46 @@ function ReviewForm({ sessions }: { sessions: CoachQualitySession[] }) {
   </form>;
 }
 
+function PracticeInsights({ metrics, periodDays }: { metrics: CoachQualityMetrics; periodDays: number }) {
+  const actions = buildCoachPracticeActions(metrics);
+  const adherenceChange = metrics.adherence.change;
+  return <div style={{ display: "grid", gap: 16 }}>
+    <div><h2 style={{ fontSize: 18, margin: "0 0 3px" }}>My practice insights</h2><div style={{ color: "var(--muted)", fontSize: 12.5 }}>A supportive view of your recorded client work over the last {periodDays} days. Use it to decide where a little extra attention could help.</div></div>
+
+    <div style={{ background: "#eff6ff", color: "#1e3a8a", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 13px", fontSize: 12 }}><b>This is not a score.</b> These figures are prompts for your day-to-day practice. A dash means there was no relevant activity to measure, and message volume is never treated as quality.</div>
+
+    <section>
+      <div style={{ fontSize: 11, fontWeight: 750, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Your current picture</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))", gap: 10 }}>
+        <Metric value={rateText(metrics.scheduledCheckins)} label="Check-ins completed" detail={`${metrics.scheduledCheckins.met} of ${metrics.scheduledCheckins.total} recorded appointments`} />
+        <Metric value={rateText(metrics.responseRate)} label="Client responses recorded" detail={`${metrics.responseRate.met} of ${metrics.responseRate.total} contacts with a known outcome`} />
+        <Metric value={rateText(metrics.goalCompletion)} label="Goals completed" detail={`${metrics.goalCompletion.met} of ${metrics.goalCompletion.total} current goals`} />
+        <Metric value={rateText(metrics.adherence)} label="Client actions completed" detail={`${metrics.adherence.met} of ${metrics.adherence.total} reviewed actions${adherenceChange == null ? "" : ` · ${adherenceChange >= 0 ? "+" : ""}${adherenceChange} points from the prior period`}`} />
+        <Metric value={rateText(metrics.barriersAddressed)} label="Barriers followed up" detail={`${metrics.barriersAddressed.met} of ${metrics.barriersAddressed.total} recorded barriers`} />
+        <Metric value={rateText(metrics.referralCompletion)} label="Referrals followed through" detail={`${metrics.referralCompletion.met} of ${metrics.referralCompletion.total} active referrals completed`} />
+        <Metric value={metrics.safetyAcknowledgement.averageMinutes == null ? "—" : `${metrics.safetyAcknowledgement.averageMinutes} min`} label="Safety acknowledgement" detail={`${metrics.safetyAcknowledgement.met} of ${metrics.safetyAcknowledgement.total} safety items acknowledged`} />
+        <Metric value={rateText(metrics.mdtClosure)} label="MDT actions completed" detail={`${metrics.mdtClosure.met} of ${metrics.mdtClosure.total} active actions`} />
+      </div>
+    </section>
+
+    <section style={{ ...box, overflow: "hidden" }}>
+      <div style={{ padding: "12px 15px" }}><b style={{ fontSize: 13.5 }}>Helpful next steps</b><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>Suggestions from the records—not judgements about your work.</div></div>
+      {actions.length ? actions.map((action) => <div key={action.key} style={{ borderTop: "1px solid var(--border)", padding: "11px 15px", display: "flex", alignItems: "center", gap: 12 }}><div style={{ flex: 1 }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{action.title}</div><div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>{action.detail}</div></div><Link href={action.href} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", color: "var(--ink)", background: "#fff", textDecoration: "none", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{action.cta}</Link></div>) : <div style={{ borderTop: "1px solid var(--border)", padding: 15, background: "var(--green-bg)", color: "var(--green-text)", fontSize: 12.5 }}><b>Your recorded work is up to date.</b> Keep using the client’s priorities and the next smallest useful step to guide each conversation.</div>}
+    </section>
+  </div>;
+}
+
 export default function CoachQualityDashboard({
-  metrics, sessions, reviews, canReview, periodDays,
+  metrics, sessions, reviews, oversight, periodDays,
 }: {
   metrics: CoachQualityMetrics;
   sessions: CoachQualitySession[];
   reviews: CoachQualityReview[];
-  canReview: boolean;
+  oversight: boolean;
   periodDays: number;
 }) {
+  if (!oversight) return <PracticeInsights metrics={metrics} periodDays={periodDays} />;
+
   const adherenceChange = metrics.adherence.change;
   const automated = [
     { domain: COACH_AUDIT_DOMAINS[0], metric: metrics.baselineCompleteness, evidence: "Completed baselines across the current caseload" },
@@ -95,7 +128,7 @@ export default function CoachQualityDashboard({
   });
 
   return <div style={{ display: "grid", gap: 16 }}>
-    <div><h2 style={{ fontSize: 18, margin: "0 0 3px" }}>Health Coach quality &amp; outcomes</h2><div style={{ color: "var(--muted)", fontSize: 12.5 }}>Operational metrics use the last {periodDays} days where a time window applies. They measure recorded work—not diagnoses or employee value.</div></div>
+    <div><h2 style={{ fontSize: 18, margin: "0 0 3px" }}>Health Coach quality oversight</h2><div style={{ color: "var(--muted)", fontSize: 12.5 }}>Restricted to Admin, Manager and Medical Director oversight. Operational metrics use the last {periodDays} days where a time window applies.</div></div>
 
     <div style={{ background: "#eff6ff", color: "#1e3a8a", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 13px", fontSize: 12 }}><b>Governance note:</b> the percentages in the SOP are draft quality benchmarks pending formal Medical Director/operations approval. This page shows evidence and does not automatically pass, fail or rank a Health Coach.</div>
 
@@ -125,7 +158,7 @@ export default function CoachQualityDashboard({
       ["Message volume", "Intentionally excluded: the SOP says volume is not a quality measure."],
     ].map(([title, text]) => <div key={title} style={{ background: "var(--neutral-bg)", borderRadius: 8, padding: 10 }}><b style={{ fontSize: 12 }}>{title}</b><div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{text}</div></div>)}</div></section>
 
-    {canReview && <ReviewForm sessions={sessions} />}
+    <ReviewForm sessions={sessions} />
 
     <section style={{ ...box, overflow: "hidden" }}><div style={{ padding: "12px 15px" }}><b style={{ fontSize: 13.5 }}>Human quality reviews</b><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>{reviews.length} immutable review{reviews.length === 1 ? "" : "s"} visible to this viewer.</div></div>{reviews.length > 0 && <div style={{ borderTop: "1px solid var(--border)", padding: "10px 15px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 8 }}>{humanEvidence.map(({ domain, met, total, percent }) => <div key={domain.key} style={{ background: "var(--neutral-bg)", borderRadius: 8, padding: 9 }}><div style={{ fontSize: 11.5, fontWeight: 700 }}>{domain.label}</div><div style={{ fontSize: 15, fontWeight: 800, marginTop: 2 }}>{percent == null ? "—" : `${percent}%`}</div><div style={{ color: "var(--muted)", fontSize: 10.5 }}>{met} of {total} applicable reviews met</div></div>)}</div>}{reviews.length ? reviews.map((review) => <details key={review.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 15px" }}><summary style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "center", listStyle: "none" }}><span style={{ background: review.overall_result === "Meets standard" ? "var(--green-bg)" : review.overall_result === "Clinical review required" ? "var(--red-bg)" : "var(--amber-bg)", color: review.overall_result === "Meets standard" ? "var(--green-text)" : review.overall_result === "Clinical review required" ? "var(--red-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 750 }}>{review.overall_result}</span><b style={{ fontSize: 12.5 }}>{review.client_name} · session {review.session_number}</b><span style={{ color: "var(--muted)", fontSize: 11 }}>· {review.coach_name} · {new Date(review.reviewed_at).toLocaleDateString("en-GB")}</span></summary><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 6, marginTop: 9 }}>{COACH_AUDIT_DOMAINS.map((domain) => <div key={domain.key} style={{ fontSize: 11.5 }}><b>{domain.label}:</b> {review.ratings[domain.key]}</div>)}</div>{review.reviewer_note && <div style={{ marginTop: 8, fontSize: 12 }}><b>Reviewer note:</b> {review.reviewer_note}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 6 }}>Reviewed by {review.reviewer_name}</div></details>) : <div style={{ borderTop: "1px solid var(--border)", padding: 15, color: "var(--muted)", fontSize: 12.5 }}>No session quality reviews recorded yet.</div>}</section>
   </div>;

@@ -92,9 +92,9 @@ const SECTIONS: NavSection[] = [
 export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?: string }) {
   const pathname = usePathname();
 
-  // Exactly one home item survives the filter: clinicians' /dashboard redirects
-  // to My Workspace, so they only get the latter; a Super Admin has no caseload,
-  // so they only get the Dashboard.
+  // Exactly one home item survives for clinicians and the owner. Managers keep
+  // Dashboard plus a second, explicitly named Coach Quality entry; /workspace
+  // clamps that role to the oversight tab rather than exposing clinical tools.
   // Roles whose home IS the workspace: /dashboard only redirects there, so
   // showing it leaves a nav item that appears to do nothing when clicked.
   // The Medical Director belongs here for the same reason a clinician does.
@@ -105,7 +105,10 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
       ...s,
       items: s.items.filter((item) => canSee(role, item.href)
         && !(clin && item.href === "/dashboard")
-        && !(owner && item.href === "/workspace")),
+        && !(owner && item.href === "/workspace"))
+        .map((item) => role === "Manager" && item.href === "/workspace"
+          ? { ...item, label: "Coach Quality", icon: "✓" }
+          : item),
     }))
     .filter((s) => s.items.length > 0);
 

@@ -135,8 +135,8 @@ describe("permission helpers", () => {
 });
 
 describe("workspace + whiteboard access", () => {
-  it("managers use their own dashboard, not a discipline workspace", () => {
-    expect(canSee("Manager", "/workspace")).toBe(false);
+  it("managers keep their dashboard and can enter Coach quality oversight", () => {
+    expect(canSee("Manager", "/workspace")).toBe(true);
     expect(canSee("Manager", "/dashboard")).toBe(true);
   });
   it("clinicians keep their workspace", () => {

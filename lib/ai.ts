@@ -18,6 +18,9 @@ export async function openaiComplete(system: string, user: string, opts?: { mode
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: opts?.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+        // Explicitly avoid API-side application-state storage. Provider abuse
+        // monitoring/data-retention controls are governed separately.
+        store: false,
         temperature: opts?.temperature ?? 0.4,
         max_tokens: opts?.maxTokens ?? 800,
         ...(opts?.json ? { response_format: { type: "json_object" } } : {}),

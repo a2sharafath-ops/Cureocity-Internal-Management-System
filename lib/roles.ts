@@ -66,10 +66,10 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/intake": ["Administrator", "Manager", "Front Desk"],
   "/access": ["Administrator", "Manager", "Front Desk"],
   "/trainer": ["Administrator", "Manager", ...CLIN_MD],
-  // Managers have their own dashboard; the discipline workspaces are for the
-  // clinicians who actually carry a caseload (Administrator keeps access for
-  // previewing/supporting).
-  "/workspace": ["Administrator", "Medical Director", ...CLIN],
+  // Managers retain their operational dashboard; /workspace clamps them to the
+  // Health Coach quality-oversight tab. Administrators and Medical Directors
+  // can also reach that oversight view while previewing the Coach workspace.
+  "/workspace": ["Administrator", "Manager", "Medical Director", ...CLIN],
   "/careteam": ["Administrator", "Manager", ...CLIN_MD],
   // the daily multi-disciplinary meeting — every clinician takes part
   "/whiteboard": ["Administrator", "Manager", ...CLIN_MD],
