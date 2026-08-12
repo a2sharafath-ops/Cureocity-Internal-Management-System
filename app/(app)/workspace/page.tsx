@@ -51,6 +51,7 @@ import { canWriteNutrition } from "@/lib/discipline";
 import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
 import CoachPriorityBoard from "@/components/CoachPriorityBoard";
 import CoachQualityDashboard, { type CoachQualityReview, type CoachQualitySession } from "@/components/CoachQualityDashboard";
+import type { CoachQualityStandard } from "@/lib/coach-quality-governance";
 import CoachCopilot, { type CoachCopilotHistory } from "@/components/CoachCopilot";
 import {
   buildCoachAlerts, type CoachRuleAlert, type CoachAlertAssessment,
@@ -391,7 +392,18 @@ export default async function WorkspacePage(
   let coachQuality: CoachQualityMetrics = calculateCoachQuality(emptyQualityInput);
   let coachQualitySessions: CoachQualitySession[] = [];
   let coachQualityReviews: CoachQualityReview[] = [];
-  const qualityPeriodDays = 30;
+  let coachQualityStandards: CoachQualityStandard[] = [];
+  let qualityPeriodDays = 30;
+  if (roleKey === "coach" && tab === "quality" && canOverseeCoachQuality) {
+    const { data: standardRows } = await supabase.from("coach_quality_standards")
+      .select("id, version, status, targets, review_cadence, sample_size, coaching_trigger, clinical_review_trigger, rationale, proposed_by_name, proposed_by_role, proposed_at, approved_by_name, approved_at, approval_note, retired_by_name, retired_at, retirement_note")
+      .order("version", { ascending: false });
+    coachQualityStandards = (standardRows ?? []) as unknown as CoachQualityStandard[];
+    const activeStandard = coachQualityStandards.find((standard) => standard.status === "Approved");
+    qualityPeriodDays = activeStandard?.review_cadence === "Quarterly"
+      ? 90
+      : activeStandard?.review_cadence === "Semiannual" ? 182 : 30;
+  }
   if (roleKey === "coach" && tab === "quality" && scoped.length) {
     const scopedIds = scoped.map((client) => client.id);
     const currentStartDate = new Date(`${today}T00:00:00Z`);
@@ -1007,7 +1019,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_quality_standards", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
@@ -1228,7 +1240,7 @@ export default async function WorkspacePage(
       {tab === "copilot" && <CoachCopilot clients={scoped.map((client) => ({ id: client.id, name: client.name, code: client.code }))} history={coachCopilotHistory} enabled={Boolean(process.env.OPENAI_API_KEY) && process.env.HEALTH_COACH_COPILOT_ENABLED === "true"} />}
 
       {/* ---- QUALITY & OUTCOMES (coach) ---- */}
-      {tab === "quality" && <CoachQualityDashboard metrics={coachQuality} sessions={coachQualitySessions} reviews={coachQualityReviews} oversight={canOverseeCoachQuality} periodDays={qualityPeriodDays} />}
+      {tab === "quality" && <CoachQualityDashboard metrics={coachQuality} sessions={coachQualitySessions} reviews={coachQualityReviews} oversight={canOverseeCoachQuality} periodDays={qualityPeriodDays} standards={coachQualityStandards} viewerRole={me.role} />}
 
       {/* ---- SUMMARIES → BLUEPRINT SIGN-OFF ---- */}
       {tab === "summaries" && <SummariesPanel roleLabel={role.short} roleKind={role.kind} consults={consultSummaries} consolidated={consolidated} clients={clientOpts} viewerDisc={wsDisc} canSignAny={["Super Admin", "Administrator", "Manager"].includes(me.role)} canSend={canDeliverDoc(me.role, "summary") && !readOnly} pdf={pdfReadiness()} whatsapp={watiReadiness()} />}

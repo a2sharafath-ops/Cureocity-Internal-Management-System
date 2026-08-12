@@ -1,16 +1,16 @@
 import type { AdherenceOutcome } from "@/lib/coach-goals";
 
 export const COACH_AUDIT_DOMAINS = [
-  { key: "assessment_completeness", label: "Assessment completeness", question: "Was the correct baseline module completed?", draftTarget: 95 },
-  { key: "measurement_quality", label: "Measurement quality", question: "Were validated tools used without modification?", draftTarget: 100 },
-  { key: "goal_quality", label: "Goal quality", question: "Is the goal observable and measurable?", draftTarget: 90 },
-  { key: "if_then_planning", label: "If–then planning", question: "Does the goal contain a cue/action plan?", draftTarget: 90 },
-  { key: "scope_compliance", label: "Scope compliance", question: "Did the coach remain within scope?", draftTarget: 100 },
-  { key: "referral_quality", label: "Referral quality", question: "Was a referral made when the recorded rule triggered?", draftTarget: 100 },
-  { key: "safety", label: "Safety", question: "Was every safety event escalated according to protocol?", draftTarget: 100 },
-  { key: "documentation", label: "Documentation", question: "Are the required session fields complete?", draftTarget: 95 },
-  { key: "mdt_coordination", label: "MDT coordination", question: "Were relevant issues communicated and owned?", draftTarget: 95 },
-  { key: "client_experience", label: "Client experience", question: "Was the language collaborative and non-judgemental?", draftTarget: 90 },
+  { key: "assessment_completeness", label: "Assessment completeness", question: "Was the correct baseline module completed?" },
+  { key: "measurement_quality", label: "Measurement quality", question: "Were validated tools used without modification?" },
+  { key: "goal_quality", label: "Goal quality", question: "Is the goal observable and measurable?" },
+  { key: "if_then_planning", label: "If–then planning", question: "Does the goal contain a cue/action plan?" },
+  { key: "scope_compliance", label: "Scope compliance", question: "Did the coach remain within scope?" },
+  { key: "referral_quality", label: "Referral quality", question: "Was a referral made when the recorded rule triggered?" },
+  { key: "safety", label: "Safety", question: "Was every safety event escalated according to protocol?" },
+  { key: "documentation", label: "Documentation", question: "Are the required session fields complete?" },
+  { key: "mdt_coordination", label: "MDT coordination", question: "Were relevant issues communicated and owned?" },
+  { key: "client_experience", label: "Client experience", question: "Was the language collaborative and non-judgemental?" },
 ] as const;
 
 export type CoachAuditDomain = (typeof COACH_AUDIT_DOMAINS)[number]["key"];

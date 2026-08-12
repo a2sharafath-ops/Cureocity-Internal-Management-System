@@ -9,6 +9,8 @@ import {
   buildCoachPracticeActions, COACH_AUDIT_DOMAINS,
   type CoachAuditRatings, type CoachQualityMetrics, type RateMetric,
 } from "@/lib/coach-quality";
+import CoachQualityGovernancePanel from "@/components/CoachQualityGovernancePanel";
+import type { CoachQualityStandard } from "@/lib/coach-quality-governance";
 
 export type CoachQualitySession = {
   id: string;
@@ -99,16 +101,19 @@ function PracticeInsights({ metrics, periodDays }: { metrics: CoachQualityMetric
 }
 
 export default function CoachQualityDashboard({
-  metrics, sessions, reviews, oversight, periodDays,
+  metrics, sessions, reviews, oversight, periodDays, standards, viewerRole,
 }: {
   metrics: CoachQualityMetrics;
   sessions: CoachQualitySession[];
   reviews: CoachQualityReview[];
   oversight: boolean;
   periodDays: number;
+  standards: CoachQualityStandard[];
+  viewerRole: string;
 }) {
   if (!oversight) return <PracticeInsights metrics={metrics} periodDays={periodDays} />;
 
+  const approvedStandard = standards.find((standard) => standard.status === "Approved") ?? null;
   const adherenceChange = metrics.adherence.change;
   const automated = [
     { domain: COACH_AUDIT_DOMAINS[0], metric: metrics.baselineCompleteness, evidence: "Completed baselines across the current caseload" },
@@ -130,7 +135,9 @@ export default function CoachQualityDashboard({
   return <div style={{ display: "grid", gap: 16 }}>
     <div><h2 style={{ fontSize: 18, margin: "0 0 3px" }}>Health Coach quality oversight</h2><div style={{ color: "var(--muted)", fontSize: 12.5 }}>Restricted to Admin, Manager and Medical Director oversight. Operational metrics use the last {periodDays} days where a time window applies.</div></div>
 
-    <div style={{ background: "#eff6ff", color: "#1e3a8a", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 13px", fontSize: 12 }}><b>Governance note:</b> the percentages in the SOP are draft quality benchmarks pending formal Medical Director/operations approval. This page shows evidence and does not automatically pass, fail or rank a Health Coach.</div>
+    <div style={{ background: "#eff6ff", color: "#1e3a8a", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 13px", fontSize: 12 }}><b>Governance note:</b> {approvedStandard ? `Reference targets come from Medical Director-approved standard version ${approvedStandard.version}.` : "No reference targets are approved, so none are displayed."} Evidence remains informational and never automatically passes, fails or ranks a Health Coach.</div>
+
+    <CoachQualityGovernancePanel standards={standards} viewerRole={viewerRole} />
 
     <section>
       <div style={{ fontSize: 11, fontWeight: 750, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 8 }}>Operational outcomes</div>
@@ -149,7 +156,7 @@ export default function CoachQualityDashboard({
 
     <section style={{ ...box, overflow: "hidden" }}>
       <div style={{ padding: "12px 15px" }}><b style={{ fontSize: 13.5 }}>Automated quality evidence</b><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>Structural checks only. Human judgement remains mandatory for scope, referral appropriateness, safety handling and client experience.</div></div>
-      {automated.map(({ domain, metric, evidence }) => <div key={domain.key} style={{ borderTop: "1px solid var(--border)", padding: "10px 15px", display: "flex", alignItems: "center", gap: 12 }}><div style={{ flex: 1 }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{domain.label}</div><div style={{ color: "var(--muted)", fontSize: 11 }}>{evidence}</div></div><div style={{ textAlign: "right" }}><b style={{ fontSize: 14 }}>{rateText(metric)}</b><div style={{ color: "var(--muted)", fontSize: 10.5 }}>draft reference ≥{domain.draftTarget}%</div></div></div>)}
+      {automated.map(({ domain, metric, evidence }) => <div key={domain.key} style={{ borderTop: "1px solid var(--border)", padding: "10px 15px", display: "flex", alignItems: "center", gap: 12 }}><div style={{ flex: 1 }}><div style={{ fontSize: 12.5, fontWeight: 700 }}>{domain.label}</div><div style={{ color: "var(--muted)", fontSize: 11 }}>{evidence}</div></div><div style={{ textAlign: "right" }}><b style={{ fontSize: 14 }}>{rateText(metric)}</b><div style={{ color: "var(--muted)", fontSize: 10.5 }}>{approvedStandard ? `approved reference ≥${approvedStandard.targets[domain.key]}%` : "no approved reference"}</div></div></div>)}
     </section>
 
     <section style={{ ...box, padding: 14 }}><div style={{ fontWeight: 750, fontSize: 13.5 }}>Known data gaps</div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 9 }}>{[
@@ -160,6 +167,6 @@ export default function CoachQualityDashboard({
 
     <ReviewForm sessions={sessions} />
 
-    <section style={{ ...box, overflow: "hidden" }}><div style={{ padding: "12px 15px" }}><b style={{ fontSize: 13.5 }}>Human quality reviews</b><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>{reviews.length} immutable review{reviews.length === 1 ? "" : "s"} visible to this viewer.</div></div>{reviews.length > 0 && <div style={{ borderTop: "1px solid var(--border)", padding: "10px 15px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 8 }}>{humanEvidence.map(({ domain, met, total, percent }) => <div key={domain.key} style={{ background: "var(--neutral-bg)", borderRadius: 8, padding: 9 }}><div style={{ fontSize: 11.5, fontWeight: 700 }}>{domain.label}</div><div style={{ fontSize: 15, fontWeight: 800, marginTop: 2 }}>{percent == null ? "—" : `${percent}%`}</div><div style={{ color: "var(--muted)", fontSize: 10.5 }}>{met} of {total} applicable reviews met</div></div>)}</div>}{reviews.length ? reviews.map((review) => <details key={review.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 15px" }}><summary style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "center", listStyle: "none" }}><span style={{ background: review.overall_result === "Meets standard" ? "var(--green-bg)" : review.overall_result === "Clinical review required" ? "var(--red-bg)" : "var(--amber-bg)", color: review.overall_result === "Meets standard" ? "var(--green-text)" : review.overall_result === "Clinical review required" ? "var(--red-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 750 }}>{review.overall_result}</span><b style={{ fontSize: 12.5 }}>{review.client_name} · session {review.session_number}</b><span style={{ color: "var(--muted)", fontSize: 11 }}>· {review.coach_name} · {new Date(review.reviewed_at).toLocaleDateString("en-GB")}</span></summary><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 6, marginTop: 9 }}>{COACH_AUDIT_DOMAINS.map((domain) => <div key={domain.key} style={{ fontSize: 11.5 }}><b>{domain.label}:</b> {review.ratings[domain.key]}</div>)}</div>{review.reviewer_note && <div style={{ marginTop: 8, fontSize: 12 }}><b>Reviewer note:</b> {review.reviewer_note}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 6 }}>Reviewed by {review.reviewer_name}</div></details>) : <div style={{ borderTop: "1px solid var(--border)", padding: 15, color: "var(--muted)", fontSize: 12.5 }}>No session quality reviews recorded yet.</div>}</section>
+    <section style={{ ...box, overflow: "hidden" }}><div style={{ padding: "12px 15px" }}><b style={{ fontSize: 13.5 }}>Human quality reviews</b><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>{reviews.length} immutable review{reviews.length === 1 ? "" : "s"} visible to this viewer.</div></div>{reviews.length > 0 && <div style={{ borderTop: "1px solid var(--border)", padding: "10px 15px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 8 }}>{humanEvidence.map(({ domain, met, total, percent }) => <div key={domain.key} style={{ background: "var(--neutral-bg)", borderRadius: 8, padding: 9 }}><div style={{ fontSize: 11.5, fontWeight: 700 }}>{domain.label}</div><div style={{ fontSize: 15, fontWeight: 800, marginTop: 2 }}>{percent == null ? "—" : `${percent}%`}</div><div style={{ color: "var(--muted)", fontSize: 10.5 }}>{met} of {total} applicable reviews met{approvedStandard ? ` · reference ≥${approvedStandard.targets[domain.key]}%` : " · no approved reference"}</div></div>)}</div>}{reviews.length ? reviews.map((review) => <details key={review.id} style={{ borderTop: "1px solid var(--border)", padding: "10px 15px" }}><summary style={{ cursor: "pointer", display: "flex", gap: 8, alignItems: "center", listStyle: "none" }}><span style={{ background: review.overall_result === "Meets standard" ? "var(--green-bg)" : review.overall_result === "Clinical review required" ? "var(--red-bg)" : "var(--amber-bg)", color: review.overall_result === "Meets standard" ? "var(--green-text)" : review.overall_result === "Clinical review required" ? "var(--red-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 750 }}>{review.overall_result}</span><b style={{ fontSize: 12.5 }}>{review.client_name} · session {review.session_number}</b><span style={{ color: "var(--muted)", fontSize: 11 }}>· {review.coach_name} · {new Date(review.reviewed_at).toLocaleDateString("en-GB")}</span></summary><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 6, marginTop: 9 }}>{COACH_AUDIT_DOMAINS.map((domain) => <div key={domain.key} style={{ fontSize: 11.5 }}><b>{domain.label}:</b> {review.ratings[domain.key]}</div>)}</div>{review.reviewer_note && <div style={{ marginTop: 8, fontSize: 12 }}><b>Reviewer note:</b> {review.reviewer_note}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 6 }}>Reviewed by {review.reviewer_name}</div></details>) : <div style={{ borderTop: "1px solid var(--border)", padding: 15, color: "var(--muted)", fontSize: 12.5 }}>No session quality reviews recorded yet.</div>}</section>
   </div>;
 }

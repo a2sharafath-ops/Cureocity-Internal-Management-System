@@ -7113,6 +7113,102 @@ export async function updateMdtTask(formData: FormData) {
   revalidatePath(`/clients/${current.client_id}`);
 }
 
+export type CoachQualityGovernanceState = { ok?: string; error?: string };
+
+/** Propose an immutable quality-standard version for Medical Director review. */
+export async function proposeCoachQualityStandard(
+  _previous: CoachQualityGovernanceState,
+  formData: FormData,
+): Promise<CoachQualityGovernanceState> {
+  const p = await getProfile();
+  const {
+    canProposeCoachQualityStandard, coachQualityProposalFromValues,
+  } = await import("@/lib/coach-quality-governance");
+  if (!p || !canProposeCoachQualityStandard(p.role)) {
+    return { error: "Only Administrator, Super Admin or Manager can propose a quality standard." };
+  }
+  const { COACH_AUDIT_DOMAINS } = await import("@/lib/coach-quality");
+  const result = coachQualityProposalFromValues({
+    targets: Object.fromEntries(COACH_AUDIT_DOMAINS.map((domain) => [
+      domain.key, formData.get(`target_${domain.key}`),
+    ])),
+    reviewCadence: formData.get("review_cadence"),
+    sampleSize: formData.get("sample_size"),
+    coachingTrigger: formData.get("coaching_trigger"),
+    clinicalReviewTrigger: formData.get("clinical_review_trigger"),
+    rationale: formData.get("rationale"),
+  });
+  if (!result.proposal) return { error: `Complete: ${result.problems.join(", ")}.` };
+
+  const supabase = await createClient();
+  const { data: version, error } = await supabase.rpc("propose_coach_quality_standard", {
+    target_values: result.proposal.targets,
+    target_review_cadence: result.proposal.reviewCadence,
+    target_sample_size: result.proposal.sampleSize,
+    target_coaching_trigger: result.proposal.coachingTrigger,
+    target_clinical_review_trigger: result.proposal.clinicalReviewTrigger,
+    target_rationale: result.proposal.rationale,
+  });
+  if (error) return { error: error.message };
+  await logAudit(p, "Health Coach quality standard proposed", `Version ${version}`, result.proposal.rationale);
+  revalidatePath("/workspace");
+  return { ok: `Version ${version} proposed for Medical Director review.` };
+}
+
+/** Approve a draft and atomically retire the previously active standard. */
+export async function approveCoachQualityStandard(
+  _previous: CoachQualityGovernanceState,
+  formData: FormData,
+): Promise<CoachQualityGovernanceState> {
+  const p = await getProfile();
+  const { canApproveCoachQualityStandard, governanceDecisionProblem } = await import("@/lib/coach-quality-governance");
+  if (!p || !canApproveCoachQualityStandard(p.role)) {
+    return { error: "Only the Medical Director can approve a quality standard." };
+  }
+  const standardId = String(formData.get("standard_id") || "");
+  const note = String(formData.get("decision_note") || "").trim();
+  const problem = governanceDecisionProblem(note);
+  if (!standardId) return { error: "Choose a draft quality standard." };
+  if (problem) return { error: problem };
+
+  const supabase = await createClient();
+  const { data: version, error } = await supabase.rpc("approve_coach_quality_standard", {
+    target_standard_id: standardId,
+    decision_note: note,
+  });
+  if (error) return { error: error.message };
+  await logAudit(p, "Health Coach quality standard approved", `Version ${version}`, note);
+  revalidatePath("/workspace");
+  return { ok: `Version ${version} approved and activated.` };
+}
+
+/** Retire an active standard or reject a draft without erasing its history. */
+export async function retireCoachQualityStandard(
+  _previous: CoachQualityGovernanceState,
+  formData: FormData,
+): Promise<CoachQualityGovernanceState> {
+  const p = await getProfile();
+  const { canApproveCoachQualityStandard, governanceDecisionProblem } = await import("@/lib/coach-quality-governance");
+  if (!p || !canApproveCoachQualityStandard(p.role)) {
+    return { error: "Only the Medical Director can retire a quality standard." };
+  }
+  const standardId = String(formData.get("standard_id") || "");
+  const note = String(formData.get("decision_note") || "").trim();
+  const problem = governanceDecisionProblem(note);
+  if (!standardId) return { error: "Choose a quality standard." };
+  if (problem) return { error: problem };
+
+  const supabase = await createClient();
+  const { data: version, error } = await supabase.rpc("retire_coach_quality_standard", {
+    target_standard_id: standardId,
+    decision_note: note,
+  });
+  if (error) return { error: error.message };
+  await logAudit(p, "Health Coach quality standard retired", `Version ${version}`, note);
+  revalidatePath("/workspace");
+  return { ok: `Version ${version} retired; no benchmark is active until another version is approved.` };
+}
+
 export type CoachQualityReviewState = { ok?: string; error?: string };
 
 /** Save an immutable human audit of one completed structured Coach session. */
