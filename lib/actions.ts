@@ -58,6 +58,9 @@ import crypto from "crypto";
 import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
 import { sendEmail } from "@/lib/email/send";
 import { renderChoice, tplInvoiceCreated, tplPaymentReceived, tplLeadEnquiry, type Template } from "@/lib/email/templates";
+import {
+  clinicalReferralCreationDecision, clinicalReferralStatusAllowedForConsent,
+} from "@/lib/clinical-referral";
 
 
 // ---- helpers ---------------------------------------------------------------
@@ -7265,38 +7268,46 @@ export async function createClinicalReferral(formData: FormData) {
   const urgency = String(formData.get("urgency") || "Routine");
   const requested_action = String(formData.get("requested_action") || "").trim() || null;
   const consent_status = String(formData.get("consent_status") || "Not recorded");
+  const decision = clinicalReferralCreationDecision(consent_status);
   if (!client_id || !reason || !CLINICAL_REFERRAL_DESTINATIONS.has(destination_role)) return;
   if (!CLINICAL_REFERRAL_URGENCY.has(urgency)) return;
-  if (!["Not recorded", "Obtained", "Declined", "Not required"].includes(consent_status)) return;
+  if (!decision) return;
 
   const supabase = await createClient();
   const discipline = REFERRAL_DISCIPLINE[destination_role];
-  const { data: assignment } = discipline
+  const { data: assignment } = decision.notifyRecipients && discipline
     ? await supabase.from("client_assignments").select("staff_id").eq("client_id", client_id).eq("discipline", discipline).maybeSingle()
     : { data: null };
   const assignedTo = (assignment as { staff_id?: string | null } | null)?.staff_id ?? null;
   const { data: referral, error } = await supabase.from("clinical_referrals").insert({
     client_id, reason, destination_role, urgency, requested_action,
     consent_status, assigned_to_staff_id: assignedTo,
-    created_by: p.id, created_by_name: p.name, status: "Sent",
+    created_by: p.id, created_by_name: p.name, status: decision.status,
   }).select("id").single();
   if (error || !referral) return;
 
   await supabase.from("clinical_referral_events").insert({
-    referral_id: referral.id, from_status: null, to_status: "Sent",
+    referral_id: referral.id, from_status: null, to_status: decision.status,
     note: requested_action, actor_id: p.id, actor_name: p.name, actor_role: p.role,
   });
   const { data: client } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
   const clientLabel = (client as { name?: string } | null)?.name ?? "Client";
-  const notification = {
-    title: `${urgency} clinical referral`,
-    body: `${clientLabel}: ${reason}`,
-    icon: urgency === "Urgent" ? "🔴" : urgency === "Priority" ? "🟠" : "🔵",
-    link: { kind: "clinical-referral", ref: client_id },
-  };
-  if (assignedTo) await notifyStaff(supabase, assignedTo, notification);
-  else await notifyRoles(supabase, [destination_role], notification);
-  await logAudit(p, "Clinical referral created", clientLabel, `${destination_role} · ${urgency}`);
+  if (decision.notifyRecipients) {
+    const notification = {
+      title: `${urgency} clinical referral`,
+      body: `${clientLabel}: ${reason}`,
+      icon: urgency === "Urgent" ? "🔴" : urgency === "Priority" ? "🟠" : "🔵",
+      link: { kind: "clinical-referral", ref: client_id },
+    };
+    if (assignedTo) await notifyStaff(supabase, assignedTo, notification);
+    else await notifyRoles(supabase, [destination_role], notification);
+  }
+  await logAudit(
+    p,
+    decision.notifyRecipients ? "Clinical referral created" : "Declined clinical referral documented",
+    clientLabel,
+    `${destination_role} · ${urgency}`,
+  );
   revalidatePath(`/clients/${client_id}`);
 }
 
@@ -7310,14 +7321,14 @@ export async function updateClinicalReferral(formData: FormData) {
   if (!id || !client_id || !CLINICAL_REFERRAL_STATUS.has(status)) return;
   const supabase = await createClient();
   const { data: current } = await supabase.from("clinical_referrals")
-    .select("status, destination_role, assigned_to_staff_id, created_by")
+    .select("status, consent_status, destination_role, assigned_to_staff_id, created_by")
     .eq("id", id).maybeSingle();
   if (!current) return;
-  const row = current as { status: string; destination_role: string; assigned_to_staff_id: string | null; created_by: string };
+  const row = current as { status: string; consent_status: string; destination_role: string; assigned_to_staff_id: string | null; created_by: string };
   const allowed = isAdminish(p.role) || row.created_by === p.id
     || row.destination_role === p.role
     || (!!p.staffId && row.assigned_to_staff_id === p.staffId);
-  if (!allowed || row.status === status) return;
+  if (!allowed || row.status === status || !clinicalReferralStatusAllowedForConsent(row.consent_status, status)) return;
 
   const now = new Date().toISOString();
   const patch: Record<string, string | null> = { status, updated_at: now };

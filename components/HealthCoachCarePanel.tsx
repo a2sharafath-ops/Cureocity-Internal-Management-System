@@ -166,10 +166,13 @@ export default function HealthCoachCarePanel({
                 </label>
                 <label style={label}>Client consent
                   <select name="consent_status" style={input} defaultValue="Not recorded">
-                    <option>Not recorded</option><option>Obtained</option><option>Declined</option><option>Not required</option>
+                    <option>Not recorded</option><option>Obtained</option><option value="Declined">Declined — document only</option><option>Not required</option>
                   </select>
                 </label>
-                <button type="submit" style={button}>Send referral</button>
+                <div style={{ color: "var(--muted)", fontSize: 11 }}>
+                  Declined consent is recorded as cancelled and is not sent or notified to the destination.
+                </div>
+                <button type="submit" style={button}>Submit referral decision</button>
               </form>
             </details>
           )}
@@ -204,7 +207,7 @@ export default function HealthCoachCarePanel({
         ) : (
           <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
             {referrals.map((referral) => {
-              const mayUpdate = !readOnly && (
+              const mayUpdate = !readOnly && referral.consent_status !== "Declined" && (
                 isAdminish(role) || referral.created_by === userId
                 || referral.destination_role === role
                 || (!!staffId && referral.assigned_to_staff_id === staffId)
