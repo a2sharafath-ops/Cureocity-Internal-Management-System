@@ -16,6 +16,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
   const [manual, setManual] = useState("");
   const [externalResult, setExternalResult] = useState("");
   const [note, setNote] = useState("");
+  const [nextReviewDate, setNextReviewDate] = useState("");
   const [safetyAction, setSafetyAction] = useState("");
   const [busy, start] = useTransition();
 
@@ -42,7 +43,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
     ? TONE_STYLE[tone as keyof typeof TONE_STYLE]
     : { bg: "var(--neutral-bg)", text: "var(--muted)" };
 
-  const reset = () => { setOpen(false); setAnswers({}); setManual(""); setExternalResult(""); setNote(""); setSafetyAction(""); };
+  const reset = () => { setOpen(false); setAnswers({}); setManual(""); setExternalResult(""); setNote(""); setNextReviewDate(""); setSafetyAction(""); };
   const save = () => {
     if (!validScore || (safetyTrigger && !safetyAction.trim())) return;
     const detail = instrument?.mode === "external"
@@ -57,6 +58,7 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
     if (safetyTrigger) form.set("safety_trigger", "1");
     if (safetyAction.trim()) form.set("immediate_action", safetyAction.trim());
     if (note.trim()) form.set("note", note.trim());
+    if (marker === "mood" && nextReviewDate) form.set("next_review_date", nextReviewDate);
     start(async () => { await saveCoachAssessment(form); reset(); router.refresh(); });
   };
 
@@ -109,6 +111,12 @@ export default function MarkerAssessment({ clientId, marker, tool, range, gender
         <div style={{ fontSize: 11.5, margin: "3px 0 7px" }}>Keep the client engaged and alert the designated senior clinician before the session ends. Saving opens a persistent safety event.</div>
         <input value={safetyAction} onChange={(event) => setSafetyAction(event.target.value)} required placeholder="Immediate action taken and person contacted" style={{ ...input, width: "100%", boxSizing: "border-box" }} />
       </div>}
+
+      {marker === "mood" && <label style={{ display: "grid", gap: 4, marginTop: 10, maxWidth: 300, fontSize: 12 }}>
+        Next review date from the clinical plan (optional)
+        <input type="date" value={nextReviewDate} onChange={(event) => setNextReviewDate(event.target.value)} style={input} />
+        <span style={{ color: "var(--muted)", fontSize: 10.5 }}>PHQ-9 is not placed on an automatic 14-day cycle. Leave blank when the clinical plan does not schedule a repeat.</span>
+      </label>}
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12 }}>Score <b>{validScore ? score : "—"}</b></span>

@@ -100,14 +100,18 @@ the Medical Director — has a read-only calendar.
 
 ## 6. Coaching — Health Coach
 
-Six markers (`lib/coach-markers.ts`), each re-assessed every 14 days: stress
-(PSS-10), sleep (PSQI), activity (PAR-Q + IPAQ-SF), nutrition (3-day diary +
-GDR), substance (AUDIT-C + DAST-10), anxiety (HAM-A).
+Seven markers live in `lib/coach-markers.ts`: stress (PSS-10), sleep (PSQI),
+activity (official PAR-Q+ + IPAQ-SF), nutrition (3-day diary + GDR), substance
+(AUDIT-C + DAST-10 + Fagerström), anxiety (GAD-7), and mood (PHQ-9).
 
-**None of these generate a follow-up, task or flag anywhere.** The "due in N
-days / overdue" label renders only inside the coach's own tab. If a coach does
-not open that screen, an overdue HAM-A is invisible to the entire clinic —
-including the self-harm referral pathway at `lib/coach-markers.ts:85`.
+The structured baseline is universal; validated instruments are conditional.
+A marker becomes applicable when the baseline triggers its pathway or a
+clinician explicitly starts it by recording a result. Once started, its stored
+`next_review_date` drives both the coach board and the clinic attention queue.
+Intervals are instrument-specific: weekly during the first month then
+biweekly for stress/sleep/activity/anxiety, six-weekly GDR, biweekly substance
+screening, and PHQ-9 only on the recorded clinical plan. A referral-band result
+raises an immediate attention flag independently of cadence.
 
 ---
 
@@ -192,4 +196,3 @@ Verified against RLS — the database closes some of these, and that is noted.
 6. Should `publishDietChartDirect` survive now that approval is a named clinical
    decision?
 7. Should PT clients get a follow-up ladder?
-8. Should overdue coach markers raise a flag like every other deliverable?

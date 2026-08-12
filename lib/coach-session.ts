@@ -1,5 +1,5 @@
 import { BARRIER_CATEGORIES } from "@/lib/coach-goals";
-import { MARKER_KEYS, type MarkerKey } from "@/lib/coach-markers";
+import { applicableMarkerKeys, type MarkerKey } from "@/lib/coach-markers";
 
 export const COACH_SESSION_VERSION = "Cureocity HC360 session v1.0";
 
@@ -199,17 +199,6 @@ export function coachSessionSummary(data: CoachSessionData, sessionNumber: numbe
   return lines.join("\n");
 }
 
-const PATHWAY_MARKER: Record<string, MarkerKey> = {
-  "PSQI sleep screening": "sleep",
-  "Official PAR-Q+ / clinical clearance": "activity",
-  "PSS-10 stress screening": "stress",
-  "GAD-7 anxiety screening": "anxiety",
-  "PHQ-9 mood screening": "mood",
-  "AUDIT-C alcohol screening": "substance",
-  "Fagerström nicotine screening": "substance",
-  "DAST-10 drug screening": "substance",
-};
-
 export function dueCoachScreenings(
   pathways: string[],
   assessments: { marker: string; next_review_date: string | null }[],
@@ -218,12 +207,13 @@ export function dueCoachScreenings(
   const latest = new Map<string, { next_review_date: string | null }>();
   for (const assessment of assessments) if (!latest.has(assessment.marker)) latest.set(assessment.marker, assessment);
   const due = new Set<MarkerKey>();
-  for (const pathway of pathways) {
-    const marker = PATHWAY_MARKER[pathway];
-    if (marker && !latest.has(marker)) due.add(marker);
-  }
-  for (const marker of MARKER_KEYS) {
+  const applicable = applicableMarkerKeys(pathways, latest.keys());
+  for (const marker of applicable) {
     const result = latest.get(marker);
+    if (!result) {
+      due.add(marker);
+      continue;
+    }
     if (result?.next_review_date && result.next_review_date <= today) due.add(marker);
   }
   return [...due];

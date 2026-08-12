@@ -14,7 +14,7 @@ import { GENERATION_MS as BP_GENERATION_MS } from "@/lib/blueprint-sla";
 import { buildOwnerResolver, outstandingDeliverables, unsatisfiedMilestones, consultDoneKinds, currentTerm, type AssignRow, type ApptOwnerRow, type DoneConsultRow, type DoneApptRow } from "@/lib/obligations";
 import { makeCatOf } from "@/lib/appt-match";
 import { loadClientStatuses } from "@/lib/client-status";
-import { MARKERS, markerOverdueDays, markerNeedsReferral, type MarkerState } from "@/lib/coach-markers";
+import { applicableMarkerKeys, MARKERS, markerOverdueDays, markerNeedsReferral, type MarkerState } from "@/lib/coach-markers";
 import {
   BOOKING_OWNER, BLOOD_CHASE_OWNER, DELIVERY_OWNER, sessionOwners,
   CONCERN_ESCALATION_OWNER, CONCERN_ESCALATION_DAYS, MARKER_BASELINE_GRACE_DAYS,
@@ -30,7 +30,7 @@ const fmt = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 
 export async function careWorkFlags(today: string): Promise<Flag[]> {
   const sb = await createClient();
-  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: coachRows }, { data: appts }, { data: signoffs }] = await Promise.all([
+  const [{ data: cps }, { data: clients }, { data: cons }, { data: charts }, { data: workouts }, { data: blood }, { data: bp }, { data: protos }, { data: openConcerns }, { data: coachRows }, { data: coachBaselines }, { data: appts }, { data: signoffs }] = await Promise.all([
     sb.from("client_packages").select("client_id, category, start_date, end_date, status").eq("status", "active"),
     sb.from("clients").select("id, name"),
     sb.from("consultations").select("client_id, kind, status, completed_at"),
@@ -51,7 +51,8 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
     // agenda used their protocol row — the same client, two different day-10s.
     sb.from("care_protocols").select("client_id, protocol, start_date").eq("status", "active"),
     sb.from("concerns").select("client_id, body, created_at").eq("status", "Open"),
-    sb.from("coach_assessments").select("client_id, marker, date, tone, band").order("date", { ascending: false }),
+    sb.from("coach_assessments").select("client_id, marker, date, tone, band, next_review_date").order("date", { ascending: false }).order("created_at", { ascending: false }),
+    sb.from("coach_baselines").select("client_id, triggered_pathways"),
     sb.from("appointments").select("client_id, type, date, status, provider_id, staff:provider_id(name, role)").neq("status", "cancelled"),
     // The ACTUAL BluePrint sign-offs. The flag below used to infer them from
     // completed consultations, which is a different thing entirely — see there.
@@ -184,10 +185,17 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
   // Latest reading per client+marker. The query is date-descending, so the
   // first row seen for a key is the newest.
   const markerLatest = new Map<string, MarkerState>();
-  for (const r of (coachRows ?? []) as { client_id: string; marker: string; date: string; tone: string | null; band: string | null }[]) {
+  const markerFirstDate = new Map<string, string>();
+  const assessedMarkersByClient = new Map<string, Set<string>>();
+  for (const r of (coachRows ?? []) as { client_id: string; marker: string; date: string; tone: string | null; band: string | null; next_review_date: string | null }[]) {
     const key = `${r.client_id}|${r.marker}`;
-    if (!markerLatest.has(key)) markerLatest.set(key, { marker: r.marker as never, date: r.date, tone: r.tone, band: r.band });
+    if (!markerLatest.has(key)) markerLatest.set(key, { marker: r.marker as never, date: r.date, tone: r.tone, band: r.band, next_review_date: r.next_review_date });
+    const first = markerFirstDate.get(key);
+    if (!first || r.date < first) markerFirstDate.set(key, r.date);
+    (assessedMarkersByClient.get(r.client_id) ?? assessedMarkersByClient.set(r.client_id, new Set()).get(r.client_id)!).add(r.marker);
   }
+  const baselinePathwaysByClient = new Map(((coachBaselines ?? []) as { client_id: string; triggered_pathways: string[] }[])
+    .map((baseline) => [baseline.client_id, baseline.triggered_pathways ?? []]));
 
   const statuses = await loadClientStatuses(sb, Array.from(catsBy.keys()), today);
 
@@ -274,16 +282,19 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
 
     // ---- the Health Coach's screening markers -----------------------------
     //
-    // These raised NOTHING anywhere: no follow-up, no task, no flag. The only
-    // place an overdue PSS-10 or GAD-7 appeared was inside the coach's own tab,
-    // so if that coach was on leave the whole clinic was blind to it —
-    // including the referral pathway for severe anxiety and substance use.
+    // Applicable screening and referral-band results must remain visible even
+    // when the assigned coach is away. Non-indicated tools do not create work.
     //
     // Only for clients who actually have a coach on their care team; a
     // membership client is not owed coaching.
     if (cats.has("comprehensive") || cats.has("training")) {
       const coachOwner = ownerFor(clientId, "coach");
+      const applicableMarkers = applicableMarkerKeys(
+        baselinePathwaysByClient.get(clientId) ?? [],
+        assessedMarkersByClient.get(clientId) ?? [],
+      );
       for (const m of MARKERS) {
+        if (!applicableMarkers.has(m.key)) continue;
         const last = markerLatest.get(`${clientId}|${m.key}`);
 
         // A reading in the referral band outranks any cadence question: the
@@ -301,20 +312,28 @@ export async function careWorkFlags(today: string): Promise<Flag[]> {
           continue;
         }
 
-        // Cadence. A client with no baseline at all is only flagged once the
-        // package has had time to start — MARKER_BASELINE_GRACE_DAYS — so a
-        // client who joined this morning doesn't arrive with six red flags.
+        // Cadence. A triggered tool with no result is only flagged once the
+        // package has had time to start. Recorded tools use their persisted,
+        // instrument-specific next-review date.
         const activeCp = rows.find((r) => r.category === (cats.has("comprehensive") ? "comprehensive" : "training"));
         const start = currentTerm(rows, protoBy.get(clientId) ?? [], today)?.anchor ?? activeCp?.start_date ?? null;
         const sinceStart = start ? Math.floor((Date.parse(today) - Date.parse(start)) / 86_400_000) : 0;
         if (!last && sinceStart < MARKER_BASELINE_GRACE_DAYS) continue;
 
-        const over = markerOverdueDays(m, last, today, sinceStart - MARKER_BASELINE_GRACE_DAYS);
+        const over = markerOverdueDays(
+          m,
+          last,
+          today,
+          sinceStart - MARKER_BASELINE_GRACE_DAYS,
+          markerFirstDate.get(`${clientId}|${m.key}`) ?? null,
+        );
         if (over === null || over <= 0) continue;
         flags.push({
           sev: "med",
           title: last ? `${who} — ${m.label.toLowerCase()} re-assessment overdue` : `${who} — ${m.label.toLowerCase()} never assessed`,
-          detail: last ? `${m.tool} · last ${last.date} · every ${m.reassessDays} days` : `${m.tool} · no baseline on file`,
+          detail: last
+            ? `${m.tool} · last ${last.date}${last.next_review_date ? ` · review due ${last.next_review_date}` : ""}`
+            : `${m.tool} · triggered by the structured baseline but no result is on file`,
           href: "/workspace?role=coach&tab=coaching", cta: "Assess",
           dueLabel: `${over} day${over === 1 ? "" : "s"} overdue`, overdue: true,
           dedupeKey: `marker-due:${clientId}:${m.key}`,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/today";
-import { MARKERS, TONE_STYLE, markerOverdueDays, type MarkerKey } from "@/lib/coach-markers";
+import { applicableMarkerKeys, MARKERS, TONE_STYLE, markerOverdueDays, type MarkerKey } from "@/lib/coach-markers";
 import { MARKER_BASELINE_GRACE_DAYS } from "@/lib/work-owners";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import MarkerAssessment from "@/components/MarkerAssessment";
@@ -9,8 +9,8 @@ import MarkerAssessment from "@/components/MarkerAssessment";
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 
-// Health-Coach workspace board — the SOP screening markers per client with the latest
-// score, band, due-status and quick score entry, plus the SOP guide.
+// Health-Coach workspace board — applicable SOP screening markers per client,
+// with non-indicated tools still available for an explicit clinical decision.
 export default async function CoachMarkersSection({ me, heading = false }: { me: { role: string; staffId?: string | null }; heading?: boolean }) {
   const supabase = await createClient();
   const today = todayISO();
@@ -26,19 +26,17 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
     clientIds = Array.from(new Set(((data ?? []) as { client_id: string }[]).map((r) => r.client_id)));
   }
 
-  const [{ data: cl }, { data: asmt }, { data: pkgs }, { data: protos }] = await Promise.all([
+  const [{ data: cl }, { data: asmt }, { data: baselines }, { data: pkgs }, { data: protos }] = await Promise.all([
     // gender comes along for AUDIT-C, which uses a lower cut-off for women.
     clientIds.length ? supabase.from("clients").select("id, name, code, gender").in("id", clientIds).order("name") : Promise.resolve({ data: [] }),
-    clientIds.length ? supabase.from("coach_assessments").select("client_id, marker, score, band, tone, date").in("client_id", clientIds).order("date", { ascending: false }) : Promise.resolve({ data: [] }),
+    clientIds.length ? supabase.from("coach_assessments").select("client_id, marker, score, band, tone, date, next_review_date").in("client_id", clientIds).order("date", { ascending: false }).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
+    clientIds.length ? supabase.from("coach_baselines").select("client_id, status, triggered_pathways").in("client_id", clientIds) : Promise.resolve({ data: [] }),
     // When each client's clock started, so a baseline isn't demanded on day one.
     clientIds.length ? supabase.from("client_packages").select("client_id, start_date").in("client_id", clientIds).eq("status", "active") : Promise.resolve({ data: [] }),
     clientIds.length ? supabase.from("care_protocols").select("client_id, start_date").in("client_id", clientIds).eq("status", "active") : Promise.resolve({ data: [] }),
   ]);
 
-  // Days since the client's care actually began. The attention queue gives a
-  // week's grace before it expects a first assessment — this screen demanded
-  // one from day zero, so a client who joined this morning arrived with six
-  // amber markers here and nothing at all on the queue.
+  // Days since care began provide a short grace for a triggered first tool.
   const startOf = new Map<string, string>();
   for (const r of [...((pkgs ?? []) as { client_id: string; start_date: string | null }[]),
                    ...((protos ?? []) as { client_id: string; start_date: string | null }[])]) {
@@ -50,11 +48,18 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
   }
   const clients = (cl ?? []) as { id: string; name: string; code: string | null; gender: string | null }[];
   // latest assessment per (client, marker)
-  const latest = new Map<string, { score: number | null; band: string | null; tone: string | null; date: string }>();
-  for (const a of (asmt ?? []) as { client_id: string; marker: string; score: number | null; band: string | null; tone: string | null; date: string }[]) {
+  const latest = new Map<string, { score: number | null; band: string | null; tone: string | null; date: string; next_review_date: string | null }>();
+  const firstDate = new Map<string, string>();
+  const assessedByClient = new Map<string, Set<string>>();
+  for (const a of (asmt ?? []) as { client_id: string; marker: string; score: number | null; band: string | null; tone: string | null; date: string; next_review_date: string | null }[]) {
     const k = `${a.client_id}|${a.marker}`;
-    if (!latest.has(k)) latest.set(k, { score: a.score, band: a.band, tone: a.tone, date: a.date });
+    if (!latest.has(k)) latest.set(k, { score: a.score, band: a.band, tone: a.tone, date: a.date, next_review_date: a.next_review_date });
+    const first = firstDate.get(k);
+    if (!first || a.date < first) firstDate.set(k, a.date);
+    (assessedByClient.get(a.client_id) ?? assessedByClient.set(a.client_id, new Set()).get(a.client_id)!).add(a.marker);
   }
+  const baselineByClient = new Map(((baselines ?? []) as { client_id: string; status: string; triggered_pathways: string[] }[])
+    .map((baseline) => [baseline.client_id, baseline]));
 
   const chip = (tone: string | null, label: string) => {
     const s = tone && TONE_STYLE[tone as keyof typeof TONE_STYLE] ? TONE_STYLE[tone as keyof typeof TONE_STYLE] : { bg: "var(--neutral-bg)", text: "var(--muted)" };
@@ -102,17 +107,34 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 10 }}>
                 {MARKERS.map((m: (typeof MARKERS)[number]) => {
                   const l = latest.get(`${c.id}|${m.key as MarkerKey}`);
+                  const baseline = baselineByClient.get(c.id);
+                  const applicable = applicableMarkerKeys(
+                    baseline?.triggered_pathways ?? [],
+                    assessedByClient.get(c.id) ?? [],
+                  ).has(m.key);
                   const start = startOf.get(c.id) ?? null;
                   const sinceStart = start ? daysBetween(start, today) : 0;
                   // Same rule and the same grace as the attention queue — the
                   // shared helper, so the two screens cannot drift apart again.
-                  const withinGrace = !l && sinceStart < MARKER_BASELINE_GRACE_DAYS;
-                  const overdueDays = withinGrace
+                  const withinGrace = applicable && !l && sinceStart < MARKER_BASELINE_GRACE_DAYS;
+                  const overdueDays = !applicable || withinGrace
                     ? null
-                    : markerOverdueDays(m, l ? { marker: m.key, date: l.date, tone: l.tone, band: l.band } : undefined, today, sinceStart - MARKER_BASELINE_GRACE_DAYS);
-                  const dueLabel = !l
-                    ? (withinGrace ? "Baseline due soon" : "Not assessed")
-                    : overdueDays !== null && overdueDays > 0 ? `Due ${overdueDays}d overdue` : `Last ${daysBetween(l.date, today)}d ago`;
+                    : markerOverdueDays(
+                      m,
+                      l ? { marker: m.key, date: l.date, tone: l.tone, band: l.band, next_review_date: l.next_review_date } : undefined,
+                      today,
+                      sinceStart - MARKER_BASELINE_GRACE_DAYS,
+                      firstDate.get(`${c.id}|${m.key}`) ?? null,
+                    );
+                  const dueLabel = !applicable
+                    ? (baseline ? "Not currently indicated" : "Awaiting baseline")
+                    : !l
+                      ? (withinGrace ? "Applicable · due soon" : overdueDays && overdueDays > 0 ? `Due ${overdueDays}d overdue` : "Applicable · due today")
+                      : overdueDays !== null && overdueDays > 0
+                        ? `Due ${overdueDays}d overdue`
+                        : l.next_review_date
+                          ? `Next ${l.next_review_date}`
+                          : m.cadence.kind === "clinical-plan" ? "No repeat scheduled" : `Last ${daysBetween(l.date, today)}d ago`;
                   const dueBad = overdueDays !== null && overdueDays > 0;
                   return (
                     <div key={m.key} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "9px 11px" }}>
@@ -120,7 +142,7 @@ export default async function CoachMarkersSection({ me, heading = false }: { me:
                         <span style={{ fontSize: 12.5, fontWeight: 700 }}>{m.icon} {m.label}</span>
                         {l && l.band && chip(l.tone, `${l.band} · ${l.score}`)}
                         <span style={{ flex: 1 }} />
-                        <span style={{ fontSize: 10.5, fontWeight: 600, color: dueBad ? "var(--amber-text)" : "var(--muted)" }}>{dueLabel}</span>
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: dueBad ? "var(--amber-text)" : applicable ? "var(--brand-text)" : "var(--muted)" }}>{dueLabel}</span>
                       </div>
                       <MarkerAssessment clientId={c.id} marker={m.key} tool={m.tool} range={m.range} gender={c.gender} />
                     </div>

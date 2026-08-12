@@ -193,13 +193,12 @@ describe("coach markers", () => {
   });
 
   it("is overdue once the cadence has elapsed", () => {
-    const last = { marker: "stress" as const, date: "2026-08-01", tone: "good", band: "Low" };
-    // reassessDays is 14 — 20 days later is 6 days overdue.
+    const last = { marker: "stress" as const, date: "2026-08-01", tone: "good", band: "Low", next_review_date: "2026-08-15" };
     expect(markerOverdueDays(stress, last, "2026-08-21")).toBe(6);
   });
 
   it("is not overdue inside the cadence", () => {
-    const last = { marker: "stress" as const, date: "2026-08-01", tone: "good", band: "Low" };
+    const last = { marker: "stress" as const, date: "2026-08-01", tone: "good", band: "Low", next_review_date: "2026-08-15" };
     expect(markerOverdueDays(stress, last, "2026-08-10")).toBeNull();
   });
 
@@ -212,16 +211,16 @@ describe("coach markers", () => {
 
   it("gives a new client a grace window before chasing a missing baseline", () => {
     // Otherwise every new Comprehensive client lands on the coach's queue with
-    // six red flags on day one, which teaches people to ignore the panel.
+    // a wall of false red flags on day one, which teaches people to ignore the panel.
     expect(MARKER_BASELINE_GRACE_DAYS).toBeGreaterThan(0);
     expect(markerOverdueDays(stress, undefined, "2026-08-21", 0)).toBe(0);
     expect(markerOverdueDays(stress, undefined, "2026-08-21", 5)).toBe(5);
   });
 
-  it("every marker names a referral threshold", () => {
+  it("every marker names a referral threshold and a cadence policy", () => {
     for (const m of MARKERS) {
       expect(m.referral, m.key).toBeTruthy();
-      expect(m.reassessDays, m.key).toBeGreaterThan(0);
+      expect(["phased", "fixed", "clinical-plan"], m.key).toContain(m.cadence.kind);
     }
   });
 });

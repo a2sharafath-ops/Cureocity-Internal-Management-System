@@ -6,7 +6,7 @@ import {
   BASELINE_MODULES, baselineProgress, questionIsVisible, triggeredBaselinePathways,
   type BaselineAnswers, type BaselineQuestion,
 } from "@/lib/coach-baseline";
-import { MARKER_BY_KEY, MARKERS, type MarkerKey } from "@/lib/coach-markers";
+import { applicableMarkerKeys, MARKER_BY_KEY, MARKERS } from "@/lib/coach-markers";
 import MarkerAssessment from "@/components/MarkerAssessment";
 
 export type CoachBaselineView = {
@@ -25,17 +25,6 @@ export type ScreeningResultView = {
 const field: React.CSSProperties = { width: "100%", minHeight: 36, boxSizing: "border-box", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 9px", background: "#fff", fontSize: 12.5 };
 const primary: React.CSSProperties = { border: 0, borderRadius: 8, padding: "8px 13px", background: "var(--ink)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" };
 const secondary: React.CSSProperties = { ...primary, border: "1px solid var(--border)", background: "#fff", color: "var(--ink)" };
-
-const PATHWAY_MARKER: Record<string, MarkerKey> = {
-  "PSQI sleep screening": "sleep",
-  "Official PAR-Q+ / clinical clearance": "activity",
-  "PSS-10 stress screening": "stress",
-  "GAD-7 anxiety screening": "anxiety",
-  "PHQ-9 mood screening": "mood",
-  "AUDIT-C alcohol screening": "substance",
-  "Fagerström nicotine screening": "substance",
-  "DAST-10 drug screening": "substance",
-};
 
 function Question({ question, value, setValue }: { question: BaselineQuestion; value: string | number | null | undefined; setValue: (value: string | number | null) => void }) {
   return <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>
@@ -58,9 +47,10 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
   const [busy, start] = useTransition();
   const progress = useMemo(() => baselineProgress(answers), [answers]);
   const pathways = useMemo(() => triggeredBaselinePathways(answers), [answers]);
-  const pathwayMarkers = Array.from(new Set(pathways.map((pathway) => PATHWAY_MARKER[pathway]).filter(Boolean)));
   const latest = new Map<string, ScreeningResultView>();
   for (const result of screenings) if (!latest.has(result.marker)) latest.set(result.marker, result);
+  const applicableMarkers = applicableMarkerKeys(pathways, latest.keys());
+  const triggeredMarkers = applicableMarkerKeys(pathways, []);
 
   const save = (intent: "Draft" | "Completed") => {
     const form = new FormData();
@@ -110,7 +100,7 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
       <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>These are workflow prompts, not diagnoses. The coach records the approved tool or routes to the appropriate professional.</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{pathways.map((pathway) => <span key={pathway} style={{ background: pathway.startsWith("Urgent") ? "var(--red-bg)" : "var(--amber-bg)", color: pathway.startsWith("Urgent") ? "var(--red-text)" : "var(--amber-text)", borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 700 }}>{pathway}</span>)}</div>
       {pathways.includes("Urgent alcohol/withdrawal clinical review") && <div style={{ marginTop: 9, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "9px 11px", fontSize: 12, fontWeight: 700 }}>Do not advise abrupt alcohol cessation. Open a clinical referral for assessment.</div>}
-      {pathwayMarkers.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 10, marginTop: 10 }}>{pathwayMarkers.map((key) => {
+      {triggeredMarkers.size > 0 && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: 10, marginTop: 10 }}>{Array.from(triggeredMarkers).map((key) => {
         const marker = MARKER_BY_KEY[key];
         const result = latest.get(key);
         return <div key={key} style={{ border: "1px solid var(--border)", borderRadius: 9, padding: 10 }}><div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 6 }}><b style={{ fontSize: 12.5 }}>{marker.icon} {marker.label}</b><span style={{ color: "var(--muted)", fontSize: 11 }}>{result ? `last ${result.date} · ${result.score} · ${result.interpretation ?? result.band}` : "not recorded"}</span></div>{canManage && <MarkerAssessment clientId={clientId} marker={key} tool={marker.tool} range={marker.range} gender={gender} />}</div>;
@@ -121,7 +111,7 @@ export default function HealthCoachBaselinePanel({ clientId, baseline, screening
       <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Screening record ({screenings.length})</summary>
       <div style={{ display: "grid", gap: 7, marginTop: 9 }}>{MARKERS.map((marker) => {
         const result = latest.get(marker.key);
-        return <div key={marker.key} style={{ display: "flex", alignItems: "start", gap: 9, borderTop: "1px solid var(--border)", paddingTop: 7, fontSize: 12 }}><span>{marker.icon}</span><div style={{ flex: 1 }}><b>{marker.label}</b>{result ? <><span style={{ color: "var(--muted)" }}> · {result.instrument ?? marker.tool} · {result.date} · score {result.score ?? "—"} · {result.interpretation ?? result.band ?? "—"}</span>{result.recommended_action && <div style={{ marginTop: 2 }}>{result.recommended_action}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5 }}>Version: {result.instrument_version ?? "not recorded"} · reviewer: {result.reviewer_name ?? "not recorded"} · next review: {result.next_review_date ?? "not set"}</div></> : <span style={{ color: "var(--muted)" }}> · no result</span>}</div>{canManage && !pathwayMarkers.includes(marker.key) && <MarkerAssessment clientId={clientId} marker={marker.key} tool={marker.tool} range={marker.range} gender={gender} />}</div>;
+        return <div key={marker.key} style={{ display: "flex", alignItems: "start", gap: 9, borderTop: "1px solid var(--border)", paddingTop: 7, fontSize: 12 }}><span>{marker.icon}</span><div style={{ flex: 1 }}><b>{marker.label}</b><span style={{ color: applicableMarkers.has(marker.key) ? "var(--amber-text)" : "var(--muted)", fontSize: 10.5, fontWeight: 700 }}> · {applicableMarkers.has(marker.key) ? "applicable" : "not currently indicated"}</span>{result ? <><span style={{ color: "var(--muted)" }}> · {result.instrument ?? marker.tool} · {result.date} · score {result.score ?? "—"} · {result.interpretation ?? result.band ?? "—"}</span>{result.recommended_action && <div style={{ marginTop: 2 }}>{result.recommended_action}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5 }}>Version: {result.instrument_version ?? "not recorded"} · reviewer: {result.reviewer_name ?? "not recorded"} · next review: {result.next_review_date ?? "not set"}</div></> : <span style={{ color: "var(--muted)" }}> · no result</span>}</div>{canManage && !triggeredMarkers.has(marker.key) && <MarkerAssessment clientId={clientId} marker={marker.key} tool={marker.tool} range={marker.range} gender={gender} />}</div>;
       })}</div>
     </details>
   </section>;

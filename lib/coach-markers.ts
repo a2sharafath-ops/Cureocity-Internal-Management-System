@@ -7,6 +7,11 @@ export type MarkerKey = (typeof MARKER_KEYS)[number];
 
 export type Band = { min: number; max: number; label: string; tone: "good" | "warn" | "bad" };
 
+export type MarkerCadence =
+  | { kind: "phased"; initialDays: number; initialPhaseDays: number; maintenanceDays: number; referralDays?: number }
+  | { kind: "fixed"; days: number; referralDays?: number }
+  | { kind: "clinical-plan" };
+
 export type Marker = {
   key: MarkerKey;
   label: string;
@@ -16,7 +21,7 @@ export type Marker = {
   frequency: string;       // cadence from the SOP
   bands: Band[];           // ascending by score
   referral: string;        // threshold that triggers action / referral
-  reassessDays: number;    // regular cadence used to flag "due" (biweekly baseline)
+  cadence: MarkerCadence;  // determines the stored next-review date
 };
 
 export const MARKERS: Marker[] = [
@@ -29,7 +34,7 @@ export const MARKERS: Marker[] = [
       { min: 27, max: 40, label: "High", tone: "bad" },
     ],
     referral: "Score ≥27 (high) — re-assess next session; escalate if persistent.",
-    reassessDays: 14,
+    cadence: { kind: "phased", initialDays: 7, initialPhaseDays: 30, maintenanceDays: 14 },
   },
   {
     key: "sleep", label: "Sleep", icon: "😴", tool: "PSQI", range: "0–21",
@@ -40,7 +45,7 @@ export const MARKERS: Marker[] = [
       { min: 11, max: 21, label: "Refer", tone: "bad" },
     ],
     referral: "PSQI >10 — flag for medical referral; re-assess after 4 weeks.",
-    reassessDays: 14,
+    cadence: { kind: "phased", initialDays: 7, initialPhaseDays: 30, maintenanceDays: 14, referralDays: 28 },
   },
   {
     key: "activity", label: "Physical Activity", icon: "🏃", tool: "Official PAR-Q+ + IPAQ-SF", range: "MET-min/week",
@@ -51,7 +56,7 @@ export const MARKERS: Marker[] = [
       { min: 3000, max: 100000, label: "High", tone: "good" },
     ],
     referral: "Any PAR-Q 'Yes' — require medical clearance before coaching exercise.",
-    reassessDays: 14,
+    cadence: { kind: "phased", initialDays: 7, initialPhaseDays: 30, maintenanceDays: 14 },
   },
   {
     key: "nutrition", label: "Nutrition", icon: "🥗", tool: "3-day diary + GDR", range: "GDR 0–100",
@@ -62,7 +67,7 @@ export const MARKERS: Marker[] = [
       { min: 75, max: 100, label: "Good", tone: "good" },
     ],
     referral: "GDR <50 or red flags (disordered eating) — refer to Dietitian.",
-    reassessDays: 14,
+    cadence: { kind: "fixed", days: 42 },
   },
   {
     key: "substance", label: "Substance Use", icon: "🚭", tool: "AUDIT-C + DAST-10", range: "AUDIT-C 0–12",
@@ -72,7 +77,7 @@ export const MARKERS: Marker[] = [
       { min: 4, max: 12, label: "Positive", tone: "bad" },
     ],
     referral: "AUDIT-C ≥4 (≥3 for women) or DAST-10 ≥3 — immediate action / referral.",
-    reassessDays: 14,
+    cadence: { kind: "fixed", days: 14 },
   },
   {
     key: "anxiety", label: "Anxiety", icon: "💬", tool: "GAD-7", range: "0–21",
@@ -84,7 +89,7 @@ export const MARKERS: Marker[] = [
       { min: 15, max: 21, label: "Severe", tone: "bad" },
     ],
     referral: "GAD-7 ≥10 — psychology referral pathway; ≥15 requires faster clinical review.",
-    reassessDays: 14,
+    cadence: { kind: "phased", initialDays: 7, initialPhaseDays: 30, maintenanceDays: 14 },
   },
   {
     key: "mood", label: "Mood", icon: "🌤️", tool: "PHQ-9", range: "0–27",
@@ -97,7 +102,7 @@ export const MARKERS: Marker[] = [
       { min: 20, max: 27, label: "Severe", tone: "bad" },
     ],
     referral: "PHQ-9 ≥10 — psychology pathway; any item 9 response overrides the routine flow and opens safety escalation.",
-    reassessDays: 14,
+    cadence: { kind: "clinical-plan" },
   },
 ];
 
@@ -149,20 +154,84 @@ export const TONE_STYLE: Record<Band["tone"], { bg: string; text: string }> = {
 // inline; the queue needs the identical rule, and two copies of a cadence is
 // exactly how the ownership rules drifted apart elsewhere.
 
-export type MarkerState = { marker: MarkerKey; date: string; tone: string | null; band: string | null };
+export type MarkerState = {
+  marker: MarkerKey;
+  date: string;
+  tone: string | null;
+  band: string | null;
+  next_review_date?: string | null;
+};
 
-/** Days a marker is overdue, or null when it is not. Never assessed = overdue
- *  from the moment the client has a coach, which is what `neverDays` covers. */
+export const SCREENING_PATHWAY_MARKER: Readonly<Record<string, MarkerKey>> = {
+  "PSQI sleep screening": "sleep",
+  "Official PAR-Q+ / clinical clearance": "activity",
+  "PSS-10 stress screening": "stress",
+  "GAD-7 anxiety screening": "anxiety",
+  "PHQ-9 mood screening": "mood",
+  "AUDIT-C alcohol screening": "substance",
+  "Fagerström nicotine screening": "substance",
+  "DAST-10 drug screening": "substance",
+};
+
+/**
+ * A validated instrument is applicable only when the baseline triggered its
+ * pathway or a clinician has already started that marker. The latter preserves
+ * an explicit clinical decision even when the original trigger later resolves.
+ */
+export function applicableMarkerKeys(pathways: string[], assessedMarkers: Iterable<string>) {
+  const keys = new Set<MarkerKey>();
+  for (const pathway of pathways) {
+    const marker = SCREENING_PATHWAY_MARKER[pathway];
+    if (marker) keys.add(marker);
+  }
+  for (const marker of assessedMarkers) {
+    if ((MARKER_KEYS as readonly string[]).includes(marker)) keys.add(marker as MarkerKey);
+  }
+  return keys;
+}
+
+const addDays = (iso: string, days: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+const daysBetween = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+/**
+ * The next review written with a completed result. Mood is deliberately not
+ * auto-scheduled: its SOP says the clinical plan owns the interval.
+ */
+export function markerNextReviewDate(
+  marker: Marker,
+  assessedOn: string,
+  firstAssessedOn: string | null,
+  tone: string | null,
+  plannedReviewDate: string | null = null,
+): string | null {
+  if (marker.cadence.kind === "clinical-plan") return plannedReviewDate;
+  if (tone === "bad" && marker.cadence.referralDays) return addDays(assessedOn, marker.cadence.referralDays);
+  if (marker.cadence.kind === "fixed") return addDays(assessedOn, marker.cadence.days);
+  const first = firstAssessedOn ?? assessedOn;
+  const interval = daysBetween(first, assessedOn) < marker.cadence.initialPhaseDays
+    ? marker.cadence.initialDays
+    : marker.cadence.maintenanceDays;
+  return addDays(assessedOn, interval);
+}
+
+/** Days an applicable marker is overdue, or null when it is not. Callers own
+ * applicability; `neverDays` covers the grace period for a triggered first use. */
 export function markerOverdueDays(
   m: Marker,
   last: MarkerState | undefined,
   today: string,
   neverDays = 0,
+  firstAssessedOn: string | null = null,
 ): number | null {
   const day = (a: string, b: string) =>
     Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
   if (!last) return neverDays;               // no baseline on file at all
-  const over = day(last.date, today) - m.reassessDays;
+  const due = last.next_review_date
+    ?? markerNextReviewDate(m, last.date, firstAssessedOn, last.tone);
+  if (!due) return null; // cadence is owned by a clinical plan and no repeat is scheduled
+  const over = day(due, today);
   return over > 0 ? over : null;
 }
 

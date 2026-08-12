@@ -47,6 +47,13 @@ describe("Health Coach Phase-4 session", () => {
     expect(dueCoachScreenings(["PHQ-9 mood screening"], [], "2026-08-12")).toEqual(["mood"]);
   });
 
+  it("does not create screening work for an untriggered baseline", () => {
+    expect(dueCoachScreenings([], [], "2026-08-12")).toEqual([]);
+    expect(dueCoachScreenings([], [
+      { marker: "nutrition", next_review_date: "2026-08-01" },
+    ], "2026-08-12")).toEqual(["nutrition"]);
+  });
+
   it("builds a concise shared summary from the agreed record", () => {
     const summary = coachSessionSummary(complete, 3);
     expect(summary).toContain("HEALTH COACH SESSION 3");

@@ -113,12 +113,11 @@ export const CONCERN_ESCALATION_OWNER: OwnerRoles = ["Medical Director"];
 export const CONCERN_ESCALATION_DAYS = 3;
 
 /**
- * How long a new client has before a never-assessed coach marker is chased.
+ * How long a new client has before a triggered, never-assessed coach marker is chased.
  *
- * The screening markers are baselined in the first sessions, not on the day the
- * package is sold. Without a grace window every new Comprehensive client would
- * arrive on the coach's queue with a wall of red flags on day one, which trains
- * people to ignore the panel.
+ * The structured baseline is completed in the first sessions, not on the day
+ * the package is sold. Its applicable screening pathways get this short grace
+ * before they enter the queue.
  */
 export const MARKER_BASELINE_GRACE_DAYS = 7;
 

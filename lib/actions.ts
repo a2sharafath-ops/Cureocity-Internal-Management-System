@@ -3851,9 +3851,10 @@ export async function saveCoachAssessment(formData: FormData) {
   if (!p || !canManageHealthCoaching(p.role)) return;
   const client_id = String(formData.get("client_id") || "");
   const marker = String(formData.get("marker") || "");
-  const { MARKER_BY_KEY, bandFor } = await import("@/lib/coach-markers");
+  const { MARKER_BY_KEY, bandFor, markerNextReviewDate } = await import("@/lib/coach-markers");
   const { INSTRUMENTS, instrumentIsComplete } = await import("@/lib/coach-instruments");
-  const m = (MARKER_BY_KEY as Record<string, { label: string; reassessDays: number }>)[marker];
+  type Marker = import("@/lib/coach-markers").Marker;
+  const m = (MARKER_BY_KEY as Record<string, Marker>)[marker];
   if (!client_id || !m) return;
   const instrument = INSTRUMENTS[marker as keyof typeof INSTRUMENTS];
   let detail: Record<string, unknown> = {};
@@ -3868,7 +3869,13 @@ export async function saveCoachAssessment(formData: FormData) {
   // Gender matters for AUDIT-C (≥3 for women, ≥4 for men). Read it from the
   // record rather than trusting the form — the banding is a clinical decision.
   const supabase = await createClient();
-  const { data: cg } = await supabase.from("clients").select("gender").eq("id", client_id).maybeSingle();
+  const [{ data: cg }, { data: firstAssessment }] = await Promise.all([
+    supabase.from("clients").select("gender").eq("id", client_id).maybeSingle(),
+    supabase.from("coach_assessments").select("date")
+      .eq("client_id", client_id).eq("marker", marker)
+      .order("date", { ascending: true }).order("created_at", { ascending: true })
+      .limit(1).maybeSingle(),
+  ]);
   const gender = (cg as { gender: string | null } | null)?.gender ?? null;
   const b = bandFor(marker as never, score, gender);
   const note = String(formData.get("note") || "").trim() || null;
@@ -3949,7 +3956,18 @@ export async function saveCoachAssessment(formData: FormData) {
       }
     }
   }
-  const nextReview = addDaysISO(todayISO(), m.reassessDays);
+  const assessedOn = todayISO();
+  const requestedReview = String(formData.get("next_review_date") || "").trim();
+  const plannedReview = /^\d{4}-\d{2}-\d{2}$/.test(requestedReview) && requestedReview >= assessedOn
+    ? requestedReview
+    : null;
+  const nextReview = markerNextReviewDate(
+    m,
+    assessedOn,
+    (firstAssessment as { date?: string } | null)?.date ?? null,
+    tone,
+    plannedReview,
+  );
   const { error: assessmentError } = await supabase.from("coach_assessments").insert({
     client_id, marker, score, band, tone, note,
     detail: { ...detail, ...(computed?.detail ?? {}), safety_trigger: safetyTrigger },
