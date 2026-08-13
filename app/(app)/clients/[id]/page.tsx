@@ -773,7 +773,13 @@ export default async function ClientDetailPage(
         />
       )}
 
-      {tab === "overview" && (<>
+      {tab === "overview" && (<div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Start with the work that needs action today, before background records. */}
+      {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
+        <div style={{ order: 1 }}><PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} canChase={!ro && isBillingOverseer(me?.role ?? "")} viewerStaffId={me?.staffId ?? null} /></div>
+      )}
+
+      <div style={{ order: 5 }}>
       {canConsult(me?.role ?? "") && (
         <div style={{ marginBottom: 16 }}>
           <HealthCoachCarePanel
@@ -804,17 +810,6 @@ export default async function ClientDetailPage(
       )}
 
       {canManageCoaching && (
-        <HealthCoachBaselinePanel
-          clientId={params.id}
-          baseline={coachBaseline}
-          screenings={coachScreenings}
-          canManage={canManageCoaching}
-          gender={client.gender}
-          supervisorOverride={coachSupervisorOverride}
-        />
-      )}
-
-      {canManageCoaching && (
         <HealthCoachGoalsPanel
           clientId={params.id}
           goals={habits}
@@ -823,6 +818,17 @@ export default async function ClientDetailPage(
           outcomes={clientGoalOutcomes}
           canManage={canManageCoaching}
           today={habToday}
+          supervisorOverride={coachSupervisorOverride}
+        />
+      )}
+
+      {canManageCoaching && (
+        <HealthCoachBaselinePanel
+          clientId={params.id}
+          baseline={coachBaseline}
+          screenings={coachScreenings}
+          canManage={canManageCoaching}
+          gender={client.gender}
           supervisorOverride={coachSupervisorOverride}
         />
       )}
@@ -836,16 +842,29 @@ export default async function ClientDetailPage(
           barriers={coachingBarriers}
         />
       )}
+      </div>
 
-      {/* ---- What's pending (the single journey tracker + the actionable items) ---- */}
-      {/* Package status — the one place the client's journey & to-dos live */}
-      {pkgStatus && (pkgStatus.openNow.length > 0 || pkgStatus.upcoming.length > 0) && (
-        <PackageStatusPanel openNow={pkgStatus.openNow} upcoming={pkgStatus.upcoming} clientId={params.id} canChase={!ro && isBillingOverseer(me?.role ?? "")} viewerStaffId={me?.staffId ?? null} />
-      )}
+      {/* ---- The people coordinating the work ---- */}
+      <div style={{ order: 4, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontWeight: 700 }}>Care Team</div>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>· assigned Health Professionals</span>
+        </div>
+        {careTeam.length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {careTeam.map((m) => (
+              <div key={m.disc} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", minWidth: 150 }}>
+                <div style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" }}>{m.disc}</div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{m.name}</div>
+              </div>
+            ))}
+          </div>
+        ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No Health Professionals assigned yet.</div>}
+      </div>
 
-      {/* ---- What they hold, and what they owe ---- */}
+      {/* ---- Package and finance records ---- */}
       {/* Packages */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+      <div style={{ order: 3, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <div style={{ fontWeight: 700 }}>Packages</div>
           <span style={{ background: activeMembership ? "var(--green-bg)" : "var(--amber-bg)", color: activeMembership ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
@@ -907,7 +926,7 @@ export default async function ClientDetailPage(
           packages card: what a client bought and what they have been invoiced
           are answered by different people on different days. */}
       {showBilling && (invoices.length > 0 || canInvoice) && (
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+        <div style={{ order: 3, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <div style={{ fontWeight: 700 }}>Billing</div>
             {invoices.length > 0 && (
@@ -936,39 +955,12 @@ export default async function ClientDetailPage(
         </div>
       )}
 
-      {/* ---- Who looks after them, and who they are ---- */}
-      {/* Care Team */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <div style={{ fontWeight: 700 }}>Care Team</div>
-          <span style={{ color: "var(--muted)", fontSize: 12 }}>· assigned Health Professionals</span>
-        </div>
-        {careTeam.length ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {careTeam.map((m) => (
-              <div key={m.disc} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", minWidth: 150 }}>
-                <div style={{ color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" }}>{m.disc}</div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{m.name}</div>
-              </div>
-            ))}
-          </div>
-        ) : <div style={{ color: "var(--muted)", fontSize: 13 }}>No Health Professionals assigned yet.</div>}
-
-        {/* Who owns this client commercially and pastorally. These sat in
-            Personal Info, which is contact detail — being someone's coach is
-            an assignment, and belongs with the rest of the team. */}
-        {(coachName || ownerName) && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px", borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 }}>
-              </div>
-        )}
-      </div>
-
       {/* Client details — contact and identity. Height/weight used to sit here
           as well, but the profile figures are whatever was typed at sign-up;
           the measured ones live in Health profile and would contradict these
           the moment anyone stepped on a scale. Coach and owner moved to Care
           Team, where assignments belong. */}
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
+      <div style={{ order: 2, background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "18px 20px", marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 12 }}>Client details</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           <Stat label="Phone" value={client.phone} />
@@ -985,7 +977,7 @@ export default async function ClientDetailPage(
         </div>
       </div>
 
-      </>)}
+      </div>)}
 
       {tab === "timeline" && (<>
       {/* One chronological record of the whole journey — purchases, consults,
