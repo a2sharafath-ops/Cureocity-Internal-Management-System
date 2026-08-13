@@ -1029,7 +1029,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_quality_standards", "client_goal_outcomes", "coach_programme_lifecycles", "coach_programme_lifecycle_events", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "habits", "coach_adherence_events", "coach_baselines", "coach_session_workflows", "coach_assessments", "safety_events", "clinical_referrals", "coach_quality_reviews", "coach_quality_standards", "client_goal_outcomes", "coach_programme_lifecycles", "coach_programme_lifecycle_events", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director
