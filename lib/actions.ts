@@ -62,36 +62,10 @@ import {
   clinicalReferralCreationDecision, clinicalReferralStatusAllowedForConsent,
 } from "@/lib/clinical-referral";
 import { coachClientWriteDecision } from "@/lib/coach-access";
+import { buildStrengthSessions } from "@/lib/strength-sessions";
 
 
 // ---- helpers ---------------------------------------------------------------
-
-function fmtDate(d: Date) {
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-
-// 12-per-4-week strength sessions on alternate days from a start date.
-function buildSessions(
-  clientId: string,
-  trainerId: string,
-  hour: number,
-  startISO: string,
-  count: number
-) {
-  const start = new Date(startISO + "T00:00:00");
-  const rows: {
-    client_id: string; trainer_id: string; seq: number; date: string; hour: number; status: string;
-  }[] = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + (i + 1) * 2);
-    rows.push({
-      client_id: clientId, trainer_id: trainerId, seq: i + 1,
-      date: fmtDate(d), hour, status: "scheduled",
-    });
-  }
-  return rows;
-}
 
 // ---- audit -----------------------------------------------------------------
 
@@ -1220,7 +1194,7 @@ export async function renewPackage(formData: FormData): Promise<{ ok: boolean; e
  * Book the strength-session block for a PT / Comprehensive client. The package
  * prompts "Book 12 strength sessions" but never seeds them (front desk picks the
  * trainer & cadence) — this is that booking. Writes real dated rows to the
- * `sessions` table (every 2 days), closes the prompt, and flips the onboarding
+ * `sessions` table in the selected three-day weekly cohort, closes the prompt, and flips the onboarding
  * "sessions scheduled" step + the SLA session count.
  */
 export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok: boolean; error?: string }> {
@@ -1232,12 +1206,13 @@ export async function scheduleStrengthSessions(formData: FormData): Promise<{ ok
   const hour = Number(formData.get("hour")) || 9;
   const count = Math.min(24, Math.max(1, Number(formData.get("count")) || 12));
   if (!client_id || !trainer_id) return { ok: false, error: "Pick a trainer" };
+  if (new Date(`${start}T00:00:00Z`).getUTCDay() === 0) return { ok: false, error: "Strength sessions are not available on Sunday." };
 
   const supabase = await createClient();
   const { data: existing } = await supabase.from("sessions").select("id").eq("client_id", client_id).eq("status", "scheduled").limit(1);
   if (existing && existing.length) return { ok: false, error: "This client already has scheduled sessions. Reschedule the existing ones instead." };
 
-  await supabase.from("sessions").insert(buildSessions(client_id, trainer_id, hour, start, count));
+  await supabase.from("sessions").insert(buildStrengthSessions(client_id, trainer_id, hour, start, count));
 
   // Close the "Book … strength sessions" prompt so it drops off the board.
   const { data: tks } = await supabase.from("tasks").select("id").eq("client_id", client_id).neq("status", "done").ilike("title", "Book %session%");

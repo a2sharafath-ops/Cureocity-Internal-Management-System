@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  setTrainerSlot, assignTrainerSlot, unassignTrainerSlot,
+  setTrainerSlot, scheduleStrengthSessions, unassignTrainerSlot,
   createAssessment, markAssessmentBooked, completeAssessment, toggleAssessmentShared, addRecoverySession, completeRecoverySession,
 } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
@@ -45,7 +45,7 @@ export default function TrainingScheduleView({
   // trainer + slot.
   const preClient = useSearchParams().get("client") ?? "";
   const [tab, setTab] = useState<"slots" | "studio" | "recovery">("slots");
-  const [assigning, setAssigning] = useState<{ trainer_id: string; hour: number } | null>(null);
+  const [assigning, setAssigning] = useState<{ trainer_id: string; hour: number; date: string } | null>(null);
   const [manualAssign, setManualAssign] = useState(Boolean(preClient));
   const [newAssess, setNewAssess] = useState(false);
   const [newRecovery, setNewRecovery] = useState(false);
@@ -143,26 +143,30 @@ export default function TrainingScheduleView({
 
           {/* assign bar */}
           {assigning && (
-            <form action={assignTrainerSlot} onSubmit={() => setTimeout(() => setAssigning(null), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <form action={scheduleStrengthSessions} onSubmit={() => setTimeout(() => setAssigning(null), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input type="hidden" name="trainer_id" value={assigning.trainer_id} />
               <input type="hidden" name="hour" value={assigning.hour} />
+              <input type="hidden" name="start_date" value={assigning.date} />
+              <input type="hidden" name="count" value="12" />
               <b style={{ fontSize: 13 }}>{trainers.find((t) => t.id === assigning.trainer_id)?.name} · {hourLabel(assigning.hour)}</b>
               <select name="client_id" required defaultValue={preClient} style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-              <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
-              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
+              <span style={{ fontSize: 11.5, color: "var(--muted)" }}>12 one-hour sessions from {fmtDate(assigning.date)}</span>
+              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Schedule</button>
               <button type="button" onClick={() => setAssigning(null)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
             </form>
           )}
 
           {/* manual assign (from + Assign client) — pick trainer + time + client */}
           {manualAssign && (
-            <form action={assignTrainerSlot} onSubmit={() => setTimeout(() => setManualAssign(false), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <form action={scheduleStrengthSessions} onSubmit={() => setTimeout(() => setManualAssign(false), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <b style={{ fontSize: 13 }}>Assign client</b>
               <select name="trainer_id" required defaultValue="" style={input}><option value="" disabled>Trainer…</option>{trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
               <select name="hour" defaultValue="9" style={input}>{hours.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
+              <label style={{ fontSize: 12, color: "var(--muted)" }}>Start <input name="start_date" type="date" defaultValue={today} required style={input} /></label>
+              <input type="hidden" name="count" value="12" />
               <select name="client_id" required defaultValue={preClient} style={input}><option value="" disabled>Client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-              <select name="tag" defaultValue="PT" style={input}>{TAGS.map((t) => <option key={t}>{t}</option>)}</select>
-              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Assign</button>
+              <span style={{ fontSize: 11.5, color: "var(--muted)" }}>12 one-hour sessions</span>
+              <button type="submit" style={{ background: "var(--ink)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Schedule</button>
               <button type="button" onClick={() => setManualAssign(false)} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer" }}>Cancel</button>
             </form>
           )}
@@ -214,7 +218,7 @@ export default function TrainingScheduleView({
                             </div>
                           ) : openCell ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-                              <button type="button" disabled={!canWrite} onClick={() => setAssigning({ trainer_id: trainer.id, hour: h })} style={{ border: "1px dashed var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: canWrite ? "pointer" : "default" }}>+ Assign</button>
+                              <button type="button" disabled={!canWrite} onClick={() => setAssigning({ trainer_id: trainer.id, hour: h, date: d.date })} style={{ border: "1px dashed var(--brand-fill)", background: "#fff", color: "var(--brand-text)", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: canWrite ? "pointer" : "default" }}>+ Assign</button>
                               {canWrite && <form action={setTrainerSlot}><input type="hidden" name="trainer_id" value={trainer.id} /><input type="hidden" name="hour" value={h} /><input type="hidden" name="status" value="unavailable" /><button style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 10, cursor: "pointer" }}>set unavailable</button></form>}
                             </div>
                           ) : (
