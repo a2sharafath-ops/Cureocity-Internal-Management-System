@@ -230,7 +230,7 @@ export function canConsult(role: string): boolean {
 // clinicians may read those records for coordination, but should not silently
 // change the Health Coach's plan. Mirrors the write policies in migration 0165.
 export const HEALTH_COACH_SUPERVISOR_ROLES = [
-  "Super Admin", "Administrator", "Manager", "Medical Director",
+  "Super Admin", "Medical Director",
 ] as const;
 
 export function isHealthCoachSupervisor(role: string): boolean {

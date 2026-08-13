@@ -6,6 +6,7 @@ import {
   canManageSessions, canMessage, hasNoReviewer, isClinician, isMedicalDirector,
   ROLE_LIST, canDeliverDoc, isStaffRole, isAdminish, canManageHealthCoaching,
   canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent,
+  isHealthCoachSupervisor,
 } from "@/lib/roles";
 import { roleFromStaffRole, visibleWorkspaces, canEditWorkspace } from "@/lib/workspaces";
 import { canWriteMedical, canWriteNutrition, canWriteFitness, ownsConsultKind } from "@/lib/discipline";
@@ -110,12 +111,19 @@ describe("permission helpers", () => {
   });
 
   it("coaching tools are owned by the Health Coach and clinical oversight", () => {
-    for (const r of ["Super Admin", "Administrator", "Manager", "Medical Director", "Health Coach"]) {
+    for (const r of ["Super Admin", "Medical Director", "Health Coach"]) {
       expect(canManageHealthCoaching(r)).toBe(true);
     }
-    for (const r of ["Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Front Desk", "Finance", "HR"]) {
+    for (const r of ["Administrator", "Manager", "Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Front Desk", "Finance", "HR"]) {
       expect(canManageHealthCoaching(r)).toBe(false);
     }
+  });
+
+  it("limits Health Coach supervision to the Medical Director and Super Admin", () => {
+    expect(isHealthCoachSupervisor("Medical Director")).toBe(true);
+    expect(isHealthCoachSupervisor("Super Admin")).toBe(true);
+    expect(isHealthCoachSupervisor("Administrator")).toBe(false);
+    expect(isHealthCoachSupervisor("Manager")).toBe(false);
   });
 
   it("any clinician may open a safety event, but only Doctor or Medical Director may close it", () => {

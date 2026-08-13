@@ -34,6 +34,15 @@ describe("Health Coach assigned-client write policy", () => {
     });
   });
 
+  it("does not grant Health Coach supervision to administrators or managers", () => {
+    for (const role of ["Administrator", "Manager"]) {
+      expect(coachClientWriteDecision({
+        role, staffId: null, assignedCoachStaffId: "coach-1",
+        overrideReason: "Assigned coach is unexpectedly unavailable.",
+      }).allowed).toBe(false);
+    }
+  });
+
   it("does not turn another clinician into a Health Coach writer", () => {
     expect(coachClientWriteDecision({
       role: "Doctor", staffId: "doctor-1", assignedCoachStaffId: "coach-1",
