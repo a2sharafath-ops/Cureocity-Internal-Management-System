@@ -152,11 +152,15 @@ export default async function ClientDetailPage(
   const ageOf = (dob: unknown): number | null =>
     typeof dob === "string" ? ageFromDob(dob) : null;
 
-  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }] = await Promise.all([
+  const [{ data: sessions }, { data: trainerData }, { data: consultData }, { data: protoData }, { data: dietPlanData }, { data: dietAssessmentData }] = await Promise.all([
     supabase.from("sessions").select("*, staff(name)").eq("client_id", params.id).order("seq", { ascending: true }),
     supabase.from("staff").select("id, name").eq("is_trainer", true).order("name"),
     supabase.from("consultations").select("id, kind, status, summary, ai_summary, approved, shared, created_at, by_name, flags, duration_min").eq("client_id", params.id).order("created_at", { ascending: false }),
     supabase.from("care_protocols").select("id").eq("client_id", params.id).limit(1),
+    // Only issued documents belong in the longitudinal client record. Drafts
+    // stay in the dietitian's workspace until they pass clinical review.
+    supabase.from("diet_plans").select("id, version, issued_on, published_at, shared_at").eq("client_id", params.id).eq("status", "published").order("version", { ascending: false }),
+    supabase.from("diet_assessments").select("id, version, issued_on, published_at, shared_at").eq("client_id", params.id).eq("status", "published").order("version", { ascending: false }),
   ]);
   // Has this client's care journey already been kicked off? If so, the primary
   // "Start" action is done — we only offer a quiet re-run for repairs.
@@ -166,6 +170,8 @@ export default async function ClientDetailPage(
   const hasProtocol = ((protoData ?? []) as unknown[]).length > 0;
   const trainers = (trainerData ?? []) as { id: string; name: string }[];
   const consults = (consultData ?? []) as { id: string; kind: string; status: string; summary: string | null; ai_summary: string | null; approved: boolean; shared: boolean; created_at: string | null; by_name: string | null; flags: { text: string; severity: string }[] | null; duration_min: number | null }[];
+  const dietPlans = (dietPlanData ?? []) as { id: string; version: number; issued_on: string | null; published_at: string | null; shared_at: string | null }[];
+  const dietAssessments = (dietAssessmentData ?? []) as { id: string; version: number; issued_on: string | null; published_at: string | null; shared_at: string | null }[];
 
   const me = await getProfile();
   const showPortal = !ro && canWrite(me?.role ?? "");
@@ -1323,6 +1329,36 @@ export default async function ClientDetailPage(
                 <span className="attach-open">Open →</span>
               </a>
             ))}
+          </div>
+        )}
+
+        {(dietPlans.length > 0 || dietAssessments.length > 0) && (
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 5 }}>Nutrition documents</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {dietPlans.map((plan) => (
+                <a key={plan.id} href={`/diet-plan/${plan.id}/print`} target="_blank" rel="noopener" className="attach">
+                  <span className="attach-icon">PDF</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>Diet plan · v{plan.version}</span>
+                    <span style={{ display: "block", color: "var(--muted)", fontSize: 11.5 }}>{plan.issued_on ? fmtDate(plan.issued_on) : plan.published_at ? fmtDate(plan.published_at) : "Issued"} · <span style={{ color: plan.shared_at ? "var(--green-text)" : "var(--amber-text)" }}>{plan.shared_at ? "In client portal" : "Not shared with client"}</span></span>
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <span className="attach-open">Open →</span>
+                </a>
+              ))}
+              {dietAssessments.map((assessment) => (
+                <a key={assessment.id} href={`/diet-assessment/${assessment.id}/print`} target="_blank" rel="noopener" className="attach">
+                  <span className="attach-icon">PDF</span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: "block", fontWeight: 600, fontSize: 12.5 }}>Dietary assessment summary · v{assessment.version}</span>
+                    <span style={{ display: "block", color: "var(--muted)", fontSize: 11.5 }}>{assessment.issued_on ? fmtDate(assessment.issued_on) : assessment.published_at ? fmtDate(assessment.published_at) : "Issued"} · <span style={{ color: assessment.shared_at ? "var(--green-text)" : "var(--amber-text)" }}>{assessment.shared_at ? "In client portal" : "Not shared with client"}</span></span>
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <span className="attach-open">Open →</span>
+                </a>
+              ))}
+            </div>
           </div>
         )}
       </div>
