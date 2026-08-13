@@ -1,5 +1,6 @@
 import type { AdherenceOutcome } from "@/lib/coach-goals";
 import { clientGoalOutcomeSummary } from "@/lib/client-goal-outcome";
+import { coachProgrammeLifecycleSummary, type CoachProgrammeLifecycleEvent } from "@/lib/coach-programme-lifecycle";
 
 export const COACH_AUDIT_DOMAINS = [
   { key: "assessment_completeness", label: "Assessment completeness", question: "Was the correct baseline module completed?" },
@@ -28,6 +29,7 @@ export type CoachQualityInput = {
   adherenceCurrent: { outcome: AdherenceOutcome }[];
   adherencePrevious: { outcome: AdherenceOutcome }[];
   clientGoalOutcomes: { goal_id: string; achievement_rating: number; support_requested: boolean; reported_at: string }[];
+  programmeLifecycleEvents: Pick<CoachProgrammeLifecycleEvent, "from_status" | "to_status">[];
   barriers: { status: string }[];
   referrals: { status: string }[];
   safetyEvents: { opened_at: string; acknowledged_at: string | null }[];
@@ -44,6 +46,7 @@ export type CoachQualityMetrics = {
   responseRate: RateMetric;
   goalCompletion: RateMetric;
   clientReportedProgress: { averageRating: number | null; total: number; supportRequested: number };
+  programmeLifecycle: { transitions: number; disengaged: number; reactivated: number; paused: number; completed: number; transferred: number };
   adherence: RateMetric & { previousPercent: number | null; change: number | null };
   ifThenPlanning: RateMetric;
   barriersAddressed: RateMetric;
@@ -101,6 +104,7 @@ export function calculateCoachQuality(input: CoachQualityInput): CoachQualityMet
     responseRate: rate(knownContacts.filter((row) => row.status === "done").length, knownContacts.length),
     goalCompletion: rate(currentGoals.filter((goal) => goal.status === "Completed").length, currentGoals.length),
     clientReportedProgress: clientGoalOutcomeSummary([...latestClientGoalOutcomes.values()]),
+    programmeLifecycle: coachProgrammeLifecycleSummary(input.programmeLifecycleEvents),
     adherence: {
       ...currentAdherence,
       previousPercent: previousAdherence.percent,

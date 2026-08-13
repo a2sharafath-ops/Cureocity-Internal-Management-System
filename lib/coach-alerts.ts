@@ -58,6 +58,13 @@ export type CoachAlertGoal = {
   updated_at: string;
 };
 
+export type CoachAlertLifecycle = {
+  client_id: string;
+  status: string;
+  next_contact_date: string | null;
+  next_contact_plan: string | null;
+};
+
 export type CoachAlertInput = {
   today: string;
   clients: { id: string; name: string }[];
@@ -66,6 +73,7 @@ export type CoachAlertInput = {
   referrals: CoachAlertReferral[];
   adherenceEvents: CoachAlertAdherence[];
   goals: CoachAlertGoal[];
+  lifecycles: CoachAlertLifecycle[];
 };
 
 const LEVEL_ORDER: Record<CoachAlertLevel, number> = { red: 0, amber: 1, blue: 2, green: 3 };
@@ -101,6 +109,21 @@ export function buildCoachAlerts(input: CoachAlertInput): CoachRuleAlert[] {
   const names = new Map(input.clients.map((client) => [client.id, client.name]));
   const alerts: CoachRuleAlert[] = [];
   const openSafetyClients = new Set<string>();
+
+  for (const lifecycle of input.lifecycles) {
+    if (!names.has(lifecycle.client_id) || !lifecycle.next_contact_date || lifecycle.next_contact_date > input.today) continue;
+    alerts.push({
+      key: `programme-contact:${lifecycle.client_id}`,
+      clientId: lifecycle.client_id,
+      clientName: names.get(lifecycle.client_id)!,
+      level: lifecycle.status === "Active" ? "blue" : "amber",
+      title: `${lifecycle.status} programme follow-up is due`,
+      detail: `${lifecycle.next_contact_plan ?? "Review the recorded lifecycle plan."} · due ${lifecycle.next_contact_date}`,
+      actionLabel: "Open lifecycle",
+      href: `/clients/${lifecycle.client_id}?tab=overview#programme-lifecycle`,
+      occurredOn: lifecycle.next_contact_date,
+    });
+  }
 
   for (const event of input.safetyEvents) {
     if (event.status === "Resolved" || !names.has(event.client_id)) continue;

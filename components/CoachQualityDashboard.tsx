@@ -86,6 +86,7 @@ function PracticeInsights({ metrics, periodDays }: { metrics: CoachQualityMetric
         <Metric value={rateText(metrics.responseRate)} label="Client responses recorded" detail={`${metrics.responseRate.met} of ${metrics.responseRate.total} contacts with a known outcome`} />
         <Metric value={rateText(metrics.goalCompletion)} label="Goals completed" detail={`${metrics.goalCompletion.met} of ${metrics.goalCompletion.total} current goals`} />
         <Metric value={metrics.clientReportedProgress.averageRating == null ? "—" : `${metrics.clientReportedProgress.averageRating}/10`} label="Client-reported progress" detail={`${metrics.clientReportedProgress.total} goal${metrics.clientReportedProgress.total === 1 ? "" : "s"} with a client report${metrics.clientReportedProgress.supportRequested ? ` · ${metrics.clientReportedProgress.supportRequested} requested support` : ""}`} />
+        <Metric value={String(metrics.programmeLifecycle.disengaged)} label="Programme disengagements" detail={`${metrics.programmeLifecycle.reactivated} reactivated · ${metrics.programmeLifecycle.transitions} lifecycle transition${metrics.programmeLifecycle.transitions === 1 ? "" : "s"}`} />
         <Metric value={rateText(metrics.adherence)} label="Client actions completed" detail={`${metrics.adherence.met} of ${metrics.adherence.total} reviewed actions${adherenceChange == null ? "" : ` · ${adherenceChange >= 0 ? "+" : ""}${adherenceChange} points from the prior period`}`} />
         <Metric value={rateText(metrics.barriersAddressed)} label="Barriers followed up" detail={`${metrics.barriersAddressed.met} of ${metrics.barriersAddressed.total} recorded barriers`} />
         <Metric value={rateText(metrics.referralCompletion)} label="Referrals followed through" detail={`${metrics.referralCompletion.met} of ${metrics.referralCompletion.total} active referrals completed`} />
@@ -147,6 +148,7 @@ export default function CoachQualityDashboard({
         <Metric value={rateText(metrics.responseRate)} label="Recorded response rate" detail={`${metrics.responseRate.met} of ${metrics.responseRate.total} follow-ups with a known outcome`} />
         <Metric value={rateText(metrics.goalCompletion)} label="Goal completion" detail={`${metrics.goalCompletion.met} of ${metrics.goalCompletion.total} current goals`} />
         <Metric value={metrics.clientReportedProgress.averageRating == null ? "—" : `${metrics.clientReportedProgress.averageRating}/10`} label="Client-reported progress" detail={`${metrics.clientReportedProgress.total} goal${metrics.clientReportedProgress.total === 1 ? "" : "s"} with a latest client report${metrics.clientReportedProgress.supportRequested ? ` · ${metrics.clientReportedProgress.supportRequested} requested support` : ""}`} />
+        <Metric value={String(metrics.programmeLifecycle.disengaged)} label="Programme disengagements" detail={`${metrics.programmeLifecycle.reactivated} reactivated · ${metrics.programmeLifecycle.paused} paused · ${metrics.programmeLifecycle.completed} completed · ${metrics.programmeLifecycle.transferred} clinically transferred`} />
         <Metric value={rateText(metrics.adherence)} label="Adherence" detail={`${metrics.adherence.met} of ${metrics.adherence.total} reviewed actions${adherenceChange == null ? "" : ` · ${adherenceChange >= 0 ? "+" : ""}${adherenceChange} points vs prior period`}`} tone={adherenceChange != null && adherenceChange < 0 ? "var(--amber-text)" : undefined} />
         <Metric value={rateText(metrics.barriersAddressed)} label="Barriers addressed" detail={`${metrics.barriersAddressed.met} of ${metrics.barriersAddressed.total} coded barriers`} />
         <Metric value={rateText(metrics.referralCompletion)} label="Referral completion" detail={`${metrics.referralCompletion.met} of ${metrics.referralCompletion.total} non-cancelled clinical referrals`} />
@@ -162,7 +164,6 @@ export default function CoachQualityDashboard({
     </section>
 
     <section style={{ ...box, padding: 14 }}><div style={{ fontWeight: 750, fontSize: 13.5 }}>Known data gaps</div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 9 }}>{[
-      ["Dropout/reactivation rate", "Programme exit and reactivation are not yet captured as explicit coaching outcomes."],
       ["Message volume", "Intentionally excluded: the SOP says volume is not a quality measure."],
     ].map(([title, text]) => <div key={title} style={{ background: "var(--neutral-bg)", borderRadius: 8, padding: 10 }}><b style={{ fontSize: 12 }}>{title}</b><div style={{ color: "var(--muted)", fontSize: 11, marginTop: 3 }}>{text}</div></div>)}</div></section>
 

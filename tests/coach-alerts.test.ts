@@ -9,6 +9,7 @@ const base = (patch: Partial<CoachAlertInput> = {}): CoachAlertInput => ({
   referrals: [],
   adherenceEvents: [],
   goals: [],
+  lifecycles: [],
   ...patch,
 });
 
@@ -63,5 +64,13 @@ describe("Health Coach phase-5 rules", () => {
       referrals: [{ id: "r1", client_id: "c1", destination_role: "Dietitian", urgency: "Routine", status: "Completed", reason: "Meal-plan review", created_at: "2026-08-01T08:00:00Z", updated_at: "2026-08-11T08:00:00Z" }],
     }));
     expect(alerts.map((alert) => alert.level)).toEqual(["green", "green"]);
+  });
+
+  it("surfaces a due lifecycle contact to the assigned Coach", () => {
+    const alerts = buildCoachAlerts(base({ lifecycles: [{
+      client_id: "c1", status: "Disengaged", next_contact_date: "2026-08-12",
+      next_contact_plan: "Call once and offer a no-pressure review slot.",
+    }] }));
+    expect(alerts[0]).toMatchObject({ key: "programme-contact:c1", level: "amber", actionLabel: "Open lifecycle" });
   });
 });

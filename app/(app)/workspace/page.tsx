@@ -52,11 +52,12 @@ import { adherenceSummary, type AdherenceOutcome } from "@/lib/coach-goals";
 import CoachPriorityBoard from "@/components/CoachPriorityBoard";
 import CoachQualityDashboard, { type CoachQualityReview, type CoachQualitySession } from "@/components/CoachQualityDashboard";
 import type { CoachQualityStandard } from "@/lib/coach-quality-governance";
+import type { CoachProgrammeStatus } from "@/lib/coach-programme-lifecycle";
 import CoachCopilot, { type CoachCopilotHistory } from "@/components/CoachCopilot";
 import {
   buildCoachAlerts, type CoachRuleAlert, type CoachAlertAssessment,
   type CoachAlertSafety, type CoachAlertReferral, type CoachAlertAdherence,
-  type CoachAlertGoal,
+  type CoachAlertGoal, type CoachAlertLifecycle,
 } from "@/lib/coach-alerts";
 import { calculateCoachQuality, type CoachQualityMetrics } from "@/lib/coach-quality";
 import {
@@ -271,7 +272,7 @@ export default async function WorkspacePage(
     const [
       { data: goalRows }, { data: adherenceRows }, { data: baselineRows },
       { data: sessionRows }, { data: assessmentRows }, { data: safetyRows },
-      { data: referralRows }, { data: completedGoalRows },
+      { data: referralRows }, { data: completedGoalRows }, { data: lifecycleRows },
     ] = await Promise.all([
       supabase.from("habits").select("id, client_id, name, review_date, confidence, clients(name)")
         .in("client_id", scopedIds).eq("status", "Active").not("review_date", "is", null).lte("review_date", today).order("review_date"),
@@ -288,6 +289,8 @@ export default async function WorkspacePage(
         .in("client_id", scopedIds).order("updated_at", { ascending: false }).limit(500),
       supabase.from("habits").select("client_id, name, status, updated_at")
         .in("client_id", scopedIds).eq("status", "Completed").gte("updated_at", recentStart),
+      supabase.from("coach_programme_lifecycles").select("client_id, status, next_contact_date, next_contact_plan")
+        .in("client_id", scopedIds).not("next_contact_date", "is", null),
     ]);
     coachGoalReviews = (goalRows ?? []) as unknown as CoachGoalReview[];
     const adherenceSignals = (adherenceRows ?? []) as unknown as CoachAlertAdherence[];
@@ -309,6 +312,7 @@ export default async function WorkspacePage(
       referrals: (referralRows ?? []) as unknown as CoachAlertReferral[],
       adherenceEvents: adherenceSignals,
       goals: (completedGoalRows ?? []) as unknown as CoachAlertGoal[],
+      lifecycles: (lifecycleRows ?? []) as unknown as CoachAlertLifecycle[],
     });
     // Marker alerts now have a richer, action-specific home in Coach priorities.
     // Keep them in the clinic-wide operations queue, but avoid showing the same
@@ -387,6 +391,7 @@ export default async function WorkspacePage(
     clientCount: scoped.length,
     appointments: [], followups: [], goals: [], adherenceCurrent: [], adherencePrevious: [],
     clientGoalOutcomes: [],
+    programmeLifecycleEvents: [],
     barriers: [], referrals: [], safetyEvents: [], mdtTasks: [], baselines: [], assessments: [],
     sessions: [], huddles: [], huddleTaskIds: [],
   };
@@ -420,7 +425,7 @@ export default async function WorkspacePage(
       { data: qualityAppointments }, { data: qualityFollowups }, { data: qualityGoals },
       { data: qualityAdherence }, { data: qualityBarriers }, { data: qualityReferrals },
       { data: qualitySafety }, { data: qualityTasks }, { data: qualityBaselines },
-      { data: qualityAssessments }, { data: qualityWorkflows }, { data: qualityGoalOutcomes }, { data: qualityHuddles },
+      { data: qualityAssessments }, { data: qualityWorkflows }, { data: qualityGoalOutcomes }, { data: qualityLifecycleEvents }, { data: qualityHuddles },
       { data: reviewRows },
     ] = await Promise.all([
       supabase.from("appointments").select("status, staff:provider_id(role)").in("client_id", scopedIds).gte("date", currentStart).lte("date", today),
@@ -435,6 +440,7 @@ export default async function WorkspacePage(
       supabase.from("coach_assessments").select("instrument_version, administration_mode").in("client_id", scopedIds).gte("date", currentStart),
       supabase.from("coach_session_workflows").select("id, client_id, session_number, status, completion_percent, completed_by_name, completed_at, clients(name)").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`).order("completed_at", { ascending: false }),
       supabase.from("client_goal_outcomes").select("goal_id, achievement_rating, support_requested, reported_at").in("client_id", scopedIds).gte("reported_at", `${currentStart}T00:00:00Z`),
+      supabase.from("coach_programme_lifecycle_events").select("from_status, to_status").in("client_id", scopedIds).gte("effective_date", currentStart).lte("effective_date", today),
       supabase.from("mdt_huddles").select("id").in("client_id", scopedIds).gte("created_at", `${currentStart}T00:00:00Z`),
       supabase.from("coach_quality_reviews").select("id, workflow_id, client_id, coach_name, session_number, ratings, overall_result, reviewer_note, reviewer_name, reviewed_at, clients(name)").in("client_id", scopedIds).order("reviewed_at", { ascending: false }).limit(100),
     ]);
@@ -449,6 +455,7 @@ export default async function WorkspacePage(
       adherenceCurrent: adherenceRows.filter((row) => row.event_date >= currentStart).map((row) => ({ outcome: row.outcome })),
       adherencePrevious: adherenceRows.filter((row) => row.event_date >= previousStart && row.event_date <= previousEnd).map((row) => ({ outcome: row.outcome })),
       clientGoalOutcomes: (qualityGoalOutcomes ?? []) as { goal_id: string; achievement_rating: number; support_requested: boolean; reported_at: string }[],
+      programmeLifecycleEvents: (qualityLifecycleEvents ?? []) as { from_status: CoachProgrammeStatus; to_status: CoachProgrammeStatus }[],
       barriers: (qualityBarriers ?? []) as { status: string }[],
       referrals: (qualityReferrals ?? []) as { status: string }[],
       safetyEvents: (qualitySafety ?? []) as { opened_at: string; acknowledged_at: string | null }[],
@@ -1022,7 +1029,7 @@ export default async function WorkspacePage(
 
   return (
     <div style={{ maxWidth: 1160 }}>
-      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_quality_standards", "client_goal_outcomes", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
+      <RealtimeRefresh tables={["consultations", "appointments", "sessions", "clients", "concerns", "mdt_notes", "mdt_huddles", "mdt_tasks", "coach_quality_reviews", "coach_quality_standards", "client_goal_outcomes", "coach_programme_lifecycles", "coach_programme_lifecycle_events", "coach_copilot_drafts", "resource_files", "diet_plans", "diet_plan_meals", "diet_plan_options", "diet_plan_option_dishes", "diet_assessments", "client_workouts", "recipes", "dishes", "blueprints", "followups"]} />
 
       {/* Workspace chrome — one discipline at a time. Clinicians have exactly
           one; admins switch with the header persona menu. The Medical Director

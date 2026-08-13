@@ -8,6 +8,7 @@ const base = (patch: Partial<CoachQualityInput> = {}): CoachQualityInput => ({
   clientCount: 2,
   appointments: [], followups: [], goals: [], adherenceCurrent: [], adherencePrevious: [],
   clientGoalOutcomes: [],
+  programmeLifecycleEvents: [],
   barriers: [], referrals: [], safetyEvents: [], mdtTasks: [], baselines: [], assessments: [],
   sessions: [], huddles: [], huddleTaskIds: [], ...patch,
 });
@@ -64,6 +65,14 @@ describe("Health Coach quality metrics", () => {
       { opened_at: "2026-08-12T09:00:00Z", acknowledged_at: null },
     ] }));
     expect(metrics.safetyAcknowledgement).toMatchObject({ met: 1, total: 2, percent: 50, averageMinutes: 12 });
+  });
+
+  it("reports lifecycle transitions as counts rather than Coach scores", () => {
+    const metrics = calculateCoachQuality(base({ programmeLifecycleEvents: [
+      { from_status: "Active", to_status: "Disengaged" },
+      { from_status: "Disengaged", to_status: "Active" },
+    ] }));
+    expect(metrics.programmeLifecycle).toMatchObject({ transitions: 2, disengaged: 1, reactivated: 1 });
   });
 
   it("never invents a percentage without a denominator", () => {

@@ -5672,6 +5672,74 @@ export async function resolveCoachingBarrier(formData: FormData) {
   revalidatePath(`/clients/${client_id}`);
 }
 
+export type CoachProgrammeLifecycleState = { ok?: string; error?: string };
+
+/** Record one governed programme lifecycle transition without touching billing. */
+export async function transitionCoachProgrammeLifecycle(
+  _previous: CoachProgrammeLifecycleState,
+  formData: FormData,
+): Promise<CoachProgrammeLifecycleState> {
+  const p = await getProfile();
+  if (!p || !canManageHealthCoaching(p.role)) {
+    return { error: "Only the assigned Health Coach or a supervisor can change programme status." };
+  }
+  const clientId = String(formData.get("client_id") || "");
+  const fromStatus = String(formData.get("from_status") || "Active");
+  const toStatus = String(formData.get("to_status") || "");
+  const reason = String(formData.get("reason") || "").trim();
+  const effectiveDate = String(formData.get("effective_date") || "");
+  const currentEffectiveDate = String(formData.get("current_effective_date") || "") || null;
+  const nextContactDate = String(formData.get("next_contact_date") || "") || null;
+  const nextContactPlan = String(formData.get("next_contact_plan") || "").trim() || null;
+  if (!clientId) return { error: "Choose a client." };
+
+  const { COACH_PROGRAMME_STATUSES, coachProgrammeTransitionProblem } = await import("@/lib/coach-programme-lifecycle");
+  if (!COACH_PROGRAMME_STATUSES.includes(fromStatus as (typeof COACH_PROGRAMME_STATUSES)[number])) {
+    return { error: "The current programme status is invalid." };
+  }
+  const problem = coachProgrammeTransitionProblem({
+    from: fromStatus as (typeof COACH_PROGRAMME_STATUSES)[number],
+    to: toStatus, reason, effectiveDate, currentEffectiveDate, nextContactDate, nextContactPlan, today: todayISO(),
+  });
+  if (problem) return { error: problem };
+
+  const supabase = await createClient();
+  const authorization = await authorizeCoachClientWrite(p, supabase, clientId, formData, "Change programme lifecycle");
+  if (!authorization.ok) return { error: authorization.error };
+  const { data: appliedStatus, error } = await supabase.rpc("transition_coach_programme_lifecycle", {
+    target_client_id: clientId,
+    target_status: toStatus,
+    target_reason: reason,
+    target_effective_date: effectiveDate,
+    target_next_contact_date: nextContactDate,
+    target_next_contact_plan: nextContactPlan,
+    supervisor_override_reason: String(formData.get("override_reason") || "").trim() || null,
+  });
+  if (error) return { error: error.message };
+
+  try {
+    const { data: assignment } = await supabase.from("client_assignments")
+      .select("staff_id").eq("client_id", clientId).eq("discipline", "coach").maybeSingle();
+    if (assignment?.staff_id) {
+      const admin = createAdminClient();
+      const name = await clientName(admin, clientId);
+      await notifyStaff(admin, assignment.staff_id, {
+        title: `Programme ${String(appliedStatus).toLowerCase()} — ${name}`,
+        body: nextContactDate ? `${reason} · next contact ${nextContactDate}` : reason,
+        href: `/clients/${clientId}#programme-lifecycle`, icon: "🧭",
+        link: { kind: "client", ref: clientId },
+      });
+    }
+  } catch {
+    // The immutable transition remains authoritative if notification delivery
+    // is unavailable; the client record still shows the next-contact prompt.
+  }
+  await logAudit(p, "Health Coach programme status changed", await clientName(supabase, clientId), `${fromStatus} → ${toStatus} · ${reason}`);
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/workspace");
+  return { ok: `Programme moved from ${fromStatus} to ${toStatus}.` };
+}
+
 // client checks a habit on/off for today (portal)
 export async function toggleHabitSelf(formData: FormData) {
   const supabase = await createClient();
