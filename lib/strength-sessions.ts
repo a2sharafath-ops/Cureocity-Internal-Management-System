@@ -17,10 +17,10 @@ export function buildStrengthSessions(clientId: string, trainerId: string, hour:
   const date = new Date(`${startISO}T00:00:00Z`);
   const startDay = date.getUTCDay();
   if (startDay === 0) throw new Error("Strength sessions are not available on Sunday.");
-  const cohort = startDay % 2 === 1 ? COHORT_DAYS.monday : COHORT_DAYS.tuesday;
+  const cohort: readonly number[] = startDay % 2 === 1 ? COHORT_DAYS.monday : COHORT_DAYS.tuesday;
   const rows: StrengthSessionRow[] = [];
   while (rows.length < count) {
-    if (cohort.includes(date.getUTCDay() as 1 | 2 | 3 | 4 | 5 | 6)) {
+    if (cohort.includes(date.getUTCDay())) {
       rows.push({ client_id: clientId, trainer_id: trainerId, seq: rows.length + 1, date: date.toISOString().slice(0, 10), hour, status: "scheduled" });
     }
     date.setUTCDate(date.getUTCDate() + 1);

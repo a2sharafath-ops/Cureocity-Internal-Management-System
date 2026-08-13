@@ -616,6 +616,38 @@ export async function rescheduleSession(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
+/** Move an untouched 12-session strength block together, retaining each session's sequence number. */
+export async function rescheduleStrengthBlock(formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const p = await getProfile();
+  if (!p || !canManageSessions(p.role)) return { ok: false, error: "Not authorized." };
+  const clientId = String(formData.get("client_id") || "");
+  const start = String(formData.get("start_date") || "");
+  const hour = Number(formData.get("hour"));
+  const trainerId = String(formData.get("trainer_id") || "");
+  if (!clientId || !start || !trainerId || !Number.isInteger(hour)) return { ok: false, error: "Choose a start date, time, and trainer." };
+  if (new Date(`${start}T00:00:00Z`).getUTCDay() === 0) return { ok: false, error: "Strength sessions are not available on Sunday." };
+
+  const supabase = await createClient();
+  const { data: sessions } = await supabase.from("sessions")
+    .select("id, seq, status, clients(name)").eq("client_id", clientId).order("seq");
+  const block = (sessions ?? []) as unknown as { id: string; seq: number; status: string; clients: { name: string } | null }[];
+  if (block.length !== 12 || block.some((session) => session.status !== "scheduled")) {
+    return { ok: false, error: "Only an untouched 12-session block can be rescheduled together. Reschedule remaining sessions individually." };
+  }
+
+  const dates = buildStrengthSessions(clientId, trainerId, hour, start, 12);
+  const updates = await Promise.all(block.map((session, index) => supabase.from("sessions")
+    .update({ date: dates[index].date, hour, trainer_id: trainerId, rescheduled: true, status: "scheduled" })
+    .eq("id", session.id)));
+  if (updates.some(({ error }) => error)) return { ok: false, error: "The strength block could not be rescheduled." };
+
+  await logAudit(p, "Strength block rescheduled", block[0]?.clients?.name, `12 sessions → ${start} ${hour}:00`);
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath("/sessions");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function markSessionComplete(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageSessions(p.role)) return;
@@ -922,7 +954,7 @@ export async function convertLeadVerified(formData: FormData): Promise<{ ok: boo
     const autoBuildSessions = cat0 !== PT_CATEGORY && cat0 !== COMPREHENSIVE_CATEGORY && cat0 !== "blueprint";
     if (pkg && !pkg.is_facility && pkg.sessions > 0 && trainerId && autoBuildSessions) {
       await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: trainerId, hour: slotHour, session: "PT" });
-      await supabase.from("sessions").insert(buildSessions(inserted.id, trainerId, slotHour, joined, pkg.sessions));
+      await supabase.from("sessions").insert(buildStrengthSessions(inserted.id, trainerId, slotHour, joined, pkg.sessions));
     }
     if (pkg) {
       const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
@@ -1035,7 +1067,7 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
   // queue the prompt); everything else with credits still auto-builds.
   if (!pkg.is_facility && pkg.sessions > 0 && cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY) {
     await supabase.from("enrollments").insert({ client_id, trainer_id: "t0", hour: 9, session: "PT" });
-    await supabase.from("sessions").insert(buildSessions(client_id, "t0", 9, start, pkg.sessions));
+    await supabase.from("sessions").insert(buildStrengthSessions(client_id, "t0", 9, start, pkg.sessions));
   }
   if (cat === "blueprint" || cat === COMPREHENSIVE_CATEGORY || cat === PT_CATEGORY) {
     const { data: cli } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
@@ -6965,7 +6997,7 @@ export async function createClientRecord(formData: FormData) {
       // queue the prompt); everything else with credits still auto-builds.
       if (!pkg.is_facility && pkg.sessions > 0 && cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY) {
         await supabase.from("enrollments").insert({ client_id: inserted.id, trainer_id: "t0", hour: 9, session: "PT" });
-        await supabase.from("sessions").insert(buildSessions(inserted.id, "t0", 9, start, pkg.sessions));
+        await supabase.from("sessions").insert(buildStrengthSessions(inserted.id, "t0", 9, start, pkg.sessions));
       }
       const num = await nextInvoiceNum(supabase);
       await supabase.from("invoices").insert({

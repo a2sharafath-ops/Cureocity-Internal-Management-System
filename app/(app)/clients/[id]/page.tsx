@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SessionActions from "@/components/SessionActions";
+import StrengthBlockActions from "@/components/StrengthBlockActions";
 import PortalLoginForm from "@/components/PortalLoginForm";
 import FileUploadForm from "@/components/FileUploadForm";
 import { fmtDate, fmtTime, IST } from "@/lib/datetime";
@@ -19,7 +20,7 @@ import InvoiceForm from "@/components/InvoiceForm";
 import AddPackage from "@/components/AddPackage";
 import VoidPackageButton from "@/components/VoidPackageButton";
 import { getProfile } from "@/lib/auth";
-import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee, isHealthCoachSupervisor } from "@/lib/roles";
+import { canWrite, canConsult, canBill, canManageInvoices, canVoidPackage, isBillingOverseer, canEmr, canSee, canManageSessions, isHealthCoachSupervisor } from "@/lib/roles";
 import { canWriteFitness } from "@/lib/discipline";
 
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -1004,6 +1005,7 @@ export default async function ClientDetailPage(
           <div style={{ color: "var(--muted)", fontSize: 13 }}>No sessions scheduled.</div>
         ) : (
           <>
+            <StrengthBlockActions clientId={client.id} trainers={trainers} defaultTrainerId={sess[0]?.trainer_id ?? ""} canReschedule={canManageSessions(me?.role ?? "") && sess.length === 12 && sess.every((session) => session.status === "scheduled")} />
             <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 10 }}>
               {sess.length} sessions · alternate days · {done} completed · {sess.length - done} upcoming
             </div>

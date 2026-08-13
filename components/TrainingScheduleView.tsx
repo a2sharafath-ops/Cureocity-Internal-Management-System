@@ -143,7 +143,7 @@ export default function TrainingScheduleView({
 
           {/* assign bar */}
           {assigning && (
-            <form action={scheduleStrengthSessions} onSubmit={() => setTimeout(() => setAssigning(null), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <form action={async (formData) => { await scheduleStrengthSessions(formData); }} onSubmit={() => setTimeout(() => setAssigning(null), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input type="hidden" name="trainer_id" value={assigning.trainer_id} />
               <input type="hidden" name="hour" value={assigning.hour} />
               <input type="hidden" name="start_date" value={assigning.date} />
@@ -158,7 +158,7 @@ export default function TrainingScheduleView({
 
           {/* manual assign (from + Assign client) — pick trainer + time + client */}
           {manualAssign && (
-            <form action={scheduleStrengthSessions} onSubmit={() => setTimeout(() => setManualAssign(false), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <form action={async (formData) => { await scheduleStrengthSessions(formData); }} onSubmit={() => setTimeout(() => setManualAssign(false), 50)} style={{ ...box, padding: 12, marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <b style={{ fontSize: 13 }}>Assign client</b>
               <select name="trainer_id" required defaultValue="" style={input}><option value="" disabled>Trainer…</option>{trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
               <select name="hour" defaultValue="9" style={input}>{hours.map((h) => <option key={h} value={h}>{hourLabel(h)}</option>)}</select>
