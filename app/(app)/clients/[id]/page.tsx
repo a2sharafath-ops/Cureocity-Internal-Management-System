@@ -48,6 +48,7 @@ import type { ClientGoalOutcome } from "@/lib/client-goal-outcome";
 import CoachProgrammeLifecyclePanel from "@/components/CoachProgrammeLifecyclePanel";
 import type { CoachProgrammeLifecycle, CoachProgrammeLifecycleEvent } from "@/lib/coach-programme-lifecycle";
 import HealthCoachBaselinePanel, { type CoachBaselineView, type ScreeningResultView } from "@/components/HealthCoachBaselinePanel";
+import CoachingSummary from "@/components/CoachingSummary";
 
 // Report types, told apart at a glance in the timeline.
 const REPORT_LABEL: Record<string, string> = {
@@ -791,7 +792,7 @@ export default async function ClientDetailPage(
         </div>
       )}
 
-      {canConsult(me?.role ?? "") && (
+      {canManageCoaching && (
         <CoachProgrammeLifecyclePanel
           clientId={params.id}
           lifecycle={programmeLifecycle}
@@ -802,7 +803,7 @@ export default async function ClientDetailPage(
         />
       )}
 
-      {canConsult(me?.role ?? "") && (
+      {canManageCoaching && (
         <HealthCoachBaselinePanel
           clientId={params.id}
           baseline={coachBaseline}
@@ -813,7 +814,7 @@ export default async function ClientDetailPage(
         />
       )}
 
-      {canConsult(me?.role ?? "") && (
+      {canManageCoaching && (
         <HealthCoachGoalsPanel
           clientId={params.id}
           goals={habits}
@@ -823,6 +824,16 @@ export default async function ClientDetailPage(
           canManage={canManageCoaching}
           today={habToday}
           supervisorOverride={coachSupervisorOverride}
+        />
+      )}
+
+      {canConsult(me?.role ?? "") && !canManageCoaching && (
+        <CoachingSummary
+          lifecycle={programmeLifecycle}
+          baselinePercent={coachBaseline?.completion_percent ?? 0}
+          goals={habits}
+          events={coachingAdherence}
+          barriers={coachingBarriers}
         />
       )}
 
