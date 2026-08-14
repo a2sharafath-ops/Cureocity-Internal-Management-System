@@ -1,3 +1,6 @@
+import type { Instrumentation } from "next";
+import { logServerError } from "@/lib/runtime-errors";
+
 // Runs once when a server instance boots (Next.js instrumentation hook).
 //
 // The Node runtime on Vercel defaults to UTC, so server-rendered dates and times
@@ -11,3 +14,19 @@ export function register() {
     process.env.TZ = process.env.TZ || "Asia/Kolkata";
   }
 }
+
+export const onRequestError: Instrumentation.onRequestError = async (
+  error,
+  request,
+  context,
+) => {
+  logServerError(error, {
+    source: "next_request",
+    method: request.method,
+    route: context.routePath,
+    route_type: context.routeType,
+    router: context.routerKind,
+    render_source: context.renderSource,
+    revalidate_reason: context.revalidateReason,
+  });
+};

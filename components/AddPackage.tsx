@@ -12,6 +12,7 @@ export default function AddPackage({ clientId, packages, hasMembership }: { clie
   const [pkgId, setPkgId] = useState("");
   const [start, setStart] = useState(new Date().toISOString().slice(0, 10));
   const [discount, setDiscount] = useState("");
+  const [mutationKey, setMutationKey] = useState(() => crypto.randomUUID());
   const [err, setErr] = useState<string | null>(null);
   const [pending, start2] = useTransition();
 
@@ -26,9 +27,13 @@ export default function AddPackage({ clientId, packages, hasMembership }: { clie
     const fd = new FormData();
     fd.set("client_id", clientId); fd.set("package_id", pkgId);
     fd.set("start_date", start); fd.set("discount", discount || "0");
+    fd.set("mutation_key", mutationKey);
     start2(async () => {
       const r = await purchasePackage(fd);
-      if (r.ok) { setOpen(false); setPkgId(""); setDiscount(""); }
+      if (r.ok) {
+        setOpen(false); setPkgId(""); setDiscount("");
+        setMutationKey(crypto.randomUUID());
+      }
       else setErr(r.error ?? "Could not add package");
     });
   };

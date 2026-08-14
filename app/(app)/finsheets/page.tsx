@@ -6,6 +6,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { PayableForm, EstimateForm, LedgerForm, ReimbursementForm, TopUpForm, EditFloatForm } from "@/components/FinanceForms";
 import { PayPayable, EstimateActions, ReimbursementActions } from "@/components/FinanceActions";
 import SegTabs from "@/components/SegTabs";
+import { assertCriticalQueries, logServerError } from "@/lib/runtime-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function FinsheetsPage(props: { searchParams: Promise<{ tab
   const cashView = searchParams.cash === "payments" ? "payments" : "receipts";
 
   const supabase = await createClient();
-  const [{ data: invData }, { data: payData }, { data: estData }, { data: ledData }, { data: reimbData }, { data: staffData }, { data: pettyCfg }] = await Promise.all([
+  const [invoiceResult, payableResult, estimateResult, ledgerResult, reimbursementResult, staffResult, pettyCashResult] = await Promise.all([
     supabase.from("invoices").select("id, num, description, amount, status, paid_date, clients(name)").eq("status", "Paid").order("paid_date", { ascending: false }).limit(200),
     supabase.from("payables").select("id, vendor, item, amount, due_date, status").order("due_date"),
     supabase.from("estimates").select("id, lead_name, item, amount, date, status").order("date", { ascending: false }),
@@ -38,6 +39,22 @@ export default async function FinsheetsPage(props: { searchParams: Promise<{ tab
     supabase.from("staff").select("id, name").order("name"),
     supabase.from("petty_cash_config").select("float_amount, low_threshold").eq("id", true).maybeSingle(),
   ]);
+  assertCriticalQueries("finance", [
+    ["invoices", invoiceResult],
+    ["payables", payableResult],
+    ["estimates", estimateResult],
+    ["ledger", ledgerResult],
+    ["reimbursements", reimbursementResult],
+    ["staff", staffResult],
+    ["petty_cash_config", pettyCashResult],
+  ]);
+  const invData = invoiceResult.data;
+  const payData = payableResult.data;
+  const estData = estimateResult.data;
+  const ledData = ledgerResult.data;
+  const reimbData = reimbursementResult.data;
+  const staffData = staffResult.data;
+  const pettyCfg = pettyCashResult.data;
   const reimbursements = (reimbData ?? []) as { id: string; payee_name: string; description: string; category: string; amount: number; incurred_date: string; status: string; receipt_bucket: string | null; receipt_path: string | null; pay_account: string | null; submitted_by: string | null }[];
   const staff = (staffData ?? []) as { id: string; name: string }[];
   const canSubmitReimb = canReimburseSubmit(me.role);
@@ -45,7 +62,8 @@ export default async function FinsheetsPage(props: { searchParams: Promise<{ tab
   // Signed URLs for any receipts, so the private bucket stays private.
   const receiptUrls: Record<string, string> = {};
   await Promise.all(reimbursements.filter((r) => r.receipt_path).map(async (r) => {
-    const { data: signed } = await supabase.storage.from(r.receipt_bucket || "finance").createSignedUrl(r.receipt_path!, 3600);
+    const { data: signed, error } = await supabase.storage.from(r.receipt_bucket || "finance").createSignedUrl(r.receipt_path!, 3600);
+    if (error) logServerError(error, { source: "signed_url", scope: "finance_receipt" });
     if (signed?.signedUrl) receiptUrls[r.id] = signed.signedUrl;
   }));
   const sales = (invData ?? []) as unknown as { id: string; num: number | null; description: string | null; amount: number; paid_date: string | null; clients: { name: string } | null }[];

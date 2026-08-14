@@ -33,17 +33,22 @@ async function resolveCategory(supabase: DB, clientId: string): Promise<string> 
  * Build the candidate pool for every discipline, with each staff member's
  * current client load in that discipline (the rotation counter).
  */
-export async function loadPool(supabase: DB, branch?: string | null): Promise<Record<Discipline, Candidate[]>> {
+export async function loadPool(supabase: DB, branch?: string | null, strict = false): Promise<Record<Discipline, Candidate[]>> {
   const roles = Object.values(ROLE_FOR);
   let q = supabase.from("staff").select("id, name, role, created_at").in("role", roles);
   if (branch) q = q.eq("branch", branch);
-  const { data: staffRows } = await q;
+  const { data: staffRows, error: staffError } = await q;
+  if (strict && staffError) throw new Error(`Could not load care-team staff: ${staffError.message}`);
   const staff = (staffRows ?? []) as { id: string; name: string; role: string; created_at: string }[];
 
-  const [{ data: assignRows }, { data: activeCps }] = await Promise.all([
+  const [assignmentResult, packageResult] = await Promise.all([
     supabase.from("client_assignments").select("staff_id, discipline, client_id"),
     supabase.from("client_packages").select("client_id").eq("status", "active"),
   ]);
+  if (strict && assignmentResult.error) throw new Error(`Could not load care-team assignments: ${assignmentResult.error.message}`);
+  if (strict && packageResult.error) throw new Error(`Could not load active packages: ${packageResult.error.message}`);
+  const assignRows = assignmentResult.data;
+  const activeCps = packageResult.data;
   const assigns = (assignRows ?? []) as { staff_id: string | null; discipline: string; client_id: string }[];
   // Rotation load = CURRENT active caseload, not lifetime. Assignments for
   // churned clients (no active package) don't count — otherwise a coach who has
@@ -85,18 +90,69 @@ export async function loadPool(supabase: DB, branch?: string | null): Promise<Re
 export async function assignCareTeam(
   supabase: DB,
   clientId: string,
-  opts: { slot?: { date: string; hour: number } | null; actor?: string; reassign?: boolean; disciplines?: string[] } = {},
+  opts: { slot?: { date: string; hour: number } | null; actor?: string; reassign?: boolean; disciplines?: string[]; strict?: boolean } = {},
 ): Promise<Assignment[]> {
-  const { data: client } = await supabase
-    .from("clients").select("id, branch").eq("id", clientId).maybeSingle();
-  if (!client) return [];
+  const plan = await planCareTeamAssignments(supabase, clientId, opts);
+  if (!plan.assignments.length) return [];
 
-  const [{ data: apptRows }, { data: busyRows }, { data: apptBusyRows }, { data: existingRows }] = await Promise.all([
+  // Elevated: RLS on client_assignments allows admins/managers only, but the
+  // engine runs as whoever triggered it (usually Front Desk). See the note above.
+  const db = createAdminClient();
+  const { error: writeErr } = await db.from("client_assignments").upsert(
+    plan.assignments.map((a) => ({
+      client_id: clientId, discipline: a.discipline, staff_id: a.staff_id,
+      method: a.method, assigned_by: opts.actor ?? null, assigned_at: new Date().toISOString(),
+    })),
+    { onConflict: "client_id,discipline" },
+  );
+  // Never fail silently again: a rejected write used to look exactly like a
+  // successful one, so a client quietly ended up with no care team.
+  if (writeErr) {
+    console.error("[care-team] assignment write failed", { clientId, error: writeErr.message });
+    return [];
+  }
+
+  // keep the denormalised single pro on the clients list in step
+  if (plan.primaryPro) await db.from("clients").update({ pro_id: plan.primaryPro }).eq("id", clientId);
+
+  return plan.assignments;
+}
+
+export type CareTeamPlan = {
+  assignments: Assignment[];
+  primaryPro: string | null;
+};
+
+/**
+ * Read-only half of assignCareTeam. Atomic package purchase uses this to pass
+ * the exact planned rows into one database transaction instead of writing the
+ * care team before or after the package/invoice pair.
+ */
+export async function planCareTeamAssignments(
+  supabase: DB,
+  clientId: string,
+  opts: { slot?: { date: string; hour: number } | null; actor?: string; reassign?: boolean; disciplines?: string[]; strict?: boolean } = {},
+): Promise<CareTeamPlan> {
+  const { data: client, error: clientError } = await supabase
+    .from("clients").select("id, branch").eq("id", clientId).maybeSingle();
+  if (opts.strict && clientError) throw new Error(`Could not load client for care-team planning: ${clientError.message}`);
+  if (!client) return { assignments: [], primaryPro: null };
+
+  const [clientAppointments, sessionCommitments, appointmentCommitments, existingAssignments] = await Promise.all([
     supabase.from("appointments").select("provider_id, type, date, hour, status").eq("client_id", clientId),
     supabase.from("sessions").select("trainer_id, date, hour").eq("status", "scheduled"),
     supabase.from("appointments").select("provider_id, date, hour, status").neq("status", "cancelled"),
     supabase.from("client_assignments").select("discipline, staff_id").eq("client_id", clientId),
   ]);
+  if (opts.strict) {
+    const failed = [clientAppointments, sessionCommitments, appointmentCommitments, existingAssignments]
+      .find((result) => result.error);
+    if (failed?.error) throw new Error(`Could not plan the care team: ${failed.error.message}`);
+  }
+  const apptRows = clientAppointments.data;
+  const busyRows = sessionCommitments.data;
+  const apptBusyRows = appointmentCommitments.data;
+  const existingRows = existingAssignments.data;
 
   const bookings = (apptRows ?? []) as Booking[];
   // A trainer is "busy" at a slot if they have a scheduled strength session OR a
@@ -114,7 +170,7 @@ export async function assignCareTeam(
       .filter((r) => r.staff_id).map((r) => r.discipline)
   );
 
-  const pool = await loadPool(supabase, client.branch);
+  const pool = await loadPool(supabase, client.branch, opts.strict);
   let planned = planCareTeam({ bookings, pool, busy, slot: opts.slot ?? null });
 
   // Scope to the disciplines this package actually needs. An explicit
@@ -132,33 +188,11 @@ export async function assignCareTeam(
   planned = planned.filter((a) => want.has(a.discipline) || a.method === "booking");
 
   const toWrite = opts.reassign ? planned : planned.filter((a) => !existing.has(a.discipline));
-  if (!toWrite.length) return [];
-
-  // Elevated: RLS on client_assignments allows admins/managers only, but the
-  // engine runs as whoever triggered it (usually Front Desk). See the note above.
-  const db = createAdminClient();
-  const { error: writeErr } = await db.from("client_assignments").upsert(
-    toWrite.map((a) => ({
-      client_id: clientId, discipline: a.discipline, staff_id: a.staff_id,
-      method: a.method, assigned_by: opts.actor ?? null, assigned_at: new Date().toISOString(),
-    })),
-    { onConflict: "client_id,discipline" },
-  );
-  // Never fail silently again: a rejected write used to look exactly like a
-  // successful one, so a client quietly ended up with no care team.
-  if (writeErr) {
-    console.error("[care-team] assignment write failed", { clientId, error: writeErr.message });
-    return [];
-  }
-
-  // keep the denormalised single pro on the clients list in step
-  const { data: allRows } = await db
-    .from("client_assignments").select("discipline, staff_id").eq("client_id", clientId);
-  const all = ((allRows ?? []) as { discipline: string; staff_id: string | null }[])
+  const all = ((existingRows ?? []) as { discipline: string; staff_id: string | null }[])
     .filter((r) => r.staff_id)
     .map((r) => ({ discipline: r.discipline as Discipline, staff_id: r.staff_id as string, method: "rotation" as const }));
-  const pro = primaryPro(all);
-  if (pro) await db.from("clients").update({ pro_id: pro }).eq("id", clientId);
-
-  return toWrite;
+  const merged = opts.reassign
+    ? [...all.filter((a) => !toWrite.some((n) => n.discipline === a.discipline)), ...toWrite]
+    : [...all, ...toWrite];
+  return { assignments: toWrite, primaryPro: primaryPro(merged) };
 }

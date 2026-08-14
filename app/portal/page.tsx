@@ -21,6 +21,7 @@ import InBodyComparison, { type Measure } from "@/components/InBodyComparison";
 
 import { todayISO } from "@/lib/today";
 import { mealHeading, type PlanMeal, type PlanOption } from "@/lib/diet-plan";
+import { assertCriticalQueries, logServerError } from "@/lib/runtime-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +60,13 @@ export default async function PortalHome() {
   const supabase = await createClient();
 
   // RLS scopes these to the logged-in client only
-  const { data: client } = await supabase
+  const clientResult = await supabase
     .from("clients")
     .select("*, packages(name, is_facility)")
     .limit(1)
     .maybeSingle();
+  assertCriticalQueries("client_portal", [["client_profile", clientResult]]);
+  const client = clientResult.data;
 
   if (!client) {
     return card(<div style={{ color: "var(--muted)", fontSize: 14 }}>No client record is linked to your login. Please contact the front desk.</div>);
@@ -71,7 +74,7 @@ export default async function PortalHome() {
 
   const pkg = (client as { packages: { name: string; is_facility: boolean } | null }).packages;
 
-  const [{ data: sessions }, { data: consults }, { data: bpData }, { data: bloodData }, { data: fileRows }] = await Promise.all([
+  const [sessionResult, consultationResult, blueprintResult, bloodResult, fileResult] = await Promise.all([
     supabase.from("sessions").select("seq, date, hour, status").eq("client_id", client.id).order("seq"),
     supabase.from("consultations").select("id, kind, summary, created_at").eq("client_id", client.id).eq("shared", true).order("created_at", { ascending: false }),
     supabase.from("blueprints").select("generated, generated_date, consolidated, scores").eq("client_id", client.id).eq("generated", true).maybeSingle(),
@@ -80,8 +83,22 @@ export default async function PortalHome() {
     supabase.from("blood_requests").select("submitted, submitted_date, requested_at, panel").eq("client_id", client.id).order("requested_at"),
     supabase.from("files").select("id, name, kind, path, created_at").eq("client_id", client.id).order("created_at", { ascending: false }),
   ]);
+  assertCriticalQueries("client_portal_care", [
+    ["sessions", sessionResult],
+    ["consultations", consultationResult],
+    ["blueprint", blueprintResult],
+    ["blood_requests", bloodResult],
+    ["files", fileResult],
+  ]);
+  const sessions = sessionResult.data;
+  const consults = consultationResult.data;
+  const bpData = blueprintResult.data;
+  const bloodData = bloodResult.data;
+  const fileRows = fileResult.data;
 
-  const { data: mealRows } = await supabase.from("meal_logs").select("*").eq("client_id", client.id).eq("date", TODAY);
+  const mealResult = await supabase.from("meal_logs").select("*").eq("client_id", client.id).eq("date", TODAY);
+  assertCriticalQueries("client_portal_meals", [["meal_logs", mealResult]]);
+  const mealRows = mealResult.data;
   const mealMap = new Map(((mealRows ?? []) as MealLog[]).map((m) => [m.meal, m]));
   // Daily meal summaries the dietitian has sent to this client.
   const { data: daySummaryRows } = await supabase.from("meal_day_summaries").select("date, summary, sent_at").eq("client_id", client.id).not("sent_at", "is", null).order("date", { ascending: false }).limit(7);
@@ -90,7 +107,9 @@ export default async function PortalHome() {
   // Comprehensive). Decide portal features from what they actually hold, not the
   // single legacy primary package — otherwise a facility-primary client with a
   // care package wrongly loses meal monitoring / strength sessions.
-  const { data: cpRows } = await supabase.from("client_packages").select("category, status").eq("client_id", client.id);
+  const packageResult = await supabase.from("client_packages").select("category, status").eq("client_id", client.id);
+  assertCriticalQueries("client_portal_entitlements", [["client_packages", packageResult]]);
+  const cpRows = packageResult.data;
   const careCats = new Set(((cpRows ?? []) as { category: string; status: string }[]).filter((c) => c.status === "active").map((c) => c.category));
   const holdsCare = careCats.has("comprehensive") || careCats.has("training") || careCats.has("blueprint");
   // BluePrint is a standalone package — Comprehensive does NOT include one.
@@ -98,22 +117,32 @@ export default async function PortalHome() {
   const showMeals = !pkg?.is_facility || holdsCare;
 
   const mCols = "date, weight, bmi, body_fat, muscle_mass, visceral_fat, waist, hip, resting_hr";
-  const [{ data: latestM }, { data: baseM }] = await Promise.all([
+  const [latestMeasurementResult, baselineMeasurementResult] = await Promise.all([
     supabase.from("measurements").select(mCols).eq("client_id", client.id).order("date", { ascending: false }).limit(1).maybeSingle(),
     supabase.from("measurements").select(mCols).eq("client_id", client.id).order("date", { ascending: true }).limit(1).maybeSingle(),
   ]);
+  assertCriticalQueries("client_portal_measurements", [
+    ["latest_measurement", latestMeasurementResult],
+    ["baseline_measurement", baselineMeasurementResult],
+  ]);
+  const latestM = latestMeasurementResult.data;
+  const baseM = baselineMeasurementResult.data;
   const m = latestM as { date: string; weight: number | null; bmi: number | null; body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null } | null;
 
-  const { data: invRows } = await supabase
+  const invoiceResult = await supabase
     .from("invoices").select("id, num, description, amount, status").eq("client_id", client.id).order("created_at", { ascending: false });
+  assertCriticalQueries("client_portal_billing", [["invoices", invoiceResult]]);
+  const invRows = invoiceResult.data;
   const invoices = (invRows ?? []) as { id: string; num: number | null; description: string | null; amount: number; status: string }[];
 
-  const { data: msgRows } = await supabase
+  const messageResult = await supabase
     .from("messages").select("id, sender, sender_name, body, created_at").eq("client_id", client.id).order("created_at", { ascending: true });
+  assertCriticalQueries("client_portal_messages", [["messages", messageResult]]);
+  const msgRows = messageResult.data;
   const messages = (msgRows ?? []) as Msg[];
 
   // read-only medical record (RLS scopes to own rows)
-  const [{ data: emrProblems }, { data: emrAllergies }, { data: emrMeds }, { data: rxRows }, { data: labRows }] = await Promise.all([
+  const [problemResult, allergyResult, medicationResult, prescriptionResult, labResult] = await Promise.all([
     supabase.from("problems").select("description, status").eq("client_id", client.id).eq("status", "active"),
     supabase.from("allergies").select("substance, severity").eq("client_id", client.id),
     supabase.from("medications").select("name, dose, frequency").eq("client_id", client.id).eq("status", "active"),
@@ -131,6 +160,18 @@ export default async function PortalHome() {
       .eq("client_id", client.id).not("shared_at", "is", null).neq("status", "cancelled")
       .order("created_at", { ascending: false }),
   ]);
+  assertCriticalQueries("client_portal_medical_record", [
+    ["problems", problemResult],
+    ["allergies", allergyResult],
+    ["medications", medicationResult],
+    ["prescriptions", prescriptionResult],
+    ["orders", labResult],
+  ]);
+  const emrProblems = problemResult.data;
+  const emrAllergies = allergyResult.data;
+  const emrMeds = medicationResult.data;
+  const rxRows = prescriptionResult.data;
+  const labRows = labResult.data;
   const myProblems = (emrProblems ?? []) as { description: string; status: string }[];
   const myAllergies = (emrAllergies ?? []) as { substance: string; severity: string }[];
   const myMeds = (emrMeds ?? []) as { name: string; dose: string | null; frequency: string | null }[];
@@ -236,7 +277,8 @@ export default async function PortalHome() {
   const mine = new Set(((myBookings ?? []) as { class_id: string }[]).map((b) => b.class_id));
 
   const files = await Promise.all(((fileRows ?? []) as { id: string; name: string | null; kind: string; path: string; created_at: string }[]).map(async (f) => {
-    const { data: signed } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
+    const { data: signed, error } = await supabase.storage.from("client-files").createSignedUrl(f.path, 3600);
+    if (error) logServerError(error, { source: "signed_url", scope: "client_portal_file" });
     return { id: f.id, name: f.name, kind: f.kind, created_at: f.created_at, url: signed?.signedUrl ?? null };
   }));
 

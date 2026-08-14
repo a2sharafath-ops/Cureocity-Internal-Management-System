@@ -12,6 +12,7 @@ import { runLeadCoverage } from "@/lib/cron/lead-coverage";
 import { runLeadIdle } from "@/lib/cron/lead-idle";
 import { runConcernEscalation } from "@/lib/cron/concern-escalation";
 import { runLeadStagnation } from "@/lib/cron/lead-stagnation";
+import { atomicBillingEnabled, runAtomicBillingRpc, subscriptionRenewalKey } from "@/lib/billing-atomic";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -43,6 +44,18 @@ async function processRenewals(supabase: Admin) {
 
   let renewed = 0;
   for (const sub of (due ?? []) as { id: string; client_id: string; package_id: string | null; amount: number; interval_days: number; renews_on: string | null }[]) {
+    if (atomicBillingEnabled()) {
+      const tx = await runAtomicBillingRpc(supabase, "renew_subscription_atomic", {
+        p_operation_key: subscriptionRenewalKey(sub.id, sub.renews_on),
+        p_subscription_id: sub.id,
+        p_actor: "auto-renewal",
+        p_require_due: true,
+      });
+      if (!tx.ok) throw new Error(tx.error);
+      renewed++;
+      continue;
+    }
+
     const num = await nextInvoiceNum(supabase);
     const { data: pkg } = await supabase.from("packages").select("name").eq("id", sub.package_id ?? "").maybeSingle();
     await supabase.from("invoices").insert({

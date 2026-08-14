@@ -27,7 +27,8 @@ import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } fro
 import { deletable, statusAfterUndo, CANCELLED } from "@/lib/consult-lifecycle";
 import { buildFollowupRows, governingPackage } from "@/lib/followups";
 import { directoryDefaults, needsDirectoryRow, staffIdFor, namesMatch } from "@/lib/staff-directory";
-import { assignCareTeam } from "@/lib/care-team";
+import { assignCareTeam, planCareTeamAssignments } from "@/lib/care-team";
+import { disciplinesForCategory } from "@/lib/assignment";
 import { isInitialApptType, loadCatOf, normalizeApptTypes } from "@/lib/appt-match";
 import { resolveNotificationTarget, nudgeLink } from "@/lib/notification-target";
 import { openaiComplete, type AiState } from "@/lib/ai";
@@ -55,7 +56,12 @@ import { paymentConfig } from "@/lib/payments/config";
 import { telehealthConfig } from "@/lib/telehealth/config";
 import { ivrConfig } from "@/lib/ivr/config";
 import crypto from "crypto";
-import { createRazorpayOrder, verifyCheckoutSignature } from "@/lib/payments/razorpay";
+import { createRazorpayOrder } from "@/lib/payments/razorpay";
+import { confirmRazorpayInvoice } from "@/lib/payments/confirmation";
+import {
+  expectedMinorAmount, persistOnlinePayment,
+  type OnlinePaymentInvoice,
+} from "@/lib/payments/settlement";
 import { sendEmail } from "@/lib/email/send";
 import { renderChoice, tplInvoiceCreated, tplPaymentReceived, tplLeadEnquiry, type Template } from "@/lib/email/templates";
 import {
@@ -63,6 +69,10 @@ import {
 } from "@/lib/clinical-referral";
 import { coachClientWriteDecision } from "@/lib/coach-access";
 import { buildStrengthSessions } from "@/lib/strength-sessions";
+import {
+  atomicBillingEnabled, billingOperationKey, runAtomicBillingRpc,
+  subscriptionRenewalKey,
+} from "@/lib/billing-atomic";
 
 
 // ---- helpers ---------------------------------------------------------------
@@ -1016,6 +1026,63 @@ export async function initiateCall(formData: FormData) {
 // Add a package to an existing client. Enforces the membership-prerequisite rule:
 // PT / Comprehensive can only be sold if the client has an active membership
 // covering the chosen start date.
+type AtomicJourneyTask = {
+  title: string;
+  type: string;
+  priority: string;
+  status: string;
+  due_date: string;
+};
+
+async function planAtomicJourneyTasks(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  category: string,
+  clientId: string,
+  clientName: string,
+): Promise<{ tasks: AtomicJourneyTask[]; error?: string }> {
+  let wanted: { title: string; kind: string | null; dueDays: number }[] = [];
+  if (category === "blueprint") {
+    wanted = BP_BOOKING_TASKS.map((task) => ({
+      title: `${task.label} — ${clientName}`, kind: task.kind, dueDays: BP_BOOKING_DUE_DAYS,
+    }));
+  } else if (category === COMPREHENSIVE_CATEGORY) {
+    wanted = [
+      ...INITIAL_BOOKINGS.filter((item) => !("optional" in item && item.optional)).map((item) => ({
+        title: `${item.label} — ${clientName}`, kind: item.consultKind as string, dueDays: BOOKING_DUE_DAYS,
+      })),
+      { title: `${PT_BOOKING_LABEL} — ${clientName}`, kind: null, dueDays: BOOKING_DUE_DAYS },
+    ];
+  } else if (category === PT_CATEGORY) {
+    wanted = [
+      ...PT_INITIAL_BOOKINGS.map((item) => ({
+        title: `${item.label} — ${clientName}`, kind: item.consultKind as string, dueDays: PT_BOOKING_DUE_DAYS,
+      })),
+      { title: `${PT_SESSIONS_LABEL} — ${clientName}`, kind: null, dueDays: PT_BOOKING_DUE_DAYS },
+    ];
+  }
+  if (!wanted.length) return { tasks: [] };
+
+  const titles = wanted.map((item) => item.title);
+  const [taskResult, appointmentResult] = await Promise.all([
+    supabase.from("tasks").select("title").eq("client_id", clientId).in("title", titles),
+    supabase.from("appointments").select("staff(role)").eq("client_id", clientId).neq("status", "cancelled"),
+  ]);
+  if (taskResult.error) return { tasks: [], error: `Could not check existing journey tasks: ${taskResult.error.message}` };
+  if (appointmentResult.error) return { tasks: [], error: `Could not check existing appointments: ${appointmentResult.error.message}` };
+
+  const taken = new Set(((taskResult.data ?? []) as { title: string }[]).map((row) => row.title));
+  const bookedKinds = new Set(((appointmentResult.data ?? []) as unknown as { staff: { role: string } | null }[])
+    .map((appointment) => ROLE_TO_KIND[appointment.staff?.role ?? ""]).filter(Boolean));
+  return {
+    tasks: wanted
+      .filter((item) => !taken.has(item.title) && (!item.kind || !bookedKinds.has(item.kind)))
+      .map((item) => ({
+        title: item.title, type: "Ops", priority: "High", status: "todo",
+        due_date: addDaysISO(todayISO(), item.dueDays),
+      })),
+  };
+}
+
 export async function purchasePackage(formData: FormData): Promise<{ ok: boolean; error?: string }> {
   const p = await getProfile();
   if (!p || !canBill(p.role)) return { ok: false, error: "Not permitted" };
@@ -1050,6 +1117,93 @@ export async function purchasePackage(formData: FormData): Promise<{ ok: boolean
     const ok = legacyFacility
       || hasActiveMembership((existing ?? []) as { category: string; start_date: string | null; end_date: string | null }[], start);
     if (!ok) return { ok: false, error: MEMBERSHIP_RULE_MSG };
+  }
+
+  if (atomicBillingEnabled()) {
+    const { data: client, error: clientError } = await supabase.from("clients")
+      .select("name").eq("id", client_id).maybeSingle();
+    if (clientError || !client) return { ok: false, error: clientError?.message ?? "Client not found" };
+
+    let sessionRows: ReturnType<typeof buildStrengthSessions> = [];
+    let enrollment: { trainer_id: string; hour: number; session: string } | null = null;
+    try {
+      // Preserve the existing purchase behavior exactly: non-facility packages
+      // other than PT/Comprehensive receive the default strength-session block.
+      if (!pkg.is_facility && pkg.sessions > 0 && cat !== PT_CATEGORY && cat !== COMPREHENSIVE_CATEGORY) {
+        enrollment = { trainer_id: "t0", hour: 9, session: "PT" };
+        sessionRows = buildStrengthSessions(client_id, "t0", 9, start, pkg.sessions);
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not prepare package sessions" };
+    }
+
+    let assignments: Awaited<ReturnType<typeof planCareTeamAssignments>> = { assignments: [], primaryPro: null };
+    try {
+      if (disciplinesForCategory(cat).length) {
+        assignments = await planCareTeamAssignments(supabase, client_id, {
+          actor: p.name, disciplines: disciplinesForCategory(cat), strict: true,
+        });
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not plan the care team" };
+    }
+
+    const journeyPlan = await planAtomicJourneyTasks(supabase, cat, client_id, client.name);
+    if (journeyPlan.error) return { ok: false, error: journeyPlan.error };
+
+    const tx = await runAtomicBillingRpc<{
+      amount: number; package_name: string; category: string; task_count: number;
+    }>(createAdminClient(), "purchase_package_atomic", {
+      p_operation_key: billingOperationKey(formData, "package-purchase"),
+      p_client_id: client_id,
+      p_package_id: package_id,
+      p_start_date: start,
+      p_discount: discount,
+      p_actor: p.name,
+      p_enrollment: enrollment,
+      p_sessions: sessionRows,
+      p_assignments: assignments.assignments,
+      p_tasks: journeyPlan.tasks,
+    });
+    if (!tx.ok) return { ok: false, error: tx.error };
+
+    const amount = Number(tx.data.amount ?? 0);
+    await logAudit(p, "Package purchased", tx.data.package_name, client_id);
+    await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk", "Super Admin"], {
+      title: "Package purchased",
+      body: `${client.name} · ${tx.data.package_name} · ₹${amount.toLocaleString("en-IN")}${discount > 0 ? ` (−₹${discount.toLocaleString("en-IN")})` : ""}`,
+      href: `/clients/${client_id}`, icon: "🛒",
+    });
+    const taskCount = Number(tx.data.task_count ?? 0);
+    if (tx.data.category === "blueprint" && taskCount > 0) {
+      await notifyRoles(supabase, BOOKING_OWNER, {
+        title: `BluePrint — ${taskCount} appointment${taskCount === 1 ? "" : "s"} to book`,
+        body: `${client.name} · due in ${BP_BOOKING_DUE_DAYS} days`,
+        href: `/appointments?client=${client_id}`, icon: "📅",
+        link: { kind: "client", ref: client_id },
+      });
+    }
+    if (tx.data.category === "blueprint") {
+      await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+        title: "BluePrint started",
+        body: `${client.name} — blood report requested, ${taskCount} appointment${taskCount === 1 ? "" : "s"} to book.`,
+        href: "/onboarding", icon: "🧬",
+      });
+    } else if (tx.data.category === COMPREHENSIVE_CATEGORY) {
+      await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+        title: "Comprehensive started",
+        body: `${client.name} — blood panel requested, care team assigned, ${taskCount} booking${taskCount === 1 ? "" : "s"} to make.`,
+        href: "/onboarding", icon: "🩺",
+      });
+    } else if (tx.data.category === PT_CATEGORY) {
+      await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], {
+        title: "PT started",
+        body: `${client.name} — trainer & coach assigned, ${taskCount} booking${taskCount === 1 ? "" : "s"} to make.`,
+        href: "/onboarding", icon: "🏋",
+      });
+    }
+    revalidatePath(`/clients/${client_id}`);
+    return { ok: true };
   }
 
   const amount = Math.max(0, Number(pkg.price ?? 0) - discount);
@@ -1103,6 +1257,19 @@ export async function voidClientPackage(formData: FormData): Promise<{ ok: boole
   if (!rowId) return { ok: false, error: "Missing package" };
 
   const supabase = await createClient();
+  if (atomicBillingEnabled()) {
+    const tx = await runAtomicBillingRpc<{
+      client_id: string; package_name: string | null; status: string;
+    }>(createAdminClient(), "void_client_package_atomic", {
+      p_operation_key: billingOperationKey(formData, "package-void"),
+      p_package_row_id: rowId,
+      p_actor: p.name,
+    });
+    if (!tx.ok) return { ok: false, error: tx.error };
+    await logAudit(p, "Package removed", tx.data.package_name ?? "package", tx.data.client_id);
+    revalidatePath(`/clients/${tx.data.client_id}`);
+    return { ok: true };
+  }
   const { data: row } = await supabase.from("client_packages")
     .select("package_name, category, package_id, status").eq("id", rowId).maybeSingle();
   if (!row) return { ok: false, error: "Package not found" };
@@ -1190,6 +1357,29 @@ export async function renewPackage(formData: FormData): Promise<{ ok: boolean; e
   if (!pkg) return { ok: false, error: "Package not found" };
   const category = packageCategory(package_id, pkg.is_facility);
   if (category === "blueprint") return { ok: false, error: "BluePrint is a one-time report — add it as a new package instead of renewing." };
+
+  if (atomicBillingEnabled()) {
+    const tx = await runAtomicBillingRpc<{
+      package_name: string; category: string; amount: number;
+      start_date: string; end_date: string | null;
+    }>(createAdminClient(), "renew_package_atomic", {
+      p_operation_key: billingOperationKey(formData, "package-renewal"),
+      p_client_id: client_id,
+      p_package_id: package_id,
+      p_actor: p.name,
+    });
+    if (!tx.ok) return { ok: false, error: tx.error };
+    await logAudit(p, "Package renewed", tx.data.package_name, `${tx.data.category} · ${tx.data.start_date} → ${tx.data.end_date ?? "—"}`);
+    const { data: client } = await supabase.from("clients").select("name").eq("id", client_id).maybeSingle();
+    await notifyRoles(supabase, ["Administrator", "Manager", "Front Desk", "Super Admin"], {
+      title: "Package renewed",
+      body: `${client?.name ?? "Client"} · ${tx.data.package_name} · ₹${Number(tx.data.amount).toLocaleString("en-IN")} → ${tx.data.end_date ?? "—"}`,
+      href: `/clients/${client_id}`, icon: "↻",
+    });
+    revalidatePath(`/clients/${client_id}`);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  }
 
   // Continue from the latest active term of the SAME category, else start today.
   const { data: cur } = await supabase.from("client_packages")
@@ -3222,38 +3412,63 @@ export async function markInvoicePaid(_prev: PaidState, formData: FormData): Pro
   return { ok: true };
 }
 
-export async function refundInvoice(formData: FormData) {
+export type RefundState = { ok?: boolean; error?: string };
+
+export async function refundInvoice(_prev: RefundState, formData: FormData): Promise<RefundState> {
   const p = await getProfile();
-  if (!p || !canManageInvoices(p.role)) return;
+  if (!p || !canManageInvoices(p.role)) return { error: "Not permitted." };
   const id = String(formData.get("id"));
   const supabase = await createClient();
+
+  if (atomicBillingEnabled()) {
+    const tx = await runAtomicBillingRpc<{
+      invoice_id: string; invoice_num: number | null; amount: number; status: string;
+    }>(createAdminClient(), "refund_invoice_atomic", {
+      p_operation_key: billingOperationKey(formData, "invoice-refund"),
+      p_invoice_id: id,
+      p_actor: p.name,
+    });
+    if (!tx.ok) return { error: tx.error };
+    await logAudit(p, "Invoice refunded", `INV-${String(tx.data.invoice_num ?? 0).padStart(3, "0")}`, `₹${tx.data.amount}`);
+    revalidatePath("/billing");
+    revalidatePath("/finsheets");
+    revalidatePath("/", "layout");
+    return { ok: true };
+  }
+
   const { data: inv } = await supabase.from("invoices")
     .select("num, amount, status, method, client_id").eq("id", id).maybeSingle();
   const row = inv as { num: number | null; amount: number; status: string; method: string | null; client_id: string | null } | null;
   // Only a genuinely Paid invoice can be refunded — refunding an Unpaid one
   // would flip the status for money that was never collected (and, below, post a
   // phantom outflow into the cash book).
-  if (!row || row.status !== "Paid") return;
+  if (!row || row.status !== "Paid") return { error: "Only a paid invoice can be refunded." };
 
-  await supabase.from("invoices").update({ status: "Refunded" }).eq("id", id);
+  const { error: invoiceError } = await supabase.from("invoices").update({ status: "Refunded" }).eq("id", id);
+  if (invoiceError) return { error: `Couldn't mark the invoice refunded — ${invoiceError.message}.` };
 
   // Reverse the original receipt in the cash book, mirroring the "in" entry
   // markInvoicePaid posted, so balances aren't left overstated after a refund.
   if (Number(row.amount) > 0) {
     const method = row.method ?? "Cash";
     const account = method.trim().toLowerCase() === "cash" ? "cash" : "bank";
-    await supabase.from("ledger").insert({
+    const { error: ledgerError } = await supabase.from("ledger").insert({
       account, date: todayISO(),
       ref: `INV-${String(row.num ?? 0).padStart(3, "0")} refund`,
       party: row.client_id ? await clientName(supabase, row.client_id) : null,
       kind: method, direction: "out",
       amount: Number(row.amount) || 0, created_by: p.name,
     });
+    if (ledgerError) {
+      await logAudit(p, "Refund cash-book entry FAILED", `INV-${String(row.num ?? 0).padStart(3, "0")}`, ledgerError.message);
+      return { error: `Invoice marked refunded, but the cash-book reversal failed — ${ledgerError.message}. Apply migration 0179 before enabling atomic billing.` };
+    }
   }
   await logAudit(p, "Invoice refunded", null, `₹${row.amount}`);
   revalidatePath("/billing");
   revalidatePath("/finsheets");
   revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 // ---- subscriptions / recurring billing -------------------------------------
@@ -3305,38 +3520,94 @@ export async function toggleAutoRenew(formData: FormData) {
   revalidatePath("/subscriptions");
 }
 
-async function renewOne(supabase: Awaited<ReturnType<typeof createClient>>, sub: { id: string; client_id: string; package_id: string | null; amount: number; interval_days: number; renews_on: string | null }, actor: string) {
+type SubscriptionRow = {
+  id: string;
+  client_id: string;
+  package_id: string | null;
+  amount: number;
+  interval_days: number;
+  renews_on: string | null;
+};
+
+export type SubscriptionRenewState = { ok?: boolean; error?: string; renewed?: number; nextMutationKey?: string };
+
+async function renewOne(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sub: SubscriptionRow,
+  actor: string,
+  operationKey: string,
+  requireDue: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  if (atomicBillingEnabled()) {
+    const tx = await runAtomicBillingRpc(createAdminClient(), "renew_subscription_atomic", {
+      p_operation_key: operationKey,
+      p_subscription_id: sub.id,
+      p_actor: actor,
+      p_require_due: requireDue,
+    });
+    return tx.ok ? { ok: true } : { ok: false, error: tx.error };
+  }
+
+  // Production stays on this legacy path until migration 0179 is applied and
+  // the environment flag is deliberately enabled. Check every write meanwhile
+  // so a failure is visible instead of being reported as a successful renewal.
   const num = await nextInvoiceNum(supabase);
-  const { data: pkg } = await supabase.from("packages").select("name").eq("id", sub.package_id ?? "").maybeSingle();
-  await supabase.from("invoices").insert({
+  const { data: pkg, error: packageError } = await supabase.from("packages").select("name").eq("id", sub.package_id ?? "").maybeSingle();
+  if (packageError) return { ok: false, error: `Could not load the subscription package: ${packageError.message}` };
+  const { error: invoiceError } = await supabase.from("invoices").insert({
     num, client_id: sub.client_id, description: `${pkg?.name ?? "Subscription"} — renewal`,
     amount: sub.amount, status: "Unpaid", issued_date: todayISO(), created_by: actor,
   });
+  if (invoiceError) return { ok: false, error: `Could not create the renewal invoice: ${invoiceError.message}` };
   const base = sub.renews_on && sub.renews_on > todayISO() ? sub.renews_on : todayISO();
-  await supabase.from("subscriptions").update({ renews_on: addDays(base, sub.interval_days) }).eq("id", sub.id);
+  const { error: renewalError } = await supabase.from("subscriptions").update({ renews_on: addDays(base, sub.interval_days) }).eq("id", sub.id);
+  if (renewalError) {
+    return { ok: false, error: `The invoice was created, but the renewal date could not be advanced: ${renewalError.message}. Apply migration 0179 before enabling atomic billing.` };
+  }
+  return { ok: true };
 }
 
-export async function renewNow(formData: FormData) {
+export async function renewNow(_prev: SubscriptionRenewState, formData: FormData): Promise<SubscriptionRenewState> {
   const p = await getProfile();
-  if (!p || !canBill(p.role)) return;
+  if (!p || !canBill(p.role)) return { error: "Not permitted." };
   const id = String(formData.get("id"));
   const supabase = await createClient();
-  const { data: sub } = await supabase.from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on").eq("id", id).maybeSingle();
-  if (sub) { await renewOne(supabase, sub, p.name); await logAudit(p, "Subscription renewed (manual)", null, null); }
-  revalidatePath("/subscriptions");
-}
-
-export async function processDueRenewals() {
-  const p = await getProfile();
-  if (!p || !canBill(p.role)) return;
-  const supabase = await createClient();
-  const { data: due } = await supabase
-    .from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on")
-    .eq("status", "active").eq("auto_renew", true).lte("renews_on", todayISO());
-  for (const sub of (due ?? [])) await renewOne(supabase, sub, p.name);
-  await logAudit(p, "Processed due renewals", null, `${(due ?? []).length} renewed`);
+  const { data: sub, error: subscriptionError } = await supabase.from("subscriptions")
+    .select("id, client_id, package_id, amount, interval_days, renews_on").eq("id", id).maybeSingle();
+  if (subscriptionError) return { error: `Could not load the subscription: ${subscriptionError.message}` };
+  if (!sub) return { error: "Subscription not found." };
+  const renewed = await renewOne(
+    supabase, sub, p.name, billingOperationKey(formData, "subscription-renewal"), false,
+  );
+  if (!renewed.ok) return { error: renewed.error };
+  await logAudit(p, "Subscription renewed (manual)", null, null);
   revalidatePath("/subscriptions");
   revalidatePath("/billing");
+  return { ok: true, renewed: 1, nextMutationKey: crypto.randomUUID() };
+}
+
+export async function processDueRenewals(_prev: SubscriptionRenewState, _formData: FormData): Promise<SubscriptionRenewState> {
+  const p = await getProfile();
+  if (!p || !canBill(p.role)) return { error: "Not permitted." };
+  const supabase = await createClient();
+  const { data: due, error: dueError } = await supabase
+    .from("subscriptions").select("id, client_id, package_id, amount, interval_days, renews_on")
+    .eq("status", "active").eq("auto_renew", true).lte("renews_on", todayISO());
+  if (dueError) return { error: `Could not load due subscriptions: ${dueError.message}` };
+  let renewedCount = 0;
+  for (const sub of (due ?? []) as SubscriptionRow[]) {
+    const renewed = await renewOne(
+      supabase, sub, p.name, subscriptionRenewalKey(sub.id, sub.renews_on), true,
+    );
+    if (!renewed.ok) {
+      return { error: `${renewedCount} renewal${renewedCount === 1 ? " was" : "s were"} completed before processing stopped. ${renewed.error}` };
+    }
+    renewedCount++;
+  }
+  await logAudit(p, "Processed due renewals", null, `${renewedCount} renewed`);
+  revalidatePath("/subscriptions");
+  revalidatePath("/billing");
+  return { ok: true, renewed: renewedCount };
 }
 
 // ---- EMR: problems / allergies / meds / vitals / SOAP ----------------------
@@ -6086,13 +6357,67 @@ export async function startInvoicePayment(formData: FormData) {
 
   const id = String(formData.get("id"));
   const supabase = await createClient();
-  const { data: inv } = await supabase.from("invoices").select("id, num, amount, status, description").eq("id", id).maybeSingle();
+  const { data: inv, error: invoiceError } = await supabase.from("invoices")
+    .select("id, num, amount, status, description, gateway, gateway_order_id, gateway_order_amount, gateway_order_currency")
+    .eq("id", id).maybeSingle();
+  if (invoiceError) return { configured: true as const, ok: false, retryable: true, error: `Could not load invoice: ${invoiceError.message}` };
   if (!inv || inv.status !== "Unpaid") return { configured: true as const, ok: false, error: "Invoice not payable" };
+  const expectedAmount = expectedMinorAmount(Number(inv.amount));
+  if (!Number.isSafeInteger(expectedAmount) || expectedAmount <= 0) {
+    return { configured: true as const, ok: false, error: "Invoice amount is not payable online" };
+  }
 
   try {
     if (cfg.provider === "razorpay") {
+      if (inv.gateway_order_id) {
+        if (inv.gateway === "razorpay" && Number(inv.gateway_order_amount) === expectedAmount
+            && String(inv.gateway_order_currency).toUpperCase() === "INR") {
+          return {
+            configured: true as const, ok: true, provider: "razorpay" as const,
+            orderId: inv.gateway_order_id, amount: expectedAmount, currency: "INR",
+            keyId: cfg.publicKeyId, invoiceId: id,
+            description: inv.description ?? `Invoice INV-${inv.num ?? ""}`,
+          };
+        }
+        return {
+          configured: true as const, ok: false,
+          error: "This invoice already has a payment order with missing or stale validation metadata. Reconcile it before retrying.",
+        };
+      }
+
       const order = await createRazorpayOrder(Number(inv.amount), `INV-${inv.num ?? id.slice(0, 6)}`, { invoice_id: id });
-      await supabase.from("invoices").update({ gateway: "razorpay", gateway_order_id: order.id }).eq("id", id);
+      if (!order.id || order.amount !== expectedAmount || order.currency.toUpperCase() !== "INR") {
+        return { configured: true as const, ok: false, error: "Gateway returned an order that does not match the invoice." };
+      }
+      const { data: bound, error: bindError } = await supabase.from("invoices").update({
+        gateway: "razorpay", gateway_order_id: order.id,
+        gateway_order_amount: order.amount, gateway_order_currency: order.currency,
+      }).eq("id", id).eq("status", "Unpaid").eq("amount", inv.amount)
+        .is("gateway_order_id", null).select("id").maybeSingle();
+      if (bindError) {
+        return { configured: true as const, ok: false, retryable: true, error: `Payment order was not saved; retry safely. ${bindError.message}` };
+      }
+      if (!bound) {
+        // A concurrent click may have won the race. Return only the order that
+        // actually became authoritative in the invoice row.
+        const { data: winner, error: winnerError } = await supabase.from("invoices")
+          .select("status, amount, description, gateway, gateway_order_id, gateway_order_amount, gateway_order_currency")
+          .eq("id", id).maybeSingle();
+        if (winnerError || !winner) {
+          return { configured: true as const, ok: false, retryable: true, error: `Could not confirm the saved payment order. ${winnerError?.message ?? "Invoice changed."}` };
+        }
+        if (winner.status === "Unpaid" && winner.gateway === "razorpay" && winner.gateway_order_id
+            && Number(winner.gateway_order_amount) === expectedAmount
+            && String(winner.gateway_order_currency).toUpperCase() === "INR") {
+          return {
+            configured: true as const, ok: true, provider: "razorpay" as const,
+            orderId: winner.gateway_order_id, amount: expectedAmount, currency: "INR",
+            keyId: cfg.publicKeyId, invoiceId: id,
+            description: winner.description ?? `Invoice INV-${inv.num ?? ""}`,
+          };
+        }
+        return { configured: true as const, ok: false, retryable: true, error: "Invoice changed while the payment order was being saved. Retry safely." };
+      }
       return {
         configured: true as const, ok: true, provider: "razorpay" as const,
         orderId: order.id, amount: order.amount, currency: order.currency,
@@ -6114,21 +6439,44 @@ export async function confirmInvoicePayment(formData: FormData) {
   const orderId = String(formData.get("order_id"));
   const paymentId = String(formData.get("payment_id"));
   const signature = String(formData.get("signature"));
-  if (!verifyCheckoutSignature(orderId, paymentId, signature)) {
-    return { ok: false, error: "Signature verification failed" };
-  }
+  if (!id || !orderId || !paymentId || !signature) return { ok: false, retryable: false, error: "Payment confirmation is incomplete." };
+  const cfg = paymentConfig();
+  if (!cfg.configured || cfg.provider !== "razorpay") return { ok: false, retryable: true, error: "Razorpay payments are not configured." };
   const supabase = await createClient();
-  await supabase.from("invoices").update({
-    status: "Paid", paid_date: todayISO(), method: "Online",
-    gateway: "razorpay", gateway_order_id: orderId, gateway_payment_id: paymentId,
-  }).eq("id", id);
-  await logAudit(p, "Invoice paid online", `INV ${id.slice(0, 6)}`, paymentId);
-  // best-effort receipt email
-  const { data: inv } = await supabase.from("invoices").select("num, amount, client_id, clients(name, email)").eq("id", id).maybeSingle();
-  const invc = inv as unknown as { num: number | null; amount: number; client_id: string | null; clients: { name: string | null; email: string | null } | null } | null;
-  if (invc?.clients?.email) await notifyEmail({ supabase, to: invc.clients.email, clientId: invc.client_id, template: "payment", tpl: tplPaymentReceived(invc.clients.name ?? "there", `INV-${String(invc.num ?? 0).padStart(3, "0")}`, Number(invc.amount)), actor: p.name });
+  const { data: inv, error: invoiceError } = await supabase.from("invoices")
+    .select("id, num, status, amount, client_id, gateway, gateway_order_id, gateway_order_amount, gateway_order_currency, gateway_payment_id, clients(name, email)")
+    .eq("id", id).maybeSingle();
+  if (invoiceError) return { ok: false, retryable: true, error: `Could not load invoice: ${invoiceError.message}` };
+  if (!inv) return { ok: false, retryable: false, error: "Invoice not found." };
+
+  const invoice = inv as unknown as OnlinePaymentInvoice & {
+    num: number | null;
+    client_id: string | null;
+    clients: { name: string | null; email: string | null } | null;
+  };
+  const result = await confirmRazorpayInvoice({
+    invoice,
+    submittedOrderId: orderId,
+    paymentId,
+    signature,
+    actor: p.name,
+  }, {
+    persist: (invoiceId, payment, actor) => persistOnlinePayment(createAdminClient(), invoiceId, payment, actor),
+  });
+  if (!result.ok) return result;
+
+  if (!result.data.idempotent_replay) {
+    // best-effort receipt email; payment persistence has already committed.
+    if (invoice.clients?.email) await notifyEmail({
+      supabase, to: invoice.clients.email, clientId: invoice.client_id,
+      template: "payment",
+      tpl: tplPaymentReceived(invoice.clients.name ?? "there", `INV-${String(invoice.num ?? 0).padStart(3, "0")}`, Number(invoice.amount)),
+      actor: p.name,
+    });
+  }
   revalidatePath("/billing");
-  return { ok: true };
+  revalidatePath("/finsheets");
+  return { ok: true, idempotent: result.data.idempotent_replay };
 }
 
 // ---- dynamic intake / consent forms ----------------------------------------

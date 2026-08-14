@@ -14,6 +14,7 @@ import PayOnlineButton from "@/components/PayOnlineButton";
 import { paymentStatus } from "@/lib/payments/config";
 import { raiseInvoiceForClient } from "@/lib/actions";
 import BackButton from "@/components/BackButton";
+import { assertCriticalQueries } from "@/lib/runtime-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +47,13 @@ export default async function BillingPage(props: { searchParams: Promise<{ tab?:
   const statusFilter = ["paid", "unpaid", "refunded"].includes((searchParams.status ?? "").toLowerCase()) ? (searchParams.status!.toLowerCase()) : null;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const invoiceResult = await supabase
     .from("invoices")
     .select("id, num, description, amount, status, method, issued_date, paid_date, clients(id, name)")
     .order("created_at", { ascending: false })
     .limit(300);
+  assertCriticalQueries("billing", [["invoices", invoiceResult]]);
+  const data = invoiceResult.data;
 
   const invoices = (data ?? []) as unknown as Inv[];
   const today = todayISO();
@@ -87,11 +90,19 @@ export default async function BillingPage(props: { searchParams: Promise<{ tab?:
   // leak. Front desk / finance can raise the invoice straight from the row.
   let unbilled: { id: string; name: string; pkg: string; price: number }[] = [];
   if (tab === "unbilled") {
-    const [{ data: cl }, { data: pk }, { data: invClients }] = await Promise.all([
+    const [clientResult, packageResult, invoicedClientResult] = await Promise.all([
       supabase.from("clients").select("id, name, package_id"),
       supabase.from("packages").select("id, name, price, is_facility"),
       supabase.from("invoices").select("client_id"),
     ]);
+    assertCriticalQueries("billing_unbilled", [
+      ["clients", clientResult],
+      ["packages", packageResult],
+      ["invoiced_clients", invoicedClientResult],
+    ]);
+    const cl = clientResult.data;
+    const pk = packageResult.data;
+    const invClients = invoicedClientResult.data;
     const pkgMap = new Map(((pk ?? []) as { id: string; name: string; price: number }[]).map((p) => [p.id, p]));
     const invSet = new Set(((invClients ?? []) as { client_id: string | null }[]).map((r) => r.client_id).filter(Boolean));
     unbilled = ((cl ?? []) as { id: string; name: string; package_id: string | null }[])
@@ -185,11 +196,7 @@ export default async function BillingPage(props: { searchParams: Promise<{ tab?:
         </div>
       )}
 
-      {error ? (
-        <div style={{ background: "var(--red-bg)", color: "var(--red-text)", border: "1px solid #fecaca", borderRadius: "var(--radius)", padding: "14px 16px", fontSize: 14 }}>
-          <b>Couldn&apos;t load invoices.</b> {error.message}
-        </div>
-      ) : tab === "unbilled" ? (
+      {tab === "unbilled" ? (
         <div style={{ ...box, overflow: "hidden" }}>
           <div style={{ padding: "10px 16px", fontSize: 12.5, color: "var(--muted)", borderBottom: "1px solid var(--border)" }}>Clients on a paid package with no invoice raised — {unbilled.length} · {money(unbilled.reduce((s, u) => s + u.price, 0))} not yet billed.</div>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>

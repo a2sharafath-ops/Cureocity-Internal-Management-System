@@ -68,6 +68,7 @@ const SECTIONS: NavSection[] = [
     title: "Governance",
     items: [
       { href: "/compliance", label: "Governance & Interop", icon: "🛡" },
+      { href: "/issues", label: "Issue Reports", icon: "⚑" },
     ],
   },
   {

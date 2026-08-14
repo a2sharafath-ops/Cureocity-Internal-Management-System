@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { markInvoicePaid, refundInvoice, nudgeRole, type PaidState } from "@/lib/actions";
+import { markInvoicePaid, refundInvoice, nudgeRole, type PaidState, type RefundState } from "@/lib/actions";
 import { isBillingOverseer } from "@/lib/roles";
 import SubmitButton from "@/components/SubmitButton";
 
@@ -18,6 +18,8 @@ export default function InvoiceActions({
   // rejected nothing is posted to the cash book, and the collector is told.
   // Silently succeeding was how the books could go out of balance.
   const [paidState, markPaid] = useActionState<PaidState, FormData>(markInvoicePaid, {});
+  const [refundState, refund] = useActionState<RefundState, FormData>(refundInvoice, {});
+  const [refundKey] = useState(() => crypto.randomUUID());
 
   if (status === "Refunded") return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
 
@@ -26,12 +28,16 @@ export default function InvoiceActions({
     // Desk) who can mark paid don't get a refund control.
     if (!canRefund) return <span style={{ color: "var(--muted)", fontSize: 12 }}>—</span>;
     return (
-      <form action={refundInvoice}>
-        <input type="hidden" name="id" value={id} />
-        <SubmitButton pendingLabel="Refunding…" doneLabel="✓ Refunded" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: "var(--red)" }}>
-          Refund
-        </SubmitButton>
-      </form>
+      <span style={{ display: "inline-flex", flexDirection: "column", gap: 4 }}>
+        <form action={refund}>
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="mutation_key" value={refundKey} />
+          <SubmitButton pendingLabel="Refunding…" doneLabel="✓ Refunded" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 12, cursor: "pointer", color: "var(--red)" }}>
+            Refund
+          </SubmitButton>
+        </form>
+        {refundState.error && <span style={{ fontSize: 11.5, color: "var(--red-text)", maxWidth: 320 }}>{refundState.error}</span>}
+      </span>
     );
   }
 

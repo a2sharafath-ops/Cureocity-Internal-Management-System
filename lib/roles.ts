@@ -106,6 +106,7 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   // (canAdmin) and in each server action.
   "/users": ["Administrator", "Manager"],
   "/compliance": ["Administrator", "Manager"],
+  "/issues": ["Administrator"],
   // The task board is Super-Admin-only for now. The system still CREATES tasks
   // for everyone (booking chases, SLA breaches) and they still drive the
   // "Needs your attention" panels — this only closes the /tasks page itself.

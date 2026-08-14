@@ -8,6 +8,7 @@ import { voidClientPackage } from "@/lib/actions";
 // package isn't deleted, just marked void (kept for the audit trail).
 export default function VoidPackageButton({ clientId, packageRowId, packageName }: { clientId: string; packageRowId: string; packageName: string }) {
   const [confirming, setConfirming] = useState(false);
+  const [mutationKey] = useState(() => crypto.randomUUID());
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -16,6 +17,7 @@ export default function VoidPackageButton({ clientId, packageRowId, packageName 
     const fd = new FormData();
     fd.set("client_id", clientId);
     fd.set("package_row_id", packageRowId);
+    fd.set("mutation_key", mutationKey);
     start(async () => {
       const r = await voidClientPackage(fd);
       if (!r.ok) { setErr(r.error ?? "Could not void"); setConfirming(false); }

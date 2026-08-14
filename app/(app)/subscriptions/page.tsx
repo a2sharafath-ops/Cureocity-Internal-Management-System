@@ -4,11 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
 import { canSee, canBill } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
-import { processDueRenewals } from "@/lib/actions";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import SubForm from "@/components/SubForm";
 import SubActions from "@/components/SubActions";
 import BackButton from "@/components/BackButton";
+import ProcessRenewalsButton from "@/components/ProcessRenewalsButton";
+import { assertCriticalQueries } from "@/lib/runtime-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,19 @@ export default async function SubscriptionsPage() {
   const editable = canBill(me.role);
 
   const supabase = await createClient();
-  const [{ data: subData }, { data: clientData }, { data: pkgData }] = await Promise.all([
+  const [subResult, clientResult, pkgResult] = await Promise.all([
     supabase.from("subscriptions").select("id, amount, status, auto_renew, renews_on, interval_days, clients(id, name), packages(name)").order("renews_on"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("packages").select("id, name").eq("active", true).order("id"),
   ]);
+  assertCriticalQueries("subscriptions", [
+    ["subscriptions", subResult],
+    ["clients", clientResult],
+    ["packages", pkgResult],
+  ]);
+  const subData = subResult.data;
+  const clientData = clientResult.data;
+  const pkgData = pkgResult.data;
   const subs = (subData ?? []) as unknown as Sub[];
   const clients = (clientData ?? []) as { id: string; name: string }[];
   const packages = (pkgData ?? []) as { id: string; name: string }[];
@@ -53,11 +62,7 @@ export default async function SubscriptionsPage() {
         <h1 style={{ fontSize: 20, margin: 0 }}>Subscriptions</h1>
         <span style={{ flex: 1 }} />
         {editable && dueCount > 0 && (
-          <form action={processDueRenewals}>
-            <button type="submit" style={{ background: "var(--amber)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 15px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              Process {dueCount} due renewal{dueCount === 1 ? "" : "s"}
-            </button>
-          </form>
+          <ProcessRenewalsButton count={dueCount} />
         )}
       </div>
       <p style={{ color: "var(--muted)", fontSize: 13, margin: "6px 0 16px" }}>

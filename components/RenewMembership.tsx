@@ -12,6 +12,7 @@ type Pkg = { id: string; name: string; price: number; is_facility: boolean };
 export default function RenewMembership({ clientId, packages, currentPackageId }: { clientId: string; packages: Pkg[]; currentPackageId?: string | null }) {
   const [open, setOpen] = useState(false);
   const [pkgId, setPkgId] = useState(currentPackageId && packages.some((m) => m.id === currentPackageId) ? currentPackageId : "");
+  const [mutationKey, setMutationKey] = useState(() => crypto.randomUUID());
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -20,9 +21,13 @@ export default function RenewMembership({ clientId, packages, currentPackageId }
     if (!pkgId) { setErr("Pick a package"); return; }
     const fd = new FormData();
     fd.set("client_id", clientId); fd.set("package_id", pkgId);
+    fd.set("mutation_key", mutationKey);
     start(async () => {
       const r = await renewPackage(fd);
-      if (r.ok) setOpen(false);
+      if (r.ok) {
+        setOpen(false);
+        setMutationKey(crypto.randomUUID());
+      }
       else setErr(r.error ?? "Could not renew");
     });
   };

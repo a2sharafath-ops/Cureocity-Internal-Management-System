@@ -9,6 +9,7 @@ import { monthTrend, sumInMonth } from "@/lib/trend";
 import AttentionPanel, { type Flag } from "@/components/AttentionPanel";
 import { withChaseHistory } from "@/lib/chase-log";
 import { packageCategory } from "@/lib/packages";
+import { assertCriticalQueries } from "@/lib/runtime-errors";
 
 const money = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -33,10 +34,7 @@ export default async function FinanceDashboard({ name }: { name: string }) {
   const lastMonth = addDays(month + "-01", -1).slice(0, 7);
   const in30 = addDays(today, 30);
 
-  const [
-    { data: invData }, { data: clientData }, { data: pkgData },
-    { data: cpData }, { data: subData }, { data: expData },
-  ] = await Promise.all([
+  const [invoiceResult, clientResult, packageResult, clientPackageResult, subscriptionResult, expenseResult] = await Promise.all([
     supabase.from("invoices").select("id, num, client_id, amount, status, issued_date, paid_date, description"),
     supabase.from("clients").select("id, code, name, package_id, joined"),
     supabase.from("packages").select("id, name, price, validity, is_facility"),
@@ -44,6 +42,20 @@ export default async function FinanceDashboard({ name }: { name: string }) {
     supabase.from("subscriptions").select("id, client_id, status, renews_on, amount"),
     supabase.from("expenses").select("id, amount, category, date, description"),
   ]);
+  assertCriticalQueries("finance_dashboard", [
+    ["invoices", invoiceResult],
+    ["clients", clientResult],
+    ["packages", packageResult],
+    ["client_packages", clientPackageResult],
+    ["subscriptions", subscriptionResult],
+    ["expenses", expenseResult],
+  ]);
+  const invData = invoiceResult.data;
+  const clientData = clientResult.data;
+  const pkgData = packageResult.data;
+  const cpData = clientPackageResult.data;
+  const subData = subscriptionResult.data;
+  const expData = expenseResult.data;
 
   const invoices = (invData ?? []) as { id: string; num: number | null; client_id: string | null; amount: number; status: string; issued_date: string | null; paid_date: string | null; description: string | null }[];
   const clients = (clientData ?? []) as { id: string; code: string | null; name: string; package_id: string | null; joined: string | null }[];

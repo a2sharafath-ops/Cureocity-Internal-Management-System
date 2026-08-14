@@ -19,6 +19,7 @@ import { todayAgenda } from "@/lib/today-agenda";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import { RingMeter } from "@/components/Meters";
 import { todayISO } from "@/lib/today";
+import { assertCriticalQueries } from "@/lib/runtime-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,18 @@ export default async function DashboardPage() {
     supabase.from("consultations").select("id, kind, clients(id, name)").not("status", "in", '("completed","cancelled")').order("created_at", { ascending: false }).limit(8),
     supabase.from("followups").select("id, day, label").eq("status", "pending").lt("due_date", TODAY),
     supabase.from("followups").select("id, priority, day, label").eq("status", "pending").eq("due_date", TODAY),
+  ]);
+  assertCriticalQueries("dashboard", [
+    ["client_count", clientsC],
+    ["lead_count", leadsC],
+    ["appointments", apptRes],
+    ["sessions", sessRes],
+    ["paid_invoices", paidRes],
+    ["renewals", renewC],
+    ["overdue_invoices", overdueC],
+    ["pending_consultations", consultsPend],
+    ["overdue_followups", fuOverdueC],
+    ["today_followups", fuTodayRes],
   ]);
 
   const appts = (apptRes.data ?? []) as unknown as { id: string; type: string | null; hour: number; status: string; clients: { id: string; name: string } | null }[];

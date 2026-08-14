@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { paymentConfig } from "@/lib/payments/config";
 import { verifyRazorpayWebhook } from "@/lib/payments/razorpay";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { todayISO } from "@/lib/today";
+import {
+  capturedPaymentFromWebhook, persistOnlinePayment, validateCapturedPayment,
+  type OnlinePaymentInvoice,
+} from "@/lib/payments/settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -22,26 +25,41 @@ export async function POST(req: Request) {
     if (!verifyRazorpayWebhook(raw, signature)) {
       return NextResponse.json({ ok: false, reason: "bad-signature" }, { status: 400 });
     }
-    let event: {
-      event?: string;
-      payload?: { payment?: { entity?: { id?: string; order_id?: string } } };
-    };
-    try { event = JSON.parse(raw); } catch { return NextResponse.json({ ok: false }, { status: 400 }); }
-
-    if (event.event === "payment.captured" || event.event === "order.paid") {
-      const pay = event.payload?.payment?.entity;
-      const orderId = pay?.order_id;
-      const paymentId = pay?.id;
-      if (orderId) {
-        // service-role client: webhooks have no user session
-        const admin = createAdminClient();
-        await admin.from("invoices").update({
-          status: "Paid", paid_date: todayISO(), method: "Online",
-          gateway: "razorpay", gateway_payment_id: paymentId ?? null,
-        }).eq("gateway_order_id", orderId).eq("status", "Unpaid");
-      }
+    const parsed = capturedPaymentFromWebhook(raw);
+    if (parsed.kind === "invalid") {
+      return NextResponse.json({ ok: false, reason: "invalid-event", detail: parsed.error }, { status: 400 });
     }
-    return NextResponse.json({ ok: true }, { status: 200 });
+    if (parsed.kind === "ignored") {
+      return NextResponse.json({ ok: true, ignored: true }, { status: 200 });
+    }
+
+    // Service-role: webhooks have no user session. First resolve the invoice by
+    // its server-stored order and validate the signed amount/currency/status.
+    const admin = createAdminClient();
+    const { data: invoiceData, error: invoiceError } = await admin.from("invoices")
+      .select("id, status, amount, gateway, gateway_order_id, gateway_order_amount, gateway_order_currency, gateway_payment_id")
+      .eq("gateway_order_id", parsed.payment.order_id).maybeSingle();
+    if (invoiceError) {
+      return NextResponse.json({ ok: false, retryable: true, reason: "invoice-read-failed" }, { status: 503 });
+    }
+    if (!invoiceData) {
+      // The Razorpay account may serve another application. It is authenticated
+      // but not ours, so acknowledge without mutating or inviting endless retry.
+      return NextResponse.json({ ok: true, ignored: true, reason: "unknown-order" }, { status: 200 });
+    }
+    const invoice = invoiceData as OnlinePaymentInvoice;
+    const validation = validateCapturedPayment(invoice, parsed.payment);
+    if (!validation.ok) {
+      return NextResponse.json({ ok: false, retryable: false, reason: "payment-mismatch" }, { status: 409 });
+    }
+    const persisted = await persistOnlinePayment(admin, invoice.id, parsed.payment, "Razorpay webhook");
+    if (!persisted.ok) {
+      return NextResponse.json(
+        { ok: false, retryable: persisted.retryable, reason: "persistence-failed" },
+        { status: persisted.retryable ? 503 : 409 },
+      );
+    }
+    return NextResponse.json({ ok: true, idempotent: persisted.data.idempotent_replay }, { status: 200 });
   }
 
   return NextResponse.json({ ok: false, reason: "provider-unsupported" }, { status: 200 });

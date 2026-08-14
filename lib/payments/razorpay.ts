@@ -32,6 +32,29 @@ export async function createRazorpayOrder(amountInMajor: number, receipt: string
   return (await res.json()) as { id: string; amount: number; currency: string; receipt: string; status: string };
 }
 
+export type RazorpayPayment = {
+  id: string;
+  order_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  captured?: boolean;
+};
+
+/** Fetch the authoritative payment entity before fulfilling a checkout. */
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPayment> {
+  const res = await fetch(`${API}/payments/${encodeURIComponent(paymentId)}`, {
+    method: "GET",
+    headers: { Authorization: authHeader() },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Razorpay payment verification failed (${res.status}): ${text}`);
+  }
+  return (await res.json()) as RazorpayPayment;
+}
+
 /** Verify the webhook signature (X-Razorpay-Signature) against the raw body. */
 export function verifyRazorpayWebhook(rawBody: string, signature: string | null): boolean {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
