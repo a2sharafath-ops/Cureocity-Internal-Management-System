@@ -7,6 +7,7 @@ import {
 } from "@/lib/diet-assessment";
 import { saveDietAssessment, submitDietAssessment, reviewDietAssessment, newDietAssessmentVersion } from "@/lib/actions";
 import DeliverButton from "@/components/DeliverButton";
+import styles from "@/components/DietAssessmentBuilder.module.css";
 
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 const inp: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
@@ -37,6 +38,47 @@ const statusPill = (status: string) => {
 const blankMedication = (): MedicationRow => ({ medication: "", notes: "" });
 /** A blank exercise row — a new "+ Add exercise" click. */
 const blankExercise = (): ExerciseRow => ({ type: "", frequency: "", duration: "" });
+
+type SectionTone = "complete" | "attention" | "neutral";
+
+function AssessmentSection({
+  step, title, description, summary, tone = "neutral", defaultOpen = false, children,
+}: {
+  step: number;
+  title: string;
+  description: string;
+  summary: string;
+  tone?: SectionTone;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <details className={styles.sectionCard} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className={styles.sectionSummary}>
+        <span className={styles.sectionChevron} aria-hidden="true">›</span>
+        <span className={styles.sectionIdentity}>
+          <span className={styles.eyebrow}>Step {step}</span>
+          <b>{title}</b>
+          <small>{description}</small>
+        </span>
+        <span className={styles.sectionSummaryMeta}>
+          <span className={tone === "complete" ? styles.completePill : tone === "attention" ? styles.attentionPill : styles.neutralPill}>{summary}</span>
+          <span className={styles.sectionAction}>Open</span>
+        </span>
+      </summary>
+      <div className={styles.sectionBody}>{children}</div>
+    </details>
+  );
+}
+
+const present = (value: unknown) => {
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== null && value !== undefined && String(value).trim() !== "";
+};
+
+const filledCount = (values: unknown[]) => values.filter(present).length;
 
 /** The fields this screen edits, plus the issued date which lives on the same row. */
 type FormState = Assessment & { issued_on: string | null };
@@ -143,6 +185,16 @@ export default function DietAssessmentBuilder({
   const showBmrHint = !locked && !form.bmr && bmrEstimate !== null;
 
   const gaps = assessmentGaps(form);
+  const consultationFilled = filledCount([
+    form.consulted_on, form.dietitian, form.medical_history, form.existing_condition, form.allergies, form.family_history,
+  ]);
+  const lifestyleFilled = filledCount([
+    form.occupation, form.daily_activity, form.sleep_hours, form.sleep_quality, form.stress_level, form.gut_health,
+  ]);
+  const healthCoreFilled = filledCount([form.height, form.weight, form.bmr]);
+  const preferenceFilled = filledCount([form.diet_type, form.food_allergies, form.food_dislikes, form.supplements]);
+  const goalCoreFilled = filledCount([form.primary_goals, form.target_weight, form.timeline_weeks]);
+  const intakeFilled = filledCount([form.meal_frequency, form.meals_per_day, form.snacking, form.hydration]);
 
   // ---- medications -------------------------------------------------------
   const updateMedication = (idx: number, patch: Partial<MedicationRow>) => {
@@ -192,127 +244,165 @@ export default function DietAssessmentBuilder({
   };
 
   return (
-    <div>
-      {/* ---- 1. HEADER ---- */}
-      <div style={{ ...box, padding: 14, marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <b style={{ fontSize: 14 }}>{clientName}</b>
-          <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 12.5 }}> · Assessment summary v{version}</span>
+    <div className={styles.builder}>
+      {/* ---- HEADER ---- */}
+      <div style={{ ...box, marginBottom: 12 }} className={styles.assessmentHeader}>
+        <div className={styles.headerIdentityRow}>
+          <div className={styles.headerIdentity}>
+            <div className={styles.eyebrow}>Dietary assessment summary</div>
+            <div className={styles.headerTitleRow}>
+              <b className={styles.headerTitle}>{clientName}</b>
+              <span style={{ background: pill.bg, color: pill.fg }} className={styles.statusPill}>{pill.text}</span>
+            </div>
+            <div className={styles.headerMeta}>Version {version} · Clinical context for the diet chart</div>
+          </div>
+
+          <div className={styles.headerUtilities}>
+            {locked ? (
+              form.issued_on && <span className={styles.issuedText}>Issued {form.issued_on}</span>
+            ) : (
+              <label className={styles.issuedField}>
+                <span>Issued on</span>
+                <input type="date" value={form.issued_on ?? ""} onChange={(e) => update("issued_on", e.target.value || null)} style={{ ...inpControl, width: 150 }} />
+              </label>
+            )}
+            {status === "published" && (
+              <a href={`/diet-assessment/${id}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF ↗</a>
+            )}
+          </div>
         </div>
-        <span style={{ background: pill.bg, color: pill.fg, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{pill.text}</span>
-        <span style={{ flex: 1 }} />
-        {locked ? (
-          form.issued_on && <span style={{ fontSize: 12, color: "var(--muted)" }}>Issued {form.issued_on}</span>
-        ) : (
-          <label style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
-            Issued
-            <input type="date" value={form.issued_on ?? ""} onChange={(e) => update("issued_on", e.target.value || null)} style={{ ...inpControl, width: 150 }} />
-          </label>
-        )}
 
-        {!readOnly && status === "draft" && (
-          <>
-            <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
-            <form action={submitDietAssessment}>
-              <input type="hidden" name="id" value={id} />
-              {/* Submitting posts only the id; the server reads the SAVED rows.
-                  Unsaved edits make those two different documents. */}
-              <button disabled={gaps.length > 0 || dirty} style={disabledOf(gaps.length > 0 || dirty, darkBtn)}
-                title={dirty ? "Save your changes first — this submits the saved assessment" : gaps.length ? "Resolve the gaps below first" : undefined}>Submit for review</button>
-            </form>
-          </>
-        )}
+        <div className={styles.actionRow}>
+          <div className={styles.readinessSummary}>
+            <span className={gaps.length ? styles.readinessDotBlocked : styles.readinessDotReady} />
+            <span>
+              {gaps.length
+                ? <><b>{gaps.length} required check{gaps.length === 1 ? "" : "s"} remaining</b> before {status === "draft" ? "review" : status === "in_review" ? "approval" : "sending"}</>
+                : <b>All required checks are complete</b>}
+            </span>
+          </div>
 
-        {!readOnly && status === "in_review" && (
-          <>
-            <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
-            {canReview ? (
+          <div className={styles.primaryActions}>
+            {!readOnly && status === "draft" && (
               <>
-                <form action={reviewDietAssessment}>
+                <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
+                <form action={submitDietAssessment}>
                   <input type="hidden" name="id" value={id} />
-                  <input type="hidden" name="approve" value="true" />
-                  {/* Matches the plan builder: approval is the signature, so it
-                      waits for both a complete document and a saved one. What
-                      publishing freezes is the saved version, not the screen.
-                      Sending back to draft stays open — gaps are what you send
-                      an assessment back for. */}
-                  <button disabled={gaps.length > 0 || dirty} style={disabledOf(gaps.length > 0 || dirty, greenBtn)}
-                    title={dirty ? "Save your changes first — this publishes the saved assessment" : gaps.length ? "Resolve the gaps below first" : undefined}>Approve &amp; publish</button>
-                </form>
-                <form action={reviewDietAssessment}>
-                  <input type="hidden" name="id" value={id} />
-                  <input type="hidden" name="approve" value="false" />
-                  <button style={amberBtn}>Send back to draft</button>
+                  {/* Submitting posts only the id; the server reads the SAVED rows.
+                      Unsaved edits make those two different documents. */}
+                  <button disabled={gaps.length > 0 || dirty} style={disabledOf(gaps.length > 0 || dirty, darkBtn)}
+                    title={dirty ? "Save your changes first — this submits the saved assessment" : gaps.length ? "Resolve the checks below first" : undefined}>Submit for review</button>
                 </form>
               </>
-            ) : (
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>Awaiting sign-off</span>
             )}
-          </>
-        )}
 
-        {status === "published" && (
-          <>
-            <a href={`/diet-assessment/${id}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF →</a>
-            {!readOnly && (
+            {!readOnly && status === "in_review" && (
               <>
-                {/* Copies THIS assessment. createDietAssessment re-drafts from
-                    live data and would throw away the corrections already made. */}
+                <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
+                {canReview ? (
+                  <>
+                    <form action={reviewDietAssessment}>
+                      <input type="hidden" name="id" value={id} />
+                      <input type="hidden" name="approve" value="true" />
+                      <button disabled={gaps.length > 0 || dirty} style={disabledOf(gaps.length > 0 || dirty, greenBtn)}
+                        title={dirty ? "Save your changes first — this publishes the saved assessment" : gaps.length ? "Resolve the checks below first" : undefined}>Approve &amp; publish</button>
+                    </form>
+                    <form action={reviewDietAssessment}>
+                      <input type="hidden" name="id" value={id} />
+                      <input type="hidden" name="approve" value="false" />
+                      <button style={amberBtn}>Send back to draft</button>
+                    </form>
+                  </>
+                ) : (
+                  <span className={styles.awaitingText}>Awaiting sign-off</span>
+                )}
+              </>
+            )}
+
+            {status === "published" && !readOnly && (
+              <>
                 <form action={newDietAssessmentVersionForm}>
                   <input type="hidden" name="id" value={id} />
                   <button style={darkBtn}>New version</button>
                 </form>
-                {/* One press: stores the file, shares it, sends it. */}
                 <DeliverButton kind="assess" id={id} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
                   whatsappReady={Boolean(whatsapp?.ready)} alreadySent={sharedAt} />
               </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
-      {savedAt && !dirty && <div style={{ fontSize: 11.5, color: "var(--green-text)", margin: "-6px 0 10px" }}>Saved at {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>}
-      {err && <div style={{ fontSize: 12, color: "var(--red-text)", margin: "-6px 0 10px" }}>{err}</div>}
+      {savedAt && !dirty && <div className={styles.successNotice}>Saved at {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>}
+      {err && <div className={styles.errorNotice}><b>Couldn&apos;t complete that action.</b><span>{err}</span></div>}
 
-      {/* ---- 2. INITIAL CONSULTATION ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Initial consultation</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+      {gaps.length > 0 && (
+        <details className={styles.readinessPanel}>
+          <summary>
+            <span><b>Review readiness</b><small>{gaps.length} required check{gaps.length === 1 ? "" : "s"} remaining</small></span>
+            <span className={styles.reviewChecklistAction}>View checklist</span>
+          </summary>
+          <div className={styles.readinessBody}>
+            <div className={styles.readinessInstruction}>
+              {status === "draft" ? "Resolve before this assessment can go for review"
+                : status === "in_review" ? "Resolve before this assessment can be approved"
+                  : "Resolve before this assessment can be sent to the client"}
+            </div>
+            <ul>{gaps.map((gap, index) => <li key={index}>{gap}</li>)}</ul>
+          </div>
+        </details>
+      )}
+
+      <div className={styles.workflowHeading}>
+        <div>
+          <div className={styles.eyebrow}>Assessment workflow</div>
+          <h3>Complete the clinical story in order</h3>
+          <p>Open one section at a time. The summary badges keep the important information visible.</p>
+        </div>
+      </div>
+
+      {/* ---- 1. INITIAL CONSULTATION ---- */}
+      <AssessmentSection step={1} title="Consultation & medical context"
+        description="Record what was found, existing risks and current medication."
+        summary={`${consultationFilled}/6 key fields`} tone={consultationFilled >= 4 ? "complete" : "neutral"} defaultOpen>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Date of consultation</div>
             <input type="date" disabled={locked} value={form.consulted_on ?? ""} onChange={(e) => update("consulted_on", e.target.value || null)} style={inpControl} /></div>
           <div><div style={label}>Dietitian</div>
             <input disabled={locked} value={form.dietitian ?? ""} onChange={(e) => update("dietitian", e.target.value || null)} style={inpControl} /></div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Medical history</div>
             <textarea disabled={locked} rows={2} value={form.medical_history ?? ""} onChange={(e) => update("medical_history", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} /></div>
           <div><div style={label}>Existing condition</div>
             <textarea disabled={locked} rows={2} value={form.existing_condition ?? ""} onChange={(e) => update("existing_condition", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} /></div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Allergies</div>
             <input disabled={locked} value={form.allergies ?? ""} onChange={(e) => update("allergies", e.target.value || null)} style={inpControl} /></div>
           <div><div style={label}>Family history</div>
             <textarea disabled={locked} rows={2} value={form.family_history ?? ""} onChange={(e) => update("family_history", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} /></div>
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Medications</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.6fr 28px", gap: 6, fontSize: 11, color: "var(--muted)", fontWeight: 600, padding: "0 2px" }}>
+        <div className={styles.subsectionHeading}>Medications</div>
+        <div className={`${styles.tableHeader} ${styles.medicationGrid}`}>
           <span>Medication</span><span>Notes</span><span />
         </div>
         {form.medications.map((m, i) => (
-          <div key={`med-${i}`} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.6fr 28px", gap: 6, marginTop: 6, alignItems: "center" }}>
+          <div key={`med-${i}`} className={`${styles.tableRow} ${styles.medicationGrid}`}>
             <input disabled={locked} value={m.medication} placeholder="Medication" onChange={(e) => updateMedication(i, { medication: e.target.value })} style={inpControl} />
             <input disabled={locked} value={m.notes} placeholder="Notes" onChange={(e) => updateMedication(i, { notes: e.target.value })} style={inpControl} />
             {!locked && <button type="button" onClick={() => removeMedication(i)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete row">✕</button>}
           </div>
         ))}
         {!locked && <button type="button" onClick={addMedication} style={{ ...outlineBtn, marginTop: 8 }}>+ Add medication</button>}
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 3. LIFESTYLE ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Lifestyle</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+      {/* ---- 2. LIFESTYLE ---- */}
+      <AssessmentSection step={2} title="Lifestyle & activity"
+        description="Set the activity level first so the energy calculation has the right context."
+        summary={form.daily_activity ? `${lifestyleFilled}/6 captured` : "Activity required"}
+        tone={form.daily_activity ? "complete" : "attention"}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Occupation</div>
             <input disabled={locked} value={form.occupation ?? ""} onChange={(e) => update("occupation", e.target.value || null)} style={inpControl} /></div>
           <div><div style={label}>Daily activity</div>
@@ -322,12 +412,12 @@ export default function DietAssessmentBuilder({
             </select></div>
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Exercise routine</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 28px", gap: 6, fontSize: 11, color: "var(--muted)", fontWeight: 600, padding: "0 2px" }}>
+        <div className={styles.subsectionHeading}>Exercise routine</div>
+        <div className={`${styles.tableHeader} ${styles.exerciseGrid}`}>
           <span>Type</span><span>Frequency</span><span>Duration</span><span />
         </div>
         {form.exercise.map((x, i) => (
-          <div key={`ex-${i}`} style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 28px", gap: 6, marginTop: 6, alignItems: "center" }}>
+          <div key={`ex-${i}`} className={`${styles.tableRow} ${styles.exerciseGrid}`}>
             <input disabled={locked} value={x.type} placeholder="e.g. Walking" onChange={(e) => updateExercise(i, { type: e.target.value })} style={inpControl} />
             <input disabled={locked} value={x.frequency} placeholder="e.g. 5x/week" onChange={(e) => updateExercise(i, { frequency: e.target.value })} style={inpControl} />
             <input disabled={locked} value={x.duration} placeholder="e.g. 30 min" onChange={(e) => updateExercise(i, { duration: e.target.value })} style={inpControl} />
@@ -336,7 +426,7 @@ export default function DietAssessmentBuilder({
         ))}
         {!locked && <button type="button" onClick={addExercise} style={{ ...outlineBtn, marginTop: 8, marginBottom: 12 }}>+ Add exercise</button>}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12, marginBottom: 10 }}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Sleep hours</div>
             <input disabled={locked} value={form.sleep_hours ?? ""} placeholder="e.g. 7-8" onChange={(e) => update("sleep_hours", e.target.value || null)} style={inpControl} /></div>
           <div><div style={label}>Sleep quality</div>
@@ -352,7 +442,7 @@ export default function DietAssessmentBuilder({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Gut health</div>
             <textarea disabled={locked} rows={2} value={form.gut_health ?? ""} onChange={(e) => update("gut_health", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} /></div>
           <div><div style={label}>Recent weight change</div>
@@ -363,7 +453,7 @@ export default function DietAssessmentBuilder({
             live. Each is blank by default on purpose, and the placeholder says
             what blank means — an empty Region box is the Kerala default being
             taken, not a question nobody asked. */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
+        <div className={styles.fieldGridThree}>
           <div><div style={label}>Region</div>
             <input disabled={locked} value={form.region ?? ""} placeholder="Kerala unless stated"
               onChange={(e) => update("region", e.target.value || null)} style={inpControl} /></div>
@@ -374,12 +464,14 @@ export default function DietAssessmentBuilder({
             <input disabled={locked} value={form.outside_meals ?? ""} placeholder="How often, and what"
               onChange={(e) => update("outside_meals", e.target.value || null)} style={inpControl} /></div>
         </div>
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 4. DIETARY PREFERENCE ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Dietary preference</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      {/* ---- 3. DIETARY PREFERENCE ---- */}
+      <AssessmentSection step={3} title="Dietary preferences & restrictions"
+        description="Capture what the client can, cannot and does not want to eat."
+        summary={preferenceFilled ? `${preferenceFilled}/4 captured` : "Add dietary context"}
+        tone={preferenceFilled >= 2 ? "complete" : "neutral"}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Diet type</div>
             <input disabled={locked} value={form.diet_type ?? ""} onChange={(e) => update("diet_type", e.target.value || null)} style={inpControl} /></div>
           <div><div style={label}>Food allergies</div>
@@ -389,13 +481,15 @@ export default function DietAssessmentBuilder({
           <div><div style={label}>Supplements</div>
             <input disabled={locked} value={form.supplements ?? ""} onChange={(e) => update("supplements", e.target.value || null)} style={inpControl} /></div>
         </div>
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 5. CURRENT HEALTH STATUS ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>Current health status</div>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Frozen at issue — this page won&apos;t silently rewrite itself as later measurements come in.</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+      {/* ---- 4. CURRENT HEALTH STATUS ---- */}
+      <AssessmentSection step={4} title="Measurements & energy"
+        description="Confirm measured values and the calculated energy baseline. Frozen when issued."
+        summary={healthCoreFilled === 3 ? `${form.weight ?? "—"} kg · ${form.tee ?? "—"} kcal TEE` : `${3 - healthCoreFilled} core metric${3 - healthCoreFilled === 1 ? "" : "s"} required`}
+        tone={healthCoreFilled === 3 ? "complete" : "attention"}>
+        <div className={styles.measurementNotice}>These values are frozen at issue and will not silently change when later measurements are added.</div>
+        <div className={styles.measurementGrid}>
           <div><div style={label}>Height (cm)</div>
             <input type="number" step="0.1" disabled={locked} value={form.height ?? ""} onChange={(e) => update("height", e.target.value === "" ? null : Number(e.target.value))} style={inpControl} /></div>
           <div><div style={label}>Weight (kg)</div>
@@ -431,16 +525,18 @@ export default function DietAssessmentBuilder({
           <div><div style={label}>Waist–hip ratio</div>
             <input type="number" step="0.01" disabled={locked} value={form.waist_hip ?? ""} onChange={(e) => update("waist_hip", e.target.value === "" ? null : Number(e.target.value))} style={inpControl} /></div>
         </div>
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 6. HEALTH & FITNESS GOALS ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Health &amp; fitness goals</div>
+      {/* ---- 5. HEALTH & FITNESS GOALS ---- */}
+      <AssessmentSection step={5} title="Health & fitness goals"
+        description="Translate the assessment into a clear outcome, target and timeframe."
+        summary={form.primary_goals ? `${goalCoreFilled}/3 planning fields` : "Primary goal required"}
+        tone={form.primary_goals ? "complete" : "attention"}>
         <div style={{ marginBottom: 10 }}>
           <div style={label}>Primary goals</div>
           <textarea disabled={locked} rows={3} value={form.primary_goals ?? ""} onChange={(e) => update("primary_goals", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Target weight (kg)</div>
             <input type="number" step="0.1" disabled={locked} value={form.target_weight ?? ""} onChange={(e) => update("target_weight", e.target.value === "" ? null : Number(e.target.value))} style={inpControl} /></div>
           <div><div style={label}>Timeline (weeks)</div>
@@ -450,12 +546,14 @@ export default function DietAssessmentBuilder({
           <div style={label}>Specific objectives</div>
           <textarea disabled={locked} rows={3} value={form.objectives ?? ""} onChange={(e) => update("objectives", e.target.value || null)} style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} />
         </div>
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 7. DIETARY INTAKE ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Dietary intake</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+      {/* ---- 6. DIETARY INTAKE ---- */}
+      <AssessmentSection step={6} title="Dietary intake pattern"
+        description="Summarise meal timing, frequency, cravings and hydration."
+        summary={intakeFilled ? `${intakeFilled}/4 captured` : "Add intake pattern"}
+        tone={intakeFilled >= 3 ? "complete" : "neutral"}>
+        <div className={styles.fieldGridTwo}>
           <div><div style={label}>Meal frequency</div>
             <input disabled={locked} value={form.meal_frequency ?? ""} placeholder="e.g. 3 meals + 2 snacks" onChange={(e) => update("meal_frequency", e.target.value || null)} style={inpControl} /></div>
           <div><div style={label}>Meals per day</div>
@@ -465,32 +563,16 @@ export default function DietAssessmentBuilder({
           <div><div style={label}>Hydration status</div>
             <input disabled={locked} value={form.hydration ?? ""} onChange={(e) => update("hydration", e.target.value || null)} style={inpControl} /></div>
         </div>
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 8. NOTES ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Notes</div>
+      {/* ---- 7. NOTES ---- */}
+      <AssessmentSection step={7} title="Clinical notes"
+        description="Keep only additional context that does not belong in a structured field."
+        summary={form.notes ? "Notes added" : "Optional"} tone="neutral">
         <textarea disabled={locked} rows={7} value={form.notes ?? ""} onChange={(e) => update("notes", e.target.value || null)}
           style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} />
-      </div>
+      </AssessmentSection>
 
-      {/* ---- 9. GAPS ----
-          Headed by the step this list is actually blocking, which depends on
-          where the document has got to. A reviewer told "before this can go for
-          review" is being described a step that already happened, and is left
-          to work out why their Approve button is greyed out. */}
-      {gaps.length > 0 && (
-        <div style={{ ...box, padding: 14, marginBottom: 12, background: "var(--red-bg)" }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>
-            {status === "draft" ? "Before this can go for review"
-              : status === "in_review" ? "Before this can be approved"
-                : "Before this can be sent to the client"}
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red-text)", fontSize: 12.5 }}>
-            {gaps.map((g, i) => <li key={i} style={{ marginBottom: 3 }}>{g}</li>)}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
