@@ -9,15 +9,16 @@ const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
 import {
   HOW_TO_USE, DEFAULT_MEALS, planProblems, optionNutrients, parseTargetRange, formatTargetRange,
-  type DishOption, type PlanComponent, type PlanTargets,
+  type DishOption, type PlanComponent, type PlanMeal, type PlanTargets,
 } from "@/lib/diet-plan";
 import { pricedDishes } from "@/lib/dish-pricing";
 import { pdfProvider, pdfReadiness, renderUrl, storagePath, fileName, DOC_KINDS, DOC_LABEL, type DocKind } from "@/lib/pdf";
 import { sendDocument, watiReadiness, templateFor, normalisePhone } from "@/lib/wati";
 import { draftAssessment, assessmentGaps, estimateTee, type Assessment } from "@/lib/diet-assessment";
 import {
-  SYSTEM_PROMPT, clientBrief, dishMenu, parseGeneratedPlan, type PlanContext,
+  SYSTEM_PROMPT, clientBrief, dishMenu, parseGeneratedPlan, type GeneratedPlan, type PlanContext,
 } from "@/lib/diet-plan-ai";
+import { COMPLETION_SYSTEM_PROMPT, completionDraftBrief } from "@/lib/diet-plan-assistant";
 import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageHealthCoaching, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent, isHealthCoachSupervisor, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
@@ -9007,6 +9008,185 @@ export async function saveDietPlan(
   }
   revalidatePath("/workspace");
   return { ok: true };
+}
+
+/**
+ * Propose missing recipe-backed choices for one existing saved draft.
+ *
+ * This is intentionally read-only. The returned proposal is merged into a
+ * browser preview, and even accepting it only changes the unsaved form. The
+ * ordinary Save action remains the sole database write, so asking for help can
+ * never create v3, overwrite v2 or move a chart through its lifecycle.
+ */
+export async function suggestDietPlanCompletion(id: string): Promise<{
+  proposal?: GeneratedPlan;
+  error?: string;
+}> {
+  const p = await planGuard();
+  if (!p) return { error: "Not authorized." };
+  if (!id) return { error: "Missing plan." };
+  const supabase = await createClient();
+
+  const { data: rawPlan, error: planErr } = await supabase.from("diet_plans")
+    .select("client_id, status, kcal, diet_plan_meals(seq, name, time_from, time_to, note, conditional, diet_plan_options(seq, food_items, qty, kcal, carb_g, protein_g, fat_g, fibre_g, micronutrients, diet_plan_option_dishes(dish_id, servings, seq)))")
+    .eq("id", id).maybeSingle();
+  if (planErr) return { error: planErr.message };
+  type RawPart = { dish_id: string; servings: number; seq: number };
+  type RawOption = {
+    seq: number; food_items: string; qty: string | null; kcal: number | null;
+    carb_g: number | null; protein_g: number | null; fat_g: number | null;
+    fibre_g: number | null; micronutrients: string | null;
+    diet_plan_option_dishes: RawPart[] | null;
+  };
+  type RawMeal = {
+    seq: number; name: string; time_from: string | null; time_to: string | null;
+    note: string | null; conditional: boolean; diet_plan_options: RawOption[] | null;
+  };
+  const plan = rawPlan as unknown as {
+    client_id: string; status: string; kcal: number | null; diet_plan_meals: RawMeal[] | null;
+  } | null;
+  if (!plan) return { error: "Plan not found." };
+  if (plan.status !== "draft") return { error: "Only a draft can be auto-completed." };
+
+  const meals: PlanMeal[] = [...(plan.diet_plan_meals ?? [])]
+    .sort((a, b) => a.seq - b.seq)
+    .map((meal) => ({
+      seq: meal.seq, name: meal.name, time_from: meal.time_from, time_to: meal.time_to,
+      note: meal.note, conditional: meal.conditional,
+      options: [...(meal.diet_plan_options ?? [])].sort((a, b) => a.seq - b.seq)
+        .map(({ diet_plan_option_dishes, ...option }) => ({
+          ...option,
+          components: [...(diet_plan_option_dishes ?? [])].sort((a, b) => a.seq - b.seq)
+            .map((component) => ({
+              seq: component.seq, dish_id: component.dish_id, servings: Number(component.servings),
+            })),
+        })),
+    }));
+
+  if (!meals.some((meal) => {
+    const count = meal.options.filter((option) => option.food_items.trim()).length;
+    return count > 0 && count < 4;
+  })) {
+    return { proposal: { meals: [], notes: null, rationale: null, dropped: [] } };
+  }
+
+  const clientId = plan.client_id;
+  const [
+    { data: client }, { data: measurement }, { data: assessment },
+    { data: allergyRows }, { data: medicationRows }, { data: consultationRows },
+    { data: reportRows }, { data: labRows },
+  ] = await Promise.all([
+    supabase.from("clients").select("name, dob, gender, occupation, height, weight, conditions, goals").eq("id", clientId).maybeSingle(),
+    supabase.from("measurements").select("weight, bmi, bmr, body_fat, muscle_mass, visceral_fat")
+      .eq("client_id", clientId).order("date", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("diet_assessments")
+      .select("bmr, daily_activity, occupation, exercise, sleep_hours, sleep_quality, stress_level, region, shift_pattern, outside_meals, diet_type, food_allergies, food_dislikes, supplements, medications, medical_history, existing_condition, primary_goals, objectives, meal_frequency, meals_per_day, snacking, hydration")
+      .eq("client_id", clientId).order("version", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("allergies").select("substance, severity").eq("client_id", clientId),
+    supabase.from("medications").select("name").eq("client_id", clientId).eq("status", "active"),
+    supabase.from("consultations")
+      .select("kind, by_role, summary, ai_summary, notes, created_at")
+      .eq("client_id", clientId).order("created_at", { ascending: false }).limit(12),
+    supabase.from("files").select("name, kind, created_at, summary")
+      .eq("client_id", clientId).order("created_at", { ascending: false }).limit(20),
+    supabase.from("lab_results").select("marker, label, value, unit, low, high, taken_on")
+      .eq("client_id", clientId).order("taken_on", { ascending: false }),
+  ]);
+
+  const c = client as {
+    name: string; dob: string | null; gender: string | null; occupation: string | null;
+    height: number | null; weight: number | null; conditions: string | null;
+    goals: string | string[] | null;
+  } | null;
+  if (!c) return { error: "Client not found." };
+  const m = measurement as {
+    weight: number | null; bmi: number | null; bmr: number | null;
+    body_fat: number | null; muscle_mass: number | null; visceral_fat: number | null;
+  } | null;
+  const a = assessment as {
+    bmr: number | null; daily_activity: string | null; occupation: string | null;
+    exercise: { type: string; frequency: string; duration: string }[] | null;
+    sleep_hours: string | null; sleep_quality: string | null; stress_level: string | null;
+    region: string | null; shift_pattern: string | null; outside_meals: string | null;
+    diet_type: string | null; food_allergies: string | null; food_dislikes: string | null;
+    supplements: string | null; medications: { medication: string; notes: string }[] | null;
+    medical_history: string | null; existing_condition: string | null;
+    primary_goals: string | null; objectives: string | null;
+    meal_frequency: string | null; meals_per_day: string | null; snacking: string | null;
+    hydration: string | null;
+  } | null;
+  const consults = (consultationRows ?? []) as {
+    kind: string; by_role: string | null; summary: string | null; ai_summary: string | null;
+    notes: string | null; created_at: string;
+  }[];
+  if (!consults.some((row) => row.kind === "Diet")) {
+    return { error: "No dietitian consultation summary for this client yet — write that up first." };
+  }
+
+  const text = (value: string | string[] | null | undefined) =>
+    Array.isArray(value) ? value.join(", ") : value?.trim() || null;
+  const bmr = a?.bmr ?? m?.bmr ?? null;
+  const activity = a?.daily_activity ?? null;
+  const energy = plan.kcal ?? estimateTee(bmr, activity);
+  if (!energy) return { error: "Settle the calorie target on the saved draft before asking for balanced alternatives." };
+
+  let dishes: DishOption[];
+  try {
+    dishes = await pricedDishes(supabase);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not read the recipe library." };
+  }
+  const usable = dishes.filter((dish) => dish.approved && dish.perServing && dish.micro);
+  if (usable.length < 20) {
+    return { error: `Only ${usable.length} approved, fully calculated recipe${usable.length === 1 ? "" : "s"} can support safe suggestions — review more under Dishes first.` };
+  }
+
+  const context: PlanContext = {
+    name: c.name, age: ageFrom(c.dob), sex: c.gender, height_cm: c.height,
+    weight_kg: m?.weight ?? c.weight, bmi: m?.bmi ?? null, bmr, tdee: energy, activity,
+    conditions: [c.conditions, a?.existing_condition, a?.medical_history].filter(Boolean).join(" · ") || null,
+    goals: [text(c.goals), a?.primary_goals, a?.objectives].filter(Boolean).join(" · ") || null,
+    allergies: [...new Set([
+      ...((allergyRows ?? []) as { substance: string; severity: string }[])
+        .map((row) => `${row.substance}${row.severity ? ` (${row.severity})` : ""}`),
+      ...[a?.food_allergies].filter((value): value is string => Boolean(value?.trim())),
+    ])],
+    medications: [...new Set([
+      ...((medicationRows ?? []) as { name: string }[]).map((row) => row.name),
+      ...(a?.medications ?? []).map((row) => [row.medication, row.notes].filter(Boolean).join(" — ")),
+    ].map((value) => value.trim()).filter(Boolean))],
+    occupation: a?.occupation ?? c.occupation,
+    sleep: [a?.sleep_hours, a?.sleep_quality].filter(Boolean).join(" · ") || null,
+    stress: a?.stress_level ?? null, region: a?.region, shiftPattern: a?.shift_pattern,
+    outsideMeals: a?.outside_meals, dietPattern: a?.diet_type,
+    mealPattern: [a?.meal_frequency, a?.meals_per_day, a?.snacking].filter(Boolean).join(" · ") || null,
+    hydration: a?.hydration, dislikes: a?.food_dislikes, supplements: a?.supplements,
+    exercise: (a?.exercise ?? []).map((row) => [row.type, row.frequency, row.duration].filter(Boolean).join(" · ")),
+    labFindings: labFindings(((labRows ?? []) as unknown as LabResult[]).map((row) => ({
+      ...row, value: Number(row.value), low: row.low == null ? null : Number(row.low),
+      high: row.high == null ? null : Number(row.high),
+    }))).map((finding) => finding.text),
+    consultations: consults.map((row) => ({
+      role: row.by_role ?? row.kind, kind: row.kind, on: row.created_at.slice(0, 10),
+      text: (row.summary ?? row.ai_summary ?? row.notes ?? "").slice(0, 1500),
+    })).filter((row) => row.text.trim()),
+    reports: ((reportRows ?? []) as {
+      name: string | null; kind: string | null; created_at: string; summary: string | null;
+    }[]).filter((row) => row.summary?.trim()).map((row) => ({
+      label: row.name ?? row.kind ?? "report", on: row.created_at.slice(0, 10), summary: row.summary!.slice(0, 800),
+    })),
+    vitals: null,
+  };
+
+  const ai = await openaiComplete(
+    COMPLETION_SYSTEM_PROMPT,
+    `${clientBrief(context)}\n\nCURRENT SAVED DRAFT — preserve it and propose only the missing choices:\n${completionDraftBrief(meals)}\n\nApproved fully calculated recipes you may use — id | name | per serving:\n${dishMenu(usable)}`,
+    { json: true, maxTokens: 5000, temperature: 0.2 },
+  );
+  if (ai.error || !ai.text) return { error: ai.error ?? "The assistant returned nothing." };
+  const parsed = parseGeneratedPlan(ai.text, usable);
+  if ("error" in parsed) return { error: parsed.error };
+  return { proposal: parsed };
 }
 
 /**

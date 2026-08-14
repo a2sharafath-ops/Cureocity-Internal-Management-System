@@ -9,7 +9,9 @@ import {
 import { rulesFor, optionInteractions } from "@/lib/food-drug";
 import { labFindings, type LabResult } from "@/lib/lab-results";
 import { contextNotes, type ClientContext } from "@/lib/client-context";
-import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion } from "@/lib/actions";
+import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion, suggestDietPlanCompletion } from "@/lib/actions";
+import { completeDietPlanDraft } from "@/lib/diet-plan-assistant";
+import type { GeneratedPlan } from "@/lib/diet-plan-ai";
 import DeliverButton from "@/components/DeliverButton";
 
 export type PlanMeta = { allergies: string | null; notes: string | null; issued_on: string | null };
@@ -107,8 +109,10 @@ export default function DietPlanBuilder({
   const [meals, setMeals] = useState<PlanMeal[]>(initial.meals);
   const [dirty, setDirty] = useState(false);
   const [saving, startSave] = useTransition();
+  const [completing, startCompletion] = useTransition();
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [assistantProposal, setAssistantProposal] = useState<GeneratedPlan | null>(null);
 
   // A published plan is a fixed document; a workspace-level read-only view
   // (e.g. an admin previewing a discipline they don't hold) is the same.
@@ -237,6 +241,19 @@ export default function DietPlanBuilder({
   // Section 4. Only what is out of range, latest result per marker.
   const findings = useMemo(() => labFindings(labs), [labs]);
 
+  // A proposal is always merged against what is on screen NOW. If the
+  // dietitian changes a field while the assistant is thinking, existing work
+  // still wins and the preview is recalculated rather than restoring an old
+  // snapshot over her edits.
+  const completionPreview = useMemo(
+    () => assistantProposal ? completeDietPlanDraft(meals, assistantProposal, dishes) : null,
+    [assistantProposal, meals, dishes],
+  );
+  const completionProblems = useMemo(
+    () => completionPreview ? planProblems(completionPreview.meals, targets, dishes) : [],
+    [completionPreview, targets, dishes],
+  );
+
   // Sections 9, 6 and 10 — reminders, never refusals.
   const notes = useMemo(
     () => (context ? contextNotes(context, meals) : []),
@@ -290,6 +307,35 @@ export default function DietPlanBuilder({
     });
   };
 
+  const requestCompletion = () => {
+    setErr(null);
+    setAssistantProposal(null);
+    if (dirty) {
+      setErr("Save the current edits first. The assistant reads the saved V2 draft so it cannot work from a different chart than the one on screen.");
+      return;
+    }
+    startCompletion(async () => {
+      try {
+        const result = await suggestDietPlanCompletion(planId);
+        if (result.error || !result.proposal) {
+          setErr(result.error ?? "The assistant did not return a proposal.");
+          return;
+        }
+        setAssistantProposal(result.proposal);
+      } catch {
+        setErr("The assistant could not prepare suggestions. Nothing was changed — try again when the connection is stable.");
+      }
+    });
+  };
+
+  const applyCompletion = () => {
+    if (!completionPreview) return;
+    setMeals(completionPreview.meals);
+    setAssistantProposal(null);
+    setSavedAt(null);
+    setDirty(true);
+  };
+
   const pill = statusPill(status);
 
   return (
@@ -334,6 +380,11 @@ export default function DietPlanBuilder({
 
         {!readOnly && status === "draft" && (
           <>
+            <button type="button" onClick={requestCompletion} disabled={saving || completing || dirty}
+              style={disabledOf(saving || completing || dirty, outlineBtn)}
+              title={dirty ? "Save your changes first — the assistant reads the saved draft" : "Propose missing recipe-backed choices without saving or creating a new version"}>
+              {completing ? "Preparing suggestions…" : "✦ Auto-complete this draft"}
+            </button>
             <button type="button" onClick={handleSave} disabled={saving} style={disabledOf(saving, brandBtn)}>{saving ? "Saving…" : "Save"}</button>
             {/* Submitting posts only the plan id — the server then re-reads the
                 SAVED rows. With unsaved edits on screen those are two different
@@ -387,6 +438,62 @@ export default function DietPlanBuilder({
       </div>
       {savedAt && !dirty && <div style={{ fontSize: 11.5, color: "var(--green-text)", margin: "-6px 0 10px" }}>Saved at {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>}
       {err && <div style={{ fontSize: 12, color: "var(--red-text)", margin: "-6px 0 10px" }}>{err}</div>}
+
+      {completionPreview && (
+        <div style={{ ...box, padding: 16, marginBottom: 12, borderColor: "var(--brand-fill)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Review the proposed completion</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>
+            Nothing has changed yet. Existing entries are preserved; only calculated, recipe-backed blanks and missing choices are proposed.
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+              {completionPreview.added.length} option{completionPreview.added.length === 1 ? "" : "s"} proposed
+            </span>
+            <span style={{ background: "var(--blue-bg)", color: "var(--blue-text)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+              {completionPreview.filledMicronutrients.length} micronutrient line{completionPreview.filledMicronutrients.length === 1 ? "" : "s"} calculated
+            </span>
+            <span style={{ background: completionProblems.length ? "var(--amber-bg)" : "var(--green-bg)", color: completionProblems.length ? "var(--amber-text)" : "var(--green-text)", borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+              {completionProblems.length} check{completionProblems.length === 1 ? "" : "s"} would remain
+            </span>
+          </div>
+
+          {completionPreview.added.length > 0 && (
+            <ul style={{ margin: "0 0 10px", paddingLeft: 18, fontSize: 12.5 }}>
+              {completionPreview.added.map((item, index) => (
+                <li key={`${item.meal}-${item.option}-${index}`} style={{ marginBottom: 3 }}>
+                  <b>{item.meal}:</b> {item.option}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div style={{ background: "var(--amber-bg)", color: "var(--amber-text)", borderRadius: 8, padding: "9px 11px", fontSize: 12, marginBottom: 10 }}>
+            Daily carbohydrate, protein, fat, fibre and water targets remain for the dietitian to settle. The assistant does not turn the food it selected into a circular clinical target.
+          </div>
+
+          {completionPreview.skipped.length > 0 && (
+            <details style={{ marginBottom: 10 }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                {completionPreview.skipped.length} item{completionPreview.skipped.length === 1 ? "" : "s"} still need manual review
+              </summary>
+              <ul style={{ margin: "7px 0 0", paddingLeft: 18, fontSize: 12, color: "var(--muted)" }}>
+                {completionPreview.skipped.map((item, index) => <li key={index} style={{ marginBottom: 3 }}>{item}</li>)}
+              </ul>
+            </details>
+          )}
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" onClick={applyCompletion}
+              disabled={completionPreview.added.length === 0 && completionPreview.filledMicronutrients.length === 0}
+              style={disabledOf(completionPreview.added.length === 0 && completionPreview.filledMicronutrients.length === 0, brandBtn)}>
+              Apply to the unsaved draft
+            </button>
+            <button type="button" onClick={() => setAssistantProposal(null)} style={outlineBtn}>Discard</button>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>After applying, review every row and press Save yourself.</span>
+          </div>
+        </div>
+      )}
 
       {/* ---- TARGETS ---- */}
       <div style={{ ...box, padding: 16, marginBottom: 12 }}>
