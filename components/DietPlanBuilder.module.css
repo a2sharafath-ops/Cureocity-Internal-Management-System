@@ -1,0 +1,600 @@
+.builder {
+  color: var(--ink);
+}
+
+.chartHeader {
+  overflow: hidden;
+}
+
+.headerIdentityRow,
+.actionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+.headerIdentityRow {
+  border-bottom: 1px solid var(--border);
+}
+
+.headerIdentity {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.headerTitleRow,
+.headerUtilities,
+.primaryActions,
+.sectionActions,
+.mealBadges,
+.mealControls,
+.optionTitleRow,
+.recipeBuilder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.headerTitle {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerMeta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.statusPill,
+.issuePill,
+.completePill,
+.incompletePill,
+.rangePill,
+.recipePill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.headerUtilities {
+  justify-content: flex-end;
+}
+
+.issuedField {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.issuedText {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actionRow {
+  background: var(--neutral-bg);
+}
+
+.readinessSummary {
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.readinessDotBlocked,
+.readinessDotReady {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+}
+
+.readinessDotBlocked {
+  background: var(--amber-text);
+}
+
+.readinessDotReady {
+  background: var(--green);
+}
+
+.primaryActions {
+  justify-content: flex-end;
+}
+
+.successNotice,
+.errorNotice {
+  margin: -4px 0 12px;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+.successNotice {
+  background: var(--green-bg);
+  color: var(--green-text);
+}
+
+.errorNotice {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  background: var(--red-bg);
+  color: var(--red-text);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 18px 2px 9px;
+}
+
+.sectionHeading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.sectionHeading p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(270px, .75fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cardHeading {
+  margin-bottom: 11px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.targetsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.rangeFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+}
+
+.rangeFields > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.allergyField {
+  grid-column: 1 / -1;
+}
+
+.kcalTotal {
+  margin: 4px 0 13px;
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 780;
+  letter-spacing: -.035em;
+}
+
+.kcalTotal small {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.macroTotals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.macroTotals > div {
+  display: flex;
+  flex-direction: column;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .55);
+  padding: 7px 8px;
+}
+
+.macroTotals span {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.macroTotals b {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.totalMessage {
+  margin-top: 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.readinessPanel {
+  margin-bottom: 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--amber-text) 28%, var(--border));
+  border-radius: var(--radius);
+  background: var(--amber-bg);
+}
+
+.readinessPanel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.readinessPanel summary::-webkit-details-marker {
+  display: none;
+}
+
+.readinessPanel summary > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.readinessPanel summary b {
+  color: var(--amber-text);
+  font-size: 12.5px;
+}
+
+.readinessPanel summary small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.reviewChecklistAction {
+  color: var(--amber-text);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.readinessPanel[open] .reviewChecklistAction {
+  font-size: 0;
+}
+
+.readinessPanel[open] .reviewChecklistAction::after {
+  content: "Hide checklist";
+  font-size: 11.5px;
+}
+
+.readinessBody {
+  border-top: 1px solid color-mix(in srgb, var(--amber-text) 18%, transparent);
+  padding: 12px 14px 13px;
+  background: var(--card);
+}
+
+.readinessInstruction {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.readinessBody ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--red-text);
+  font-size: 12px;
+  columns: 2;
+  column-gap: 28px;
+}
+
+.readinessBody li {
+  margin: 0 0 4px;
+  break-inside: avoid;
+}
+
+.mealCard {
+  margin-bottom: 9px;
+  overflow: hidden;
+}
+
+.mealSummary {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 8px 12px;
+}
+
+.mealToggle {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mealToggle > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mealToggle b {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mealToggle small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chevron {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--neutral-bg);
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.completePill {
+  background: var(--green-bg);
+  color: var(--green-text);
+}
+
+.incompletePill,
+.issuePill {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+}
+
+.rangePill {
+  background: var(--neutral-bg);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.mealControls {
+  flex-wrap: nowrap;
+}
+
+.mealBody {
+  border-top: 1px solid var(--border);
+  padding: 14px;
+  background: color-mix(in srgb, var(--neutral-bg) 38%, var(--card));
+}
+
+.mealSetupGrid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(120px, 160px) minmax(120px, 160px);
+  gap: 9px;
+}
+
+.conditionalField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.conditionalField > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.conditionalField small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.optionsArea {
+  margin-top: 16px;
+}
+
+.optionsHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.optionsHeading span {
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+.optionsHeading small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.optionCard {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 11px;
+}
+
+.optionTitleRow {
+  margin-bottom: 8px;
+}
+
+.optionNumber {
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+.optionTitleSpacer {
+  flex: 1;
+}
+
+.recipePill {
+  background: var(--blue-bg);
+  color: var(--blue-text);
+}
+
+.optionBasicsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(210px, 1fr);
+  gap: 8px;
+}
+
+.optionBasicsGrid label,
+.nutritionGrid label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.optionBasicsGrid label > span,
+.nutritionGrid label > span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.nutritionGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(85px, 1fr)) minmax(190px, 1.7fr);
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.micronutrientField {
+  min-width: 190px;
+}
+
+.recipeBuilder {
+  margin-top: 9px;
+  border-top: 1px dashed var(--border);
+  padding-top: 9px;
+}
+
+.optionMessage {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1100px) {
+  .overviewGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .nutritionGrid {
+    grid-template-columns: repeat(3, minmax(110px, 1fr));
+  }
+
+  .micronutrientField {
+    grid-column: span 2;
+  }
+
+  .mealSummary {
+    grid-template-columns: minmax(200px, 1fr) auto;
+  }
+
+  .mealBadges {
+    justify-content: flex-end;
+  }
+
+  .mealControls {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .headerIdentityRow,
+  .actionRow,
+  .sectionHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .headerUtilities,
+  .primaryActions,
+  .sectionActions {
+    justify-content: flex-start;
+  }
+
+  .targetsGrid,
+  .optionBasicsGrid,
+  .mealSetupGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .allergyField,
+  .mealNameField {
+    grid-column: auto;
+  }
+
+  .readinessBody ul {
+    columns: 1;
+  }
+
+  .mealSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .mealBadges,
+  .mealControls {
+    grid-column: 1;
+    justify-content: flex-start;
+  }
+
+  .nutritionGrid {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
+  }
+
+  .micronutrientField {
+    grid-column: 1 / -1;
+  }
+}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   type PlanMeal, type PlanOption, type PlanTargets, type DishOption, type TargetMacroKey,
-  mealHeading, planTotals, targetCheck, planProblems, resequence, optionNutrients,
+  planTotals, targetCheck, planProblems, resequence, optionNutrients,
   MACROS, MACRO_LABELS, MACRO_TARGETS, optionMicronutrients, micronutrientLine, targetStepProblem,
 } from "@/lib/diet-plan";
 import { rulesFor, optionInteractions } from "@/lib/food-drug";
@@ -13,6 +13,7 @@ import { saveDietPlan, submitDietPlan, reviewDietPlan, newDietPlanVersion, sugge
 import { completeDietPlanDraft } from "@/lib/diet-plan-assistant";
 import type { GeneratedPlan } from "@/lib/diet-plan-ai";
 import DeliverButton from "@/components/DeliverButton";
+import styles from "./DietPlanBuilder.module.css";
 
 export type PlanMeta = { allergies: string | null; notes: string | null; issued_on: string | null };
 
@@ -40,14 +41,14 @@ const blankOption = (seq: number): PlanOption => ({
   fat_g: null, fibre_g: null, micronutrients: "", components: [],
 });
 
-/**
- * The nine columns the clinic's brief specifies, shared by the header and each
- * row: Option, Food Items, Quantity, Calories, Carbs, Protein, Fat, Fibre,
- * Micronutrients — plus the delete button.
- */
-const OPT_COLS = "62px 1.5fr 1.1fr 62px 58px 62px 52px 56px 1fr 28px";
 /** A blank meal slot — a new "+ Add meal slot" click. */
 const blankMeal = (seq: number): PlanMeal => ({ seq, name: "", time_from: null, time_to: null, note: null, conditional: false, options: [] });
+
+const mealKey = (meal: PlanMeal, index: number) => meal.id ?? `meal-${index}`;
+const OPTION_NUTRIENT_LABELS: Record<(typeof MACROS)[number], string> = {
+  kcal: "Calories", carb_g: "Carbs (g)", protein_g: "Protein (g)",
+  fat_g: "Fat (g)", fibre_g: "Fibre (g)",
+};
 
 const statusPill = (status: string) => {
   if (status === "published") return { bg: "var(--green-bg)", fg: "var(--green-text)", text: "Published" };
@@ -113,6 +114,9 @@ export default function DietPlanBuilder({
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [assistantProposal, setAssistantProposal] = useState<GeneratedPlan | null>(null);
+  const [openMealKeys, setOpenMealKeys] = useState<Set<string>>(
+    () => new Set(initial.meals[0] ? [mealKey(initial.meals[0], 0)] : []),
+  );
 
   // A published plan is a fixed document; a workspace-level read-only view
   // (e.g. an admin previewing a discipline they don't hold) is the same.
@@ -157,7 +161,11 @@ export default function DietPlanBuilder({
     touch();
   };
   const addMeal = () => {
-    setMeals((ms) => [...ms, blankMeal(ms.length)]);
+    setMeals((ms) => {
+      const next = blankMeal(ms.length);
+      setOpenMealKeys((keys) => new Set(keys).add(mealKey(next, ms.length)));
+      return [...ms, next];
+    });
     touch();
   };
 
@@ -232,6 +240,18 @@ export default function DietPlanBuilder({
   const totals = planTotals(meals);
   const check = targetCheck(totals, targets.kcal);
   const problems = planProblems(meals, targets, dishes);
+  const targetProblems = problems.filter((problem) => problem.startsWith("No daily"));
+  const problemsForMeal = (meal: PlanMeal) => {
+    const name = meal.name.trim() || "Untitled slot";
+    return problems.filter((problem) => problem.startsWith(`${name} `) || problem.startsWith(`${name} ·`));
+  };
+  const toggleMeal = (key: string) => {
+    setOpenMealKeys((keys) => {
+      const next = new Set(keys);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   // Section 2's step rule. A warning rather than a refusal: a target set from
   // an estimated BMR and then corrected by a real InBody reading can move 400
@@ -339,24 +359,43 @@ export default function DietPlanBuilder({
   const pill = statusPill(status);
 
   return (
-    <div>
+    <div className={styles.builder}>
       {/* ---- HEADER ---- */}
-      <div style={{ ...box, padding: 14, marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <b style={{ fontSize: 14 }}>{clientName}</b>
-          <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 12.5 }}> · Diet plan v{version}</span>
+      <div style={{ ...box, marginBottom: 12 }} className={styles.chartHeader}>
+        <div className={styles.headerIdentityRow}>
+          <div className={styles.headerIdentity}>
+            <div className={styles.eyebrow}>Diet chart</div>
+            <div className={styles.headerTitleRow}>
+              <b className={styles.headerTitle}>{clientName}</b>
+              <span style={{ background: pill.bg, color: pill.fg }} className={styles.statusPill}>{pill.text}</span>
+            </div>
+            <div className={styles.headerMeta}>Version {version}</div>
+          </div>
+
+          <div className={styles.headerUtilities}>
+            {locked ? (
+              meta.issued_on && <span className={styles.issuedText}>Issued {meta.issued_on}</span>
+            ) : (
+              <label className={styles.issuedField}>
+                <span>Issued on</span>
+                <input type="date" value={meta.issued_on ?? ""} onChange={(e) => { setMeta((m) => ({ ...m, issued_on: e.target.value || null })); touch(); }} style={{ ...inpControl, width: 150 }} />
+              </label>
+            )}
+            <a href={`/diet-plan/${planId}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF ↗</a>
+          </div>
         </div>
-        <span style={{ background: pill.bg, color: pill.fg, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600 }}>{pill.text}</span>
-        <span style={{ flex: 1 }} />
-        {locked ? (
-          meta.issued_on && <span style={{ fontSize: 12, color: "var(--muted)" }}>Issued {meta.issued_on}</span>
-        ) : (
-          <label style={{ fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
-            Issued
-            <input type="date" value={meta.issued_on ?? ""} onChange={(e) => { setMeta((m) => ({ ...m, issued_on: e.target.value || null })); touch(); }} style={{ ...inpControl, width: 150 }} />
-          </label>
-        )}
-        <a href={`/diet-plan/${planId}/print`} target="_blank" rel="noopener" style={{ ...outlineBtn, textDecoration: "none", color: "var(--ink)" }}>Preview PDF →</a>
+
+        <div className={styles.actionRow}>
+          <div className={styles.readinessSummary}>
+            <span className={problems.length ? styles.readinessDotBlocked : styles.readinessDotReady} />
+            <span>
+              {problems.length
+                ? <><b>{problems.length} check{problems.length === 1 ? "" : "s"} remaining</b> before {status === "draft" ? "review" : status === "in_review" ? "approval" : "sending"}</>
+                : <b>All required checks are complete</b>}
+            </span>
+          </div>
+
+          <div className={styles.primaryActions}>
         {/* One press: makes the stored file, puts it in the portal, sends it.
             Preview above is just a look — it leaves nothing behind.
 
@@ -366,9 +405,7 @@ export default function DietPlanBuilder({
             cannot be walked back. The assessment builder has always gated on
             published; this one did not, which is how a draft could be sent. */}
         {status !== "published" ? (
-          <span style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 600 }}>
-            Approve and publish before this can be sent
-          </span>
+          null
         ) : problems.length === 0 ? (
           <DeliverButton kind="plan" id={planId} clientName={clientName} ready={pdf.ready} missing={pdf.missing}
             whatsappReady={Boolean(whatsapp?.ready)} alreadySent={initial.sharedAt} />
@@ -435,9 +472,11 @@ export default function DietPlanBuilder({
             </form>
           </>
         )}
+          </div>
+        </div>
       </div>
-      {savedAt && !dirty && <div style={{ fontSize: 11.5, color: "var(--green-text)", margin: "-6px 0 10px" }}>Saved at {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>}
-      {err && <div style={{ fontSize: 12, color: "var(--red-text)", margin: "-6px 0 10px" }}>{err}</div>}
+      {savedAt && !dirty && <div className={styles.successNotice}>Saved at {new Date(savedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>}
+      {err && <div className={styles.errorNotice}><b>Couldn&apos;t complete that action.</b><span>{err}</span></div>}
 
       {completionPreview && (
         <div style={{ ...box, padding: 16, marginBottom: 12, borderColor: "var(--brand-fill)" }}>
@@ -495,96 +534,148 @@ export default function DietPlanBuilder({
         </div>
       )}
 
-      {/* ---- TARGETS ---- */}
-      <div style={{ ...box, padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Daily targets</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          <div><div style={label}>Calorie target (kcal/day)</div>
-            <input type="number" disabled={locked} value={targets.kcal ?? ""} onChange={(e) => { setTargets((t) => ({ ...t, kcal: e.target.value === "" ? null : Number(e.target.value) })); touch(); }} style={inpControl} /></div>
-          {MACRO_TARGETS.map(([key, , targetLabel]) => (
-            <div key={key}>
-              <div style={label}>{targetLabel[0].toUpperCase() + targetLabel.slice(1)} target (g/day)</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 5, alignItems: "center" }}>
-                <input type="number" min="0" step="0.1" disabled={locked} aria-label={`${targetLabel} minimum`}
-                  value={targets[key].min ?? ""} placeholder="Min"
-                  onChange={(e) => setTargetBound(key, "min", e.target.value)} style={inpControl} />
-                <span style={{ color: "var(--muted)", fontSize: 12 }}>to</span>
-                <input type="number" min="0" step="0.1" disabled={locked} aria-label={`${targetLabel} maximum`}
-                  value={targets[key].max ?? ""} placeholder="Max"
-                  onChange={(e) => setTargetBound(key, "max", e.target.value)} style={inpControl} />
+      <div className={styles.sectionHeading}>
+        <div>
+          <div className={styles.eyebrow}>Step 1</div>
+          <h3>Set the day&apos;s targets</h3>
+        </div>
+        {targetProblems.length > 0 && <span className={styles.issuePill}>{targetProblems.length} missing</span>}
+      </div>
+
+      <div className={styles.overviewGrid}>
+        {/* ---- TARGETS ---- */}
+        <div style={{ ...box, padding: 16 }}>
+          <div className={styles.cardHeading}>Daily targets</div>
+          <div className={styles.targetsGrid}>
+            <div><div style={label}>Calories (kcal/day)</div>
+              <input type="number" disabled={locked} value={targets.kcal ?? ""} onChange={(e) => { setTargets((t) => ({ ...t, kcal: e.target.value === "" ? null : Number(e.target.value) })); touch(); }} style={inpControl} /></div>
+            {MACRO_TARGETS.map(([key, , targetLabel]) => (
+              <div key={key}>
+                <div style={label}>{targetLabel[0].toUpperCase() + targetLabel.slice(1)} (g/day)</div>
+                <div className={styles.rangeFields}>
+                  <input type="number" min="0" step="0.1" disabled={locked} aria-label={`${targetLabel} minimum`}
+                    value={targets[key].min ?? ""} placeholder="Min"
+                    onChange={(e) => setTargetBound(key, "min", e.target.value)} style={inpControl} />
+                  <span>to</span>
+                  <input type="number" min="0" step="0.1" disabled={locked} aria-label={`${targetLabel} maximum`}
+                    value={targets[key].max ?? ""} placeholder="Max"
+                    onChange={(e) => setTargetBound(key, "max", e.target.value)} style={inpControl} />
+                </div>
               </div>
-            </div>
-          ))}
-          <div><div style={label}>Water</div>
-            <input disabled={locked} value={targets.water ?? ""} placeholder="e.g. 2.5 - 3 ltr/day" onChange={(e) => { setTargets((t) => ({ ...t, water: e.target.value || null })); touch(); }} style={inpControl} /></div>
-          <div style={{ gridColumn: "span 2" }}><div style={label}>Food allergies</div>
-            <input disabled={locked} value={meta.allergies ?? ""} placeholder="e.g. Peanuts, shellfish" onChange={(e) => { setMeta((m) => ({ ...m, allergies: e.target.value || null })); touch(); }} style={inpControl} /></div>
-        </div>
-      </div>
-
-      {/* ---- LIVE TOTALS ---- */}
-      <div style={{
-        ...box, padding: "10px 14px", marginBottom: 12,
-        background: check.tone === "ok" ? "var(--green-bg)" : check.tone === "warn" ? "var(--amber-bg)" : "var(--card)",
-      }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: check.tone === "ok" ? "var(--green-text)" : check.tone === "warn" ? "var(--amber-text)" : "var(--ink)" }}>
-          Combinations range {totals.minKcal}–{totals.maxKcal} kcal
-        </div>
-        {/* The day's macros as well as its calories, so the header targets can
-            be read against what the options actually add up to. Until the chart
-            held carbs, fat and fibre this line could only ever say protein. */}
-        <div style={{ fontSize: 12, marginTop: 3, color: "var(--muted)" }}>
-          {MACRO_LABELS.map(([k, label]) => (
-            <span key={k} style={{ marginRight: 12 }}>
-              {label} {totals.macros[k].min}–{totals.macros[k].max} g
-            </span>
-          ))}
-        </div>
-        {check.text && <div style={{ fontSize: 12, marginTop: 2, color: check.tone === "ok" ? "var(--green-text)" : "var(--amber-text)" }}>{check.text}</div>}
-
-        {/* Section 2's step rule, next to the target it is about rather than
-            in the problems list at the bottom — this is a remark on a number
-            she is looking at, not a fault in the chart. */}
-        {stepWarning && (
-          <div style={{ fontSize: 12, marginTop: 6, color: "var(--amber-text)" }}>
-            {stepWarning}
+            ))}
+            <div><div style={label}>Water</div>
+              <input disabled={locked} value={targets.water ?? ""} placeholder="e.g. 2.5–3 L/day" onChange={(e) => { setTargets((t) => ({ ...t, water: e.target.value || null })); touch(); }} style={inpControl} /></div>
+            <div className={styles.allergyField}><div style={label}>Food allergies</div>
+              <input disabled={locked} value={meta.allergies ?? ""} placeholder="e.g. Peanuts, shellfish" onChange={(e) => { setMeta((m) => ({ ...m, allergies: e.target.value || null })); touch(); }} style={inpControl} /></div>
           </div>
-        )}
+        </div>
+
+        {/* ---- LIVE TOTALS ---- */}
+        <div style={{
+          ...box, padding: 16,
+          background: check.tone === "ok" ? "var(--green-bg)" : check.tone === "warn" ? "var(--amber-bg)" : "var(--card)",
+        }}>
+          <div className={styles.cardHeading}>Current day totals</div>
+          <div className={styles.kcalTotal} style={{ color: check.tone === "ok" ? "var(--green-text)" : check.tone === "warn" ? "var(--amber-text)" : "var(--ink)" }}>
+            {totals.minKcal}–{totals.maxKcal} <small>kcal</small>
+          </div>
+          <div className={styles.macroTotals}>
+            {MACRO_LABELS.map(([k, macroLabel]) => (
+              <div key={k}>
+                <span>{macroLabel}</span>
+                <b>{totals.macros[k].min}–{totals.macros[k].max} g</b>
+              </div>
+            ))}
+          </div>
+          {check.text && <div className={styles.totalMessage} style={{ color: check.tone === "ok" ? "var(--green-text)" : "var(--amber-text)" }}>{check.text}</div>}
+          {stepWarning && <div className={styles.totalMessage} style={{ color: "var(--amber-text)" }}>{stepWarning}</div>}
+        </div>
       </div>
+
+      {/* ---- PROBLEMS ---- */}
+      {problems.length > 0 && (
+        <details className={styles.readinessPanel}>
+          <summary>
+            <span><b>Review readiness</b><small>{problems.length} required check{problems.length === 1 ? "" : "s"} remaining</small></span>
+            <span className={styles.reviewChecklistAction}>View checklist</span>
+          </summary>
+          <div className={styles.readinessBody}>
+            <div className={styles.readinessInstruction}>
+              {status === "draft" ? "Complete these before sending the chart for review."
+                : status === "in_review" ? "Complete these before approving the chart."
+                  : "Complete these before sending the chart to the client."}
+            </div>
+            <ul>
+              {problems.map((problem, index) => <li key={index}>{problem}</li>)}
+            </ul>
+          </div>
+        </details>
+      )}
 
       {/* ---- MEAL SLOTS ---- */}
-      {meals.map((m, i) => (
-        <div key={m.id ?? `meal-${i}`} style={{ ...box, padding: 14, marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input disabled={locked} value={m.name} placeholder="Meal name" onChange={(e) => updateMeal(i, { name: e.target.value })} style={{ ...inpControl, flex: "1 1 220px", fontWeight: 700, width: "auto" }} />
-            <input disabled={locked} value={m.time_from ?? ""} placeholder="From (e.g. 9:30 am)" onChange={(e) => updateMeal(i, { time_from: e.target.value || null })} style={{ ...inpControl, width: 140 }} />
-            <span style={{ color: "var(--muted)" }}>–</span>
-            <input disabled={locked} value={m.time_to ?? ""} placeholder="To (e.g. 10:00 am)" onChange={(e) => updateMeal(i, { time_to: e.target.value || null })} style={{ ...inpControl, width: 140 }} />
-            <span style={{ flex: 1 }} />
+      <div className={styles.sectionHeading}>
+        <div>
+          <div className={styles.eyebrow}>Step 2</div>
+          <h3>Build the meal schedule</h3>
+          <p>Open one slot to work on it. The others stay summarized.</p>
+        </div>
+        <div className={styles.sectionActions}>
+          <button type="button" onClick={() => setOpenMealKeys(new Set(meals.map(mealKey)))} style={outlineBtn}>Expand all</button>
+          <button type="button" onClick={() => setOpenMealKeys(new Set())} style={outlineBtn}>Collapse all</button>
+        </div>
+      </div>
+
+      {meals.map((m, i) => {
+        const key = mealKey(m, i);
+        const open = openMealKeys.has(key);
+        const mealIssues = problemsForMeal(m);
+        const activeOptions = m.options.filter((option) => option.food_items.trim()).length;
+        return (
+        <div key={key} style={box} className={styles.mealCard}>
+          <div className={styles.mealSummary}>
+            <button type="button" onClick={() => toggleMeal(key)} className={styles.mealToggle} aria-expanded={open}>
+              <span className={styles.chevron}>{open ? "▾" : "›"}</span>
+              <span>
+                <b>{m.name.trim() || `Untitled meal ${i + 1}`}</b>
+                <small>{m.time_from || m.time_to ? [m.time_from, m.time_to].filter(Boolean).join("–") : "Time not set"}{m.conditional ? " · Conditional" : ""}</small>
+              </span>
+            </button>
+            <div className={styles.mealBadges}>
+              <span className={activeOptions === 4 ? styles.completePill : styles.incompletePill}>{activeOptions}/4 options</span>
+              <span className={styles.rangePill}>{slotRangeText(m)}</span>
+              {mealIssues.length > 0 && <span className={styles.issuePill}>{mealIssues.length} check{mealIssues.length === 1 ? "" : "s"}</span>}
+            </div>
             {!locked && (
-              <>
+              <div className={styles.mealControls}>
                 <button type="button" disabled={i === 0} onClick={() => moveMeal(i, -1)} style={disabledOf(i === 0, iconBtn)} title="Move up">↑</button>
                 <button type="button" disabled={i === meals.length - 1} onClick={() => moveMeal(i, 1)} style={disabledOf(i === meals.length - 1, iconBtn)} title="Move down">↓</button>
                 <button type="button" onClick={() => removeMeal(i)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete slot">✕</button>
-              </>
+              </div>
             )}
           </div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>{mealHeading(m) || "—"}</div>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 8 }}>
+          {open && <div className={styles.mealBody}>
+          <div className={styles.mealSetupGrid}>
+            <div className={styles.mealNameField}><div style={label}>Meal name</div>
+              <input disabled={locked} value={m.name} placeholder="Meal name" onChange={(e) => updateMeal(i, { name: e.target.value })} style={{ ...inpControl, fontWeight: 700 }} /></div>
+            <div><div style={label}>From</div>
+              <input disabled={locked} value={m.time_from ?? ""} placeholder="e.g. 9:30 am" onChange={(e) => updateMeal(i, { time_from: e.target.value || null })} style={inpControl} /></div>
+            <div><div style={label}>To</div>
+              <input disabled={locked} value={m.time_to ?? ""} placeholder="e.g. 10:00 am" onChange={(e) => updateMeal(i, { time_to: e.target.value || null })} style={inpControl} /></div>
+          </div>
+
+          <label className={styles.conditionalField}>
             <input type="checkbox" disabled={locked} checked={m.conditional} onChange={(e) => updateMeal(i, { conditional: e.target.checked })} />
-            Conditional
-            <span style={{ color: "var(--muted)" }}>— Eaten instead of a meal — excluded from the day&apos;s totals</span>
+            <span><b>Conditional slot</b><small>Eaten instead of a meal and excluded from the day&apos;s totals</small></span>
           </label>
 
-          <input disabled={locked} value={m.note ?? ""} placeholder="Note (optional)" onChange={(e) => updateMeal(i, { note: e.target.value || null })} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 8 }} />
+          <input disabled={locked} value={m.note ?? ""} placeholder="Note for this meal slot (optional)" onChange={(e) => updateMeal(i, { note: e.target.value || null })} style={{ ...inp, width: "100%", boxSizing: "border-box", marginTop: 8 }} />
 
-          {/* Options table */}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, fontSize: 11, color: "var(--muted)", fontWeight: 600, padding: "0 2px" }}>
-              <span>Option</span><span>Food items</span><span>Qty</span><span>Kcal</span>
-              <span>Carbs (g)</span><span>Protein (g)</span><span>Fat (g)</span><span>Fibre (g)</span>
-              <span>Micronutrient</span><span />
+          {/* Options */}
+          <div className={styles.optionsArea}>
+            <div className={styles.optionsHeading}>
+              <span>Meal options</span>
+              <small>Every active slot needs exactly four complete options.</small>
             </div>
             {m.options.map((o, j) => {
               // A built row's calories and protein are the recipes'. The boxes
@@ -610,21 +701,34 @@ export default function DietPlanBuilder({
               // she is deciding whether to trust it on a client's chart.
               const quoted = built && o.components.some((c) => dishMap.get(c.dish_id)?.basis === "published");
               return (
-                <div key={o.id ?? `opt-${j}`} style={{ marginTop: 6, paddingBottom: built ? 6 : 0 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: OPT_COLS, gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 12, color: "var(--muted)" }}>Option {j + 1}</span>
-                    <input disabled={locked} value={o.food_items} placeholder="Food items" onChange={(e) => updateOption(i, j, { food_items: e.target.value })} style={inpControl} />
-                    <input disabled={locked} value={o.qty ?? ""} placeholder="Measured qty" onChange={(e) => updateOption(i, j, { qty: e.target.value || null })} style={inpControl} />
+                <div key={o.id ?? `opt-${j}`} className={styles.optionCard}>
+                  <div className={styles.optionTitleRow}>
+                    <span className={styles.optionNumber}>Option {j + 1}</span>
+                    {built && <span className={styles.recipePill}>Recipe calculated</span>}
+                    <span className={styles.optionTitleSpacer} />
+                    {!locked && <button type="button" onClick={() => removeOption(i, j)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete option">✕</button>}
+                  </div>
+                  <div className={styles.optionBasicsGrid}>
+                    <label><span>Food items</span>
+                      <input disabled={locked} value={o.food_items} placeholder="What the client will eat" onChange={(e) => updateOption(i, j, { food_items: e.target.value })} style={inpControl} />
+                    </label>
+                    <label><span>Measured quantity</span>
+                      <input disabled={locked} value={o.qty ?? ""} placeholder="Portion and units" onChange={(e) => updateOption(i, j, { qty: e.target.value || null })} style={inpControl} />
+                    </label>
+                  </div>
+                  <div className={styles.nutritionGrid}>
                     {/* The five figures the issued document prints, in the
                         brief's order. Read-only wherever the row is built from
                         recipes — the recipes decide, and the boxes stay
                         visible so the row still reads straight across. */}
                     {MACROS.map((k) => (
-                      <input key={k} type="number" step={k === "kcal" ? "1" : "0.1"}
-                        disabled={locked} readOnly={built} value={o[k] ?? ""}
-                        onChange={(e) => updateOption(i, j, { [k]: e.target.value === "" ? null : Number(e.target.value) })}
-                        style={built ? fromRecipe : inpControl}
-                        title={built ? "Added up from the recipes below" : undefined} />
+                      <label key={k}><span>{OPTION_NUTRIENT_LABELS[k]}</span>
+                        <input type="number" step={k === "kcal" ? "1" : "0.1"}
+                          disabled={locked} readOnly={built} value={o[k] ?? ""}
+                          onChange={(e) => updateOption(i, j, { [k]: e.target.value === "" ? null : Number(e.target.value) })}
+                          style={built ? fromRecipe : inpControl}
+                          title={built ? "Added up from the recipes below" : undefined} />
+                      </label>
                     ))}
                     {/* ---- KEY MICRONUTRIENTS ----
                         Left as a box she can type in, always. The recipes can
@@ -637,8 +741,9 @@ export default function DietPlanBuilder({
                         is built from recipes, the app offers the line it worked
                         out and she takes it with one click. Filling the box for
                         her would overwrite a note somebody meant. */}
-                    <input disabled={locked} value={o.micronutrients ?? ""} placeholder="Iron, folate…" onChange={(e) => updateOption(i, j, { micronutrients: e.target.value || null })} style={inpControl} />
-                    {!locked && <button type="button" onClick={() => removeOption(i, j)} style={{ ...iconBtn, color: "var(--red-text)" }} title="Delete option">✕</button>}
+                    <label className={styles.micronutrientField}><span>Key micronutrients</span>
+                      <input disabled={locked} value={o.micronutrients ?? ""} placeholder="Iron, folate…" onChange={(e) => updateOption(i, j, { micronutrients: e.target.value || null })} style={inpControl} />
+                    </label>
                   </div>
 
                   {/* ---- BUILT FROM ----
@@ -650,13 +755,13 @@ export default function DietPlanBuilder({
                     // The library did not load. Without this the row shows
                     // greyed, uneditable figures, no recipes and no reason —
                     // and no way back to typing them by hand.
-                    <div style={{ fontSize: 11.5, color: "var(--amber-text)", margin: "4px 0 0 78px" }}>
+                    <div className={styles.optionMessage} style={{ color: "var(--amber-text)" }}>
                       Built from recipes, but the recipe library could not be loaded — reload the page to edit this option.
                     </div>
                   )}
 
                   {(built || !locked) && dishes.length > 0 && (
-                    <div style={{ margin: "4px 0 0 78px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                    <div className={styles.recipeBuilder}>
                       {built && <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>Built from</span>}
                       {o.components.map((c, k) => (
                         <span key={c.id ?? `part-${k}`} style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
@@ -718,8 +823,7 @@ export default function DietPlanBuilder({
                     const line = micronutrientLine(optionMicronutrients(o.components, dishMap));
                     if (!line || line === o.micronutrients) return null;
                     return (
-                      <div style={{ fontSize: 11.5, color: "var(--muted)", margin: "3px 0 0 78px",
-                                    display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <div className={styles.optionMessage} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span>These recipes work out at <b style={{ color: "var(--ink)" }}>{line}</b></span>
                         <button type="button"
                           onClick={() => updateOption(i, j, { micronutrients: line })}
@@ -735,13 +839,13 @@ export default function DietPlanBuilder({
                     // she simply needs to know it is the databank's number and
                     // not this app's, because correcting an ingredient will not
                     // move it until the recipe can be computed here.
-                    <div style={{ fontSize: 11.5, color: "var(--muted)", margin: "3px 0 0 78px" }}>
+                    <div className={styles.optionMessage}>
                       Figures quoted from the published recipe, not calculated here.
                     </div>
                   )}
 
                   {trouble && (
-                    <div style={{ fontSize: 11.5, color: "var(--amber-text)", margin: "3px 0 0 78px" }}>
+                    <div className={styles.optionMessage} style={{ color: "var(--amber-text)" }}>
                       No figures for this option — {trouble}. Fix it under Dishes, or remove it here and type the numbers.
                     </div>
                   )}
@@ -750,35 +854,26 @@ export default function DietPlanBuilder({
             })}
             {!locked && <button type="button" onClick={() => addOption(i)} style={{ ...outlineBtn, marginTop: 8 }}>+ Add option</button>}
           </div>
-
-          <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 10 }}>{slotRangeText(m)}</div>
+          </div>}
         </div>
-      ))}
-      {!locked && <button type="button" onClick={addMeal} style={{ ...outlineBtn, marginBottom: 12 }}>+ Add meal slot</button>}
+        );
+      })}
+      {!locked && <button type="button" onClick={addMeal} style={{ ...outlineBtn, marginBottom: 18 }}>+ Add meal slot</button>}
 
       {/* ---- NOTES ---- */}
+      <div className={styles.sectionHeading}>
+        <div>
+          <div className={styles.eyebrow}>Step 3</div>
+          <h3>Add coaching and review context</h3>
+          <p>Keep instructions for the client separate from clinical reminders for the care team.</p>
+        </div>
+      </div>
       <div style={{ ...box, padding: 16, marginBottom: 12 }}>
         <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Coaching notes</div>
         <textarea disabled={locked} rows={7} value={meta.notes ?? ""} placeholder="3-part meal rule, hydration, tea structure…"
           onChange={(e) => { setMeta((mt) => ({ ...mt, notes: e.target.value || null })); touch(); }}
           style={{ ...inp, width: "100%", boxSizing: "border-box", resize: "vertical" }} />
       </div>
-
-      {/* ---- PROBLEMS ---- */}
-      {problems.length > 0 && (
-        <div style={{ ...box, padding: 14, marginBottom: 12, background: "var(--red-bg)" }}>
-          {/* Named by the step being blocked right now, rather than listing
-              every step it could block — the reader only has one next move. */}
-          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--red-text)", marginBottom: 6 }}>
-            {status === "draft" ? "Resolve before this chart can go for review"
-              : status === "in_review" ? "Resolve before this chart can be approved"
-                : "Resolve before this chart can be sent to the client"}
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 18, color: "var(--red-text)", fontSize: 12.5 }}>
-            {problems.map((p, i) => <li key={i} style={{ marginBottom: 3 }}>{p}</li>)}
-          </ul>
-        </div>
-      )}
 
       {/* ---- READ AGAINST WHAT THE CLIENT TAKES ----
           Deliberately below the problems list and deliberately not blocking.
