@@ -2,6 +2,12 @@ export const ISSUE_TYPES = ["Bug", "Feedback", "Performance", "Data concern"] as
 export const ISSUE_SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
 export const ISSUE_STATUSES = ["Open", "In progress", "Resolved", "Dismissed"] as const;
 
+export const APP_FEEDBACK_COPY = {
+  trigger: "App Feedback",
+  title: "Cureocity App Feedback",
+  scope: "Report a Cureocity app bug, technical problem, feedback, or feature request. Do not use this for client concerns or clinical or safety matters.",
+} as const;
+
 export type IssueType = (typeof ISSUE_TYPES)[number];
 export type IssueSeverity = (typeof ISSUE_SEVERITIES)[number];
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];

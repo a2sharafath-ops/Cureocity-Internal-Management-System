@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APP_FEEDBACK_COPY,
   canReportIssue,
   canTriageIssues,
   clientRefFromRoute,
@@ -25,6 +26,14 @@ function reportData(overrides: Record<string, string> = {}) {
 }
 
 describe("issue report privacy and validation", () => {
+  it("clearly scopes staff feedback away from client and clinical safety concerns", () => {
+    expect(APP_FEEDBACK_COPY.trigger).toBe("App Feedback");
+    expect(APP_FEEDBACK_COPY.scope).toMatch(/app bug|technical problem/i);
+    expect(APP_FEEDBACK_COPY.scope).toMatch(/feature request/i);
+    expect(APP_FEEDBACK_COPY.scope).toMatch(/do not use this for client concerns/i);
+    expect(APP_FEEDBACK_COPY.scope).toMatch(/clinical or safety matters/i);
+  });
+
   it("captures a clean pathname, pseudonymous client reference and allowlisted device context", () => {
     const result = validateIssueSubmission(reportData());
     expect(result.ok).toBe(true);

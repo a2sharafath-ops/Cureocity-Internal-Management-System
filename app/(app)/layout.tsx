@@ -12,7 +12,6 @@ import { getProfile, getViewRole } from "@/lib/auth";
 import { getAppSettings, brandLogo } from "@/lib/settings";
 import { signOut } from "@/lib/actions";
 import { logServerError } from "@/lib/runtime-errors";
-import IssueReportButton from "@/components/IssueReportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +78,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
           <HeaderTitle />
           <span style={{ flex: 1 }} />
-          <IssueReportButton />
           {role === "Super Admin" && <Link href="/messages" title="Communications" style={{ border: "1px solid rgba(20,20,25,0.07)", background: "rgba(255,255,255,0.55)", borderRadius: 999, width: 34, height: 34, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 15, marginRight: 2 }}>💬</Link>}
           <NotificationBell items={notifs} unread={unread} />
           {(real === "Administrator" || real === "Super Admin") && <RolePreview preview={preview} profession={profession} />}

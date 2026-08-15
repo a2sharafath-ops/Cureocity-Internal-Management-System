@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useFormStatus } from "react-dom";
-import { ISSUE_SEVERITIES, ISSUE_TYPES } from "@/lib/issue-reports";
+import { APP_FEEDBACK_COPY, ISSUE_SEVERITIES, ISSUE_TYPES } from "@/lib/issue-reports";
 import { submitIssueReport, type IssueActionState } from "@/lib/issue-actions";
 
 const input: React.CSSProperties = {
@@ -45,11 +45,11 @@ function IssueReportForm({ onClose }: { onClose: () => void }) {
       <div style={{ width: "min(100%, 560px)", maxHeight: "calc(100vh - 36px)", overflowY: "auto", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, boxShadow: "0 24px 70px rgba(0,0,0,.2)", padding: 22 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
           <div>
-            <h2 id="issue-report-title" style={{ margin: 0, fontSize: 18 }}>Report an issue</h2>
-            <p style={{ margin: "5px 0 0", color: "var(--muted)", fontSize: 12.5, lineHeight: 1.45 }}>Tell the administrator what happened. The current page and basic browser details are attached automatically.</p>
+            <h2 id="issue-report-title" style={{ margin: 0, fontSize: 18 }}>{APP_FEEDBACK_COPY.title}</h2>
+            <p style={{ margin: "5px 0 0", color: "var(--muted)", fontSize: 12.5, lineHeight: 1.45 }}>{APP_FEEDBACK_COPY.scope} The current page and basic browser details are attached automatically.</p>
           </div>
           <span style={{ flex: 1 }} />
-          <button type="button" onClick={onClose} aria-label="Close report form" style={{ border: 0, background: "transparent", fontSize: 20, cursor: "pointer", color: "var(--muted)" }}>×</button>
+          <button type="button" onClick={onClose} aria-label="Close app feedback form" style={{ border: 0, background: "transparent", fontSize: 20, cursor: "pointer", color: "var(--muted)" }}>×</button>
         </div>
 
         {state.ok ? (
@@ -71,7 +71,7 @@ function IssueReportForm({ onClose }: { onClose: () => void }) {
                 <select name="severity" defaultValue="Medium" style={input}>{ISSUE_SEVERITIES.map((value) => <option key={value}>{value}</option>)}</select>
               </label>
             </div>
-            <label style={{ display: "grid", gap: 5, color: "var(--muted)", fontSize: 12, fontWeight: 650 }}>What happened?
+            <label style={{ display: "grid", gap: 5, color: "var(--muted)", fontSize: 12, fontWeight: 650 }}>What happened or what would you improve?
               <textarea name="description" minLength={15} maxLength={4000} required rows={6} style={{ ...input, resize: "vertical", lineHeight: 1.45 }} placeholder="What were you trying to do, what did you expect, and what happened instead?" />
             </label>
             <div style={{ borderRadius: 9, background: "var(--neutral-bg)", padding: "9px 11px", color: "var(--muted)", fontSize: 11.5, lineHeight: 1.45 }}>
@@ -97,8 +97,8 @@ export default function IssueReportButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} title="Report an issue" style={{ border: "1px solid rgba(20,20,25,0.07)", background: "rgba(255,255,255,0.55)", borderRadius: 999, padding: "7px 11px", cursor: "pointer", color: "var(--muted)", fontSize: 12, fontWeight: 650, whiteSpace: "nowrap" }}>
-        ⚑ Report issue
+      <button type="button" onClick={() => setOpen(true)} title={APP_FEEDBACK_COPY.scope} aria-label={`${APP_FEEDBACK_COPY.trigger}: Cureocity application bugs, technical feedback and feature requests`} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, border: 0, background: "transparent", borderRadius: 10, padding: "9px 12px", marginBottom: 2, cursor: "pointer", color: "rgba(255,255,255,0.88)", fontSize: 14, fontWeight: 500, textAlign: "left" }}>
+        {APP_FEEDBACK_COPY.trigger}
       </button>
       {open && <IssueReportForm onClose={() => setOpen(false)} />}
     </>

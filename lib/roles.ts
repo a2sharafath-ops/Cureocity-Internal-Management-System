@@ -54,6 +54,7 @@ const CLIN_MD = [...CLIN, "Medical Director"] as Role[];
 // Which nav items each role can see. "all" = every role.
 export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/dashboard": "all",
+  "/copilot": "all",
   "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/onboarding": ["Administrator", "Manager", "Front Desk"],
   "/leads": ["Administrator", "Manager", "Front Desk"],

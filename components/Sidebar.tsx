@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { canSee, isClinician, isMedicalDirector } from "@/lib/roles";
 import { moduleScope } from "@/lib/deployment";
+import IssueReportButton from "@/components/IssueReportButton";
 
 const SCOPE = moduleScope();
 
@@ -21,6 +22,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "▚" },
       { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
+      { href: "/copilot", label: "Staff Copilot", icon: "✦" },
     ],
   },
   // The "Care Team" hub link was removed from the sidebar. The /careteam page
@@ -216,6 +218,10 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
             })}
           </div>
         ))}
+
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.16)" }}>
+          <IssueReportButton />
+        </div>
 
       </nav>
 
