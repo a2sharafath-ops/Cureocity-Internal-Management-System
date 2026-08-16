@@ -12,6 +12,8 @@ import { getProfile, getViewRole } from "@/lib/auth";
 import { getAppSettings, brandLogo } from "@/lib/settings";
 import { signOut } from "@/lib/actions";
 import { logServerError } from "@/lib/runtime-errors";
+import CureocityAssistantLauncher from "@/components/CureocityAssistantLauncher";
+import { staffAssistantSurface } from "@/lib/staff-copilot";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = me.name;
   const role = effective; // display + nav follow the (possibly previewed) role
   const initials = name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
+  const assistantSurface = staffAssistantSurface(real, process.env);
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
@@ -104,6 +107,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             the top of the content rather than sitting on a reserved strip. */}
         <main style={{ padding: "10px 24px 24px" }}>{children}</main>
       </div>
+      <CureocityAssistantLauncher surface={assistantSurface} />
     </div>
   );
 }

@@ -44,9 +44,9 @@ export default async function StaffCopilotPage() {
   return (
     <div style={{ maxWidth: 940, display: "grid", gap: 16 }}>
       <div>
-        <h1 style={{ fontSize: 20, margin: "0 0 3px" }}>Staff Copilot</h1>
+        <h1 style={{ fontSize: 20, margin: "0 0 3px" }}>Cureocity Assistant</h1>
         <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>
-          Role-aware, draft-only assistance for {me.role}. Copilot never completes work or contacts a client by itself.
+          Role-aware, draft-only assistance for {me.role}. Cureocity Assistant never completes work or contacts a client by itself.
         </p>
       </div>
 
@@ -80,7 +80,7 @@ export default async function StaffCopilotPage() {
         {definition.existingHref && (
           <div>
             <Link href={definition.existingHref} style={{ display: "inline-block", borderRadius: 9, padding: "8px 13px", background: "var(--ink)", color: "#fff", textDecoration: "none", fontSize: 12.5, fontWeight: 700 }}>
-              Open guarded Health Coach Copilot
+              Open guarded Health Coach assistant
             </Link>
           </div>
         )}

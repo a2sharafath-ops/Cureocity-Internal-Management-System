@@ -24,7 +24,7 @@ const SECTIONS: NavSection[] = [
       { href: "/dashboard", label: "Dashboard", icon: "▚" },
       { href: "/workboard", label: "Workboard", icon: "◫" },
       { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
-      { href: "/copilot", label: "Staff Copilot", icon: "✦" },
+      { href: "/copilot", label: "Cureocity Assistant", icon: "✦" },
     ],
   },
   // The "Care Team" hub link was removed from the sidebar. The /careteam page

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { STAFF_COPILOT_ROLES, staffCopilotAvailability, staffCopilotDefinition } from "@/lib/staff-copilot";
+import {
+  CUREOCITY_ASSISTANT_NAME,
+  STAFF_COPILOT_ROLES,
+  staffAssistantSurface,
+  staffCopilotAvailability,
+  staffCopilotDefinition,
+} from "@/lib/staff-copilot";
 
 describe("role-aware Staff Copilot framework", () => {
   it("covers every staff role but never clients", () => {
@@ -65,5 +71,46 @@ describe("role-aware Staff Copilot framework", () => {
       STAFF_COPILOT_SUPER_ADMIN_ENABLED: "true",
       OPENAI_API_KEY: "test-only-key",
     })).toEqual({ enabled: true, reasons: [] });
+  });
+
+  it("exposes the global Cureocity Assistant only to staff", () => {
+    expect(CUREOCITY_ASSISTANT_NAME).toBe("Cureocity Assistant");
+    expect(staffAssistantSurface("Client", {})).toMatchObject({
+      visible: false,
+      quickPromptEnabled: false,
+      voiceInputEnabled: false,
+    });
+    expect(staffAssistantSurface("Doctor", {
+      STAFF_COPILOT_DOCTOR_ENABLED: "true",
+      OPENAI_API_KEY: "test-only-key",
+    })).toMatchObject({
+      visible: true,
+      functional: false,
+      enabled: false,
+      quickPromptEnabled: false,
+      voiceInputEnabled: false,
+    });
+  });
+
+  it("routes global text only to an enabled existing guarded capability", () => {
+    expect(staffAssistantSurface("Super Admin", {
+      STAFF_COPILOT_SUPER_ADMIN_ENABLED: "true",
+      OPENAI_API_KEY: "test-only-key",
+    })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Health Coach", {
+      HEALTH_COACH_COPILOT_ENABLED: "true",
+      OPENAI_API_KEY: "test-only-key",
+    })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: false,
+      fullWorkspaceHref: "/workspace?role=coach&tab=copilot",
+      voiceInputEnabled: false,
+    });
   });
 });

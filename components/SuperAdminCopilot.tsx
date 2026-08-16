@@ -89,7 +89,7 @@ function DraftReview({ draft }: { draft: NonNullable<SuperAdminCopilotState["dra
         onChange={(event) => setText(event.target.value)}
         rows={11}
         style={{ ...input, resize: "vertical", lineHeight: 1.5 }}
-        aria-label="Editable Super Admin Copilot draft"
+        aria-label="Editable Cureocity Assistant draft"
       />
       {draft.evidence.length > 0 && (
         <details>
@@ -133,7 +133,7 @@ export default function SuperAdminCopilot({
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div style={{ background: "#eff6ff", color: "#1e3a8a", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 13px", fontSize: 12 }}>
-        <b>Review-first pilot.</b> Copilot reads only aggregate/anonymized operational context and prepares text for you to review. It has no tool or endpoint for messages, data changes, access changes, approvals, deployments, payments or clinical actions.
+        <b>Review-first pilot.</b> Cureocity Assistant reads only aggregate/anonymized operational context and prepares text for you to review. It has no tool or endpoint for messages, data changes, access changes, approvals, deployments, payments or clinical actions.
       </div>
 
       {!enabled && (
@@ -144,7 +144,7 @@ export default function SuperAdminCopilot({
 
       <form action={action} style={{ ...box, padding: 16, display: "grid", gap: 12 }}>
         <label style={{ display: "grid", gap: 4, fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>
-          What reviewable draft should Copilot prepare?
+          What reviewable draft should Cureocity Assistant prepare?
           <select
             name="task_type"
             value={selectedTask}
@@ -184,7 +184,7 @@ export default function SuperAdminCopilot({
 
       <section style={{ ...box, overflow: "hidden" }}>
         <div style={{ padding: "12px 15px" }}>
-          <b style={{ fontSize: 13.5 }}>Recent Super Admin Copilot drafts</b>
+          <b style={{ fontSize: 13.5 }}>Recent Cureocity Assistant drafts</b>
           <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>
             Generated, accepted and discarded drafts remain labelled and auditable. None is evidence that an operational action occurred.
           </div>
@@ -200,7 +200,7 @@ export default function SuperAdminCopilot({
             <div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 6 }}>AI-assisted review text only · no action executed</div>
           </details>
         )) : (
-          <div style={{ borderTop: "1px solid var(--border)", padding: 15, color: "var(--muted)", fontSize: 12.5 }}>No Super Admin Copilot drafts yet.</div>
+          <div style={{ borderTop: "1px solid var(--border)", padding: 15, color: "var(--muted)", fontSize: 12.5 }}>No Cureocity Assistant drafts yet.</div>
         )}
       </section>
     </div>
