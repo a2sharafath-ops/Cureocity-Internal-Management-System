@@ -49,6 +49,13 @@ describe("canSee", () => {
     }
   });
 
+  it("the sprint Workboard is owner-only", () => {
+    expect(canSee("Super Admin", "/workboard")).toBe(true);
+    for (const r of ["Administrator", "Manager", "Medical Director", "Front Desk", "HR", "Doctor", "Staff"]) {
+      expect(canSee(r, "/workboard")).toBe(false);
+    }
+  });
+
   it("unknown routes default to visible", () => {
     expect(canSee("Staff", "/some-unmapped-route")).toBe(true);
   });

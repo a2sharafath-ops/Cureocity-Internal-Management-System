@@ -21,6 +21,7 @@ const SECTIONS: NavSection[] = [
     title: null,
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "▚" },
+      { href: "/workboard", label: "Workboard", icon: "◫" },
       { href: "/workspace", label: "My Workspace", icon: "🧑‍⚕️" },
       { href: "/copilot", label: "Staff Copilot", icon: "✦" },
     ],
@@ -92,7 +93,7 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
-export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?: string }) {
+export default function Sidebar({ role = "Staff", realRole = role, logo }: { role?: string; realRole?: string; logo?: string }) {
   const pathname = usePathname();
 
   // Exactly one home item survives for clinicians and the owner. Managers keep
@@ -106,7 +107,7 @@ export default function Sidebar({ role = "Staff", logo }: { role?: string; logo?
   const sections = SECTIONS
     .map((s) => ({
       ...s,
-      items: s.items.filter((item) => canSee(role, item.href)
+      items: s.items.filter((item) => (item.href === "/workboard" ? realRole === "Super Admin" : canSee(role, item.href))
         && !(clin && item.href === "/dashboard")
         && !(owner && item.href === "/workspace"))
         .map((item) => role === "Manager" && item.href === "/workspace"

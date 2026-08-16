@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       <Suspense fallback={null}><RouteProgress /></Suspense>
       <PasswordRecoveryRedirect />
-      <Sidebar role={role} logo={brandLogo(await getAppSettings())} />
+      <Sidebar role={role} realRole={real} logo={brandLogo(await getAppSettings())} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Floating glass header.
             The outer element is the sticky rail — transparent, full width, and

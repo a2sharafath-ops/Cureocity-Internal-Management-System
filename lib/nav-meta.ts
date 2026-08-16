@@ -7,6 +7,7 @@ export type PageMeta = { title: string };
 
 export const PAGE_META: Record<string, PageMeta> = {
   "/dashboard":     { title: "Dashboard" },
+  "/workboard":     { title: "Workboard" },
   "/leads":         { title: "CRM & Leads" },
   "/clients":       { title: "Clients" },
   "/appointments":  { title: "Appointment Calendar" },

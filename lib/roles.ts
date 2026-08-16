@@ -54,6 +54,9 @@ const CLIN_MD = [...CLIN, "Medical Director"] as Role[];
 // Which nav items each role can see. "all" = every role.
 export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/dashboard": "all",
+  // Owner sprint/release board. Super Admin reaches it through the global
+  // bypass; every other role is explicitly denied.
+  "/workboard": [],
   "/copilot": "all",
   "/clients": ["Administrator", "Manager", "Front Desk", ...CLIN_MD],
   "/onboarding": ["Administrator", "Manager", "Front Desk"],
