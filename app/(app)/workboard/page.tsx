@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   canViewWorkboard,
   missingBaselineKeys,
+  orderedWorkboardWorkstreams,
   WORKBOARD_STATUSES,
   type WorkboardHistoryItem,
   type WorkboardItem,
@@ -60,6 +61,7 @@ export default async function WorkboardPage() {
   if (historyResult.error) logServerError(historyResult.error, { source: "workboard", operation: "load_history" });
   const history = (historyResult.data ?? []) as unknown as WorkboardHistoryItem[];
   const missing = missingBaselineKeys(items);
+  const workstreams = orderedWorkboardWorkstreams(items);
   const counts = Object.fromEntries(WORKBOARD_STATUSES.map((status) => [status, items.filter((item) => item.status === status).length])) as Record<WorkboardStatus, number>;
 
   return (
@@ -83,6 +85,19 @@ export default async function WorkboardPage() {
           <div style={{ color: "var(--muted)", fontSize: 11, fontWeight: 700 }}>Total tracked</div>
           <div style={{ fontSize: 21, fontWeight: 800, marginTop: 5 }}>{items.length}</div>
         </div>
+      </section>
+
+      <section aria-label="Workboard workstream summary" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))", gap: 9, marginBottom: 16 }}>
+        {workstreams.map((workstream) => {
+          const streamItems = items.filter((item) => item.workstream === workstream);
+          const open = streamItems.filter((item) => item.status !== "Done").length;
+          return (
+            <div key={workstream} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "11px 13px" }}>
+              <div style={{ fontSize: 12, fontWeight: 750 }}>{workstream}</div>
+              <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 4 }}>{streamItems.length} item{streamItems.length === 1 ? "" : "s"} · {open} open</div>
+            </div>
+          );
+        })}
       </section>
 
       {missing.length > 0 && (
