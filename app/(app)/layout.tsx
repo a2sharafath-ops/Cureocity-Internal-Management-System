@@ -80,7 +80,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <span style={{ flex: 1 }} />
           {role === "Super Admin" && <Link href="/messages" title="Communications" style={{ border: "1px solid rgba(20,20,25,0.07)", background: "rgba(255,255,255,0.55)", borderRadius: 999, width: 34, height: 34, display: "grid", placeItems: "center", textDecoration: "none", fontSize: 15, marginRight: 2 }}>💬</Link>}
           <NotificationBell items={notifs} unread={unread} />
-          {(real === "Administrator" || real === "Super Admin") && <RolePreview preview={preview} profession={profession} />}
+          {(real === "Administrator" || real === "Super Admin") && <RolePreview preview={preview} profession={profession} realRole={real} />}
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, marginLeft: 12 }}>
             <Link href="/account" title="My account" style={{ display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none", color: "inherit" }}>
               <span style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 12 }}>

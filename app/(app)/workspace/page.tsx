@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, getViewRole } from "@/lib/auth";
 import { canSee, isClinician, isAdminish, canReviewDietChart, canDeliverDoc } from "@/lib/roles";
 import { getPersona } from "@/lib/personas";
+import { isNativeSuperAdmin } from "@/lib/role-preview";
 import { todayISO, todayLabel } from "@/lib/today";
 import { loadClientStatuses, clientStatus } from "@/lib/client-status";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
@@ -75,6 +76,13 @@ export default async function WorkspacePage(
   const searchParams = await props.searchParams;
   const me = await getProfile();
   if (!me) redirect("/dashboard");
+  const viewRole = await getViewRole();
+  // Super Admin has an operational dashboard, not a native clinical
+  // workspace. Explicit role/persona previews can still enter /workspace, but
+  // once preview is cleared an already-open workspace must not survive.
+  if (isNativeSuperAdmin(viewRole.real, viewRole.preview, viewRole.profession)) {
+    redirect("/dashboard");
+  }
   // Managers normally use their operational dashboard rather than entering a
   // discipline workspace. The sole exception is the restricted Coach quality
   // oversight screen; the tab clamp below prevents access to the other tools.
@@ -83,7 +91,7 @@ export default async function WorkspacePage(
 
   // Resolve active role: ?role → own discipline → persona → default —
   // constrained to the disciplines this login role is allowed to view.
-  const { profession } = await getViewRole();
+  const { profession } = viewRole;
   const persona = getPersona(profession);
   // While an admin previews a discipline persona, the workspace behaves exactly
   // as that clinician's would — one workspace, no switcher — so the preview is

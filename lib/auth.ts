@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { resolveViewRole, type ViewRole } from "@/lib/role-preview";
 
 export type Profile = {
   id: string;
@@ -50,16 +51,13 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
 
 // Effective (display) role — Administrators can preview another role via a cookie.
 // The REAL role still governs all permissions; this only changes what's shown.
-export async function getViewRole(): Promise<{ real: string; effective: string; preview: string | null; profession: string | null }> {
+export async function getViewRole(): Promise<ViewRole> {
   const me = await getProfile();
   const real = me?.role ?? "Staff";
-  let preview: string | null = null;
-  let profession: string | null = null;
-  if (real === "Administrator" || real === "Super Admin") {
-    const c = (await cookies()).get("preview_role")?.value;
-    if (c) preview = c;
-    const p = (await cookies()).get("preview_profession")?.value;
-    if (p) profession = p;
-  }
-  return { real, effective: preview ?? real, preview, profession };
+  const store = await cookies();
+  return resolveViewRole(
+    real,
+    store.get("preview_role")?.value,
+    store.get("preview_profession")?.value,
+  );
 }

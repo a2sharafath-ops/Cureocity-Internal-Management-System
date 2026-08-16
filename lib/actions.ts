@@ -24,6 +24,7 @@ import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
+import { previewSelectionDestination } from "@/lib/role-preview";
 import { canWriteNutrition, canWriteFitness, ownsConsultKind, wsKeyForRole } from "@/lib/discipline";
 import { deletable, statusAfterUndo, CANCELLED } from "@/lib/consult-lifecycle";
 import { buildFollowupRows, governingPackage } from "@/lib/followups";
@@ -155,7 +156,7 @@ export async function setPreviewRole(formData: FormData) {
     store.set("preview_role", persona.key, { path: "/", sameSite: "lax" });
     store.set("preview_profession", persona.key, { path: "/", sameSite: "lax" });
     revalidatePath("/", "layout");
-    redirect(persona.route);
+    redirect(previewSelectionDestination(role));
   }
 
   // Plain role preview (or clear)
@@ -163,6 +164,11 @@ export async function setPreviewRole(formData: FormData) {
   if (!role || role === "off") store.delete("preview_role");
   else store.set("preview_role", role, { path: "/", sameSite: "lax" });
   revalidatePath("/", "layout");
+  // Always leave the currently rendered route after a role change. In
+  // particular, clearing a clinician preview while already on /workspace must
+  // return a native Super Admin to their dashboard instead of leaving a stale
+  // Doctor Workspace on screen.
+  redirect(previewSelectionDestination(role));
 }
 
 export type PwState = { error?: string; ok?: string };

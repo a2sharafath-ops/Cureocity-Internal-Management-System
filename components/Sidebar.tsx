@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { canSee, isClinician, isMedicalDirector } from "@/lib/roles";
 import { moduleScope } from "@/lib/deployment";
 import IssueReportButton from "@/components/IssueReportButton";
+import { shouldShowWorkspaceNavigation } from "@/lib/role-preview";
 
 const SCOPE = moduleScope();
 
@@ -109,7 +110,7 @@ export default function Sidebar({ role = "Staff", realRole = role, logo }: { rol
       ...s,
       items: s.items.filter((item) => (item.href === "/workboard" ? realRole === "Super Admin" : canSee(role, item.href))
         && !(clin && item.href === "/dashboard")
-        && !(owner && item.href === "/workspace"))
+        && (item.href !== "/workspace" || shouldShowWorkspaceNavigation(realRole, role)))
         .map((item) => role === "Manager" && item.href === "/workspace"
           ? { ...item, label: "Coach Quality", icon: "✓" }
           : item),
