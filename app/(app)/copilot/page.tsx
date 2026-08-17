@@ -7,6 +7,7 @@ import StaffNavigationAssistant, { type StaffNavigationAssistantHistory } from "
 import FrontDeskAssistant, { type FrontDeskAssistantHistory } from "@/components/FrontDeskAssistant";
 import FitnessTrainerAssistant, { type FitnessTrainerAssistantHistory } from "@/components/FitnessTrainerAssistant";
 import AdministratorAssistant, { type AdministratorAssistantHistory } from "@/components/AdministratorAssistant";
+import ManagerAssistant, { type ManagerAssistantHistory } from "@/components/ManagerAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -37,6 +38,8 @@ export default async function StaffCopilotPage() {
   let fitnessTrainerHistoryError: string | null = null;
   let administratorHistory: AdministratorAssistantHistory[] = [];
   let administratorHistoryError: string | null = null;
+  let managerHistory: ManagerAssistantHistory[] = [];
+  let managerHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -114,6 +117,22 @@ export default async function StaffCopilotPage() {
       administratorHistoryError = "Administrator checklist history could not be loaded. No data was changed; verify migrations 0186 and 0189 before enabling this pilot.";
     } else {
       administratorHistory = (data ?? []) as AdministratorAssistantHistory[];
+    }
+  }
+  if (me.role === "Manager" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Manager")
+      .eq("task_key", "operations_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "manager_assistant", operation: "load_history" });
+      managerHistoryError = "Manager checklist history could not be loaded. No data was changed; verify migrations 0186 and 0190 before enabling this pilot.";
+    } else {
+      managerHistory = (data ?? []) as ManagerAssistantHistory[];
     }
   }
 
@@ -200,6 +219,10 @@ export default async function StaffCopilotPage() {
           enabled={availability.enabled}
           historyError={administratorHistoryError}
         />
+      )}
+
+      {me.role === "Manager" && (
+        <ManagerAssistant history={managerHistory} enabled={availability.enabled} historyError={managerHistoryError} />
       )}
 
       <div style={{ ...box, padding: 18 }}>

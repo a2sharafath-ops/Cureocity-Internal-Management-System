@@ -127,6 +127,7 @@ export const STAFF_NAVIGATION_TASK_KEY = "navigation_checklist";
 export const FRONT_DESK_OPERATIONAL_TASK_KEY = "operational_checklist";
 export const FITNESS_TRAINER_OPERATIONAL_TASK_KEY = "operational_checklist";
 export const ADMINISTRATOR_GOVERNANCE_TASK_KEY = "governance_checklist";
+export const MANAGER_OPERATIONS_TASK_KEY = "operations_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -227,6 +228,31 @@ const administratorGovernanceManifest = manifest({
   ],
 });
 
+const managerOperationsManifest = manifest({
+  taskVersion: "manager.operations_checklist.v1",
+  role: "Manager",
+  key: MANAGER_OPERATIONS_TASK_KEY,
+  label: "Prepare a manager operations checklist",
+  owner: "Cureocity Manager operations owner",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_MANAGER_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Manager"],
+  dataContract: {
+    sources: ["versioned Manager workflow metadata", "authenticated real role", "existing route permission map"],
+    allowedFields: ["workflow label", "route label", "route path", "static purpose", "ordered navigation step"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["client records", "clinical records", "coach records", "appointment records", "session records", "finance records", "HR records", "staff records", "access records", "messages", "credentials", "free-form SOP content"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "assign, schedule, reschedule, contact, approve, complete, configure, publish, or change any management item",
+    "claim that a client, appointment, session, follow-up, handover, quality item, package, service, or template exists or is complete",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
@@ -234,6 +260,7 @@ export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[
   frontDeskOperationalManifest,
   fitnessTrainerOperationalManifest,
   administratorGovernanceManifest,
+  managerOperationsManifest,
 ];
 
 export type AssistantPolicyDecision = {

@@ -8,6 +8,7 @@ import {
   ADMINISTRATOR_GOVERNANCE_TASK_KEY,
   FITNESS_TRAINER_OPERATIONAL_TASK_KEY,
   FRONT_DESK_OPERATIONAL_TASK_KEY,
+  MANAGER_OPERATIONS_TASK_KEY,
   STAFF_NAVIGATION_TASK_KEY,
   assertAssistantPolicyIntegrity,
   assistantTaskManifestsForRole,
@@ -23,7 +24,8 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(assistantTaskManifestsForRole("Front Desk")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Fitness Trainer")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Administrator")).toHaveLength(1);
-    for (const role of ["Manager", "Medical Director", "Doctor", "Dietitian", "Psychologist", "Finance", "HR"]) {
+    expect(assistantTaskManifestsForRole("Manager")).toHaveLength(1);
+    for (const role of ["Medical Director", "Doctor", "Dietitian", "Psychologist", "Finance", "HR"]) {
       expect(assistantTaskManifestsForRole(role), role).toEqual([]);
     }
   });
@@ -95,6 +97,13 @@ describe("versioned Cureocity Assistant task policy", () => {
       taskKey: ADMINISTRATOR_GOVERNANCE_TASK_KEY,
       env: { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" },
     }).allowed).toBe(false);
+
+    expect(decideAssistantTask({
+      realRole: "Manager", taskKey: MANAGER_OPERATIONS_TASK_KEY, env: { STAFF_COPILOT_MANAGER_ENABLED: "true" },
+    })).toMatchObject({ allowed: true, manifest: { role: "Manager", executionMode: "deterministic", requiresExternalAi: false } });
+    expect(decideAssistantTask({
+      realRole: "Administrator", taskKey: MANAGER_OPERATIONS_TASK_KEY, env: { STAFF_COPILOT_MANAGER_ENABLED: "true" },
+    }).allowed).toBe(false);
   });
 
   it("requires AI configuration only for tasks whose manifest says so", () => {
@@ -117,6 +126,9 @@ describe("versioned Cureocity Assistant task policy", () => {
       realRole: "Administrator",
       taskKey: ADMINISTRATOR_GOVERNANCE_TASK_KEY,
       env: { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" },
+    }).reasons).toEqual([]);
+    expect(decideAssistantTask({
+      realRole: "Manager", taskKey: MANAGER_OPERATIONS_TASK_KEY, env: { STAFF_COPILOT_MANAGER_ENABLED: "true" },
     }).reasons).toEqual([]);
     expect(decideAssistantTask({
       realRole: "Super Admin",

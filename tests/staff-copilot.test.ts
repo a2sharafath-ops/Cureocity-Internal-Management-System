@@ -37,7 +37,7 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator", "Manager"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
@@ -105,6 +105,17 @@ describe("role-aware Staff Copilot framework", () => {
       reasons: ["The role feature flag is off."],
     });
     expect(staffCopilotAvailability("Administrator", { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
+  it("defines the deterministic Manager operations pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Manager")).toMatchObject({
+      functional: true,
+      featureFlag: "STAFF_COPILOT_MANAGER_ENABLED",
+      requiresExternalAi: false,
+      allowedTasks: ["Prepare a manager operations checklist"],
+    });
+    expect(staffCopilotAvailability("Manager", {})).toEqual({ enabled: false, reasons: ["The role feature flag is off."] });
+    expect(staffCopilotAvailability("Manager", { STAFF_COPILOT_MANAGER_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
   it("requires both the Health Coach role flag and external connection", () => {
@@ -196,6 +207,14 @@ describe("role-aware Staff Copilot framework", () => {
       enabled: true,
       quickPromptEnabled: true,
       quickPromptKind: "administrator_checklist",
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Manager", { STAFF_COPILOT_MANAGER_ENABLED: "true" })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      quickPromptKind: "manager_checklist",
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });
