@@ -37,7 +37,7 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
@@ -49,6 +49,20 @@ describe("role-aware Staff Copilot framework", () => {
       enabled: false,
       reasons: ["Allowed tasks and role boundaries have not been approved for this role."],
     });
+  });
+
+  it("defines the deterministic Staff navigation pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Staff")).toMatchObject({
+      functional: true,
+      featureFlag: "STAFF_COPILOT_STAFF_ENABLED",
+      requiresExternalAi: false,
+      allowedTasks: ["Draft an app navigation checklist"],
+    });
+    expect(staffCopilotAvailability("Staff", {})).toEqual({
+      enabled: false,
+      reasons: ["The role feature flag is off."],
+    });
+    expect(staffCopilotAvailability("Staff", { STAFF_COPILOT_STAFF_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
   it("requires both the Health Coach role flag and external connection", () => {
@@ -99,6 +113,17 @@ describe("role-aware Staff Copilot framework", () => {
     })).toMatchObject({
       enabled: true,
       quickPromptEnabled: true,
+      quickPromptKind: "super_admin",
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Staff", {
+      STAFF_COPILOT_STAFF_ENABLED: "true",
+    })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      quickPromptKind: "staff_navigation",
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });
@@ -109,8 +134,21 @@ describe("role-aware Staff Copilot framework", () => {
     })).toMatchObject({
       enabled: true,
       quickPromptEnabled: false,
+      quickPromptKind: null,
       fullWorkspaceHref: "/workspace?role=coach&tab=copilot",
       voiceInputEnabled: false,
     });
+  });
+
+  it("honours the global kill switch across deterministic and AI-backed tasks", () => {
+    expect(staffCopilotAvailability("Staff", {
+      CUREOCITY_ASSISTANT_DISABLED: "true",
+      STAFF_COPILOT_STAFF_ENABLED: "true",
+    }).enabled).toBe(false);
+    expect(staffCopilotAvailability("Super Admin", {
+      CUREOCITY_ASSISTANT_DISABLED: "true",
+      STAFF_COPILOT_SUPER_ADMIN_ENABLED: "true",
+      OPENAI_API_KEY: "test-only-key",
+    }).reasons).toContain("The global Cureocity Assistant kill switch is active.");
   });
 });

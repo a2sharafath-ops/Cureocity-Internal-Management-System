@@ -31,6 +31,7 @@ The repository currently establishes the following facts:
 - Authenticated staff pages now include a persistent Cureocity Assistant launcher. It opens an accessible side panel over the current page so the user's page state is preserved, and it links to a dedicated full workspace for longer work and draft history.
 - The global panel invokes text generation only for an existing, enabled, server-guarded capability. The Super Admin quick-draft path uses the current guarded draft action; Health Coach work continues in the guarded client-scoped workspace; unapproved or unconfigured roles receive an explicit unavailable state.
 - A visible voice-input affordance is present but disabled and labelled coming soon. It does not request microphone permission, record audio, create a transcript, or call a voice provider. Voice requires a separate privacy, consent, retention, provider, security, and evaluation decision.
+- A shared versioned task-manifest foundation now defines real-role ownership, feature gates, execution mode, action tier, allowed/forbidden data, human review, and prohibited actions for every implemented task. A global emergency kill-switch contract can disable all task availability without broadening any role.
 - The Health Coach pilot is functional in code but guarded. It has nine approved behavioural-coaching draft tasks and strict clinical hard stops. It is enabled only when its dedicated feature flag and server-side AI configuration are present.
 - The Super Admin pilot is functional in code but disabled in the current AWS Development environment pending a Development-only OpenAI API key and `STAFF_COPILOT_SUPER_ADMIN_ENABLED=true`. Its four approved tasks are:
   1. draft an operational summary;
@@ -40,10 +41,11 @@ The repository currently establishes the following facts:
 - Super Admin context is currently reduced to aggregate or anonymized operational information. The model does not receive raw database identifiers from that context builder.
 - Super Admin outputs are structured, bounded, safety-checked, stored as reviewable drafts, and may be marked Accepted or Discarded. Acceptance stores working text only; it executes no operational action.
 - Generation, blocked generation, acceptance, and discard behavior has an audit path. Existing draft evidence is designed to be immutable, and no delete path is exposed for discarded Super Admin drafts.
-- Every role other than Health Coach and Super Admin is deliberately inert. A future-looking environment flag alone cannot activate one of those roles because its tasks and boundaries have not been approved or implemented.
+- The first Phase 3 Staff slice is implemented in code as a deterministic navigation-checklist pilot. It uses only versioned public application-route metadata, performs no AI call, reads no client/staff/business record, stores immutable generated evidence plus separately reviewed text through an atomic audit RPC, and remains default-off pending migration 0186 and its dedicated Development feature flag.
+- Every role other than Health Coach, Super Admin, and the bounded Staff navigation pilot is deliberately inert. A future-looking environment flag alone cannot activate one of those roles because its tasks and boundaries have not been approved or implemented.
 - The existing application already has role gates, discipline ownership, row-level security (RLS), audit records, clinical review responsibilities, and human approval flows that the Assistant must reuse rather than bypass.
 
-Relevant current sources are [the staff framework](../lib/staff-copilot.ts), [the global Assistant launcher](../components/CureocityAssistantLauncher.tsx), [the Super Admin task definition](../lib/super-admin-copilot.ts), [the Health Coach task definition](../lib/coach-copilot.ts), [the full Assistant workspace](../app/(app)/copilot/page.tsx), and [the Super Admin draft migration](../supabase/0183_staff_copilot_drafts.sql).
+Relevant current sources are [the versioned task policy](../lib/cureocity-assistant-policy.ts), [the staff framework](../lib/staff-copilot.ts), [the global Assistant launcher](../components/CureocityAssistantLauncher.tsx), [the Staff navigation contract](../lib/staff-navigation-assistant.ts), [the Super Admin task definition](../lib/super-admin-copilot.ts), [the Health Coach task definition](../lib/coach-copilot.ts), [the full Assistant workspace](../app/(app)/copilot/page.tsx), [the shared Staff draft foundation](../supabase/0186_staff_assistant_policy_foundation.sql), and [the Super Admin draft migration](../supabase/0183_staff_copilot_drafts.sql).
 
 ### 2.2 Future scope defined by this PRD
 
@@ -827,7 +829,7 @@ Do not place raw prompts, responses, client names, free-text clinical data, or r
 
 Pilot in this order:
 
-1. Staff: navigation and SOP retrieval;
+1. Staff: navigation and SOP retrieval (navigation checklist implemented and guarded; SOP retrieval remains deferred until an authoritative role-visible corpus is approved);
 2. Front Desk: onboarding and scheduling checks/drafts;
 3. Administrator: operational summaries and completeness checks; and
 4. Manager: workload, SLA, and handover summaries.

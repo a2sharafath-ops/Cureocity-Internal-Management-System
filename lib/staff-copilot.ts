@@ -1,31 +1,20 @@
-import { COACH_COPILOT_TASKS } from "@/lib/coach-copilot";
-import { SUPER_ADMIN_COPILOT_TASKS } from "@/lib/super-admin-copilot";
+import {
+  CUREOCITY_ASSISTANT_STAFF_ROLES,
+  assistantTaskManifestsForRole,
+} from "@/lib/cureocity-assistant-policy";
 import type { Role } from "@/lib/roles";
 
 export const CUREOCITY_ASSISTANT_NAME = "Cureocity Assistant";
 export const CUREOCITY_ASSISTANT_VOICE_LABEL = "Voice input · coming soon";
 
-export const STAFF_COPILOT_ROLES: Role[] = [
-  "Super Admin",
-  "Administrator",
-  "Manager",
-  "Medical Director",
-  "Front Desk",
-  "Doctor",
-  "Dietitian",
-  "Fitness Trainer",
-  "Health Coach",
-  "Psychologist",
-  "Finance",
-  "HR",
-  "Staff",
-];
+export const STAFF_COPILOT_ROLES: Role[] = CUREOCITY_ASSISTANT_STAFF_ROLES;
 
 export type StaffCopilotDefinition = {
   role: Role;
   title: string;
   functional: boolean;
   featureFlag: string;
+  requiresExternalAi: boolean;
   allowedTasks: readonly string[];
   existingHref: string | null;
 };
@@ -35,33 +24,16 @@ const flagFor = (role: Role) => `STAFF_COPILOT_${role.toUpperCase().replace(/[^A
 export function staffCopilotDefinition(role: string): StaffCopilotDefinition | null {
   if (!(STAFF_COPILOT_ROLES as string[]).includes(role)) return null;
   const staffRole = role as Role;
-  if (staffRole === "Super Admin") {
-    return {
-      role: staffRole,
-      title: "Cureocity Assistant for Super Admin",
-      functional: true,
-      featureFlag: "STAFF_COPILOT_SUPER_ADMIN_ENABLED",
-      allowedTasks: SUPER_ADMIN_COPILOT_TASKS.map((task) => task.label),
-      existingHref: null,
-    };
-  }
-  if (staffRole === "Health Coach") {
-    return {
-      role: staffRole,
-      title: "Cureocity Assistant for Health Coach",
-      functional: true,
-      featureFlag: "HEALTH_COACH_COPILOT_ENABLED",
-      allowedTasks: COACH_COPILOT_TASKS.map((task) => task.label),
-      existingHref: "/workspace?role=coach&tab=copilot",
-    };
-  }
+  const tasks = assistantTaskManifestsForRole(staffRole);
+  const implemented = tasks.filter((task) => task.implementation === "implemented");
   return {
     role: staffRole,
     title: `Cureocity Assistant for ${staffRole}`,
-    functional: false,
-    featureFlag: flagFor(staffRole),
-    allowedTasks: [],
-    existingHref: null,
+    functional: implemented.length > 0,
+    featureFlag: implemented[0]?.featureFlag ?? flagFor(staffRole),
+    requiresExternalAi: implemented.some((task) => task.requiresExternalAi),
+    allowedTasks: implemented.map((task) => task.label),
+    existingHref: staffRole === "Health Coach" ? "/workspace?role=coach&tab=copilot" : null,
   };
 }
 
@@ -70,7 +42,7 @@ export function staffCopilotAvailability(
   env: Record<string, string | undefined>,
 ): { enabled: boolean; reasons: string[] } {
   const definition = staffCopilotDefinition(role);
-  if (!definition) return { enabled: false, reasons: ["Copilot is available only to authenticated staff."] };
+  if (!definition) return { enabled: false, reasons: ["Cureocity Assistant is available only to authenticated staff."] };
   if (!definition.functional || definition.allowedTasks.length === 0) {
     return {
       enabled: false,
@@ -78,8 +50,9 @@ export function staffCopilotAvailability(
     };
   }
   const reasons: string[] = [];
+  if (env.CUREOCITY_ASSISTANT_DISABLED === "true") reasons.push("The global Cureocity Assistant kill switch is active.");
   if (env[definition.featureFlag] !== "true") reasons.push("The role feature flag is off.");
-  if (!env.OPENAI_API_KEY) reasons.push("The external AI connection is not configured.");
+  if (definition.requiresExternalAi && !env.OPENAI_API_KEY) reasons.push("The external AI connection is not configured.");
   return { enabled: reasons.length === 0, reasons };
 }
 
@@ -93,6 +66,7 @@ export type StaffAssistantSurface = {
   allowedTasks: string[];
   fullWorkspaceHref: string;
   quickPromptEnabled: boolean;
+  quickPromptKind: "super_admin" | "staff_navigation" | null;
   quickPromptHelp: string;
   voiceInputEnabled: false;
 };
@@ -121,15 +95,25 @@ export function staffAssistantSurface(
       allowedTasks: [],
       fullWorkspaceHref: "/copilot",
       quickPromptEnabled: false,
+      quickPromptKind: null,
       quickPromptHelp: "No staff assistant is available for this account.",
       voiceInputEnabled: false,
     };
   }
 
   const availability = staffCopilotAvailability(role, env);
-  const quickPromptEnabled = role === "Super Admin" && availability.enabled;
+  const quickPromptKind = availability.enabled
+    ? role === "Super Admin"
+      ? "super_admin"
+      : role === "Staff"
+        ? "staff_navigation"
+        : null
+    : null;
+  const quickPromptEnabled = quickPromptKind !== null;
   const quickPromptHelp = quickPromptEnabled
-    ? "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
+    ? role === "Staff"
+      ? "Ask where to find a Cureocity app area. This uses static navigation metadata only and saves a reviewable checklist; it reads no client, clinical, finance, HR, or staff records."
+      : "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
     : role === "Health Coach" && availability.enabled
       ? "Open the Health Coach workspace to select an authorized client before entering text."
       : definition.functional
@@ -146,6 +130,7 @@ export function staffAssistantSurface(
     allowedTasks: [...definition.allowedTasks],
     fullWorkspaceHref: definition.existingHref ?? "/copilot",
     quickPromptEnabled,
+    quickPromptKind,
     quickPromptHelp,
     voiceInputEnabled: false,
   };

@@ -11,6 +11,10 @@ import {
   CUREOCITY_ASSISTANT_VOICE_LABEL,
   type StaffAssistantSurface,
 } from "@/lib/staff-copilot";
+import {
+  generateStaffNavigationDraft,
+  type StaffNavigationAssistantState,
+} from "@/lib/staff-navigation-assistant-actions";
 import { SUPER_ADMIN_COPILOT_TASKS } from "@/lib/super-admin-copilot";
 
 const input: React.CSSProperties = {
@@ -75,6 +79,47 @@ function SuperAdminQuickDraft() {
           <div style={{ color: "var(--muted)", fontSize: 11 }}>
             Continue in the full workspace to review, edit, accept, or discard this saved draft. Nothing was sent, changed, approved, or applied.
           </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function StaffNavigationQuickDraft() {
+  const [state, action, pending] = useActionState<StaffNavigationAssistantState, FormData>(
+    generateStaffNavigationDraft,
+    {},
+  );
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <form action={action} style={{ display: "grid", gap: 9 }}>
+        <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 700 }}>
+          Which Cureocity area do you want to find?
+          <textarea
+            name="instruction"
+            rows={4}
+            maxLength={500}
+            placeholder="Example: Where can I report an app bug? Do not enter names, contact details, client information, credentials, or record content."
+            style={{ ...input, resize: "vertical", lineHeight: 1.45 }}
+          />
+        </label>
+        {state.error && (
+          <div role="alert" style={{ borderRadius: 9, padding: "9px 10px", background: "var(--red-bg)", color: "var(--red-text)", fontSize: 12 }}>
+            {state.error}
+          </div>
+        )}
+        <button type="submit" disabled={pending} style={{ border: 0, borderRadius: 10, padding: "10px 13px", background: "var(--ink)", color: "#fff", fontWeight: 750, cursor: pending ? "default" : "pointer", opacity: pending ? 0.65 : 1 }}>
+          {pending ? "Preparing checklist…" : "Prepare navigation checklist"}
+        </button>
+      </form>
+      {state.draft && (
+        <section aria-label="Generated navigation checklist" style={{ border: "1px solid var(--border)", borderRadius: 11, padding: 12, display: "grid", gap: 8, background: "var(--neutral-bg)" }}>
+          <div style={{ color: "#5b21b6", fontSize: 10.5, fontWeight: 800 }}>DETERMINISTIC DRAFT · NO AI CALL · NO ACTION</div>
+          <b style={{ fontSize: 13.5 }}>{state.draft.title}</b>
+          <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.5 }}>{state.draft.text}</div>
+          <div style={{ color: "var(--amber-text)", fontSize: 11.5 }}><b>Boundary:</b> {state.draft.caution}</div>
+          <div style={{ color: "var(--muted)", fontSize: 11 }}>Continue in the full workspace to review, edit, accept, discard, or inspect route evidence.</div>
         </section>
       )}
     </div>
@@ -233,8 +278,10 @@ export default function CureocityAssistantLauncher({ surface }: { surface: Staff
               </details>
             )}
 
-            {surface.quickPromptEnabled ? (
+            {surface.quickPromptKind === "super_admin" ? (
               <SuperAdminQuickDraft />
+            ) : surface.quickPromptKind === "staff_navigation" ? (
+              <StaffNavigationQuickDraft />
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 700 }}>

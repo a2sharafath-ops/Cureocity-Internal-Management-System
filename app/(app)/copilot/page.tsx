@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/auth";
 import { staffCopilotAvailability, staffCopilotDefinition } from "@/lib/staff-copilot";
 import SuperAdminCopilot, { type SuperAdminCopilotHistory } from "@/components/SuperAdminCopilot";
+import StaffNavigationAssistant, { type StaffNavigationAssistantHistory } from "@/components/StaffNavigationAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -25,6 +26,8 @@ export default async function StaffCopilotPage() {
   const availability = staffCopilotAvailability(me.role, process.env);
   let superAdminHistory: SuperAdminCopilotHistory[] = [];
   let superAdminHistoryError: string | null = null;
+  let staffNavigationHistory: StaffNavigationAssistantHistory[] = [];
+  let staffNavigationHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -38,6 +41,22 @@ export default async function StaffCopilotPage() {
       superAdminHistoryError = "Draft history could not be loaded. No data was changed; verify migration 0183 before enabling the pilot.";
     } else {
       superAdminHistory = (data ?? []) as SuperAdminCopilotHistory[];
+    }
+  }
+  if (me.role === "Staff" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Staff")
+      .eq("task_key", "navigation_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "staff_navigation_assistant", operation: "load_history" });
+      staffNavigationHistoryError = "Navigation history could not be loaded. No data was changed; verify migration 0186 before enabling this pilot.";
+    } else {
+      staffNavigationHistory = (data ?? []) as StaffNavigationAssistantHistory[];
     }
   }
 
@@ -94,13 +113,21 @@ export default async function StaffCopilotPage() {
         />
       )}
 
+      {me.role === "Staff" && (
+        <StaffNavigationAssistant
+          history={staffNavigationHistory}
+          enabled={availability.enabled}
+          historyError={staffNavigationHistoryError}
+        />
+      )}
+
       <div style={{ ...box, padding: 18 }}>
         <h2 style={{ fontSize: 15, margin: "0 0 9px" }}>Controls that apply to every role</h2>
         <ul style={{ margin: 0, paddingLeft: 20, color: "var(--muted)", fontSize: 12.5, lineHeight: 1.55 }}>
           <li>Outputs must remain clearly labelled drafts and require the staff member to review every word.</li>
           <li>No draft may send a message, update a record, create a referral, approve a document or close a safety item automatically.</li>
           <li>Each role needs an explicit allowlist of tasks and data sources; ordinary feature flags cannot grant new clinical permissions.</li>
-          <li>Clients cannot access this staff route, and external AI remains off without a role flag and configured connection.</li>
+          <li>Clients cannot access this staff route. Every task stays off without its own role flag; tasks that use external AI also require a configured server connection.</li>
           <li>Generation, acceptance and discard events must remain auditable before any new role becomes functional.</li>
         </ul>
       </div>

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 const BP_PANEL = "blueprint";
 import { getProfile } from "@/lib/auth";
+import { decideAssistantTask } from "@/lib/cureocity-assistant-policy";
 import {
   HOW_TO_USE, DEFAULT_MEALS, planProblems, optionNutrients, parseTargetRange, formatTargetRange,
   type DishOption, type PlanComponent, type PlanMeal, type PlanTargets,
@@ -7791,12 +7792,13 @@ export async function generateCoachCopilotDraft(
   if (!p || p.role !== "Health Coach") {
     return { error: "Only the assigned Health Coach can use this Copilot." };
   }
-  if (process.env.HEALTH_COACH_COPILOT_ENABLED !== "true") {
-    return { error: "Coach Copilot is awaiting privacy and clinical-governance approval." };
-  }
   const clientId = String(formData.get("client_id") || "");
   const task = String(formData.get("task_type") || "");
   const instruction = String(formData.get("instruction") || "").trim();
+  const policy = decideAssistantTask({ realRole: p.role, taskKey: task, env: process.env });
+  if (!policy.allowed) {
+    return { error: `Health Coach Cureocity Assistant is off. ${policy.reasons.join(" ")}` };
+  }
   const {
     COACH_COPILOT_SYSTEM_PROMPT, coachCopilotHasSafetyStop, coachCopilotRequestProblem, coachCopilotSafetyProblem,
     coachCopilotUserPrompt, parseCoachCopilotOutput,

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getProfile } from "@/lib/auth";
+import { decideAssistantTask } from "@/lib/cureocity-assistant-policy";
 import { openaiComplete } from "@/lib/ai";
 import { logServerError } from "@/lib/runtime-errors";
 import {
@@ -30,17 +31,12 @@ export type SuperAdminCopilotState = {
 
 type Profile = NonNullable<Awaited<ReturnType<typeof getProfile>>>;
 
-function pilotReady(profile: Profile | null) {
+function pilotReady(profile: Profile | null, taskKey = "operational_summary") {
   if (!profile || profile.role !== "Super Admin") {
     return "Only a signed-in Super Admin can use this pilot.";
   }
-  if (process.env.STAFF_COPILOT_SUPER_ADMIN_ENABLED !== "true") {
-    return "Super Admin Copilot is off. Apply migration 0183 and enable its dedicated feature flag before testing.";
-  }
-  if (!process.env.OPENAI_API_KEY) {
-    return "Super Admin Copilot is off because the external AI connection is not configured.";
-  }
-  return null;
+  const policy = decideAssistantTask({ realRole: profile.role, taskKey, env: process.env });
+  return policy.allowed ? null : `Super Admin Cureocity Assistant is off. ${policy.reasons.join(" ")}`;
 }
 
 async function audit(
@@ -71,10 +67,10 @@ export async function generateSuperAdminCopilotDraft(
   formData: FormData,
 ): Promise<SuperAdminCopilotState> {
   const profile = await getProfile();
-  const readinessProblem = pilotReady(profile);
+  const task = String(formData.get("task_type") || "");
+  const readinessProblem = pilotReady(profile, task);
   if (readinessProblem || !profile) return { error: readinessProblem ?? "Super Admin Copilot is unavailable." };
 
-  const task = String(formData.get("task_type") || "");
   const instruction = String(formData.get("instruction") || "").trim();
   const requestProblem = superAdminCopilotRequestProblem(task, instruction);
   if (requestProblem) return { error: requestProblem };
