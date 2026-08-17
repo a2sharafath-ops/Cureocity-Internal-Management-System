@@ -24,6 +24,10 @@ yarn-error.log*
 .env
 .env*.local
 
+# browser regression output
+/playwright-report/
+/test-results/
+
 # vercel
 .vercel
 

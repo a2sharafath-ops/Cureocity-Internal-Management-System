@@ -10,7 +10,9 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:assistant:e2e:provision": "node scripts/provision-dev-assistant-test-accounts.mjs",
+    "test:assistant:e2e": "playwright test -c playwright.assistant.config.ts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.3",
@@ -21,6 +23,7 @@
     "unpdf": "^1.8.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "20.14.15",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",

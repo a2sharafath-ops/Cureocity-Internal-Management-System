@@ -71,12 +71,12 @@ export default function LoginPage() {
           Sign in to Cureocity
         </p>
 
-        <label style={{ fontSize: 12, color: "var(--muted)" }}>Email</label>
-        <input style={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+        <label htmlFor="login-email" style={{ fontSize: 12, color: "var(--muted)" }}>Email</label>
+        <input id="login-email" style={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
 
         <div style={{ height: 12 }} />
-        <label style={{ fontSize: 12, color: "var(--muted)" }}>Password</label>
-        <input style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+        <label htmlFor="login-password" style={{ fontSize: 12, color: "var(--muted)" }}>Password</label>
+        <input id="login-password" style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
 
         {error && (
           <div style={{ marginTop: 12, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 8, padding: "8px 10px", fontSize: 12 }}>
