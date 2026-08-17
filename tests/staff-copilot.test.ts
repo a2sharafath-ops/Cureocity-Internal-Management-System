@@ -37,7 +37,7 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
@@ -77,6 +77,20 @@ describe("role-aware Staff Copilot framework", () => {
       reasons: ["The role feature flag is off."],
     });
     expect(staffCopilotAvailability("Front Desk", { STAFF_COPILOT_FRONT_DESK_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
+  it("defines the deterministic Fitness Trainer checklist pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Fitness Trainer")).toMatchObject({
+      functional: true,
+      featureFlag: "STAFF_COPILOT_FITNESS_TRAINER_ENABLED",
+      requiresExternalAi: false,
+      allowedTasks: ["Prepare a trainer workspace checklist"],
+    });
+    expect(staffCopilotAvailability("Fitness Trainer", {})).toEqual({
+      enabled: false,
+      reasons: ["The role feature flag is off."],
+    });
+    expect(staffCopilotAvailability("Fitness Trainer", { STAFF_COPILOT_FITNESS_TRAINER_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
   it("requires both the Health Coach role flag and external connection", () => {
@@ -148,6 +162,16 @@ describe("role-aware Staff Copilot framework", () => {
       enabled: true,
       quickPromptEnabled: true,
       quickPromptKind: "front_desk_checklist",
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Fitness Trainer", {
+      STAFF_COPILOT_FITNESS_TRAINER_ENABLED: "true",
+    })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      quickPromptKind: "fitness_trainer_checklist",
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });

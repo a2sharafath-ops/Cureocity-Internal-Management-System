@@ -20,6 +20,11 @@ import {
   type FrontDeskAssistantState,
 } from "@/lib/front-desk-assistant-actions";
 import { FRONT_DESK_WORKFLOWS } from "@/lib/front-desk-assistant";
+import {
+  generateFitnessTrainerOperationalDraft,
+  type FitnessTrainerAssistantState,
+} from "@/lib/fitness-trainer-assistant-actions";
+import { FITNESS_TRAINER_WORKFLOWS } from "@/lib/fitness-trainer-assistant";
 import { SUPER_ADMIN_COPILOT_TASKS } from "@/lib/super-admin-copilot";
 
 const input: React.CSSProperties = {
@@ -167,6 +172,48 @@ function FrontDeskQuickDraft() {
           <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.5 }}>{state.draft.text}</div>
           <div style={{ color: "var(--amber-text)", fontSize: 11.5 }}><b>Boundary:</b> {state.draft.caution}</div>
           <div style={{ color: "var(--muted)", fontSize: 11 }}>Continue in the full workspace to review, edit, accept, discard, or inspect route evidence.</div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function FitnessTrainerQuickDraft() {
+  const [state, action, pending] = useActionState<FitnessTrainerAssistantState, FormData>(
+    generateFitnessTrainerOperationalDraft,
+    {},
+  );
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <form action={action} style={{ display: "grid", gap: 9 }}>
+        <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 700 }}>
+          Fitness Trainer workflow
+          <select name="workflow_key" defaultValue="today_and_roster" style={input}>
+            {FITNESS_TRAINER_WORKFLOWS.map((workflow) => (
+              <option key={workflow.key} value={workflow.key}>{workflow.label}</option>
+            ))}
+          </select>
+        </label>
+        <div style={{ color: "var(--muted)", fontSize: 11.5, lineHeight: 1.45 }}>
+          No client or clinical details are requested. The Assistant uses only the selected workflow key and versioned static workspace metadata.
+        </div>
+        {state.error && (
+          <div role="alert" style={{ borderRadius: 9, padding: "9px 10px", background: "var(--red-bg)", color: "var(--red-text)", fontSize: 12 }}>
+            {state.error}
+          </div>
+        )}
+        <button type="submit" disabled={pending} style={{ border: 0, borderRadius: 10, padding: "10px 13px", background: "var(--ink)", color: "#fff", fontWeight: 750, cursor: pending ? "default" : "pointer", opacity: pending ? 0.65 : 1 }}>
+          {pending ? "Preparing checklist…" : "Prepare trainer checklist"}
+        </button>
+      </form>
+      {state.draft && (
+        <section aria-label="Generated Fitness Trainer workspace checklist" style={{ border: "1px solid var(--border)", borderRadius: 11, padding: 12, display: "grid", gap: 8, background: "var(--neutral-bg)" }}>
+          <div style={{ color: "#5b21b6", fontSize: 10.5, fontWeight: 800 }}>DETERMINISTIC DRAFT · STATIC WORKSPACE · NO AI CALL · NO RECORD READ · NO ACTION</div>
+          <b style={{ fontSize: 13.5 }}>{state.draft.title}</b>
+          <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.5 }}>{state.draft.text}</div>
+          <div style={{ color: "var(--amber-text)", fontSize: 11.5 }}><b>Boundary:</b> {state.draft.caution}</div>
+          <div style={{ color: "var(--muted)", fontSize: 11 }}>Continue in the full workspace to review, accept, discard, or inspect workspace evidence. Record details cannot be added.</div>
         </section>
       )}
     </div>
@@ -331,6 +378,8 @@ export default function CureocityAssistantLauncher({ surface }: { surface: Staff
               <StaffNavigationQuickDraft />
             ) : surface.quickPromptKind === "front_desk_checklist" ? (
               <FrontDeskQuickDraft />
+            ) : surface.quickPromptKind === "fitness_trainer_checklist" ? (
+              <FitnessTrainerQuickDraft />
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 700 }}>

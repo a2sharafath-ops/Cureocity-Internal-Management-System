@@ -125,6 +125,7 @@ const healthCoachManifests: AssistantTaskManifest[] = COACH_COPILOT_TASKS.map((t
 
 export const STAFF_NAVIGATION_TASK_KEY = "navigation_checklist";
 export const FRONT_DESK_OPERATIONAL_TASK_KEY = "operational_checklist";
+export const FITNESS_TRAINER_OPERATIONAL_TASK_KEY = "operational_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -175,11 +176,37 @@ const frontDeskOperationalManifest = manifest({
   ],
 });
 
+const fitnessTrainerOperationalManifest = manifest({
+  taskVersion: "fitness_trainer.operational_checklist.v1",
+  role: "Fitness Trainer",
+  key: FITNESS_TRAINER_OPERATIONAL_TASK_KEY,
+  label: "Prepare a trainer workspace checklist",
+  owner: "Cureocity Fitness Trainer domain owner",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_FITNESS_TRAINER_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Fitness Trainer"],
+  dataContract: {
+    sources: ["versioned Fitness Trainer workspace metadata", "authenticated real role", "existing route and tab permission map"],
+    allowedFields: ["workflow label", "workspace tab label", "route path", "static purpose", "ordered navigation step"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["client records", "clinical records", "assessment content", "workout plan records", "session records", "finance records", "HR records", "staff records", "messages", "credentials", "free-form SOP content"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "start or change a workout prescription, complete a session, schedule work, contact a client, or publish a plan",
+    "claim that an assessment, appointment, session, plan, concern, restriction, or handoff exists or is complete",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
   staffNavigationManifest,
   frontDeskOperationalManifest,
+  fitnessTrainerOperationalManifest,
 ];
 
 export type AssistantPolicyDecision = {
