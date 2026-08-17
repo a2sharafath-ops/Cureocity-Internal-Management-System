@@ -8,6 +8,7 @@ import FrontDeskAssistant, { type FrontDeskAssistantHistory } from "@/components
 import FitnessTrainerAssistant, { type FitnessTrainerAssistantHistory } from "@/components/FitnessTrainerAssistant";
 import AdministratorAssistant, { type AdministratorAssistantHistory } from "@/components/AdministratorAssistant";
 import ManagerAssistant, { type ManagerAssistantHistory } from "@/components/ManagerAssistant";
+import DietitianAssistant, { type DietitianAssistantHistory } from "@/components/DietitianAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -40,6 +41,8 @@ export default async function StaffCopilotPage() {
   let administratorHistoryError: string | null = null;
   let managerHistory: ManagerAssistantHistory[] = [];
   let managerHistoryError: string | null = null;
+  let dietitianHistory: DietitianAssistantHistory[] = [];
+  let dietitianHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -135,6 +138,22 @@ export default async function StaffCopilotPage() {
       managerHistory = (data ?? []) as ManagerAssistantHistory[];
     }
   }
+  if (me.role === "Dietitian" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Dietitian")
+      .eq("task_key", "review_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "dietitian_assistant", operation: "load_history" });
+      dietitianHistoryError = "Dietitian checklist history could not be loaded. No data was changed; verify migrations 0186 and 0191 before enabling this pilot.";
+    } else {
+      dietitianHistory = (data ?? []) as DietitianAssistantHistory[];
+    }
+  }
 
   return (
     <div style={{ maxWidth: 940, display: "grid", gap: 16 }}>
@@ -223,6 +242,10 @@ export default async function StaffCopilotPage() {
 
       {me.role === "Manager" && (
         <ManagerAssistant history={managerHistory} enabled={availability.enabled} historyError={managerHistoryError} />
+      )}
+
+      {me.role === "Dietitian" && (
+        <DietitianAssistant history={dietitianHistory} enabled={availability.enabled} historyError={dietitianHistoryError} />
       )}
 
       <div style={{ ...box, padding: 18 }}>

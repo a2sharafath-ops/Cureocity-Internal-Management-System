@@ -37,7 +37,7 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator", "Manager"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator", "Manager", "Dietitian"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
@@ -116,6 +116,17 @@ describe("role-aware Staff Copilot framework", () => {
     });
     expect(staffCopilotAvailability("Manager", {})).toEqual({ enabled: false, reasons: ["The role feature flag is off."] });
     expect(staffCopilotAvailability("Manager", { STAFF_COPILOT_MANAGER_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
+  it("defines the deterministic Dietitian review pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Dietitian")).toMatchObject({
+      functional: true,
+      featureFlag: "STAFF_COPILOT_DIETITIAN_ENABLED",
+      requiresExternalAi: false,
+      allowedTasks: ["Prepare a Dietitian review checklist"],
+    });
+    expect(staffCopilotAvailability("Dietitian", {})).toEqual({ enabled: false, reasons: ["The role feature flag is off."] });
+    expect(staffCopilotAvailability("Dietitian", { STAFF_COPILOT_DIETITIAN_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
   it("requires both the Health Coach role flag and external connection", () => {
@@ -215,6 +226,14 @@ describe("role-aware Staff Copilot framework", () => {
       enabled: true,
       quickPromptEnabled: true,
       quickPromptKind: "manager_checklist",
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Dietitian", { STAFF_COPILOT_DIETITIAN_ENABLED: "true" })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      quickPromptKind: "dietitian_checklist",
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });

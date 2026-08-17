@@ -66,7 +66,7 @@ export type StaffAssistantSurface = {
   allowedTasks: string[];
   fullWorkspaceHref: string;
   quickPromptEnabled: boolean;
-  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | "fitness_trainer_checklist" | "administrator_checklist" | "manager_checklist" | null;
+  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | "fitness_trainer_checklist" | "administrator_checklist" | "manager_checklist" | "dietitian_checklist" | null;
   quickPromptHelp: string;
   voiceInputEnabled: false;
 };
@@ -116,6 +116,8 @@ export function staffAssistantSurface(
             ? "administrator_checklist"
           : role === "Manager"
             ? "manager_checklist"
+          : role === "Dietitian"
+            ? "dietitian_checklist"
         : null
     : null;
   const quickPromptEnabled = quickPromptKind !== null;
@@ -130,6 +132,8 @@ export function staffAssistantSurface(
           ? "Choose one approved Administrator governance workflow. The Assistant prepares a static route checklist only; it reads no client, clinical, finance, HR, staff, access, issue, message, or other application records."
         : role === "Manager"
           ? "Choose one approved Manager operations workflow. The Assistant prepares a static route checklist only; it reads no client, clinical, coach, appointment, session, finance, HR, staff, access, message, or other application records."
+        : role === "Dietitian"
+          ? "Choose one approved Dietitian review workflow. The Assistant prepares a static checklist only; it reads no client, clinical, consultation, assessment, chart, meal, recipe, monitoring, concern, finance, HR, staff, or message records."
         : "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
     : role === "Health Coach" && availability.enabled
       ? "Open the Health Coach workspace to select an authorized client before entering text."
