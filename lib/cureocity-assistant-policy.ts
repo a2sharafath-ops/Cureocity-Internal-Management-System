@@ -133,6 +133,7 @@ export const PSYCHOLOGIST_REVIEW_TASK_KEY = "workflow_checklist";
 export const DOCTOR_REVIEW_TASK_KEY = "workflow_checklist";
 export const MEDICAL_DIRECTOR_REVIEW_TASK_KEY = "review_checklist";
 export const FINANCE_REVIEW_TASK_KEY = "process_checklist";
+export const HR_PROCESS_TASK_KEY = "process_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -383,6 +384,31 @@ const financeReviewManifest = manifest({
   ],
 });
 
+const hrProcessManifest = manifest({
+  taskVersion: "hr.process_checklist.v1",
+  role: "HR",
+  key: HR_PROCESS_TASK_KEY,
+  label: "Prepare an HR process checklist",
+  owner: "Cureocity HR domain owner and Super Admin",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_HR_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["HR"],
+  dataContract: {
+    sources: ["versioned HR navigation and process-boundary metadata", "authenticated real role", "existing route permission map"],
+    allowedFields: ["process label", "route label", "route path", "static purpose", "static HR and privacy boundary"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["staff profiles", "attendance records", "leave records", "rosters", "payroll", "salary or compensation records", "bank details", "government identifiers", "health or medical information", "private complaints", "performance or disciplinary records", "recruitment candidates", "onboarding or offboarding records", "training records", "documents", "access records", "messages", "credentials"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "score or rank staff, infer health or protected traits, or make or recommend a hiring, termination, disciplinary, performance, compensation, leave, capacity or access decision",
+    "create or complete onboarding or offboarding, mark attendance, calculate entitlement, approve or reject leave, change roster or payroll, assign training, publish policy, provision or remove access, upload documents, assign work or contact anyone",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
@@ -396,6 +422,7 @@ export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[
   doctorReviewManifest,
   medicalDirectorReviewManifest,
   financeReviewManifest,
+  hrProcessManifest,
 ];
 
 export type AssistantPolicyDecision = {

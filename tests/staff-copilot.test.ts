@@ -36,18 +36,11 @@ describe("role-aware Staff Copilot framework", () => {
     ]);
   });
 
-  it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator", "Manager", "Dietitian", "Psychologist", "Doctor", "Medical Director", "Finance"].includes(role));
-    for (const role of inertRoles) {
-      expect(staffCopilotDefinition(role)?.functional).toBe(false);
-      expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
-    }
-    expect(staffCopilotAvailability("HR", {
-      STAFF_COPILOT_HR_ENABLED: "true",
-      OPENAI_API_KEY: "test-only-key",
-    })).toEqual({
+  it("gives every staff role an explicit bounded definition while unknown roles stay unavailable", () => {
+    expect(STAFF_COPILOT_ROLES.filter((role) => !staffCopilotDefinition(role)?.functional)).toEqual([]);
+    expect(staffCopilotAvailability("Client", { STAFF_COPILOT_CLIENT_ENABLED: "true" })).toEqual({
       enabled: false,
-      reasons: ["Allowed tasks and role boundaries have not been approved for this role."],
+      reasons: ["Cureocity Assistant is available only to authenticated staff."],
     });
   });
 
@@ -158,6 +151,12 @@ describe("role-aware Staff Copilot framework", () => {
     expect(staffCopilotAvailability("Finance", { STAFF_COPILOT_FINANCE_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
+  it("defines the deterministic HR process pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("HR")).toMatchObject({ functional: true, featureFlag: "STAFF_COPILOT_HR_ENABLED", requiresExternalAi: false, allowedTasks: ["Prepare an HR process checklist"] });
+    expect(staffCopilotAvailability("HR", {})).toEqual({ enabled: false, reasons: ["The role feature flag is off."] });
+    expect(staffCopilotAvailability("HR", { STAFF_COPILOT_HR_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
   it("requires both the Health Coach role flag and external connection", () => {
     expect(staffCopilotAvailability("Health Coach", {})).toEqual({
       enabled: false,
@@ -187,16 +186,7 @@ describe("role-aware Staff Copilot framework", () => {
       quickPromptEnabled: false,
       voiceInputEnabled: false,
     });
-    expect(staffAssistantSurface("HR", {
-      STAFF_COPILOT_HR_ENABLED: "true",
-      OPENAI_API_KEY: "test-only-key",
-    })).toMatchObject({
-      visible: true,
-      functional: false,
-      enabled: false,
-      quickPromptEnabled: false,
-      voiceInputEnabled: false,
-    });
+    expect(staffAssistantSurface("HR", {})).toMatchObject({ visible: true, functional: true, enabled: false, quickPromptEnabled: false, voiceInputEnabled: false });
   });
 
   it("routes global text only to an enabled existing guarded capability", () => {
@@ -280,6 +270,8 @@ describe("role-aware Staff Copilot framework", () => {
     expect(staffAssistantSurface("Medical Director", { STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED: "true" })).toMatchObject({ enabled: true, quickPromptEnabled: true, quickPromptKind: "medical_director_checklist", fullWorkspaceHref: "/copilot", voiceInputEnabled: false });
 
     expect(staffAssistantSurface("Finance", { STAFF_COPILOT_FINANCE_ENABLED: "true" })).toMatchObject({ enabled: true, quickPromptEnabled: true, quickPromptKind: "finance_checklist", fullWorkspaceHref: "/copilot", voiceInputEnabled: false });
+
+    expect(staffAssistantSurface("HR", { STAFF_COPILOT_HR_ENABLED: "true" })).toMatchObject({ enabled: true, quickPromptEnabled: true, quickPromptKind: "hr_checklist", fullWorkspaceHref: "/copilot", voiceInputEnabled: false });
 
     expect(staffAssistantSurface("Health Coach", {
       HEALTH_COACH_COPILOT_ENABLED: "true",
