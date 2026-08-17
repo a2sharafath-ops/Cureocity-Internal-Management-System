@@ -37,13 +37,13 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator", "Manager", "Dietitian", "Psychologist"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator", "Manager", "Dietitian", "Psychologist", "Doctor"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
     }
-    expect(staffCopilotAvailability("Doctor", {
-      STAFF_COPILOT_DOCTOR_ENABLED: "true",
+    expect(staffCopilotAvailability("Medical Director", {
+      STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED: "true",
       OPENAI_API_KEY: "test-only-key",
     })).toEqual({
       enabled: false,
@@ -140,6 +140,12 @@ describe("role-aware Staff Copilot framework", () => {
     expect(staffCopilotAvailability("Psychologist", { STAFF_COPILOT_PSYCHOLOGIST_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
+  it("defines the deterministic Doctor workflow pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Doctor")).toMatchObject({ functional: true, featureFlag: "STAFF_COPILOT_DOCTOR_ENABLED", requiresExternalAi: false, allowedTasks: ["Prepare a Doctor workflow checklist"] });
+    expect(staffCopilotAvailability("Doctor", {})).toEqual({ enabled: false, reasons: ["The role feature flag is off."] });
+    expect(staffCopilotAvailability("Doctor", { STAFF_COPILOT_DOCTOR_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
   it("requires both the Health Coach role flag and external connection", () => {
     expect(staffCopilotAvailability("Health Coach", {})).toEqual({
       enabled: false,
@@ -169,8 +175,8 @@ describe("role-aware Staff Copilot framework", () => {
       quickPromptEnabled: false,
       voiceInputEnabled: false,
     });
-    expect(staffAssistantSurface("Doctor", {
-      STAFF_COPILOT_DOCTOR_ENABLED: "true",
+    expect(staffAssistantSurface("Medical Director", {
+      STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED: "true",
       OPENAI_API_KEY: "test-only-key",
     })).toMatchObject({
       visible: true,
@@ -256,6 +262,8 @@ describe("role-aware Staff Copilot framework", () => {
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });
+
+    expect(staffAssistantSurface("Doctor", { STAFF_COPILOT_DOCTOR_ENABLED: "true" })).toMatchObject({ enabled: true, quickPromptEnabled: true, quickPromptKind: "doctor_checklist", fullWorkspaceHref: "/copilot", voiceInputEnabled: false });
 
     expect(staffAssistantSurface("Health Coach", {
       HEALTH_COACH_COPILOT_ENABLED: "true",
