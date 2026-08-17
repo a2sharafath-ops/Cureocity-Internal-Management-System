@@ -131,6 +131,7 @@ export const MANAGER_OPERATIONS_TASK_KEY = "operations_checklist";
 export const DIETITIAN_REVIEW_TASK_KEY = "review_checklist";
 export const PSYCHOLOGIST_REVIEW_TASK_KEY = "workflow_checklist";
 export const DOCTOR_REVIEW_TASK_KEY = "workflow_checklist";
+export const MEDICAL_DIRECTOR_REVIEW_TASK_KEY = "review_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -331,6 +332,31 @@ const doctorReviewManifest = manifest({
   ],
 });
 
+const medicalDirectorReviewManifest = manifest({
+  taskVersion: "medical_director.review_checklist.v1",
+  role: "Medical Director",
+  key: MEDICAL_DIRECTOR_REVIEW_TASK_KEY,
+  label: "Prepare a Medical Director review checklist",
+  owner: "Cureocity Medical Director and clinical-governance owner",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Medical Director"],
+  dataContract: {
+    sources: ["versioned Medical Director workspace and review-boundary metadata", "authenticated real role", "existing route and tab permission map"],
+    allowedFields: ["review workflow label", "route label", "route path", "static purpose", "static governance boundary"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["approval queue records", "client records", "medical records", "clinical records", "consultation content", "EMR content", "results", "orders", "prescriptions", "diet plans", "diet assessments", "therapy notes", "appointments", "concerns", "safety events", "referrals", "finance records", "HR records", "staff records", "messages", "credentials"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "diagnose, interpret evidence, decide completeness, recommend treatment, prescribe, select a test, place an order, assess risk, or provide crisis advice",
+    "approve, reject, request changes, sign, publish, deliver, close, refer, assign, contact, override another clinician, or claim that a clinical, review, governance, or safety item is complete, safe, indicated, urgent, or resolved",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
@@ -342,6 +368,7 @@ export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[
   dietitianReviewManifest,
   psychologistReviewManifest,
   doctorReviewManifest,
+  medicalDirectorReviewManifest,
 ];
 
 export type AssistantPolicyDecision = {

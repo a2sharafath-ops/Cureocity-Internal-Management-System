@@ -11,6 +11,7 @@ import ManagerAssistant, { type ManagerAssistantHistory } from "@/components/Man
 import DietitianAssistant, { type DietitianAssistantHistory } from "@/components/DietitianAssistant";
 import PsychologistAssistant, { type PsychologistAssistantHistory } from "@/components/PsychologistAssistant";
 import DoctorAssistant, { type DoctorAssistantHistory } from "@/components/DoctorAssistant";
+import MedicalDirectorAssistant, { type MedicalDirectorAssistantHistory } from "@/components/MedicalDirectorAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -49,6 +50,8 @@ export default async function StaffCopilotPage() {
   let psychologistHistoryError: string | null = null;
   let doctorHistory: DoctorAssistantHistory[] = [];
   let doctorHistoryError: string | null = null;
+  let medicalDirectorHistory: MedicalDirectorAssistantHistory[] = [];
+  let medicalDirectorHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -192,6 +195,22 @@ export default async function StaffCopilotPage() {
       doctorHistory = (data ?? []) as DoctorAssistantHistory[];
     }
   }
+  if (me.role === "Medical Director" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Medical Director")
+      .eq("task_key", "review_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "medical_director_assistant", operation: "load_history" });
+      medicalDirectorHistoryError = "Medical Director checklist history could not be loaded. No data was changed; verify migrations 0186 and 0194 before enabling this pilot.";
+    } else {
+      medicalDirectorHistory = (data ?? []) as MedicalDirectorAssistantHistory[];
+    }
+  }
 
   return (
     <div style={{ maxWidth: 940, display: "grid", gap: 16 }}>
@@ -292,6 +311,10 @@ export default async function StaffCopilotPage() {
 
       {me.role === "Doctor" && (
         <DoctorAssistant history={doctorHistory} enabled={availability.enabled} historyError={doctorHistoryError} />
+      )}
+
+      {me.role === "Medical Director" && (
+        <MedicalDirectorAssistant history={medicalDirectorHistory} enabled={availability.enabled} historyError={medicalDirectorHistoryError} />
       )}
 
       <div style={{ ...box, padding: 18 }}>

@@ -66,7 +66,7 @@ export type StaffAssistantSurface = {
   allowedTasks: string[];
   fullWorkspaceHref: string;
   quickPromptEnabled: boolean;
-  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | "fitness_trainer_checklist" | "administrator_checklist" | "manager_checklist" | "dietitian_checklist" | "psychologist_checklist" | "doctor_checklist" | null;
+  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | "fitness_trainer_checklist" | "administrator_checklist" | "manager_checklist" | "dietitian_checklist" | "psychologist_checklist" | "doctor_checklist" | "medical_director_checklist" | null;
   quickPromptHelp: string;
   voiceInputEnabled: false;
 };
@@ -122,6 +122,8 @@ export function staffAssistantSurface(
             ? "psychologist_checklist"
           : role === "Doctor"
             ? "doctor_checklist"
+          : role === "Medical Director"
+            ? "medical_director_checklist"
         : null
     : null;
   const quickPromptEnabled = quickPromptKind !== null;
@@ -142,6 +144,8 @@ export function staffAssistantSurface(
           ? "Choose one approved Psychologist workflow. The Assistant prepares a static checklist only; it reads no client, psychological, clinical, consultation, assessment, therapy-note, appointment, concern, safety, referral, finance, HR, staff, or message records."
         : role === "Doctor"
           ? "Choose one approved Doctor workflow. The Assistant prepares a static checklist only; it reads no client, medical, consultation, EMR, result, order, prescription, note, appointment, concern, safety, referral, finance, HR, staff, or message records."
+        : role === "Medical Director"
+          ? "Choose one approved Medical Director review workflow. The Assistant prepares a static checklist only; it reads no approval queue, client, clinical, EMR, result, order, nutrition, concern, safety, finance, HR, staff, or message records."
         : "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
     : role === "Health Coach" && availability.enabled
       ? "Open the Health Coach workspace to select an authorized client before entering text."
