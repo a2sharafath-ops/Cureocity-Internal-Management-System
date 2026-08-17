@@ -9,6 +9,7 @@ import FitnessTrainerAssistant, { type FitnessTrainerAssistantHistory } from "@/
 import AdministratorAssistant, { type AdministratorAssistantHistory } from "@/components/AdministratorAssistant";
 import ManagerAssistant, { type ManagerAssistantHistory } from "@/components/ManagerAssistant";
 import DietitianAssistant, { type DietitianAssistantHistory } from "@/components/DietitianAssistant";
+import PsychologistAssistant, { type PsychologistAssistantHistory } from "@/components/PsychologistAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -43,6 +44,8 @@ export default async function StaffCopilotPage() {
   let managerHistoryError: string | null = null;
   let dietitianHistory: DietitianAssistantHistory[] = [];
   let dietitianHistoryError: string | null = null;
+  let psychologistHistory: PsychologistAssistantHistory[] = [];
+  let psychologistHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -154,6 +157,22 @@ export default async function StaffCopilotPage() {
       dietitianHistory = (data ?? []) as DietitianAssistantHistory[];
     }
   }
+  if (me.role === "Psychologist" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Psychologist")
+      .eq("task_key", "workflow_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "psychologist_assistant", operation: "load_history" });
+      psychologistHistoryError = "Psychologist checklist history could not be loaded. No data was changed; verify migrations 0186 and 0192 before enabling this pilot.";
+    } else {
+      psychologistHistory = (data ?? []) as PsychologistAssistantHistory[];
+    }
+  }
 
   return (
     <div style={{ maxWidth: 940, display: "grid", gap: 16 }}>
@@ -246,6 +265,10 @@ export default async function StaffCopilotPage() {
 
       {me.role === "Dietitian" && (
         <DietitianAssistant history={dietitianHistory} enabled={availability.enabled} historyError={dietitianHistoryError} />
+      )}
+
+      {me.role === "Psychologist" && (
+        <PsychologistAssistant history={psychologistHistory} enabled={availability.enabled} historyError={psychologistHistoryError} />
       )}
 
       <div style={{ ...box, padding: 18 }}>

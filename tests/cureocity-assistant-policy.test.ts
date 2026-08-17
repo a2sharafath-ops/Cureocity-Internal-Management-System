@@ -10,6 +10,7 @@ import {
   FRONT_DESK_OPERATIONAL_TASK_KEY,
   MANAGER_OPERATIONS_TASK_KEY,
   DIETITIAN_REVIEW_TASK_KEY,
+  PSYCHOLOGIST_REVIEW_TASK_KEY,
   STAFF_NAVIGATION_TASK_KEY,
   assertAssistantPolicyIntegrity,
   assistantTaskManifestsForRole,
@@ -27,7 +28,8 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(assistantTaskManifestsForRole("Administrator")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Manager")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Dietitian")).toHaveLength(1);
-    for (const role of ["Medical Director", "Doctor", "Psychologist", "Finance", "HR"]) {
+    expect(assistantTaskManifestsForRole("Psychologist")).toHaveLength(1);
+    for (const role of ["Medical Director", "Doctor", "Finance", "HR"]) {
       expect(assistantTaskManifestsForRole(role), role).toEqual([]);
     }
   });
@@ -113,6 +115,12 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(decideAssistantTask({
       realRole: "Doctor", taskKey: DIETITIAN_REVIEW_TASK_KEY, env: { STAFF_COPILOT_DIETITIAN_ENABLED: "true" },
     }).allowed).toBe(false);
+    expect(decideAssistantTask({
+      realRole: "Psychologist", taskKey: PSYCHOLOGIST_REVIEW_TASK_KEY, env: { STAFF_COPILOT_PSYCHOLOGIST_ENABLED: "true" },
+    })).toMatchObject({ allowed: true, manifest: { role: "Psychologist", executionMode: "deterministic", requiresExternalAi: false } });
+    expect(decideAssistantTask({
+      realRole: "Doctor", taskKey: PSYCHOLOGIST_REVIEW_TASK_KEY, env: { STAFF_COPILOT_PSYCHOLOGIST_ENABLED: "true" },
+    }).allowed).toBe(false);
   });
 
   it("requires AI configuration only for tasks whose manifest says so", () => {
@@ -141,6 +149,9 @@ describe("versioned Cureocity Assistant task policy", () => {
     }).reasons).toEqual([]);
     expect(decideAssistantTask({
       realRole: "Dietitian", taskKey: DIETITIAN_REVIEW_TASK_KEY, env: { STAFF_COPILOT_DIETITIAN_ENABLED: "true" },
+    }).reasons).toEqual([]);
+    expect(decideAssistantTask({
+      realRole: "Psychologist", taskKey: PSYCHOLOGIST_REVIEW_TASK_KEY, env: { STAFF_COPILOT_PSYCHOLOGIST_ENABLED: "true" },
     }).reasons).toEqual([]);
     expect(decideAssistantTask({
       realRole: "Super Admin",

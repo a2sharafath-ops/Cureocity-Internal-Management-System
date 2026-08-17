@@ -129,6 +129,7 @@ export const FITNESS_TRAINER_OPERATIONAL_TASK_KEY = "operational_checklist";
 export const ADMINISTRATOR_GOVERNANCE_TASK_KEY = "governance_checklist";
 export const MANAGER_OPERATIONS_TASK_KEY = "operations_checklist";
 export const DIETITIAN_REVIEW_TASK_KEY = "review_checklist";
+export const PSYCHOLOGIST_REVIEW_TASK_KEY = "workflow_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -279,6 +280,31 @@ const dietitianReviewManifest = manifest({
   ],
 });
 
+const psychologistReviewManifest = manifest({
+  taskVersion: "psychologist.workflow_checklist.v1",
+  role: "Psychologist",
+  key: PSYCHOLOGIST_REVIEW_TASK_KEY,
+  label: "Prepare a Psychologist workflow checklist",
+  owner: "Cureocity Psychologist domain owner and Medical Director",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_PSYCHOLOGIST_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Psychologist"],
+  dataContract: {
+    sources: ["versioned Psychologist workspace and safety-boundary metadata", "authenticated real role", "existing route and tab permission map"],
+    allowedFields: ["workflow label", "workspace tab label", "route path", "static purpose", "static process boundary"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["client records", "psychological records", "clinical records", "consultation content", "assessment content", "therapy notes", "appointment records", "concern records", "safety records", "referrals", "finance records", "HR records", "staff records", "messages", "credentials"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "diagnose, interpret an assessment, recommend treatment, provide psychotherapy or crisis advice, or disclose therapy content",
+    "book, change, submit, escalate, close, refer, assign, contact, or claim that a clinical or safety item is complete, safe, urgent, or resolved",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
@@ -288,6 +314,7 @@ export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[
   administratorGovernanceManifest,
   managerOperationsManifest,
   dietitianReviewManifest,
+  psychologistReviewManifest,
 ];
 
 export type AssistantPolicyDecision = {
