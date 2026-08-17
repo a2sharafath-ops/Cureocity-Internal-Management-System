@@ -40,6 +40,8 @@ import { generateDoctorReviewDraft, type DoctorAssistantState } from "@/lib/doct
 import { DOCTOR_WORKFLOWS } from "@/lib/doctor-assistant";
 import { generateMedicalDirectorReviewDraft, type MedicalDirectorAssistantState } from "@/lib/medical-director-assistant-actions";
 import { MEDICAL_DIRECTOR_WORKFLOWS } from "@/lib/medical-director-assistant";
+import { generateFinanceReviewDraft, type FinanceAssistantState } from "@/lib/finance-assistant-actions";
+import { FINANCE_WORKFLOWS } from "@/lib/finance-assistant";
 import { SUPER_ADMIN_COPILOT_TASKS } from "@/lib/super-admin-copilot";
 
 const input: React.CSSProperties = {
@@ -395,6 +397,21 @@ function MedicalDirectorQuickDraft() {
   );
 }
 
+function FinanceQuickDraft() {
+  const [state, action, pending] = useActionState<FinanceAssistantState, FormData>(generateFinanceReviewDraft, {});
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <form action={action} style={{ display: "grid", gap: 9 }}>
+        <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 700 }}>Finance process<select name="workflow_key" defaultValue="invoice_payment_reconciliation" style={input}>{FINANCE_WORKFLOWS.map((workflow) => <option key={workflow.key} value={workflow.key}>{workflow.label}</option>)}</select></label>
+        <div style={{ color: "var(--muted)", fontSize: 11.5, lineHeight: 1.45 }}>No record details are requested. The Assistant uses only the selected workflow key and versioned static route and transaction-boundary metadata.</div>
+        {state.error && <div role="alert" style={{ borderRadius: 9, padding: "9px 10px", background: "var(--red-bg)", color: "var(--red-text)", fontSize: 12 }}>{state.error}</div>}
+        <button type="submit" disabled={pending} style={{ border: 0, borderRadius: 10, padding: "10px 13px", background: "var(--ink)", color: "#fff", fontWeight: 750, cursor: pending ? "default" : "pointer", opacity: pending ? 0.65 : 1 }}>{pending ? "Preparing checklist…" : "Prepare process checklist"}</button>
+      </form>
+      {state.draft && <section aria-label="Generated Finance process checklist" style={{ border: "1px solid var(--border)", borderRadius: 11, padding: 12, display: "grid", gap: 8, background: "var(--neutral-bg)" }}><div style={{ color: "#5b21b6", fontSize: 10.5, fontWeight: 800 }}>DETERMINISTIC DRAFT · STATIC ROUTES · NO AI CALL · NO RECORD READ · NO FINANCIAL ACTION</div><b style={{ fontSize: 13.5 }}>{state.draft.title}</b><div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.5 }}>{state.draft.text}</div><div style={{ color: "var(--amber-text)", fontSize: 11.5 }}><b>Boundary:</b> {state.draft.caution}</div><div style={{ color: "var(--muted)", fontSize: 11 }}>Continue in the full workspace to review, accept, discard, or inspect static route evidence. Record details cannot be added.</div></section>}
+    </div>
+  );
+}
+
 export default function CureocityAssistantLauncher({ surface }: { surface: StaffAssistantSurface }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -567,6 +584,8 @@ export default function CureocityAssistantLauncher({ surface }: { surface: Staff
               <DoctorQuickDraft />
             ) : surface.quickPromptKind === "medical_director_checklist" ? (
               <MedicalDirectorQuickDraft />
+            ) : surface.quickPromptKind === "finance_checklist" ? (
+              <FinanceQuickDraft />
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 700 }}>

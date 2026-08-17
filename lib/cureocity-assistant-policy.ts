@@ -132,6 +132,7 @@ export const DIETITIAN_REVIEW_TASK_KEY = "review_checklist";
 export const PSYCHOLOGIST_REVIEW_TASK_KEY = "workflow_checklist";
 export const DOCTOR_REVIEW_TASK_KEY = "workflow_checklist";
 export const MEDICAL_DIRECTOR_REVIEW_TASK_KEY = "review_checklist";
+export const FINANCE_REVIEW_TASK_KEY = "process_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -357,6 +358,31 @@ const medicalDirectorReviewManifest = manifest({
   ],
 });
 
+const financeReviewManifest = manifest({
+  taskVersion: "finance.process_checklist.v1",
+  role: "Finance",
+  key: FINANCE_REVIEW_TASK_KEY,
+  label: "Prepare a Finance process checklist",
+  owner: "Cureocity Finance domain owner and Super Admin",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_FINANCE_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Finance"],
+  dataContract: {
+    sources: ["versioned Finance navigation and transaction-boundary metadata", "authenticated real role", "existing route permission map"],
+    allowedFields: ["process label", "route label", "route path", "static purpose", "static finance boundary"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["invoices", "payments", "refunds", "credits", "expenses", "payables", "estimates", "ledger entries", "bank records", "cash records", "reimbursements", "receipts", "subscriptions", "passes", "POS records", "reports", "budgets", "prices", "payroll", "salary records", "client records", "staff records", "messages", "credentials"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "calculate or assert an authoritative amount, balance, variance, overdue state, reconciliation result, eligibility, approval state, or accounting treatment",
+    "raise or edit an invoice, record or capture payment, refund, void, credit, reimburse, approve, pay, post, categorize, reconcile, change a ledger, bank, cash, subscription, pass, POS, price, budget, payroll or purchase record, or contact anyone",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
@@ -369,6 +395,7 @@ export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[
   psychologistReviewManifest,
   doctorReviewManifest,
   medicalDirectorReviewManifest,
+  financeReviewManifest,
 ];
 
 export type AssistantPolicyDecision = {

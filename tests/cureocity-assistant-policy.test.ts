@@ -13,6 +13,7 @@ import {
   PSYCHOLOGIST_REVIEW_TASK_KEY,
   DOCTOR_REVIEW_TASK_KEY,
   MEDICAL_DIRECTOR_REVIEW_TASK_KEY,
+  FINANCE_REVIEW_TASK_KEY,
   STAFF_NAVIGATION_TASK_KEY,
   assertAssistantPolicyIntegrity,
   assistantTaskManifestsForRole,
@@ -33,7 +34,8 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(assistantTaskManifestsForRole("Psychologist")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Doctor")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Medical Director")).toHaveLength(1);
-    for (const role of ["Finance", "HR"]) {
+    expect(assistantTaskManifestsForRole("Finance")).toHaveLength(1);
+    for (const role of ["HR"]) {
       expect(assistantTaskManifestsForRole(role), role).toEqual([]);
     }
   });
@@ -129,6 +131,8 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(decideAssistantTask({ realRole: "Medical Director", taskKey: DOCTOR_REVIEW_TASK_KEY, env: { STAFF_COPILOT_DOCTOR_ENABLED: "true" } }).allowed).toBe(false);
     expect(decideAssistantTask({ realRole: "Medical Director", taskKey: MEDICAL_DIRECTOR_REVIEW_TASK_KEY, env: { STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED: "true" } })).toMatchObject({ allowed: true, manifest: { role: "Medical Director", executionMode: "deterministic", requiresExternalAi: false } });
     expect(decideAssistantTask({ realRole: "Doctor", taskKey: MEDICAL_DIRECTOR_REVIEW_TASK_KEY, env: { STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED: "true" } }).allowed).toBe(false);
+    expect(decideAssistantTask({ realRole: "Finance", taskKey: FINANCE_REVIEW_TASK_KEY, env: { STAFF_COPILOT_FINANCE_ENABLED: "true" } })).toMatchObject({ allowed: true, manifest: { role: "Finance", executionMode: "deterministic", requiresExternalAi: false } });
+    expect(decideAssistantTask({ realRole: "Administrator", taskKey: FINANCE_REVIEW_TASK_KEY, env: { STAFF_COPILOT_FINANCE_ENABLED: "true" } }).allowed).toBe(false);
   });
 
   it("requires AI configuration only for tasks whose manifest says so", () => {
@@ -163,6 +167,7 @@ describe("versioned Cureocity Assistant task policy", () => {
     }).reasons).toEqual([]);
     expect(decideAssistantTask({ realRole: "Doctor", taskKey: DOCTOR_REVIEW_TASK_KEY, env: { STAFF_COPILOT_DOCTOR_ENABLED: "true" } }).reasons).toEqual([]);
     expect(decideAssistantTask({ realRole: "Medical Director", taskKey: MEDICAL_DIRECTOR_REVIEW_TASK_KEY, env: { STAFF_COPILOT_MEDICAL_DIRECTOR_ENABLED: "true" } }).reasons).toEqual([]);
+    expect(decideAssistantTask({ realRole: "Finance", taskKey: FINANCE_REVIEW_TASK_KEY, env: { STAFF_COPILOT_FINANCE_ENABLED: "true" } }).reasons).toEqual([]);
     expect(decideAssistantTask({
       realRole: "Super Admin",
       taskKey: "operational_summary",
