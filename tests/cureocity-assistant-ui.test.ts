@@ -33,10 +33,12 @@ describe("Cureocity Assistant staff UI", () => {
     expect(launcher).toContain('surface.quickPromptKind === "staff_navigation"');
     expect(launcher).toContain('surface.quickPromptKind === "front_desk_checklist"');
     expect(launcher).toContain('surface.quickPromptKind === "fitness_trainer_checklist"');
+    expect(launcher).toContain('surface.quickPromptKind === "administrator_checklist"');
     expect(launcher).toContain("generateSuperAdminCopilotDraft");
     expect(launcher).toContain("generateStaffNavigationDraft");
     expect(launcher).toContain("generateFrontDeskOperationalDraft");
     expect(launcher).toContain("generateFitnessTrainerOperationalDraft");
+    expect(launcher).toContain("generateAdministratorGovernanceDraft");
   });
 
   it("keeps voice explicitly disabled without microphone or recording APIs", () => {

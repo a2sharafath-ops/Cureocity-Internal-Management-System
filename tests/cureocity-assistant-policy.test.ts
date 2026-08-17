@@ -5,6 +5,7 @@ import {
   CUREOCITY_ASSISTANT_POLICY_VERSION,
   CUREOCITY_ASSISTANT_STAFF_ROLES,
   CUREOCITY_ASSISTANT_TASK_MANIFESTS,
+  ADMINISTRATOR_GOVERNANCE_TASK_KEY,
   FITNESS_TRAINER_OPERATIONAL_TASK_KEY,
   FRONT_DESK_OPERATIONAL_TASK_KEY,
   STAFF_NAVIGATION_TASK_KEY,
@@ -21,7 +22,8 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(assistantTaskManifestsForRole("Staff")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Front Desk")).toHaveLength(1);
     expect(assistantTaskManifestsForRole("Fitness Trainer")).toHaveLength(1);
-    for (const role of ["Administrator", "Manager", "Medical Director", "Doctor", "Dietitian", "Psychologist", "Finance", "HR"]) {
+    expect(assistantTaskManifestsForRole("Administrator")).toHaveLength(1);
+    for (const role of ["Manager", "Medical Director", "Doctor", "Dietitian", "Psychologist", "Finance", "HR"]) {
       expect(assistantTaskManifestsForRole(role), role).toEqual([]);
     }
   });
@@ -82,6 +84,17 @@ describe("versioned Cureocity Assistant task policy", () => {
       taskKey: FITNESS_TRAINER_OPERATIONAL_TASK_KEY,
       env: { STAFF_COPILOT_FITNESS_TRAINER_ENABLED: "true" },
     }).allowed).toBe(false);
+
+    expect(decideAssistantTask({
+      realRole: "Administrator",
+      taskKey: ADMINISTRATOR_GOVERNANCE_TASK_KEY,
+      env: { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" },
+    })).toMatchObject({ allowed: true, manifest: { role: "Administrator", executionMode: "deterministic", requiresExternalAi: false } });
+    expect(decideAssistantTask({
+      realRole: "Manager",
+      taskKey: ADMINISTRATOR_GOVERNANCE_TASK_KEY,
+      env: { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" },
+    }).allowed).toBe(false);
   });
 
   it("requires AI configuration only for tasks whose manifest says so", () => {
@@ -99,6 +112,11 @@ describe("versioned Cureocity Assistant task policy", () => {
       realRole: "Fitness Trainer",
       taskKey: FITNESS_TRAINER_OPERATIONAL_TASK_KEY,
       env: { STAFF_COPILOT_FITNESS_TRAINER_ENABLED: "true" },
+    }).reasons).toEqual([]);
+    expect(decideAssistantTask({
+      realRole: "Administrator",
+      taskKey: ADMINISTRATOR_GOVERNANCE_TASK_KEY,
+      env: { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" },
     }).reasons).toEqual([]);
     expect(decideAssistantTask({
       realRole: "Super Admin",

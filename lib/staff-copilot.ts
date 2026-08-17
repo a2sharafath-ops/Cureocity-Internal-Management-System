@@ -66,7 +66,7 @@ export type StaffAssistantSurface = {
   allowedTasks: string[];
   fullWorkspaceHref: string;
   quickPromptEnabled: boolean;
-  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | "fitness_trainer_checklist" | null;
+  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | "fitness_trainer_checklist" | "administrator_checklist" | null;
   quickPromptHelp: string;
   voiceInputEnabled: false;
 };
@@ -112,6 +112,8 @@ export function staffAssistantSurface(
           ? "front_desk_checklist"
           : role === "Fitness Trainer"
             ? "fitness_trainer_checklist"
+          : role === "Administrator"
+            ? "administrator_checklist"
         : null
     : null;
   const quickPromptEnabled = quickPromptKind !== null;
@@ -122,6 +124,8 @@ export function staffAssistantSurface(
         ? "Choose one approved Front Desk workflow. The Assistant prepares a static route checklist only; it reads no client, clinical, finance, HR, staff, appointment, or message records."
         : role === "Fitness Trainer"
           ? "Choose one approved Fitness Trainer workflow. The Assistant prepares a static workspace checklist only; it reads no client, clinical, assessment, workout, session, finance, HR, staff, or message records."
+        : role === "Administrator"
+          ? "Choose one approved Administrator governance workflow. The Assistant prepares a static route checklist only; it reads no client, clinical, finance, HR, staff, access, issue, message, or other application records."
         : "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
     : role === "Health Coach" && availability.enabled
       ? "Open the Health Coach workspace to select an authorized client before entering text."

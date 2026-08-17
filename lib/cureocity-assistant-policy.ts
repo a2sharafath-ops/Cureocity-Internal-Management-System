@@ -126,6 +126,7 @@ const healthCoachManifests: AssistantTaskManifest[] = COACH_COPILOT_TASKS.map((t
 export const STAFF_NAVIGATION_TASK_KEY = "navigation_checklist";
 export const FRONT_DESK_OPERATIONAL_TASK_KEY = "operational_checklist";
 export const FITNESS_TRAINER_OPERATIONAL_TASK_KEY = "operational_checklist";
+export const ADMINISTRATOR_GOVERNANCE_TASK_KEY = "governance_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -201,12 +202,38 @@ const fitnessTrainerOperationalManifest = manifest({
   ],
 });
 
+const administratorGovernanceManifest = manifest({
+  taskVersion: "administrator.governance_checklist.v1",
+  role: "Administrator",
+  key: ADMINISTRATOR_GOVERNANCE_TASK_KEY,
+  label: "Prepare an administrator governance checklist",
+  owner: "Cureocity Administrator governance owner",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_ADMINISTRATOR_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Administrator"],
+  dataContract: {
+    sources: ["versioned Administrator workflow metadata", "authenticated real role", "existing route permission map"],
+    allowedFields: ["workflow label", "route label", "route path", "static purpose", "ordered navigation step"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["client records", "clinical records", "finance records", "HR records", "staff records", "access records", "issue records", "messages", "credentials", "free-form SOP content"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "grant, revoke, invite, deactivate, configure, resolve, assign, approve, publish, contact, or change any administrative item",
+    "claim that an issue, user, permission, package, service, onboarding item, follow-up, or retention item exists or is complete",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
   staffNavigationManifest,
   frontDeskOperationalManifest,
   fitnessTrainerOperationalManifest,
+  administratorGovernanceManifest,
 ];
 
 export type AssistantPolicyDecision = {

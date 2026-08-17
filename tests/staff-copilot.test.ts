@@ -37,7 +37,7 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk", "Fitness Trainer", "Administrator"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
@@ -91,6 +91,20 @@ describe("role-aware Staff Copilot framework", () => {
       reasons: ["The role feature flag is off."],
     });
     expect(staffCopilotAvailability("Fitness Trainer", { STAFF_COPILOT_FITNESS_TRAINER_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
+  it("defines the deterministic Administrator governance pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Administrator")).toMatchObject({
+      functional: true,
+      featureFlag: "STAFF_COPILOT_ADMINISTRATOR_ENABLED",
+      requiresExternalAi: false,
+      allowedTasks: ["Prepare an administrator governance checklist"],
+    });
+    expect(staffCopilotAvailability("Administrator", {})).toEqual({
+      enabled: false,
+      reasons: ["The role feature flag is off."],
+    });
+    expect(staffCopilotAvailability("Administrator", { STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
   it("requires both the Health Coach role flag and external connection", () => {
@@ -172,6 +186,16 @@ describe("role-aware Staff Copilot framework", () => {
       enabled: true,
       quickPromptEnabled: true,
       quickPromptKind: "fitness_trainer_checklist",
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Administrator", {
+      STAFF_COPILOT_ADMINISTRATOR_ENABLED: "true",
+    })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      quickPromptKind: "administrator_checklist",
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });

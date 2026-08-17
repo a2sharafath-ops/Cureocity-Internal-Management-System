@@ -6,6 +6,7 @@ import SuperAdminCopilot, { type SuperAdminCopilotHistory } from "@/components/S
 import StaffNavigationAssistant, { type StaffNavigationAssistantHistory } from "@/components/StaffNavigationAssistant";
 import FrontDeskAssistant, { type FrontDeskAssistantHistory } from "@/components/FrontDeskAssistant";
 import FitnessTrainerAssistant, { type FitnessTrainerAssistantHistory } from "@/components/FitnessTrainerAssistant";
+import AdministratorAssistant, { type AdministratorAssistantHistory } from "@/components/AdministratorAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -34,6 +35,8 @@ export default async function StaffCopilotPage() {
   let frontDeskHistoryError: string | null = null;
   let fitnessTrainerHistory: FitnessTrainerAssistantHistory[] = [];
   let fitnessTrainerHistoryError: string | null = null;
+  let administratorHistory: AdministratorAssistantHistory[] = [];
+  let administratorHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -95,6 +98,22 @@ export default async function StaffCopilotPage() {
       fitnessTrainerHistoryError = "Fitness Trainer checklist history could not be loaded. No data was changed; verify migrations 0186 and 0188 before enabling this pilot.";
     } else {
       fitnessTrainerHistory = (data ?? []) as FitnessTrainerAssistantHistory[];
+    }
+  }
+  if (me.role === "Administrator" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Administrator")
+      .eq("task_key", "governance_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "administrator_assistant", operation: "load_history" });
+      administratorHistoryError = "Administrator checklist history could not be loaded. No data was changed; verify migrations 0186 and 0189 before enabling this pilot.";
+    } else {
+      administratorHistory = (data ?? []) as AdministratorAssistantHistory[];
     }
   }
 
@@ -172,6 +191,14 @@ export default async function StaffCopilotPage() {
           history={fitnessTrainerHistory}
           enabled={availability.enabled}
           historyError={fitnessTrainerHistoryError}
+        />
+      )}
+
+      {me.role === "Administrator" && (
+        <AdministratorAssistant
+          history={administratorHistory}
+          enabled={availability.enabled}
+          historyError={administratorHistoryError}
         />
       )}
 
