@@ -31,8 +31,10 @@ describe("Cureocity Assistant staff UI", () => {
     expect(launcher).toContain("Open full workspace and history");
     expect(launcher).toContain('surface.quickPromptKind === "super_admin"');
     expect(launcher).toContain('surface.quickPromptKind === "staff_navigation"');
+    expect(launcher).toContain('surface.quickPromptKind === "front_desk_checklist"');
     expect(launcher).toContain("generateSuperAdminCopilotDraft");
     expect(launcher).toContain("generateStaffNavigationDraft");
+    expect(launcher).toContain("generateFrontDeskOperationalDraft");
   });
 
   it("keeps voice explicitly disabled without microphone or recording APIs", () => {

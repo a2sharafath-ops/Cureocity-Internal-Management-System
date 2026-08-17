@@ -42,10 +42,11 @@ The repository currently establishes the following facts:
 - Super Admin outputs are structured, bounded, safety-checked, stored as reviewable drafts, and may be marked Accepted or Discarded. Acceptance stores working text only; it executes no operational action.
 - Generation, blocked generation, acceptance, and discard behavior has an audit path. Existing draft evidence is designed to be immutable, and no delete path is exposed for discarded Super Admin drafts.
 - The first Phase 3 Staff slice is implemented in code as a deterministic navigation-checklist pilot. It uses only versioned public application-route metadata, performs no AI call, reads no client/staff/business record, stores immutable generated evidence plus separately reviewed text through an atomic audit RPC, and remains default-off pending migration 0186 and its dedicated Development feature flag.
-- Every role other than Health Coach, Super Admin, and the bounded Staff navigation pilot is deliberately inert. A future-looking environment flag alone cannot activate one of those roles because its tasks and boundaries have not been approved or implemented.
+- The first Front Desk slice is implemented in code as a deterministic operational-navigation checklist for lead intake, client onboarding, appointment coordination, and follow-up/retention routes. It accepts only an allowlisted workflow key, performs no AI call or application-record read, cannot be edited with record details, and remains default-off pending migrations 0186/0187 and its dedicated Development feature flag.
+- Every role other than Health Coach, Super Admin, Front Desk, and the bounded Staff navigation pilot is deliberately inert. A future-looking environment flag alone cannot activate one of those roles because its tasks and boundaries have not been approved or implemented.
 - The existing application already has role gates, discipline ownership, row-level security (RLS), audit records, clinical review responsibilities, and human approval flows that the Assistant must reuse rather than bypass.
 
-Relevant current sources are [the versioned task policy](../lib/cureocity-assistant-policy.ts), [the staff framework](../lib/staff-copilot.ts), [the global Assistant launcher](../components/CureocityAssistantLauncher.tsx), [the Staff navigation contract](../lib/staff-navigation-assistant.ts), [the Super Admin task definition](../lib/super-admin-copilot.ts), [the Health Coach task definition](../lib/coach-copilot.ts), [the full Assistant workspace](../app/(app)/copilot/page.tsx), [the shared Staff draft foundation](../supabase/0186_staff_assistant_policy_foundation.sql), and [the Super Admin draft migration](../supabase/0183_staff_copilot_drafts.sql).
+Relevant current sources are [the versioned task policy](../lib/cureocity-assistant-policy.ts), [the staff framework](../lib/staff-copilot.ts), [the global Assistant launcher](../components/CureocityAssistantLauncher.tsx), [the Staff navigation contract](../lib/staff-navigation-assistant.ts), [the Front Desk operational contract](../lib/front-desk-assistant.ts), [the Super Admin task definition](../lib/super-admin-copilot.ts), [the Health Coach task definition](../lib/coach-copilot.ts), [the full Assistant workspace](../app/(app)/copilot/page.tsx), [the shared Staff draft foundation](../supabase/0186_staff_assistant_policy_foundation.sql), [the Front Desk pilot migration](../supabase/0187_front_desk_assistant_pilot.sql), and [the Super Admin draft migration](../supabase/0183_staff_copilot_drafts.sql).
 
 ### 2.2 Future scope defined by this PRD
 
@@ -830,7 +831,7 @@ Do not place raw prompts, responses, client names, free-text clinical data, or r
 Pilot in this order:
 
 1. Staff: navigation and SOP retrieval (navigation checklist implemented and guarded; SOP retrieval remains deferred until an authoritative role-visible corpus is approved);
-2. Front Desk: onboarding and scheduling checks/drafts;
+2. Front Desk: static onboarding and scheduling route checklists implemented and guarded; record-aware checks/drafts remain future scope;
 3. Administrator: operational summaries and completeness checks; and
 4. Manager: workload, SLA, and handover summaries.
 

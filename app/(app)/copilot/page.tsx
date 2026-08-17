@@ -4,6 +4,7 @@ import { getProfile } from "@/lib/auth";
 import { staffCopilotAvailability, staffCopilotDefinition } from "@/lib/staff-copilot";
 import SuperAdminCopilot, { type SuperAdminCopilotHistory } from "@/components/SuperAdminCopilot";
 import StaffNavigationAssistant, { type StaffNavigationAssistantHistory } from "@/components/StaffNavigationAssistant";
+import FrontDeskAssistant, { type FrontDeskAssistantHistory } from "@/components/FrontDeskAssistant";
 import { createClient } from "@/lib/supabase/server";
 import { logServerError } from "@/lib/runtime-errors";
 
@@ -28,6 +29,8 @@ export default async function StaffCopilotPage() {
   let superAdminHistoryError: string | null = null;
   let staffNavigationHistory: StaffNavigationAssistantHistory[] = [];
   let staffNavigationHistoryError: string | null = null;
+  let frontDeskHistory: FrontDeskAssistantHistory[] = [];
+  let frontDeskHistoryError: string | null = null;
   if (me.role === "Super Admin" && availability.enabled) {
     const supabase = await createClient();
     const { data, error } = await supabase.from("staff_copilot_drafts")
@@ -57,6 +60,22 @@ export default async function StaffCopilotPage() {
       staffNavigationHistoryError = "Navigation history could not be loaded. No data was changed; verify migration 0186 before enabling this pilot.";
     } else {
       staffNavigationHistory = (data ?? []) as StaffNavigationAssistantHistory[];
+    }
+  }
+  if (me.role === "Front Desk" && availability.enabled) {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("staff_assistant_drafts")
+      .select("id, title, draft_text, accepted_text, status, created_at, accepted_at")
+      .eq("role_name", "Front Desk")
+      .eq("task_key", "operational_checklist")
+      .eq("created_by", me.id)
+      .order("created_at", { ascending: false })
+      .limit(30);
+    if (error) {
+      logServerError(error, { source: "front_desk_assistant", operation: "load_history" });
+      frontDeskHistoryError = "Front Desk checklist history could not be loaded. No data was changed; verify migrations 0186 and 0187 before enabling this pilot.";
+    } else {
+      frontDeskHistory = (data ?? []) as FrontDeskAssistantHistory[];
     }
   }
 
@@ -118,6 +137,14 @@ export default async function StaffCopilotPage() {
           history={staffNavigationHistory}
           enabled={availability.enabled}
           historyError={staffNavigationHistoryError}
+        />
+      )}
+
+      {me.role === "Front Desk" && (
+        <FrontDeskAssistant
+          history={frontDeskHistory}
+          enabled={availability.enabled}
+          historyError={frontDeskHistoryError}
         />
       )}
 

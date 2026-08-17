@@ -5,6 +5,7 @@ import {
   CUREOCITY_ASSISTANT_POLICY_VERSION,
   CUREOCITY_ASSISTANT_STAFF_ROLES,
   CUREOCITY_ASSISTANT_TASK_MANIFESTS,
+  FRONT_DESK_OPERATIONAL_TASK_KEY,
   STAFF_NAVIGATION_TASK_KEY,
   assertAssistantPolicyIntegrity,
   assistantTaskManifestsForRole,
@@ -17,7 +18,8 @@ describe("versioned Cureocity Assistant task policy", () => {
     expect(assistantTaskManifestsForRole("Super Admin")).toHaveLength(4);
     expect(assistantTaskManifestsForRole("Health Coach")).toHaveLength(9);
     expect(assistantTaskManifestsForRole("Staff")).toHaveLength(1);
-    for (const role of ["Administrator", "Manager", "Medical Director", "Front Desk", "Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Finance", "HR"]) {
+    expect(assistantTaskManifestsForRole("Front Desk")).toHaveLength(1);
+    for (const role of ["Administrator", "Manager", "Medical Director", "Doctor", "Dietitian", "Fitness Trainer", "Psychologist", "Finance", "HR"]) {
       expect(assistantTaskManifestsForRole(role), role).toEqual([]);
     }
   });
@@ -56,6 +58,17 @@ describe("versioned Cureocity Assistant task policy", () => {
       taskKey: STAFF_NAVIGATION_TASK_KEY,
       env: { STAFF_COPILOT_STAFF_ENABLED: "true" },
     }).allowed).toBe(false);
+
+    expect(decideAssistantTask({
+      realRole: "Front Desk",
+      taskKey: FRONT_DESK_OPERATIONAL_TASK_KEY,
+      env: { STAFF_COPILOT_FRONT_DESK_ENABLED: "true" },
+    })).toMatchObject({ allowed: true, manifest: { role: "Front Desk", executionMode: "deterministic", requiresExternalAi: false } });
+    expect(decideAssistantTask({
+      realRole: "Manager",
+      taskKey: FRONT_DESK_OPERATIONAL_TASK_KEY,
+      env: { STAFF_COPILOT_FRONT_DESK_ENABLED: "true" },
+    }).allowed).toBe(false);
   });
 
   it("requires AI configuration only for tasks whose manifest says so", () => {
@@ -63,6 +76,11 @@ describe("versioned Cureocity Assistant task policy", () => {
       realRole: "Staff",
       taskKey: STAFF_NAVIGATION_TASK_KEY,
       env: { STAFF_COPILOT_STAFF_ENABLED: "true" },
+    }).reasons).toEqual([]);
+    expect(decideAssistantTask({
+      realRole: "Front Desk",
+      taskKey: FRONT_DESK_OPERATIONAL_TASK_KEY,
+      env: { STAFF_COPILOT_FRONT_DESK_ENABLED: "true" },
     }).reasons).toEqual([]);
     expect(decideAssistantTask({
       realRole: "Super Admin",

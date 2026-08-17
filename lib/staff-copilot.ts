@@ -66,7 +66,7 @@ export type StaffAssistantSurface = {
   allowedTasks: string[];
   fullWorkspaceHref: string;
   quickPromptEnabled: boolean;
-  quickPromptKind: "super_admin" | "staff_navigation" | null;
+  quickPromptKind: "super_admin" | "staff_navigation" | "front_desk_checklist" | null;
   quickPromptHelp: string;
   voiceInputEnabled: false;
 };
@@ -74,8 +74,9 @@ export type StaffAssistantSurface = {
 /**
  * One server-derived contract for the global Assistant launcher.
  *
- * The global panel can invoke only the existing Super Admin draft action. The
- * Health Coach flow needs a server-authorized client selection and therefore
+ * The global panel can invoke only explicitly implemented, role-bound actions:
+ * guarded Super Admin drafts and deterministic Staff/Front Desk checklists.
+ * The Health Coach flow needs a server-authorized client selection and therefore
  * continues in its guarded workspace. Unapproved roles stay visibly inert even
  * if somebody sets a future-looking environment flag.
  */
@@ -107,13 +108,17 @@ export function staffAssistantSurface(
       ? "super_admin"
       : role === "Staff"
         ? "staff_navigation"
+        : role === "Front Desk"
+          ? "front_desk_checklist"
         : null
     : null;
   const quickPromptEnabled = quickPromptKind !== null;
   const quickPromptHelp = quickPromptEnabled
     ? role === "Staff"
       ? "Ask where to find a Cureocity app area. This uses static navigation metadata only and saves a reviewable checklist; it reads no client, clinical, finance, HR, or staff records."
-      : "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
+      : role === "Front Desk"
+        ? "Choose one approved Front Desk workflow. The Assistant prepares a static route checklist only; it reads no client, clinical, finance, HR, staff, appointment, or message records."
+        : "Choose one approved review-only task. Your request uses the existing guarded Super Admin draft action."
     : role === "Health Coach" && availability.enabled
       ? "Open the Health Coach workspace to select an authorized client before entering text."
       : definition.functional

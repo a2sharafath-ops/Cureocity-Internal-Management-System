@@ -37,7 +37,7 @@ describe("role-aware Staff Copilot framework", () => {
   });
 
   it("keeps every undefined role inert even if a future-looking flag is set", () => {
-    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff"].includes(role));
+    const inertRoles = STAFF_COPILOT_ROLES.filter((role) => !["Super Admin", "Health Coach", "Staff", "Front Desk"].includes(role));
     for (const role of inertRoles) {
       expect(staffCopilotDefinition(role)?.functional).toBe(false);
       expect(staffCopilotDefinition(role)?.allowedTasks).toEqual([]);
@@ -63,6 +63,20 @@ describe("role-aware Staff Copilot framework", () => {
       reasons: ["The role feature flag is off."],
     });
     expect(staffCopilotAvailability("Staff", { STAFF_COPILOT_STAFF_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
+  });
+
+  it("defines the deterministic Front Desk checklist pilot without requiring an AI key", () => {
+    expect(staffCopilotDefinition("Front Desk")).toMatchObject({
+      functional: true,
+      featureFlag: "STAFF_COPILOT_FRONT_DESK_ENABLED",
+      requiresExternalAi: false,
+      allowedTasks: ["Prepare an operational navigation checklist"],
+    });
+    expect(staffCopilotAvailability("Front Desk", {})).toEqual({
+      enabled: false,
+      reasons: ["The role feature flag is off."],
+    });
+    expect(staffCopilotAvailability("Front Desk", { STAFF_COPILOT_FRONT_DESK_ENABLED: "true" })).toEqual({ enabled: true, reasons: [] });
   });
 
   it("requires both the Health Coach role flag and external connection", () => {
@@ -124,6 +138,16 @@ describe("role-aware Staff Copilot framework", () => {
       enabled: true,
       quickPromptEnabled: true,
       quickPromptKind: "staff_navigation",
+      fullWorkspaceHref: "/copilot",
+      voiceInputEnabled: false,
+    });
+
+    expect(staffAssistantSurface("Front Desk", {
+      STAFF_COPILOT_FRONT_DESK_ENABLED: "true",
+    })).toMatchObject({
+      enabled: true,
+      quickPromptEnabled: true,
+      quickPromptKind: "front_desk_checklist",
       fullWorkspaceHref: "/copilot",
       voiceInputEnabled: false,
     });

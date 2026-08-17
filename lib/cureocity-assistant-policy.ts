@@ -124,6 +124,7 @@ const healthCoachManifests: AssistantTaskManifest[] = COACH_COPILOT_TASKS.map((t
 }));
 
 export const STAFF_NAVIGATION_TASK_KEY = "navigation_checklist";
+export const FRONT_DESK_OPERATIONAL_TASK_KEY = "operational_checklist";
 
 const staffNavigationManifest = manifest({
   taskVersion: "staff.navigation_checklist.v1",
@@ -149,10 +150,36 @@ const staffNavigationManifest = manifest({
   ],
 });
 
+const frontDeskOperationalManifest = manifest({
+  taskVersion: "front_desk.operational_checklist.v1",
+  role: "Front Desk",
+  key: FRONT_DESK_OPERATIONAL_TASK_KEY,
+  label: "Prepare an operational navigation checklist",
+  owner: "Cureocity Front Desk operations owner",
+  implementation: "implemented",
+  executionMode: "deterministic",
+  featureFlag: "STAFF_COPILOT_FRONT_DESK_ENABLED",
+  requiresExternalAi: false,
+  actionTier: 1,
+  reviewerRoles: ["Front Desk"],
+  dataContract: {
+    sources: ["versioned Front Desk workflow metadata", "authenticated real role", "existing route permission map"],
+    allowedFields: ["workflow label", "route label", "route path", "static purpose", "ordered navigation step"],
+    classifications: ["Public application metadata", "Internal operational"],
+    forbiddenSources: ["client records", "clinical records", "finance records", "HR records", "staff records", "messages", "credentials", "free-form SOP content"],
+  },
+  prohibitedActions: [
+    ...NO_ACTIONS,
+    "book, reschedule, cancel, contact, collect, mark complete, or otherwise act on an operational item",
+    "claim that a client, appointment, consent, payment, or follow-up exists or is complete",
+  ],
+});
+
 export const CUREOCITY_ASSISTANT_TASK_MANIFESTS: readonly AssistantTaskManifest[] = [
   ...superAdminManifests,
   ...healthCoachManifests,
   staffNavigationManifest,
+  frontDeskOperationalManifest,
 ];
 
 export type AssistantPolicyDecision = {
