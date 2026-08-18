@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { deleteTask, remindTask, setTaskProject, setTaskStatus } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
 
@@ -16,6 +16,15 @@ type Project = { id: string; name: string; status: string; dueDate: string | nul
 type Bucket = "all" | "open" | "attention" | "blocked" | "completed";
 type Scope = "all" | "mine" | "unassigned";
 
+function routeDefaults(pathname: string): { view: "projects" | "tasks"; bucket: Bucket; project: string; scope: Scope; date: string } {
+  const projectMatch = pathname.match(/^\/tasks\/project\/([^/]+)$/);
+  if (projectMatch) return { view: "tasks", bucket: "open", project: projectMatch[1], scope: "all", date: "all" };
+  if (pathname === "/tasks/overdue") return { view: "tasks", bucket: "open", project: "all", scope: "all", date: "overdue" };
+  if (pathname === "/tasks/unassigned") return { view: "tasks", bucket: "open", project: "all", scope: "unassigned", date: "all" };
+  if (pathname === "/tasks/all" || pathname === "/tasks/open" || pathname === "/tasks/attention" || pathname === "/tasks/blocked" || pathname === "/tasks/completed") return { view: "tasks", bucket: pathname.slice(7) as Bucket, project: "all", scope: "all", date: "all" };
+  return { view: "projects", bucket: "all", project: "all", scope: "all", date: "all" };
+}
+
 const STATUS_LABEL: Record<string, string> = { todo: "To Do", doing: "In Progress", blocked: "Blocked", done: "Done" };
 const STATUS_OPTS = ["todo", "doing", "blocked", "done"];
 const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
@@ -24,28 +33,31 @@ function fmt(date: string | null) { return date ? new Date(`${date}T00:00:00Z`).
 
 export default function TasksView({ tasks, today, staff, types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const validBucket = (value: string | null): Bucket => ["all", "open", "attention", "blocked", "completed"].includes(value ?? "") ? value as Bucket : "all";
   const validScope = (value: string | null): Scope => ["all", "mine", "unassigned"].includes(value ?? "") ? value as Scope : "all";
-  const [view, setView] = useState<"projects" | "tasks">(searchParams.get("view") === "tasks" ? "tasks" : "projects");
-  const [bucket, setBucket] = useState<Bucket>(validBucket(searchParams.get("filter")));
-  const [scope, setScope] = useState<Scope>(validScope(searchParams.get("scope")));
-  const [projectF, setProjectF] = useState(searchParams.get("project") ?? "all");
-  const [dateF, setDateF] = useState(searchParams.get("date") ?? "all");
+  const initialRoute = routeDefaults(pathname);
+  const [view, setView] = useState<"projects" | "tasks">(searchParams.get("view") === "tasks" ? "tasks" : initialRoute.view);
+  const [bucket, setBucket] = useState<Bucket>(validBucket(searchParams.get("filter")) === "all" && !searchParams.get("filter") ? initialRoute.bucket : validBucket(searchParams.get("filter")));
+  const [scope, setScope] = useState<Scope>(validScope(searchParams.get("scope")) === "all" && !searchParams.get("scope") ? initialRoute.scope : validScope(searchParams.get("scope")));
+  const [projectF, setProjectF] = useState(searchParams.get("project") ?? initialRoute.project);
+  const [dateF, setDateF] = useState(searchParams.get("date") ?? initialRoute.date);
   const [typeF, setTypeF] = useState(searchParams.get("type") ?? "all");
   const [assigneeF, setAssigneeF] = useState(searchParams.get("assignee") ?? "all");
   const [timeline, setTimeline] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
   useEffect(() => {
-    setView(searchParams.get("view") === "tasks" ? "tasks" : "projects");
-    setBucket(validBucket(searchParams.get("filter")));
-    setScope(validScope(searchParams.get("scope")));
-    setProjectF(searchParams.get("project") ?? "all");
-    setDateF(searchParams.get("date") ?? "all");
+    const route = routeDefaults(pathname);
+    setView(searchParams.get("view") === "tasks" ? "tasks" : route.view);
+    setBucket(searchParams.get("filter") ? validBucket(searchParams.get("filter")) : route.bucket);
+    setScope(searchParams.get("scope") ? validScope(searchParams.get("scope")) : route.scope);
+    setProjectF(searchParams.get("project") ?? route.project);
+    setDateF(searchParams.get("date") ?? route.date);
     setTypeF(searchParams.get("type") ?? "all");
     setAssigneeF(searchParams.get("assignee") ?? "all");
-  }, [searchParams]);
+  }, [pathname, searchParams]);
 
   const isOverdue = (task: TaskRow) => task.status !== "done" && Boolean(task.due_date && task.due_date < today);
   const attention = (task: TaskRow) => task.status !== "done" && (task.status === "blocked" || !task.assigneeId || isOverdue(task));
@@ -94,13 +106,16 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     setDateF(nextDate);
     setTypeF(nextType);
     setAssigneeF(nextAssignee);
-    const params = new URLSearchParams({ view: "tasks", filter: nextBucket });
-    if (project !== "all") params.set("project", project);
-    if (nextScope !== "all") params.set("scope", nextScope);
-    if (nextDate !== "all") params.set("date", nextDate);
+    const basePath = project !== "all" ? `/tasks/project/${project}` : nextDate === "overdue" ? "/tasks/overdue" : nextScope === "unassigned" ? "/tasks/unassigned" : `/tasks/${nextBucket}`;
+    const defaultRoute = routeDefaults(basePath);
+    const params = new URLSearchParams();
+    if (nextBucket !== defaultRoute.bucket) params.set("filter", nextBucket);
+    if (project !== defaultRoute.project) params.set("project", project);
+    if (nextScope !== defaultRoute.scope) params.set("scope", nextScope);
+    if (nextDate !== defaultRoute.date) params.set("date", nextDate);
     if (nextType !== "all") params.set("type", nextType);
     if (nextAssignee !== "all") params.set("assignee", nextAssignee);
-    router.push(`/tasks?${params.toString()}`);
+    router.push(params.size ? `${basePath}?${params.toString()}` : basePath);
   };
   const openProjects = () => { setView("projects"); router.push("/tasks"); };
   const chooseProject = (id: string) => openTasks({ bucket: "open", project: id });
