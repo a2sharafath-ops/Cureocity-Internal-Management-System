@@ -21,10 +21,13 @@ export default async function TasksPageContent() {
 
   const supabase = await createClient();
   const [{ data: taskData }, { data: sharedAssignmentData }, { data: staffData }, { data: clientData }, { data: contactData, error: contactError }, { data: projectData, error: projectError }] = await Promise.all([
-    supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, project_id, staff(name), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
+    // `tasks` now has both a legacy assignee link and the shared-assignee join
+    // table. Name the legacy relationship explicitly so PostgREST does not
+    // mistake the two valid paths for an error and render a false zero-task view.
+    supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, project_id, staff:staff!tasks_assignee_id_fkey(name), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
     // Migration 0200 adds this table. A missing table must not hide existing
     // tasks while a deployment is waiting for its database migration.
-    supabase.from("task_assignees").select("task_id, staff_id, staff:staff_id(name)"),
+    supabase.from("task_assignees").select("task_id, staff_id, staff:staff!task_assignees_staff_id_fkey(name)"),
     supabase.from("staff").select("id, name").order("name"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("staff").select("id, task_reminder_phone, task_reminder_whatsapp_opt_in"),
