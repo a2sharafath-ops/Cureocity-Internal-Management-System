@@ -5096,11 +5096,19 @@ export async function setTaskProject(formData: FormData) {
   const projectId = String(formData.get("project_id") ?? "").trim();
   if (!id) return;
   const supabase = await createClient();
+  const { data: current } = await supabase.from("tasks").select("title, project_id").eq("id", id).maybeSingle();
+  if (!current) return;
   if (projectId) {
     const { data: project } = await supabase.from("task_projects").select("id").eq("id", projectId).maybeSingle();
     if (!project) return;
   }
-  await supabase.from("tasks").update({ project_id: projectId || null }).eq("id", id);
+  if (current.project_id === (projectId || null)) return;
+  const { data: project } = projectId
+    ? await supabase.from("task_projects").select("name").eq("id", projectId).maybeSingle()
+    : { data: null };
+  const { error } = await supabase.from("tasks").update({ project_id: projectId || null }).eq("id", id);
+  if (error) return;
+  await logAudit(p, "Task project changed", current.title, project?.name ?? "Operations inbox");
   revalidatePath("/tasks");
 }
 
@@ -5113,7 +5121,11 @@ export async function setTaskStatus(formData: FormData) {
   const status = String(formData.get("status"));
   if (!["todo", "doing", "blocked", "done"].includes(status)) return;
   const supabase = await createClient();
-  await supabase.from("tasks").update({ status }).eq("id", id);
+  const { data: current } = await supabase.from("tasks").select("title, status").eq("id", id).maybeSingle();
+  if (!current || current.status === status) return;
+  const { error } = await supabase.from("tasks").update({ status }).eq("id", id);
+  if (error) return;
+  await logAudit(p, "Task status changed", current.title, `${current.status} → ${status}`);
   revalidatePath("/tasks");
 }
 
@@ -5161,7 +5173,12 @@ export async function deleteTask(formData: FormData) {
   // was ever owed.
   if (!p || !canManageTasks(p.role)) return;
   const supabase = await createClient();
-  await supabase.from("tasks").delete().eq("id", String(formData.get("id")));
+  const id = String(formData.get("id"));
+  const { data: current } = await supabase.from("tasks").select("title").eq("id", id).maybeSingle();
+  if (!current) return;
+  const { error } = await supabase.from("tasks").delete().eq("id", id);
+  if (error) return;
+  await logAudit(p, "Task deleted", current.title, null);
   revalidatePath("/tasks");
 }
 
