@@ -10,7 +10,7 @@ import { coachSignals } from "@/lib/coach-signals";
 import MedicalReports, { type ReportRow } from "@/components/MedicalReports";
 import LabResults from "@/components/LabResults";
 import { type LabResult } from "@/lib/lab-results";
-import { sectionsFor, questionBody, answeredIn } from "@/lib/consult-sections";
+import { sectionsFor, questionBody } from "@/lib/consult-sections";
 import { visibleQuestions, type QConditions } from "@/lib/consult-conditions";
 import { optionsOf, selectedOption, withOption, type QTypes } from "@/lib/answer-input";
 import { carriedAnswers } from "@/lib/shared-answers";
@@ -65,7 +65,7 @@ const createPrescriptionForm = async (formData: FormData) => {
 type LabRow = LabResult & { id: string; panel: string | null; notes: string | null; entered_by: string | null };
 
 export default function ConsoleView({
-  id, kind, label, icon, client, questions, conditions, types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], labResults = [], orders = [], prescriptions = [], otherConsults = [],
+  id, kind, label, icon, client, questions, conditions, optionalQuestions = [], types, intros, answers, flags, summary, status, canTools, health, draftVitals, savedVitals, savedVitalsAt, draftPending, rxPrintId, rxSharedAt, labSharedAt, pdf, whatsapp, reports = [], labResults = [], orders = [], prescriptions = [], otherConsults = [],
 }: {
   id: string;
   kind: string;
@@ -75,6 +75,8 @@ export default function ConsoleView({
   questions: string[];
   /** Follow-ups that only apply once an earlier answer opens them. */
   conditions?: QConditions;
+  /** Visible prompts that add context but are not completion requirements. */
+  optionalQuestions?: string[];
   /** Questions answered by tapping a chip rather than typing. */
   types?: QTypes;
   /** What the clinician says to open each section, keyed by heading. */
@@ -131,8 +133,14 @@ export default function ConsoleView({
   // Counters describe what the coach can actually see. A hidden follow-up
   // sitting in the denominator makes an intake that IS complete read 74/86,
   // which is the kind of number people stop trusting.
-  const askable = shown.filter(Boolean).length;
-  const filled = ans.filter((a, i) => shown[i] && a.trim()).length;
+  const optionalQuestionSet = new Set(optionalQuestions);
+  const requiredIndices = questions.map((q, i) => shown[i] && !optionalQuestionSet.has(q) ? i : -1).filter((i) => i >= 0);
+  const optionalIndices = questions.map((q, i) => shown[i] && optionalQuestionSet.has(q) ? i : -1).filter((i) => i >= 0);
+  const requiredFilled = requiredIndices.filter((i) => (ans[i] ?? "").trim()).length;
+  const optionalFilled = optionalIndices.filter((i) => (ans[i] ?? "").trim()).length;
+  const requiredLeft = requiredIndices.length - requiredFilled;
+  const conditionalQuestions = new Set(Object.keys(conditions ?? {}));
+  const hiddenConditionalCount = questions.filter((q, i) => conditionalQuestions.has(q) && !shown[i]).length;
 
   // Sections are derived from the question text ("Labs — Fasting glucose"), so
   // an 85-question intake becomes a dozen navigable groups without the question
@@ -146,7 +154,7 @@ export default function ConsoleView({
   // drop their textareas from the form, so a save would wipe those answers.
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     if (sections.length <= 1) return {};
-    const firstGap = sections.find((s) => answeredIn(s, questions.map((q) => amap.get(q) ?? "")) < s.indices.length);
+    const firstGap = sections.find((s) => s.indices.some((i) => shown[i] && !optionalQuestionSet.has(questions[i]) && !(amap.get(questions[i]) ?? "").trim()));
     const init: Record<string, boolean> = {};
     for (const s of sections) init[s.title] = s.title === (firstGap ?? sections[0]).title;
     return init;
@@ -323,7 +331,7 @@ export default function ConsoleView({
     // Placeholders, not empty headings: the previous draft ended on a bare
     // "Assessment & plan:" and read as though it had been cut off.
     S.push("", "ASSESSMENT", "— ", "", "PLAN", "— ");
-    S.push("", `Compiled from the record on ${qDate} · ${filled} of ${questions.length} intake questions answered. Review and edit before sharing.`);
+    S.push("", `Compiled from the record on ${qDate} · ${requiredFilled} of ${requiredIndices.length} applicable required intake questions answered. Review and edit before sharing.`);
 
     setSummaryText(S.join("\n"));
     setAiMsg("Drafted from the record — fill in Assessment and Plan, then Complete & summarize.");
@@ -664,10 +672,11 @@ export default function ConsoleView({
         {/* Section rail — where am I, and what's left. */}
         {grouped && (
           <aside style={{ ...box, padding: "10px 8px", position: "sticky", top: 12, maxHeight: "calc(100vh - 24px)", overflowY: "auto" }}>
-            <div style={{ ...cap, padding: "2px 8px 8px" }}>{filled}/{askable} answered</div>
+            <div style={{ ...cap, padding: "2px 8px 8px" }}>{requiredFilled}/{requiredIndices.length} required</div>
             {sections.map((s) => {
-              const done = answeredIn(s, ans);
-              const all = done === s.indices.length;
+              const applicable = s.indices.filter((i) => shown[i] && !optionalQuestionSet.has(questions[i]));
+              const done = applicable.filter((i) => (ans[i] ?? "").trim()).length;
+              const all = done === applicable.length;
               return (
                 <button key={s.title} type="button" onClick={() => jump(s.title)}
                   style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, background: open[s.title] ? "var(--brand-tint)" : "transparent", border: "none", borderRadius: 8, padding: "6px 8px", cursor: "pointer", textAlign: "left", marginBottom: 1 }}>
@@ -718,14 +727,14 @@ export default function ConsoleView({
           <div style={{ ...box, padding: "14px 18px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontWeight: 700 }}>Intake questionnaire</div>
             <span style={{ flex: 1 }} />
-            <span style={{ background: filled === askable ? "var(--green-bg)" : "var(--amber-bg)", color: filled === askable ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700 }}>
-              {filled}/{askable} answered
+            <span style={{ background: requiredLeft === 0 ? "var(--green-bg)" : "var(--amber-bg)", color: requiredLeft === 0 ? "var(--green-text)" : "var(--amber-text)", borderRadius: 999, padding: "2px 10px", fontSize: 11.5, fontWeight: 700 }}>
+              {requiredFilled}/{requiredIndices.length} required complete
             </span>
           </div>
 
           {sections.map((s, si) => {
             const isOpen = !grouped || open[s.title];
-            const askableHere = s.indices.filter((i) => shown[i]);
+            const askableHere = s.indices.filter((i) => shown[i] && !optionalQuestionSet.has(questions[i]));
             const done = askableHere.filter((i) => (ans[i] ?? "").trim()).length;
             return (
               <section key={s.title || "all"} id={`sec-${si}-${slug(s.title)}`} style={{ ...box, scrollMarginTop: 12 }}>
@@ -761,6 +770,7 @@ export default function ConsoleView({
                       <div key={i} style={{ marginBottom: 12, display: shown[i] ? "block" : "none" }}>
                         <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>
                           {i + 1}. {questionBody(q, s.title)}
+                          <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 11 }}> · {conditionalQuestions.has(q) ? `conditional follow-up · ${optionalQuestionSet.has(q) ? "optional" : "required"}` : optionalQuestionSet.has(q) ? "optional" : "required"}</span>
                           {empty && <span style={{ color: "var(--amber-text)", fontWeight: 500 }}> · unfilled</span>}
                         </label>
                         {/* The question travels with its own answer. Index alone
@@ -837,7 +847,7 @@ export default function ConsoleView({
           {/* Complete the questionnaire → reveals Word export + copyable summary */}
           <div style={{ ...box, padding: "14px 18px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {!qDone ? (
-              <button type="button" onClick={() => setQDone(true)} style={{ ...toolBtn, padding: "8px 14px", fontSize: 13 }}>✓ Complete questionnaire</button>
+              <button type="button" onClick={() => setQDone(true)} disabled={requiredLeft > 0} title={requiredLeft ? `Complete ${requiredLeft} applicable required question${requiredLeft === 1 ? "" : "s"} first` : undefined} style={{ ...toolBtn, padding: "8px 14px", fontSize: 13, opacity: requiredLeft ? 0.5 : 1, cursor: requiredLeft ? "not-allowed" : "pointer" }}>✓ Complete questionnaire</button>
             ) : (
               <>
                 <span style={{ background: "var(--green-bg)", color: "var(--green-text)", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>✓ Completed</span>
@@ -846,7 +856,7 @@ export default function ConsoleView({
               </>
             )}
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{answeredQA.length} answered · {Math.max(0, askable - answeredQA.length)} left</span>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{requiredFilled}/{requiredIndices.length} applicable required · {requiredLeft} left{optionalIndices.length ? ` · ${optionalFilled}/${optionalIndices.length} optional` : ""}{hiddenConditionalCount ? ` · ${hiddenConditionalCount} conditional follow-up${hiddenConditionalCount === 1 ? "" : "s"} not currently applicable` : ""}</span>
           </div>
 
           {qDone && (

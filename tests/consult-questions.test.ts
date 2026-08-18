@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { consultQ, consultQFor, applicableQuestions } from "@/lib/consult-questions";
+import { CONSULT_QUESTIONS, consultQ, consultQFor, applicableQuestions } from "@/lib/consult-questions";
 
 describe("sex-specific questionnaire filtering", () => {
   const doctor = consultQ("Doctor").questions;
@@ -45,5 +45,17 @@ describe("sex-specific questionnaire filtering", () => {
       expect(consultQFor(kind, "Male").questions).toEqual(base);
       expect(consultQFor(kind, "Female").questions).toEqual(base);
     }
+  });
+});
+
+describe("Health Coach question requirements", () => {
+  const coach = CONSULT_QUESTIONS.Coach;
+
+  it("marks only real questions as optional context", () => {
+    const all = new Set(coach.questions);
+    for (const question of coach.optionalQuestions ?? []) {
+      expect(all.has(question), `optional question missing: ${question}`).toBe(true);
+    }
+    expect(coach.optionalQuestions?.length).toBeGreaterThan(0);
   });
 });

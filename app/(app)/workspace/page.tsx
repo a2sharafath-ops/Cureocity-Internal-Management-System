@@ -1207,7 +1207,9 @@ export default async function WorkspacePage(
                   <Link href="/blueprint" style={qa}>BluePrint</Link>
                   {roleKey === "diet" && <Link href="/meals" style={qa}>Meal Monitoring</Link>}
                   {roleKey === "trainer" && <Link href="/trainer" style={qa}>Session Board</Link>}
-                  {roleKey === "coach" && <Link href="/followups" style={qa}>Follow-ups</Link>}
+                  {roleKey === "coach" && <Link href="/workspace?role=coach&tab=clients" style={qa}>My coaching clients</Link>}
+                  {roleKey === "coach" && <Link href="/workspace?role=coach&tab=coaching" style={qa}>Screening markers</Link>}
+                  {roleKey === "coach" && <Link href="/workspace?role=coach&tab=followups" style={qa}>My follow-ups</Link>}
                   {/* With /emr and /orders out of the sidebar, these quick
                       actions are the doctor's front door to both. */}
                   {roleKey === "doctor" && <Link href="/emr" style={qa}>Client Records</Link>}

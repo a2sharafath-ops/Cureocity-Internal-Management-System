@@ -49,6 +49,7 @@ import CoachProgrammeLifecyclePanel from "@/components/CoachProgrammeLifecyclePa
 import type { CoachProgrammeLifecycle, CoachProgrammeLifecycleEvent } from "@/lib/coach-programme-lifecycle";
 import HealthCoachBaselinePanel, { type CoachBaselineView, type ScreeningResultView } from "@/components/HealthCoachBaselinePanel";
 import CoachingSummary from "@/components/CoachingSummary";
+import HealthCoachClientNavigator from "@/components/HealthCoachClientNavigator";
 
 // Report types, told apart at a glance in the timeline.
 const REPORT_LABEL: Record<string, string> = {
@@ -786,6 +787,19 @@ export default async function ClientDetailPage(
       )}
 
       <div style={{ order: 5 }}>
+      {assignedCoachCanManage && (
+        <HealthCoachClientNavigator
+          clientId={params.id}
+          baselineStatus={coachBaseline?.status ?? "Not started"}
+          baselinePercent={coachBaseline?.completion_percent ?? 0}
+          activeGoals={habits.filter((goal) => goal.status === "Active").length}
+          openBarriers={coachingBarriers.filter((barrier) => barrier.status !== "Resolved").length}
+          programmeStatus={programmeLifecycle?.status ?? "Active"}
+          openReferrals={clinicalReferrals.filter((referral) => !["Completed", "Cancelled", "Declined"].includes(referral.status)).length}
+          openSafety={safetyEvents.filter((event) => event.status !== "Resolved").length}
+        />
+      )}
+
       {canConsult(me?.role ?? "") && (
         <div style={{ marginBottom: 16 }}>
           <HealthCoachCarePanel
@@ -805,13 +819,13 @@ export default async function ClientDetailPage(
       )}
 
       {canManageCoaching && (
-        <CoachProgrammeLifecyclePanel
+        <HealthCoachBaselinePanel
           clientId={params.id}
-          lifecycle={programmeLifecycle}
-          events={programmeLifecycleEvents}
+          baseline={coachBaseline}
+          screenings={coachScreenings}
           canManage={canManageCoaching}
+          gender={client.gender}
           supervisorOverride={coachSupervisorOverride}
-          today={habToday}
         />
       )}
 
@@ -829,13 +843,13 @@ export default async function ClientDetailPage(
       )}
 
       {canManageCoaching && (
-        <HealthCoachBaselinePanel
+        <CoachProgrammeLifecyclePanel
           clientId={params.id}
-          baseline={coachBaseline}
-          screenings={coachScreenings}
+          lifecycle={programmeLifecycle}
+          events={programmeLifecycleEvents}
           canManage={canManageCoaching}
-          gender={client.gender}
           supervisorOverride={coachSupervisorOverride}
+          today={habToday}
         />
       )}
 

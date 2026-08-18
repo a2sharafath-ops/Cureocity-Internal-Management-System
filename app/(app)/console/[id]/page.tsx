@@ -319,6 +319,7 @@ export default async function ConsolePage(props: { params: Promise<{ id: string 
       questions={q.questions}
       otherConsults={otherConsults}
       conditions={q.conditions}
+      optionalQuestions={q.optionalQuestions}
       types={q.types}
       intros={q.intros}
       answers={(row.answers ?? []) as [string, string][]}

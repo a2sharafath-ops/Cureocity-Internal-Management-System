@@ -8,6 +8,11 @@ export type ConsultQ = {
   label: string;
   icon: string;
   questions: string[];
+  /**
+   * Context prompts that enrich a consultation but are not needed to complete
+   * its core workflow. Conditional prompts remain conditional independently.
+   */
+  optionalQuestions?: string[];
   /** Follow-ups that only apply once an earlier answer opens them. */
   conditions?: QConditions;
   /** Questions answered by tapping rather than typing. Free text stays
@@ -319,6 +324,32 @@ export const CONSULT_QUESTIONS: Record<string, ConsultQ> = {
       "Confidence — why did you choose that number, and not a lower one?": { parent: COACH_Q.confidenceScore, when: "answered" },
       "Confidence — what would help increase your confidence by one point?": { parent: COACH_Q.confidenceScore, when: "answered" },
     },
+    // These preserve useful coaching context without turning a client-centred
+    // conversation into a 75-question completion gate. Safety-screening and
+    // programme-planning questions deliberately stay required.
+    optionalQuestions: [
+      "Welcome — before we talk about food, exercise or goals, is there anything you feel I should understand about you?",
+      "Stress — what are the main sources of stress in your life right now?",
+      "Stress — when you are stressed, how does it usually show up in your body or behaviour?",
+      "Stress — what do you currently do to relax or calm yourself?",
+      "Stress — when life gets stressful, what kind of support helps you most?",
+      "Sleep — do you use your phone or a screen close to bedtime?",
+      "Sleep — do you take caffeine, tea or coffee in the evening?",
+      "Sleep — what affects your sleep the most: stress, work, phone, late food, children, pain, or something else?",
+      "Activity — approximately how many steps do you get daily, if you track it?",
+      "Activity — what kind of movement do you enjoy or feel comfortable doing?",
+      "Nutrition — how often do you eat from outside in a week?",
+      "Nutrition — what are your usual cravings: sweet, fried, bakery, tea snacks, rice-heavy meals, or late-night food?",
+      "Nutrition — how often do you include fruits and vegetables?",
+      "Nutrition — how often do you include protein foods like egg, fish, chicken, pulses, paneer, curd or sprouts?",
+      "Nutrition — who prepares food at home?",
+      "Nutrition — what are the foods you cannot avoid, or do not want to remove completely?",
+      "Confidence — do you prefer a strict plan or a flexible plan?",
+      "Confidence — do you like tracking daily, or do you prefer weekly check-ins?",
+      "Confidence — what kind of reminders or support help you stay consistent?",
+      "Closing — is there anything you want me to keep in mind while planning your routine?",
+      "Closing — how would you like us to support you between sessions?",
+    ],
     types: {
       // Scales. Written as numbers so the signal rules can read them: a
       // readiness of 2 is a different conversation from a readiness of 9, and

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import ClientStatusBadge from "@/components/ClientStatusBadge";
 import type { ClientStatus } from "@/lib/client-status";
+import { HEALTH_COACH_RECORD_SECTIONS, healthCoachRecordHref } from "@/lib/health-coach-ux";
 
 export type WsClientRow = {
   id: string;
@@ -58,6 +59,27 @@ export default function WorkspaceClients({
       <>
         {kv("Conditions", r.conditions)}
         {!ro && kv("Client record", <Link href={`/emr/${r.id}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Open chart →</Link>)}
+      </>
+    );
+    if (role === "coach") return (
+      <>
+        {kv("Goals", r.goals.length ? r.goals.join(", ") : null)}
+        {kv("Conditions", r.conditions)}
+        {!ro && kv("Coaching record", (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {HEALTH_COACH_RECORD_SECTIONS.map((section) => (
+              <Link key={section.key} href={healthCoachRecordHref(r.id, section.fragment)} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "6px 9px", color: "var(--brand-text)", textDecoration: "none", fontWeight: 650, fontSize: 12 }}>
+                {section.label}
+              </Link>
+            ))}
+          </div>
+        ))}
+        {!ro && kv("Caseload tools", (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <Link href="/workspace?role=coach&tab=coaching" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>Screening markers →</Link>
+            <Link href="/workspace?role=coach&tab=followups" style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>My follow-ups →</Link>
+          </div>
+        ))}
       </>
     );
     return (

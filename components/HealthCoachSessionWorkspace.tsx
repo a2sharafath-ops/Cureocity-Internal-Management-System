@@ -13,6 +13,7 @@ import { BARRIER_CATEGORIES } from "@/lib/coach-goals";
 import { MARKER_BY_KEY, type MarkerKey } from "@/lib/coach-markers";
 import MarkerAssessment from "@/components/MarkerAssessment";
 import { COACH_OVERRIDE_REASON_MIN_LENGTH } from "@/lib/coach-access";
+import { HEALTH_COACH_SESSION_STEPS } from "@/lib/health-coach-ux";
 
 export type CoachWorkflowView = {
   id: string; status: string; session_number: number; completion_percent: number;
@@ -92,7 +93,7 @@ export default function HealthCoachSessionWorkspace({
     });
   };
 
-  const sectionTitle = (number: number, title: string, hint: string) => <div style={{ display: "flex", gap: 10, alignItems: "start", marginBottom: 12 }}><span style={{ width: 26, height: 26, borderRadius: 999, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 800 }}>{number}</span><div><div style={{ fontWeight: 750, fontSize: 14 }}>{title}</div><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 1 }}>{hint}</div></div></div>;
+  const sectionTitle = (number: number, title: string, hint: string) => <div id={`session-step-${number}`} style={{ display: "flex", gap: 10, alignItems: "start", marginBottom: 12, scrollMarginTop: 12 }}><span style={{ width: 26, height: 26, borderRadius: 999, background: "var(--brand-fill)", color: "#fff", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 800 }}>{number}</span><div><div style={{ fontWeight: 750, fontSize: 14 }}>{title}</div><div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 1 }}>{hint}</div></div></div>;
   const label = (title: string, child: React.ReactNode, hint?: string) => <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}><b>{title}</b>{hint && <span style={{ color: "var(--muted)", fontSize: 10.5 }}>{hint}</span>}{child}</label>;
 
   return <div style={{ maxWidth: 1180 }}>
@@ -116,6 +117,13 @@ export default function HealthCoachSessionWorkspace({
     </section>
 
     {dueScreenings.length > 0 && <section style={{ ...box, padding: "15px 17px", marginBottom: 14, background: "var(--amber-bg)" }}><b style={{ fontSize: 13 }}>{dueScreenings.length} screening{dueScreenings.length === 1 ? "" : "s"} need a decision today</b><div style={{ color: "var(--amber-text)", fontSize: 11.5, marginTop: 3 }}>Complete the approved tool where appropriate, or document why it was scheduled/deferred.</div><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 8, marginTop: 9 }}>{dueScreenings.map((key) => { const marker = MARKER_BY_KEY[key]; const result = latest.get(key); return <div key={key} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 9, padding: 9 }}><div style={{ display: "flex", gap: 7, alignItems: "center" }}><b style={{ flex: 1, fontSize: 12 }}>{marker.icon} {marker.tool}</b>{!locked && <MarkerAssessment clientId={client.id} marker={key} tool={marker.tool} range={marker.range} gender={gender} supervisorOverride={supervisorOverride} />}</div>{result && <div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 4 }}>Last: {result.date} · {result.score} · {result.interpretation}</div>}</div>; })}</div></section>}
+
+    <nav aria-label="Health Coach session steps" style={{ ...box, padding: "10px 12px", marginBottom: 14, display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+      <span style={{ color: "var(--muted)", fontSize: 11.5, fontWeight: 700, marginRight: 2 }}>Jump to:</span>
+      {HEALTH_COACH_SESSION_STEPS.filter((step) => !urgent || step.number === 1 || step.number === 5).map((step) => (
+        <a key={step.number} href={`#${step.fragment}`} style={{ border: "1px solid var(--border)", borderRadius: 999, padding: "5px 9px", color: "var(--brand-text)", background: "#fff", textDecoration: "none", fontSize: 11.5, fontWeight: 700 }}>{step.number}. {step.shortLabel}</a>
+      ))}
+    </nav>
 
     <div style={{ display: "grid", gap: 14 }}>
       <section style={{ ...box, padding: 17 }}>{sectionTitle(1, "Connect, set the agenda and check safety", "Begin with the client’s priority; do not start with the coach’s checklist.")}<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>{label("Wellbeing today · 0–10", <ScoreScale value={data.check_in.wellbeing} onChange={(value) => set("check_in", "wellbeing", value)} disabled={locked} />)}{label("Energy today · 0–10", <ScoreScale value={data.check_in.energy} onChange={(value) => set("check_in", "energy", value)} disabled={locked} />)}{label("What would make this session useful?", <textarea disabled={locked} value={data.check_in.client_priority ?? ""} onChange={(event) => set("check_in", "client_priority", event.target.value)} style={area} />)}{label("Any new urgent concern?", <select disabled={locked} value={data.check_in.urgent_concern ?? ""} onChange={(event) => set("check_in", "urgent_concern", event.target.value)} style={field}><option value="">Select…</option>{URGENT_CONCERNS.map((value) => <option key={value}>{value}</option>)}</select>)}</div>{urgent && <div style={{ marginTop: 12, background: "var(--red-bg)", color: "var(--red-text)", borderRadius: 9, padding: 11 }}><b>Stop routine coaching and escalate now</b><textarea disabled={locked} required value={data.check_in.immediate_action ?? ""} onChange={(event) => set("check_in", "immediate_action", event.target.value)} placeholder="Who was contacted, what was done, and how the client was kept safe" style={{ ...area, marginTop: 7 }} /></div>}</section>
