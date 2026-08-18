@@ -38,6 +38,11 @@ Create or workflow trigger → assign owner, priority and due date → work the 
 - Personal “My tasks” focus for the signed-in staff member.
 - Summary of open, overdue, blocked and unassigned work.
 - A distinct Blocked queue, rather than hiding blocked work in the general list.
+- Bulk import for a launch, event or campaign list; every imported owner must
+  match an existing staff name before any row is created.
+- Package-journey booking tasks automatically use the client's assigned Health
+  Coach where that assignment exists; unresolved work remains visibly
+  unassigned for triage.
 - Preserved table, filters, timeline, reminders and linked client/lead routes.
 - No database migration and no change to task data or permissions.
 

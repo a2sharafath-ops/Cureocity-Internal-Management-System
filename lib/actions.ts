@@ -23,6 +23,7 @@ import { COMPLETION_SYSTEM_PROMPT, completionDraftBrief } from "@/lib/diet-plan-
 import { canDeliverDoc, isAdminish, isStaffRole, canSee, canWrite, canWorkFollowups, canManageSessions, canManagePackages, canVoidPackage, canApproveLeaveType, canReviewDietChart, canManageServices, canSetTargets, canManageSops, canManageTasks, canConsult, canManageHealthCoaching, canManageBlueprint, canBill, canManageInvoices, canRecordPayment, canMessage, canClasses, canRetention, canPos, canEmr, canFinanceOps, canCompliance, canAppointments, canEditAppointments, canCampaigns, canHr, canReimburseSubmit, canReimburseApprove, canCreateClinicalReferral, canOpenSafetyEvent, canResolveSafetyEvent, isHealthCoachSupervisor, LEAD_OWNER_ROLES } from "@/lib/roles";
 import { BP_SCORES } from "@/lib/blueprint";
 import { todayISO } from "@/lib/today";
+import { parseTaskImport } from "@/lib/task-bulk-import";
 import { packageCategory, requiresMembership, hasActiveMembership, addDaysISO, MEMBERSHIP_RULE_MSG } from "@/lib/packages";
 import { getPersona } from "@/lib/personas";
 import { previewSelectionDestination } from "@/lib/role-preview";
@@ -104,6 +105,23 @@ async function logAudit(
 }
 
 type CoachWriteAuthorization = { ok: true } | { ok: false; error: string };
+
+/**
+ * Care-team assignment is the authoritative owner for client work. Use the
+ * elevated client only inside already-authorised server workflows: a Front
+ * Desk package sale is allowed to start a journey, but may not itself read the
+ * care-team table under RLS.
+ */
+async function assignedClientDisciplineStaffId(clientId: string, discipline: string): Promise<string | null> {
+  const db = createAdminClient();
+  const { data, error } = await db.from("client_assignments")
+    .select("staff_id")
+    .eq("client_id", clientId)
+    .eq("discipline", discipline)
+    .maybeSingle();
+  if (error) return null;
+  return (data as { staff_id?: string | null } | null)?.staff_id ?? null;
+}
 
 /**
  * Enforce formal coach ownership before a Health Coach-owned mutation. A
@@ -2058,6 +2076,7 @@ async function startBlueprintJourney(
   // Without this a freshly-sold BluePrint client sat with no care team at all,
   // so every owner-resolved nudge fell back to chasing a whole role.
   await assignCareTeam(supabase, clientId, { actor });
+  const bookingOwnerId = await assignedClientDisciplineStaffId(clientId, "coach");
 
   const titles = BP_BOOKING_TASKS.map((t) => `${t.label} — ${clientName}`);
   // Dedupe against tasks in ANY status (not just open) so a re-run never clones
@@ -2078,14 +2097,13 @@ async function startBlueprintJourney(
     .map(({ t, title }) => ({
       title, client_id: clientId, type: "Ops", priority: "High",
       status: "todo", due_date: addDaysISO(todayISO(), BP_BOOKING_DUE_DAYS),
-      created_by: actor,
+      assignee_id: bookingOwnerId, created_by: actor,
     }));
   if (rows.length) await supabase.from("tasks").insert(rows);
 
-  // These three used to be inserted as unassigned "Ops" tasks and then sit on
-  // a board nobody owned. Booking is the Health Coach's job like every other
-  // booking, so they are told, by name, with the same wording the rest of the
-  // booking work uses.
+  // Booking is owned by the assigned Health Coach. If a care-team assignment
+  // could not be resolved, the task intentionally remains unassigned so the
+  // Admin/Manager triage queue can correct it rather than guessing.
   if (rows.length) {
     await notifyRoles(supabase, BOOKING_OWNER, {
       title: `BluePrint — ${rows.length} appointment${rows.length === 1 ? "" : "s"} to book`,
@@ -2178,6 +2196,7 @@ async function startComprehensiveJourney(
   // coach and trainer fall back to rotation. Safe to call before any booking —
   // it assigns what it can and fills the rest in later.
   await assignCareTeam(supabase, clientId, { actor });
+  const bookingOwnerId = await assignedClientDisciplineStaffId(clientId, "coach");
 
   await supabase.from("care_protocols").upsert(
     {
@@ -2203,7 +2222,7 @@ async function startComprehensiveJourney(
   const bookedKinds = new Set(((coAppts ?? []) as unknown as { staff: { role: string } | null }[])
     .map((a) => ROLE_TO_KIND[a.staff?.role ?? ""]).filter(Boolean));
 
-  const mk = (title: string) => ({ title, client_id: clientId, type: "Ops", priority: "High", status: "todo", due_date: addDaysISO(todayISO(), BOOKING_DUE_DAYS), created_by: actor });
+  const mk = (title: string) => ({ title, client_id: clientId, type: "Ops", priority: "High", status: "todo", due_date: addDaysISO(todayISO(), BOOKING_DUE_DAYS), assignee_id: bookingOwnerId, created_by: actor });
   const rows = [
     ...consultItems.filter((b) => !taken.has(b.title) && !bookedKinds.has(b.kind)).map((b) => mk(b.title)),
     ...(!taken.has(sessTitle) ? [mk(sessTitle)] : []),
@@ -2242,6 +2261,7 @@ async function startPTJourney(
   notify = true,
 ) {
   await assignCareTeam(supabase, clientId, { actor, disciplines: ["trainer", "coach"] });
+  const bookingOwnerId = await assignedClientDisciplineStaffId(clientId, "coach");
 
   await supabase.from("care_protocols").upsert(
     { client_id: clientId, protocol: PT_CATEGORY, start_date: startDate, status: "active", created_by: actor },
@@ -2260,7 +2280,7 @@ async function startPTJourney(
   const bookedKinds = new Set(((ptAppts ?? []) as unknown as { staff: { role: string } | null }[])
     .map((a) => ROLE_TO_KIND[a.staff?.role ?? ""]).filter(Boolean));
 
-  const mk = (title: string) => ({ title, client_id: clientId, type: "Ops", priority: "High", status: "todo", due_date: addDaysISO(todayISO(), PT_BOOKING_DUE_DAYS), created_by: actor });
+  const mk = (title: string) => ({ title, client_id: clientId, type: "Ops", priority: "High", status: "todo", due_date: addDaysISO(todayISO(), PT_BOOKING_DUE_DAYS), assignee_id: bookingOwnerId, created_by: actor });
   const rows = [
     ...consultItems.filter((b) => !taken.has(b.title) && !bookedKinds.has(b.kind)).map((b) => mk(b.title)),
     ...(!taken.has(sessTitle) ? [mk(sessTitle)] : []),
@@ -4936,6 +4956,55 @@ export async function payPayroll(formData: FormData) {
 }
 
 // ---- team tasks ------------------------------------------------------------
+
+export type TaskBatchState = { error?: string; ok?: string };
+
+/**
+ * Imports a small, human-reviewed operational list. This is intentionally a
+ * server action rather than a browser-side loop, so every row gets the same
+ * role check and either all valid rows are inserted or none are.
+ */
+export async function addTaskBatch(_previous: TaskBatchState, formData: FormData): Promise<TaskBatchState> {
+  const p = await getProfile();
+  if (!p || !canManageTasks(p.role)) return { error: "Only Admin, Manager or Super Admin can import tasks." };
+  const parsed = parseTaskImport(String(formData.get("lines") ?? ""));
+  if (parsed.error) return { error: parsed.error };
+  const initiative = String(formData.get("initiative") ?? "").trim();
+  if (initiative.length > 80) return { error: "Initiative label must be 80 characters or fewer." };
+
+  const supabase = await createClient();
+  const { data: staffRows, error: staffError } = await supabase.from("staff").select("id, name");
+  if (staffError) return { error: "Could not load staff for assignment." };
+  const byName = new Map<string, string>();
+  const duplicateNames = new Set<string>();
+  for (const row of (staffRows ?? []) as { id: string; name: string }[]) {
+    const key = row.name.trim().toLocaleLowerCase();
+    if (byName.has(key)) duplicateNames.add(key);
+    else byName.set(key, row.id);
+  }
+  for (const task of parsed.tasks) {
+    if (!task.assigneeName) continue;
+    const key = task.assigneeName.toLocaleLowerCase();
+    if (duplicateNames.has(key)) return { error: `“${task.assigneeName}” matches more than one staff member. Assign it manually after import.` };
+    if (!byName.has(key)) return { error: `No staff member named “${task.assigneeName}” was found. Use the exact name or leave that owner blank.` };
+  }
+
+  const prefix = initiative ? `[${initiative}] ` : "";
+  const rows = parsed.tasks.map((task) => ({
+    title: `${prefix}${task.title}`.slice(0, 300),
+    assignee_id: task.assigneeName ? byName.get(task.assigneeName.toLocaleLowerCase()) ?? null : null,
+    type: initiative ? "Initiative" : "Ops",
+    priority: task.priority,
+    status: "todo",
+    due_date: task.dueDate,
+    created_by: p.name,
+  }));
+  const { error } = await supabase.from("tasks").insert(rows);
+  if (error) return { error: "Task import could not be saved. No tasks were imported." };
+  await logAudit(p, "Tasks imported", initiative || "Operational tasks", `${rows.length} task${rows.length === 1 ? "" : "s"}`);
+  revalidatePath("/tasks");
+  return { ok: `${rows.length} task${rows.length === 1 ? "" : "s"} imported.` };
+}
 
 export async function addTask(formData: FormData) {
   const p = await getProfile();

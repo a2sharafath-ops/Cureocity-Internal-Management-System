@@ -5,6 +5,7 @@ import { canSee, canManageTasks } from "@/lib/roles";
 import { todayISO } from "@/lib/today";
 import RealtimeRefresh from "@/components/RealtimeRefresh";
 import TaskForm from "@/components/TaskForm";
+import TaskBulkImport from "@/components/TaskBulkImport";
 import TasksView, { type TaskRow } from "@/components/TasksView";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,8 @@ export default async function TasksPage() {
         <span style={{ flex: 1 }} />
         {canManageTasks(me.role) && <TaskForm staff={staff} clients={clients} />}
       </div>
+
+      {canManageTasks(me.role) && <TaskBulkImport />}
 
       <TasksView tasks={tasks} today={todayISO()} staff={staffNames} types={types} currentStaffId={me.staffId ?? null} />
     </div>
