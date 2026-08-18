@@ -49,7 +49,7 @@ export function taskOperationsSummary(tasks: OperationsTask[]) {
 async function sendOperationsDigests(supabase: AnyClient, today: string): Promise<number> {
   if (!operationsDigestEnabled()) return 0;
   const [{ data: profileRows }, { data: taskRows }, { data: staffRows }] = await Promise.all([
-    supabase.from("profiles").select("role, staff_id, branch").in("role", ["Administrator", "Manager"]).not("staff_id", "is", null),
+    supabase.from("profiles").select("role, staff_id, branch").in("role", ["Super Admin", "Administrator", "Manager"]).not("staff_id", "is", null),
     supabase.from("tasks").select("id, status, due_date, assignee_id").neq("status", "done"),
     supabase.from("staff").select("id, name, branch, task_reminder_phone, task_reminder_whatsapp_opt_in"),
   ]);
@@ -68,14 +68,17 @@ async function sendOperationsDigests(supabase: AnyClient, today: string): Promis
   for (const recipient of recipients) {
     const person = staffById.get(recipient.staff_id);
     if (!person?.task_reminder_whatsapp_opt_in || !person.task_reminder_phone || seen.has(recipient.staff_id)) continue;
-    // A configured branch is the reliable team boundary. An Admin without a
-    // branch receives the all-operations summary; a Manager without a branch
-    // receives only directly assigned work, never an assumed organisation-wide view.
-    const scoped = recipient.branch
-      ? tasks.filter((task) => task.assignee_id && staffById.get(task.assignee_id)?.branch === recipient.branch)
-      : recipient.role === "Administrator"
-        ? tasks
-        : tasks.filter((task) => task.assignee_id === recipient.staff_id);
+    // A configured branch is the reliable team boundary. Super Admin always
+    // receives the all-operations summary. An Admin without a branch also
+    // receives all operations; a Manager without a branch receives only their
+    // directly assigned work, never an assumed organisation-wide view.
+    const scoped = recipient.role === "Super Admin"
+      ? tasks
+      : recipient.branch
+        ? tasks.filter((task) => task.assignee_id && staffById.get(task.assignee_id)?.branch === recipient.branch)
+        : recipient.role === "Administrator"
+          ? tasks
+          : tasks.filter((task) => task.assignee_id === recipient.staff_id);
     const summary = taskOperationsSummary(scoped.map((task) => ({ status: task.status, assigneeId: task.assignee_id })));
     const overdue = scoped.filter((task) => Boolean(task.due_date && task.due_date < today)).length;
     if (!summary.open) continue;
