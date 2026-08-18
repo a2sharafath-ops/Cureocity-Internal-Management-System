@@ -4970,9 +4970,14 @@ export async function addTaskBatch(_previous: TaskBatchState, formData: FormData
   const parsed = parseTaskImport(String(formData.get("lines") ?? ""));
   if (parsed.error) return { error: parsed.error };
   const initiative = String(formData.get("initiative") ?? "").trim();
+  const projectId = String(formData.get("project_id") ?? "").trim();
   if (initiative.length > 80) return { error: "Initiative label must be 80 characters or fewer." };
 
   const supabase = await createClient();
+  if (projectId) {
+    const { data: project } = await supabase.from("task_projects").select("id").eq("id", projectId).maybeSingle();
+    if (!project) return { error: "The selected project is no longer available. Refresh and try again." };
+  }
   const { data: staffRows, error: staffError } = await supabase.from("staff").select("id, name");
   if (staffError) return { error: "Could not load staff for assignment." };
   const byName = new Map<string, string>();
@@ -4997,6 +5002,7 @@ export async function addTaskBatch(_previous: TaskBatchState, formData: FormData
     priority: task.priority,
     status: "todo",
     due_date: task.dueDate,
+    ...(projectId ? { project_id: projectId } : {}),
     created_by: p.name,
   }));
   const { error } = await supabase.from("tasks").insert(rows);
@@ -5010,8 +5016,13 @@ export async function addTask(formData: FormData) {
   const p = await getProfile();
   if (!p || !canManageTasks(p.role)) return; // Admin / Manager / HR
   const title = String(formData.get("title") ?? "").trim();
+  const projectId = String(formData.get("project_id") ?? "").trim();
   if (!title) return;
   const supabase = await createClient();
+  if (projectId) {
+    const { data: project } = await supabase.from("task_projects").select("id").eq("id", projectId).maybeSingle();
+    if (!project) return;
+  }
   await supabase.from("tasks").insert({
     title,
     assignee_id: String(formData.get("assignee_id") || "") || null,
@@ -5019,9 +5030,31 @@ export async function addTask(formData: FormData) {
     type: String(formData.get("type") || "Ops"),
     priority: String(formData.get("priority") || "Medium"),
     due_date: String(formData.get("due_date") || "") || null,
+    ...(projectId ? { project_id: projectId } : {}),
     status: "todo", created_by: p.name,
   });
   await logAudit(p, "Task created", title, null);
+  revalidatePath("/tasks");
+}
+
+/** Creates a project container only. Existing task ownership and automation
+ * remain untouched until a manager deliberately adds a task to the project. */
+export async function createTaskProject(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageTasks(p.role)) return;
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name || name.length > 120) return;
+  const description = String(formData.get("description") ?? "").trim();
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("task_projects").insert({
+    name,
+    description: description || null,
+    owner_id: String(formData.get("owner_id") ?? "") || null,
+    start_date: String(formData.get("start_date") ?? "") || null,
+    due_date: String(formData.get("due_date") ?? "") || null,
+    created_by: p.name,
+  }).select("id").maybeSingle();
+  if (!error && data) await logAudit(p, "Task project created", name, null);
   revalidatePath("/tasks");
 }
 

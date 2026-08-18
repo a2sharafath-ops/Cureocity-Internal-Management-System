@@ -1,171 +1,92 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
-import { setTaskStatus, remindTask, deleteTask } from "@/lib/actions";
+import { deleteTask, remindTask, setTaskStatus } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
-import { taskTriage } from "@/lib/task-triage";
 
 export type TaskRow = {
   id: string; title: string; type: string; priority: string; status: string;
-  due_date: string | null; assigneeId: string | null; assignee: string | null; clientId: string | null; clientName: string | null;
-  /** a task can be about a lead instead of a client (0085) */
-  leadId?: string | null; leadName?: string | null;
+  due_date: string | null; assigneeId: string | null; assignee: string | null;
+  clientId: string | null; clientName: string | null; leadId?: string | null; leadName?: string | null;
+  projectId?: string | null; projectName?: string | null;
 };
+type Project = { id: string; name: string; status: string; dueDate: string | null; owner: string | null };
 
 const STATUS_LABEL: Record<string, string> = { todo: "To Do", doing: "In Progress", blocked: "Blocked", done: "Done" };
 const STATUS_OPTS = ["todo", "doing", "blocked", "done"];
+const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
+const selectStyle: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
+function fmt(date: string | null) { return date ? new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "—"; }
 
-function daysRemaining(due: string | null, today: string): { text: string; overdue: boolean } {
-  if (!due) return { text: "—", overdue: false };
-  const d = Math.round((Date.parse(due + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
-  if (d < 0) return { text: `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} overdue`, overdue: true };
-  if (d === 0) return { text: "Due today", overdue: false };
-  return { text: `In ${d} day${d === 1 ? "" : "s"}`, overdue: false };
-}
-function fmt(iso: string | null) { return iso ? new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "—"; }
-
-export default function TasksView({ tasks, today, staff, types, currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; currentStaffId: string | null }) {
-  const [tab, setTab] = useState<"upcoming" | "overdue" | "blocked" | "completed">("upcoming");
+export default function TasksView({ tasks, today, staff, types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
+  const [view, setView] = useState<"projects" | "tasks">(projects.length ? "projects" : "tasks");
+  const [bucket, setBucket] = useState<"open" | "attention" | "completed">("open");
   const [scope, setScope] = useState<"all" | "mine" | "unassigned">("all");
+  const [projectF, setProjectF] = useState("all");
   const [dateF, setDateF] = useState("all");
   const [typeF, setTypeF] = useState("all");
   const [assigneeF, setAssigneeF] = useState("all");
   const [timeline, setTimeline] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
-  const inTab = (t: TaskRow) => {
-    const overdue = t.status !== "done" && t.due_date && t.due_date < today;
-    if (tab === "completed") return t.status === "done";
-    if (tab === "blocked") return t.status === "blocked";
-    if (tab === "overdue") return !!overdue;
-    return t.status !== "done" && t.status !== "blocked" && !overdue; // upcoming
+  const isOverdue = (task: TaskRow) => task.status !== "done" && Boolean(task.due_date && task.due_date < today);
+  const attention = (task: TaskRow) => task.status !== "done" && (task.status === "blocked" || !task.assigneeId || isOverdue(task));
+  const dueText = (task: TaskRow) => {
+    if (!task.due_date) return "No due date";
+    const days = Math.round((Date.parse(`${task.due_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    return days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue` : days === 0 ? "Due today" : `In ${days} day${days === 1 ? "" : "s"}`;
   };
-  const triage = taskTriage(tasks.map((task) => ({ id: task.id, status: task.status, dueDate: task.due_date, assigneeId: task.assigneeId })), today, currentStaffId);
-  const counts = {
-    upcoming: tasks.filter((t) => t.status !== "done" && t.status !== "blocked" && !(t.due_date && t.due_date < today)).length,
-    overdue: triage.overdue,
-    blocked: triage.blocked,
-    completed: tasks.filter((t) => t.status === "done").length,
+  const inBucket = (task: TaskRow) => bucket === "completed" ? task.status === "done" : bucket === "attention" ? attention(task) : task.status !== "done" && task.status !== "blocked" && !isOverdue(task);
+  const matchDate = (task: TaskRow) => {
+    if (dateF === "all") return true;
+    if (!task.due_date) return false;
+    const days = Math.round((Date.parse(`${task.due_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    return dateF === "today" ? days === 0 : dateF === "week" ? days >= 0 && days <= 7 : days < 0;
   };
-  const matchDate = (t: TaskRow) => {
-    if (dateF === "all" || !t.due_date) return dateF === "all";
-    const d = Math.round((Date.parse(t.due_date + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
-    if (dateF === "today") return d === 0;
-    if (dateF === "week") return d >= 0 && d <= 7;
-    if (dateF === "overdue") return d < 0;
-    return true;
-  };
-  const rows = tasks.filter(inTab)
-    .filter((t) => scope === "all" || (scope === "mine" ? Boolean(currentStaffId && t.assigneeId === currentStaffId) : !t.assigneeId))
-    .filter((t) => typeF === "all" || t.type === typeF)
-    .filter((t) => assigneeF === "all" || t.assignee === assigneeF)
+  const rows = tasks.filter(inBucket)
+    .filter((task) => scope === "all" || (scope === "mine" ? Boolean(currentStaffId && task.assigneeId === currentStaffId) : !task.assigneeId))
+    .filter((task) => projectF === "all" || (projectF === "inbox" ? !task.projectId : task.projectId === projectF))
+    .filter((task) => typeF === "all" || task.type === typeF)
+    .filter((task) => assigneeF === "all" || task.assignee === assigneeF)
     .filter(matchDate)
     .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+  const counts = {
+    open: tasks.filter((task) => task.status !== "done" && task.status !== "blocked" && !isOverdue(task)).length,
+    attention: tasks.filter(attention).length,
+    completed: tasks.filter((task) => task.status === "done").length,
+  };
+  const chooseProject = (id: string) => { setProjectF(id); setView("tasks"); setBucket("open"); };
+  const metric = (label: string, value: number, select: () => void, red = false) => <button type="button" onClick={select} style={{ textAlign: "left", minWidth: 126, border: "1px solid var(--border)", background: red ? "var(--red-bg)" : "var(--card)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}><div style={{ fontSize: 20, fontWeight: 800, color: red ? "var(--red)" : "var(--ink)" }}>{value}</div><div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</div></button>;
 
-  const box: React.CSSProperties = { background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const th: React.CSSProperties = { padding: "11px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".3px" };
-  const td: React.CSSProperties = { padding: "12px 16px", fontSize: 13, verticalAlign: "top" };
-  const sel: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
-  const prioColor = (p: string) => p === "High" ? "var(--red)" : p === "Medium" ? "var(--amber-text-soft)" : "var(--muted)";
-  const metric = (label: string, value: number, onClick: () => void, tone?: "alert" | "warn") => (
-    <button type="button" onClick={onClick} style={{ textAlign: "left", minWidth: 122, border: "1px solid var(--border)", background: tone === "alert" ? "var(--red-bg)" : tone === "warn" ? "var(--amber-bg)" : "var(--card)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
-      <div style={{ fontSize: 20, fontWeight: 800, color: tone === "alert" ? "var(--red)" : tone === "warn" ? "var(--amber-text)" : "var(--ink)" }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</div>
-    </button>
-  );
-  return (
-    <div>
-      <section aria-label="Task triage" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
-        {metric("Open tasks", triage.open, () => { setTab("upcoming"); setScope("all"); })}
-        {metric("My open tasks", triage.mine, () => { setTab("upcoming"); setScope("mine"); })}
-        {metric("Overdue", triage.overdue, () => { setTab("overdue"); setScope("all"); }, "alert")}
-        {metric("Blocked", triage.blocked, () => { setTab("blocked"); setScope("all"); }, "warn")}
-        {metric("Unassigned", triage.unassigned, () => { setTab("upcoming"); setScope("unassigned"); })}
-      </section>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
-          { key: "upcoming", label: "Upcoming", count: counts.upcoming },
-          { key: "overdue", label: "Overdue", count: counts.overdue },
-          { key: "blocked", label: "Blocked", count: counts.blocked },
-          { key: "completed", label: "Completed", count: counts.completed },
-        ]} />
-        <span style={{ flex: 1 }} />
-        {currentStaffId && <button type="button" onClick={() => setScope((value) => value === "mine" ? "all" : "mine")} style={{ border: "1px solid var(--border)", background: scope === "mine" ? "var(--brand-fill)" : "#fff", color: scope === "mine" ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{scope === "mine" ? "Showing my tasks" : "My tasks"}</button>}
-        <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Smart Timeline View</button>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <select value={dateF} onChange={(e) => setDateF(e.target.value)} style={sel}><option value="all">All Dates</option><option value="today">Due today</option><option value="week">Next 7 days</option><option value="overdue">Overdue</option></select>
-        <select value={typeF} onChange={(e) => setTypeF(e.target.value)} style={sel}><option value="all">All Tasks</option>{types.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-        <select value={assigneeF} onChange={(e) => setAssigneeF(e.target.value)} style={sel}><option value="all">All Assignees</option>{staff.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-        <span style={{ flex: 1 }} />
-        <span style={{ color: "var(--muted)", fontSize: 13 }}>Showing {rows.length} task{rows.length === 1 ? "" : "s"}</span>
-      </div>
-
-      {timeline ? (
-        <div style={{ ...box, padding: "8px 18px" }}>
-          {rows.length === 0 && <div style={{ padding: 18, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No tasks.</div>}
-          {rows.map((t, i) => { const dr = daysRemaining(t.due_date, today); return (
-            <div key={t.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
-              <div style={{ width: 70, color: "var(--muted)", fontSize: 12, flexShrink: 0 }}>{fmt(t.due_date)}</div>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: dr.overdue ? "var(--red)" : "var(--brand-fill)", marginTop: 3, flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <b style={{ fontSize: 13.5 }}>{t.title}</b>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}><span style={{ color: prioColor(t.priority), fontWeight: 700 }}>{t.priority}</span> · {t.type} · {t.assignee ?? "Unassigned"} · <span style={{ color: dr.overdue ? "var(--red)" : "var(--muted)" }}>{dr.text}</span></div>
-              </div>
-            </div>
-          ); })}
-        </div>
-      ) : (
-        <div style={{ ...box, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
-            <thead><tr><th style={th}>Title</th><th style={th}>Assignee</th><th style={th}>Due</th><th style={th}>Days remaining</th><th style={th}>Linked client</th><th style={th}>Status</th><th style={th} /></tr></thead>
-            <tbody>
-              {rows.map((t) => { const dr = daysRemaining(t.due_date, today); return (
-                <Fragment key={t.id}>
-                  <tr style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={td}><b style={{ fontSize: 13.5 }}>{t.title}</b><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{t.type} · <span style={{ color: prioColor(t.priority), fontWeight: 700 }}>{t.priority}</span></div></td>
-                    <td style={{ ...td, color: "var(--muted)" }}>{t.assignee ?? "Unassigned"}</td>
-                    <td style={{ ...td, color: "var(--muted)" }}>{fmt(t.due_date)}</td>
-                    <td style={{ ...td, color: dr.overdue ? "var(--red)" : "var(--muted)", fontWeight: dr.overdue ? 600 : 400 }}>{dr.text}</td>
-                    <td style={td}>
-                      {t.clientId
-                        ? <Link href={`/clients/${t.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{t.clientName}</Link>
-                        : t.leadId
-                          ? <Link href={`/leads/${t.leadId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>
-                              {t.leadName} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 11 }}>· lead</span>
-                            </Link>
-                          : <span style={{ color: "var(--muted)" }}>—</span>}
-                    </td>
-                    <td style={td}>
-                      <form action={setTaskStatus}>
-                        <input type="hidden" name="id" value={t.id} />
-                        <select name="status" defaultValue={t.status} onChange={(e) => e.currentTarget.form?.requestSubmit()} style={{ ...sel, padding: "6px 8px" }}>
-                          {STATUS_OPTS.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                        </select>
-                      </form>
-                    </td>
-                    <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button type="button" onClick={() => setOpen(open === t.id ? null : t.id)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View</button>{" "}
-                      <form action={remindTask} style={{ display: "inline" }}><input type="hidden" name="id" value={t.id} /><button title="Send reminder" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 9px", fontSize: 13, cursor: "pointer" }}>🔔</button></form>
-                    </td>
-                  </tr>
-                  {open === t.id && (
-                    <tr style={{ background: "#fafafa" }}>
-                      <td colSpan={7} style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>
-                        <b style={{ color: "var(--ink)" }}>{t.title}</b> · {t.type} · {t.priority} priority · {t.assignee ?? "Unassigned"}{t.clientName ? ` · client: ${t.clientName}` : ""} · due {fmt(t.due_date)} · status {STATUS_LABEL[t.status]}
-                        <form action={deleteTask} style={{ display: "inline", marginLeft: 12 }}><input type="hidden" name="id" value={t.id} /><button style={{ border: "1px solid #fecaca", background: "#fff", color: "var(--red)", borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete task</button></form>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ); })}
-              {rows.length === 0 && <tr><td colSpan={7} style={{ ...td, textAlign: "center", color: "var(--muted)", padding: "24px 16px" }}>No tasks in this view.</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      )}
+  return <div>
+    <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+      {projects.length > 0 && <SegTabs active={view} onSelect={(key) => setView(key as typeof view)} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />}
+      <span style={{ flex: 1 }} /><button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>
     </div>
-  );
+    <section aria-label="Task health" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
+      {metric("Open", counts.open, () => { setBucket("open"); setScope("all"); })}
+      {metric("Needs attention", counts.attention, () => { setBucket("attention"); setScope("all"); }, true)}
+      {metric("Completed", counts.completed, () => { setBucket("completed"); setScope("all"); })}
+    </section>
+    {view === "projects" && projects.length > 0 && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
+      {projects.filter((project) => project.status !== "completed").map((project) => {
+        const projectTasks = tasks.filter((task) => task.projectId === project.id && task.status !== "done");
+        return <button key={project.id} type="button" onClick={() => chooseProject(project.id)} style={{ ...box, padding: 14, textAlign: "left", cursor: "pointer" }}><div style={{ display: "flex", gap: 8 }}><b>{project.name}</b><span style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 11 }}>{project.status === "on_hold" ? "On hold" : "Active"}</span></div><div style={{ marginTop: 8, color: "var(--muted)", fontSize: 12 }}>{projectTasks.length} open · {projectTasks.filter(attention).length} need attention{project.owner ? ` · ${project.owner}` : ""}</div>{project.dueDate && <div style={{ marginTop: 5, color: "var(--muted)", fontSize: 12 }}>Target {fmt(project.dueDate)}</div>}</button>;
+      })}
+      {tasks.some((task) => !task.projectId && task.status !== "done") && <button type="button" onClick={() => chooseProject("inbox")} style={{ ...box, padding: 14, textAlign: "left", cursor: "pointer", borderStyle: "dashed" }}><b>Operations inbox</b><div style={{ marginTop: 8, color: "var(--muted)", fontSize: 12 }}>{tasks.filter((task) => !task.projectId && task.status !== "done").length} ungrouped client, lead, and operational tasks</div></button>}
+    </section>}
+    <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+      <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} style={selectStyle}><option value="all">Everyone’s tasks</option>{currentStaffId && <option value="mine">My tasks</option>}<option value="unassigned">Unassigned</option></select>
+      {projects.length > 0 && <select value={projectF} onChange={(event) => { setProjectF(event.target.value); setView("tasks"); }} style={selectStyle}><option value="all">All projects</option><option value="inbox">Operations inbox</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+      <select value={dateF} onChange={(event) => setDateF(event.target.value)} style={selectStyle}><option value="all">All dates</option><option value="today">Due today</option><option value="week">Next 7 days</option><option value="overdue">Overdue</option></select>
+      <select value={typeF} onChange={(event) => setTypeF(event.target.value)} style={selectStyle}><option value="all">All task types</option>{types.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+      <select value={assigneeF} onChange={(event) => setAssigneeF(event.target.value)} style={selectStyle}><option value="all">All assignees</option>{staff.map((person) => <option key={person} value={person}>{person}</option>)}</select>
+      <span style={{ flex: 1 }} /><span style={{ color: "var(--muted)", fontSize: 13 }}>Showing {rows.length} task{rows.length === 1 ? "" : "s"}</span>
+    </div>
+    {timeline ? <div style={{ ...box, padding: "8px 18px" }}>{rows.length === 0 && <div style={{ padding: 18, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No tasks in this view.</div>}{rows.map((task, index) => <div key={task.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderTop: index ? "1px solid var(--border)" : "none" }}><div style={{ width: 70, color: "var(--muted)", fontSize: 12 }}>{fmt(task.due_date)}</div><div style={{ width: 10, height: 10, borderRadius: "50%", background: isOverdue(task) ? "var(--red)" : "var(--brand-fill)", marginTop: 3 }} /><div><b>{task.title}</b><div style={{ fontSize: 12, color: "var(--muted)" }}>{task.projectName ?? "Operations inbox"} · {task.assignee ?? "Unassigned"} · {dueText(task)}</div></div></div>)}</div> : <div style={{ ...box, overflow: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}><thead><tr>{["Task", "Project", "Assignee", "Due", "Linked record", "Status", ""].map((label) => <th key={label} style={{ padding: "11px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase" }}>{label}</th>)}</tr></thead><tbody>
+      {rows.map((task) => <Fragment key={task.id}><tr style={{ borderTop: "1px solid var(--border)" }}><td style={{ padding: "12px 16px", fontSize: 13 }}><b>{task.title}</b><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{task.type} · {task.priority}</div></td><td style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>{task.projectName ?? "Operations inbox"}</td><td style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>{task.assignee ?? "Unassigned"}</td><td style={{ padding: "12px 16px", fontSize: 13, color: isOverdue(task) ? "var(--red)" : "var(--muted)" }}>{fmt(task.due_date)}<div style={{ fontSize: 11.5 }}>{dueText(task)}</div></td><td style={{ padding: "12px 16px", fontSize: 13 }}>{task.clientId ? <Link href={`/clients/${task.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{task.clientName}</Link> : task.leadId ? <Link href={`/leads/${task.leadId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{task.leadName} <span style={{ color: "var(--muted)", fontSize: 11 }}>· lead</span></Link> : <span style={{ color: "var(--muted)" }}>—</span>}</td><td style={{ padding: "12px 16px", fontSize: 13 }}><form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><select name="status" defaultValue={task.status} onChange={(event) => event.currentTarget.form?.requestSubmit()} style={{ ...selectStyle, padding: "6px 8px" }}>{STATUS_OPTS.map((status) => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}</select></form></td><td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}><button type="button" onClick={() => setOpen(open === task.id ? null : task.id)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View</button>{" "}<form action={remindTask} style={{ display: "inline" }}><input type="hidden" name="id" value={task.id} /><button title="Send reminder" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 9px", fontSize: 13, cursor: "pointer" }}>🔔</button></form></td></tr>{open === task.id && <tr style={{ background: "#fafafa" }}><td colSpan={7} style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}><b style={{ color: "var(--ink)" }}>{task.title}</b> · {task.projectName ?? "Operations inbox"} · {task.assignee ?? "Unassigned"} · due {fmt(task.due_date)}<form action={deleteTask} style={{ display: "inline", marginLeft: 12 }}><input type="hidden" name="id" value={task.id} /><button style={{ border: "1px solid #fecaca", background: "#fff", color: "var(--red)", borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete task</button></form></td></tr>}</Fragment>)}
+      {rows.length === 0 && <tr><td colSpan={7} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>No tasks in this view.</td></tr>}
+    </tbody></table></div>}
+  </div>;
 }
