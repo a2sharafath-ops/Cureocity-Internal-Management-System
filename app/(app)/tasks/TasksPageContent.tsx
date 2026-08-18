@@ -11,8 +11,8 @@ import TaskReminderContacts from "@/components/TaskReminderContacts";
 import TaskProjectForm from "@/components/TaskProjectForm";
 import TaskProjectTools from "@/components/TaskProjectTools";
 
-type TaskAssignee = { staff_id: string; staff: { name: string } | null };
-type Raw = { id: string; title: string; type: string; priority: string; status: string; due_date: string | null; assignee_id: string | null; project_id: string | null; staff: { name: string } | null; task_assignees: TaskAssignee[] | null; clients: { id: string; name: string } | null; leads: { id: string; name: string } | null };
+type TaskAssignee = { task_id: string; staff_id: string; staff: { name: string } | null };
+type Raw = { id: string; title: string; type: string; priority: string; status: string; due_date: string | null; assignee_id: string | null; project_id: string | null; staff: { name: string } | null; clients: { id: string; name: string } | null; leads: { id: string; name: string } | null };
 type Project = { id: string; name: string; status: string; due_date: string | null; owner_id: string | null; staff: { name: string } | null };
 
 export default async function TasksPageContent() {
@@ -20,8 +20,11 @@ export default async function TasksPageContent() {
   if (!me || !canSee(me.role, "/tasks")) redirect("/dashboard");
 
   const supabase = await createClient();
-  const [{ data: taskData }, { data: staffData }, { data: clientData }, { data: contactData, error: contactError }, { data: projectData, error: projectError }] = await Promise.all([
-    supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, project_id, staff(name), task_assignees(staff_id, staff:staff_id(name)), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
+  const [{ data: taskData }, { data: sharedAssignmentData }, { data: staffData }, { data: clientData }, { data: contactData, error: contactError }, { data: projectData, error: projectError }] = await Promise.all([
+    supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, project_id, staff(name), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
+    // Migration 0200 adds this table. A missing table must not hide existing
+    // tasks while a deployment is waiting for its database migration.
+    supabase.from("task_assignees").select("task_id, staff_id, staff:staff_id(name)"),
     supabase.from("staff").select("id, name").order("name"),
     supabase.from("clients").select("id, name").order("name"),
     supabase.from("staff").select("id, task_reminder_phone, task_reminder_whatsapp_opt_in"),
@@ -33,8 +36,13 @@ export default async function TasksPageContent() {
   const clients = (clientData ?? []) as { id: string; name: string }[];
   const projects = projectError ? [] : (projectData ?? []) as unknown as Project[];
   const projectById = new Map(projects.map((project) => [project.id, project]));
+  const sharedByTask = new Map<string, { id: string; name: string }[]>();
+  for (const row of (sharedAssignmentData ?? []) as unknown as TaskAssignee[]) {
+    if (!row.staff?.name) continue;
+    sharedByTask.set(row.task_id, [...(sharedByTask.get(row.task_id) ?? []), { id: row.staff_id, name: row.staff.name }]);
+  }
   const tasks: TaskRow[] = raw.map((t) => {
-    const shared = (t.task_assignees ?? []).map((row) => ({ id: row.staff_id, name: row.staff?.name })).filter((row): row is { id: string; name: string } => Boolean(row.name));
+    const shared = sharedByTask.get(t.id) ?? [];
     const fallback = t.assignee_id && t.staff?.name ? [{ id: t.assignee_id, name: t.staff.name }] : [];
     const assignees = shared.length ? shared : fallback;
     return {
