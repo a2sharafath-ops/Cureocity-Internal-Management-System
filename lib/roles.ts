@@ -23,6 +23,14 @@ export type Role =
   | "HR"
   | "Staff";
 
+/**
+ * Staff-facing role names. Keep the stored `Administrator` value intact: it
+ * is part of existing database policies and permission checks.
+ */
+export function roleLabel(role: string): string {
+  return role === "Administrator" ? "Admin" : role;
+}
+
 export function isClinician(role: string): boolean {
   return (CLINICIAN_ROLES as readonly string[]).includes(role);
 }
@@ -111,10 +119,10 @@ export const NAV_ACCESS: Record<string, Role[] | "all"> = {
   "/users": ["Administrator", "Manager"],
   "/compliance": ["Administrator", "Manager"],
   "/issues": ["Administrator"],
-  // The task board is Super-Admin-only for now. The system still CREATES tasks
-  // for everyone (booking chases, SLA breaches) and they still drive the
-  // "Needs your attention" panels — this only closes the /tasks page itself.
-  "/tasks": [],
+  // Central operational task board. Admin and Manager can create and manage
+  // work here; workflow-generated tasks still surface in staff attention
+  // panels for the people who need to act on them.
+  "/tasks": ["Administrator", "Manager"],
   "/hr": ["Administrator", "Manager", "HR"],
   "/exlib": ["Administrator", "Manager", ...CLIN_MD],
   "/notifications": ["Administrator", "Manager"],

@@ -14,6 +14,7 @@ import { signOut } from "@/lib/actions";
 import { logServerError } from "@/lib/runtime-errors";
 import CureocityAssistantLauncher from "@/components/CureocityAssistantLauncher";
 import { staffAssistantSurface } from "@/lib/staff-copilot";
+import { roleLabel } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 {initials}
               </span>
               <b style={{ fontSize: 13 }}>{name}</b>
-              <span style={{ color: "var(--muted)" }}>· {role}</span>
+              <span style={{ color: "var(--muted)" }}>· {roleLabel(role)}</span>
             </Link>
             <form action={signOut} style={{ marginLeft: 8 }}>
               <button

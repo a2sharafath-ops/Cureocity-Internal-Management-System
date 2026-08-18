@@ -42,9 +42,11 @@ describe("canSee", () => {
     }
   });
 
-  it("the task board is owner-only for now", () => {
+  it("the task board is available to Super Admin, Admin and Manager", () => {
     expect(canSee("Super Admin", "/tasks")).toBe(true);
-    for (const r of ["Administrator", "Manager", "Front Desk", "HR", "Doctor", "Staff"]) {
+    expect(canSee("Administrator", "/tasks")).toBe(true);
+    expect(canSee("Manager", "/tasks")).toBe(true);
+    for (const r of ["Front Desk", "HR", "Doctor", "Staff"]) {
       expect(canSee(r, "/tasks")).toBe(false);
     }
   });

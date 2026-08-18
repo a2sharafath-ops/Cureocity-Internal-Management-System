@@ -1,4 +1,5 @@
 import { getPersona } from "@/lib/personas";
+import { roleLabel } from "@/lib/roles";
 
 export type ViewRole = {
   real: string;
@@ -32,7 +33,8 @@ export function previewSelectionDestination(role: string): string {
 }
 
 export function nativeRoleOptionLabel(realRole: string, previewActive: boolean): string {
-  return previewActive ? `Return to ${realRole}` : `View as… (${realRole})`;
+  const label = roleLabel(realRole);
+  return previewActive ? `Return to ${label}` : `View as… (${label})`;
 }
 
 export function isNativeSuperAdmin(

@@ -1,6 +1,7 @@
 "use client";
 
 import { updateUserRole } from "@/lib/actions";
+import { roleLabel } from "@/lib/roles";
 
 const ROLES = [
   "Super Admin", "Administrator", "Manager", "Medical Director", "Front Desk",
@@ -26,7 +27,7 @@ export default function UserRoleSelect({
         }}
       >
         {ROLES.map((r) => (
-          <option key={r} value={r}>{r}</option>
+          <option key={r} value={r}>{roleLabel(r)}</option>
         ))}
       </select>
     </form>

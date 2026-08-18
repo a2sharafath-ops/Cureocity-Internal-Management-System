@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/auth";
-import { ROLE_LIST, accessAreas, accessAreaList, roleCapabilities } from "@/lib/roles";
+import { ROLE_LIST, accessAreas, accessAreaList, roleCapabilities, roleLabel } from "@/lib/roles";
 import UserRoleSelect from "@/components/UserRoleSelect";
 import UserBranchSelect from "@/components/UserBranchSelect";
 import UserNameEdit from "@/components/UserNameEdit";
@@ -103,7 +103,7 @@ export default async function UsersPage() {
                   <td style={{ padding: "12px 16px" }}>
                     {canAdmin
                       ? <UserRoleSelect id={u.id} role={u.role} disabled={u.id === me.id} />
-                      : <span style={{ color: "var(--muted)" }}>{u.role}</span>}
+                      : <span style={{ color: "var(--muted)" }}>{roleLabel(u.role)}</span>}
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--muted)", fontSize: 13, whiteSpace: "nowrap" }}>
                     {(() => { const a = accessAreas(u.role); return a === "all" ? "All areas" : `${a} areas`; })()}
