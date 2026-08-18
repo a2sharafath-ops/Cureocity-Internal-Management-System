@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import { transitionCoachProgrammeLifecycle, type CoachProgrammeLifecycleState } from "@/lib/actions";
 import {
   COACH_PROGRAMME_STATUSES, coachProgrammeTransitionAllowed,
@@ -34,6 +35,9 @@ export default function CoachProgrammeLifecyclePanel({ clientId, lifecycle, even
   const [state, action] = useActionState<CoachProgrammeLifecycleState, FormData>(transitionCoachProgrammeLifecycle, {});
   const needsNextContact = ["Active", "Paused", "Disengaged"].includes(target);
   const options = COACH_PROGRAMME_STATUSES.filter((status) => coachProgrammeTransitionAllowed(current, status));
+  const bookHref = lifecycle?.next_contact_date
+    ? `/appointments?client=${encodeURIComponent(clientId)}&disc=${encodeURIComponent("Health Coach")}&type=${encodeURIComponent("Follow-up")}&date=${encodeURIComponent(lifecycle.next_contact_date)}&back=overview`
+    : null;
 
   return <section id="programme-lifecycle" style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px", marginBottom: 16 }}>
     <div style={{ display: "flex", alignItems: "start", gap: 10, flexWrap: "wrap" }}>
@@ -41,7 +45,7 @@ export default function CoachProgrammeLifecyclePanel({ clientId, lifecycle, even
       <span style={{ ...statusTone(current), borderRadius: 999, padding: "3px 9px", fontSize: 11, fontWeight: 750 }}>{current}</span>
     </div>
 
-    {lifecycle?.effective_date && <div style={{ marginTop: 10, fontSize: 12 }}><b>Since {lifecycle.effective_date}:</b> {lifecycle.status_reason}{lifecycle.next_contact_date && <div style={{ marginTop: 4, color: "var(--brand-text)" }}><b>Next contact {lifecycle.next_contact_date}:</b> {lifecycle.next_contact_plan}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 4 }}>Recorded by {lifecycle.changed_by_name} ({lifecycle.changed_by_role})</div></div>}
+    {lifecycle?.effective_date && <div style={{ marginTop: 10, fontSize: 12 }}><b>Since {lifecycle.effective_date}:</b> {lifecycle.status_reason}{lifecycle.next_contact_date && <div style={{ marginTop: 4, color: "var(--brand-text)" }}><b>Next contact {lifecycle.next_contact_date}:</b> {lifecycle.next_contact_plan}</div>}<div style={{ color: "var(--muted)", fontSize: 10.5, marginTop: 4 }}>Recorded by {lifecycle.changed_by_name} ({lifecycle.changed_by_role})</div>{canManage && bookHref && <Link href={bookHref} style={{ display: "inline-block", marginTop: 8, border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", background: "#fff", color: "var(--brand-text)", textDecoration: "none", fontSize: 11.5, fontWeight: 700 }}>Book next Health Coach session →</Link>}</div>}
 
     {canManage && <details style={{ marginTop: 12, border: "1px solid var(--border)", borderRadius: 9, padding: "9px 11px" }}>
       <summary style={{ cursor: "pointer", fontSize: 12.5, fontWeight: 700 }}>{initialising ? "Start coaching programme" : current === "Active" ? "Change programme status" : "Record next lifecycle transition"}</summary>

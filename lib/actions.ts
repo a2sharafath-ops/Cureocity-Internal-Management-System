@@ -6003,6 +6003,27 @@ export async function transitionCoachProgrammeLifecycle(
   });
   if (error) return { error: error.message };
 
+  // Starting an Active programme creates exactly one operational follow-up.
+  // It is a reminder, not an appointment: the Health Coach still reviews the
+  // plan and chooses the slot, preserving clinical and client availability.
+  if (initialising && nextContactDate && nextContactPlan) {
+    const { error: followupError } = await supabase.from("followups").upsert({
+      client_id: clientId,
+      kind: "custom",
+      label: "Health Coach programme follow-up",
+      due_date: nextContactDate,
+      priority: "normal",
+      status: "pending",
+      category: "Health Coaching",
+      mode: "Phone",
+      note: nextContactPlan,
+      created_by: p.name,
+    }, { onConflict: "client_id,label" });
+    // The lifecycle record is authoritative. Do not roll it back merely
+    // because an operational reminder could not be created.
+    if (followupError) console.error("Could not create programme follow-up", followupError.message);
+  }
+
   try {
     const { data: assignment } = await supabase.from("client_assignments")
       .select("staff_id").eq("client_id", clientId).eq("discipline", "coach").maybeSingle();
@@ -6024,6 +6045,7 @@ export async function transitionCoachProgrammeLifecycle(
   await logAudit(p, "Health Coach programme status changed", await clientName(supabase, clientId), auditDetail);
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/workspace");
+  revalidatePath("/followups");
   return { ok: initialising ? "Active coaching programme started." : `Programme moved from ${fromStatus} to ${toStatus}.` };
 }
 

@@ -95,6 +95,12 @@ function recentStart(today: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function addDays(iso: string, days: number) {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function referralLink(clientId: string, destination: string, reason: string) {
   return `/clients/${clientId}?tab=overview&referral=${encodeURIComponent(destination)}&referral_reason=${encodeURIComponent(reason)}#care-coordination`;
 }
@@ -111,15 +117,17 @@ export function buildCoachAlerts(input: CoachAlertInput): CoachRuleAlert[] {
   const openSafetyClients = new Set<string>();
 
   for (const lifecycle of input.lifecycles) {
-    if (!names.has(lifecycle.client_id) || !lifecycle.next_contact_date || lifecycle.next_contact_date > input.today) continue;
+    if (!names.has(lifecycle.client_id) || !lifecycle.next_contact_date || lifecycle.next_contact_date > addDays(input.today, 7)) continue;
+    const isUpcoming = lifecycle.next_contact_date > input.today;
+    const daysAway = Math.round((Date.parse(`${lifecycle.next_contact_date}T00:00:00Z`) - Date.parse(`${input.today}T00:00:00Z`)) / 86_400_000);
     alerts.push({
       key: `programme-contact:${lifecycle.client_id}`,
       clientId: lifecycle.client_id,
       clientName: names.get(lifecycle.client_id)!,
       level: lifecycle.status === "Active" ? "blue" : "amber",
-      title: `${lifecycle.status} programme follow-up is due`,
-      detail: `${lifecycle.next_contact_plan ?? "Review the recorded lifecycle plan."} · due ${lifecycle.next_contact_date}`,
-      actionLabel: "Open lifecycle",
+      title: isUpcoming ? `${lifecycle.status} programme follow-up is coming up` : `${lifecycle.status} programme follow-up is due`,
+      detail: `${lifecycle.next_contact_plan ?? "Review the recorded lifecycle plan."} · ${isUpcoming ? `in ${daysAway} day${daysAway === 1 ? "" : "s"}` : "due"} ${lifecycle.next_contact_date}`,
+      actionLabel: isUpcoming ? "Plan follow-up" : "Open lifecycle",
       href: `/clients/${lifecycle.client_id}?tab=overview#programme-lifecycle`,
       occurredOn: lifecycle.next_contact_date,
     });

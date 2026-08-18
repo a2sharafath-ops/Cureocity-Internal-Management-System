@@ -60,10 +60,11 @@ export default function AppointmentsView({
   const preClient = params.get("client") ?? "";
   const preDisc = params.get("disc") ?? "";
   const preType = params.get("type") ?? "";
+  const preDate = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date")! : today;
   const [disc, setDisc] = useState(DISCIPLINES.includes(preDisc) ? preDisc : "All");
   const [booking, setBooking] = useState<{ open: boolean; date: string; hour: number; provider: string; client: string; taskId?: string }>(
     preClient
-      ? { open: true, date: today, hour: 10, provider: "", client: preClient }
+      ? { open: true, date: preDate, hour: 10, provider: "", client: preClient }
       : { open: false, date: today, hour: 10, provider: "", client: "" },
   );
   const [bookErr, setBookErr] = useState<string | null>(null);

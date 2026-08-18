@@ -73,4 +73,20 @@ describe("Health Coach phase-5 rules", () => {
     }] }));
     expect(alerts[0]).toMatchObject({ key: "programme-contact:c1", level: "amber", actionLabel: "Open lifecycle" });
   });
+
+  it("surfaces an upcoming lifecycle contact seven days ahead without treating it as due", () => {
+    const alerts = buildCoachAlerts(base({ lifecycles: [{
+      client_id: "c1", status: "Active", next_contact_date: "2026-08-19",
+      next_contact_plan: "Review the agreed walking goal and adherence record.",
+    }] }));
+    expect(alerts[0]).toMatchObject({ key: "programme-contact:c1", level: "blue", actionLabel: "Plan follow-up" });
+    expect(alerts[0].title).toMatch(/coming up/);
+  });
+
+  it("does not surface a lifecycle contact more than seven days ahead", () => {
+    expect(buildCoachAlerts(base({ lifecycles: [{
+      client_id: "c1", status: "Active", next_contact_date: "2026-08-20",
+      next_contact_plan: "Review the agreed walking goal and adherence record.",
+    }] }))).toHaveLength(0);
+  });
 });
