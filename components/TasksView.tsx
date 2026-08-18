@@ -4,10 +4,11 @@ import { useState, Fragment } from "react";
 import Link from "next/link";
 import { setTaskStatus, remindTask, deleteTask } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
+import { taskTriage } from "@/lib/task-triage";
 
 export type TaskRow = {
   id: string; title: string; type: string; priority: string; status: string;
-  due_date: string | null; assignee: string | null; clientId: string | null; clientName: string | null;
+  due_date: string | null; assigneeId: string | null; assignee: string | null; clientId: string | null; clientName: string | null;
   /** a task can be about a lead instead of a client (0085) */
   leadId?: string | null; leadName?: string | null;
 };
@@ -24,8 +25,9 @@ function daysRemaining(due: string | null, today: string): { text: string; overd
 }
 function fmt(iso: string | null) { return iso ? new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "—"; }
 
-export default function TasksView({ tasks, today, staff, types }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[] }) {
-  const [tab, setTab] = useState<"upcoming" | "overdue" | "completed">("upcoming");
+export default function TasksView({ tasks, today, staff, types, currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; currentStaffId: string | null }) {
+  const [tab, setTab] = useState<"upcoming" | "overdue" | "blocked" | "completed">("upcoming");
+  const [scope, setScope] = useState<"all" | "mine" | "unassigned">("all");
   const [dateF, setDateF] = useState("all");
   const [typeF, setTypeF] = useState("all");
   const [assigneeF, setAssigneeF] = useState("all");
@@ -35,12 +37,15 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
   const inTab = (t: TaskRow) => {
     const overdue = t.status !== "done" && t.due_date && t.due_date < today;
     if (tab === "completed") return t.status === "done";
+    if (tab === "blocked") return t.status === "blocked";
     if (tab === "overdue") return !!overdue;
-    return t.status !== "done" && !overdue; // upcoming
+    return t.status !== "done" && t.status !== "blocked" && !overdue; // upcoming
   };
+  const triage = taskTriage(tasks.map((task) => ({ id: task.id, status: task.status, dueDate: task.due_date, assigneeId: task.assigneeId })), today, currentStaffId);
   const counts = {
-    upcoming: tasks.filter((t) => t.status !== "done" && !(t.due_date && t.due_date < today)).length,
-    overdue: tasks.filter((t) => t.status !== "done" && t.due_date && t.due_date < today).length,
+    upcoming: tasks.filter((t) => t.status !== "done" && t.status !== "blocked" && !(t.due_date && t.due_date < today)).length,
+    overdue: triage.overdue,
+    blocked: triage.blocked,
     completed: tasks.filter((t) => t.status === "done").length,
   };
   const matchDate = (t: TaskRow) => {
@@ -52,6 +57,7 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
     return true;
   };
   const rows = tasks.filter(inTab)
+    .filter((t) => scope === "all" || (scope === "mine" ? Boolean(currentStaffId && t.assigneeId === currentStaffId) : !t.assigneeId))
     .filter((t) => typeF === "all" || t.type === typeF)
     .filter((t) => assigneeF === "all" || t.assignee === assigneeF)
     .filter(matchDate)
@@ -62,15 +68,30 @@ export default function TasksView({ tasks, today, staff, types }: { tasks: TaskR
   const td: React.CSSProperties = { padding: "12px 16px", fontSize: 13, verticalAlign: "top" };
   const sel: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
   const prioColor = (p: string) => p === "High" ? "var(--red)" : p === "Medium" ? "var(--amber-text-soft)" : "var(--muted)";
+  const metric = (label: string, value: number, onClick: () => void, tone?: "alert" | "warn") => (
+    <button type="button" onClick={onClick} style={{ textAlign: "left", minWidth: 122, border: "1px solid var(--border)", background: tone === "alert" ? "var(--red-bg)" : tone === "warn" ? "var(--amber-bg)" : "var(--card)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}>
+      <div style={{ fontSize: 20, fontWeight: 800, color: tone === "alert" ? "var(--red)" : tone === "warn" ? "var(--amber-text)" : "var(--ink)" }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</div>
+    </button>
+  );
   return (
     <div>
+      <section aria-label="Task triage" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
+        {metric("Open tasks", triage.open, () => { setTab("upcoming"); setScope("all"); })}
+        {metric("My open tasks", triage.mine, () => { setTab("upcoming"); setScope("mine"); })}
+        {metric("Overdue", triage.overdue, () => { setTab("overdue"); setScope("all"); }, "alert")}
+        {metric("Blocked", triage.blocked, () => { setTab("blocked"); setScope("all"); }, "warn")}
+        {metric("Unassigned", triage.unassigned, () => { setTab("upcoming"); setScope("unassigned"); })}
+      </section>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
         <SegTabs active={tab} onSelect={(k) => setTab(k as typeof tab)} items={[
           { key: "upcoming", label: "Upcoming", count: counts.upcoming },
           { key: "overdue", label: "Overdue", count: counts.overdue },
+          { key: "blocked", label: "Blocked", count: counts.blocked },
           { key: "completed", label: "Completed", count: counts.completed },
         ]} />
         <span style={{ flex: 1 }} />
+        {currentStaffId && <button type="button" onClick={() => setScope((value) => value === "mine" ? "all" : "mine")} style={{ border: "1px solid var(--border)", background: scope === "mine" ? "var(--brand-fill)" : "#fff", color: scope === "mine" ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{scope === "mine" ? "Showing my tasks" : "My tasks"}</button>}
         <button type="button" onClick={() => setTimeline((v) => !v)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Smart Timeline View</button>
       </div>
 

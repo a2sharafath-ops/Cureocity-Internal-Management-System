@@ -27,7 +27,7 @@ export default async function TasksPage() {
 
   const tasks: TaskRow[] = raw.map((t) => ({
     id: t.id, title: t.title, type: t.type, priority: t.priority, status: t.status, due_date: t.due_date,
-    assignee: t.staff?.name ?? null, clientId: t.clients?.id ?? null, clientName: t.clients?.name ?? null,
+    assigneeId: t.assignee_id, assignee: t.staff?.name ?? null, clientId: t.clients?.id ?? null, clientName: t.clients?.name ?? null,
     // A task can belong to a lead instead of a client (0085). Without this the
     // auto-created "call this new lead" task would show a dash in the Client
     // column with no way back to the record it's about.
@@ -48,7 +48,7 @@ export default async function TasksPage() {
         {canManageTasks(me.role) && <TaskForm staff={staff} clients={clients} />}
       </div>
 
-      <TasksView tasks={tasks} today={todayISO()} staff={staffNames} types={types} />
+      <TasksView tasks={tasks} today={todayISO()} staff={staffNames} types={types} currentStaffId={me.staffId ?? null} />
     </div>
   );
 }
