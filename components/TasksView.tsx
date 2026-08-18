@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { deleteTask, remindTask, setTaskProject, setTaskStatus } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
 
@@ -12,6 +13,8 @@ export type TaskRow = {
   projectId?: string | null; projectName?: string | null;
 };
 type Project = { id: string; name: string; status: string; dueDate: string | null; owner: string | null };
+type Bucket = "all" | "open" | "attention" | "blocked" | "completed";
+type Scope = "all" | "mine" | "unassigned";
 
 const STATUS_LABEL: Record<string, string> = { todo: "To Do", doing: "In Progress", blocked: "Blocked", done: "Done" };
 const STATUS_OPTS = ["todo", "doing", "blocked", "done"];
@@ -20,15 +23,29 @@ const selectStyle: React.CSSProperties = { border: "1px solid var(--border)", bo
 function fmt(date: string | null) { return date ? new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "—"; }
 
 export default function TasksView({ tasks, today, staff, types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
-  const [view, setView] = useState<"projects" | "tasks">("projects");
-  const [bucket, setBucket] = useState<"all" | "open" | "attention" | "blocked" | "completed">("open");
-  const [scope, setScope] = useState<"all" | "mine" | "unassigned">("all");
-  const [projectF, setProjectF] = useState("all");
-  const [dateF, setDateF] = useState("all");
-  const [typeF, setTypeF] = useState("all");
-  const [assigneeF, setAssigneeF] = useState("all");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const validBucket = (value: string | null): Bucket => ["all", "open", "attention", "blocked", "completed"].includes(value ?? "") ? value as Bucket : "all";
+  const validScope = (value: string | null): Scope => ["all", "mine", "unassigned"].includes(value ?? "") ? value as Scope : "all";
+  const [view, setView] = useState<"projects" | "tasks">(searchParams.get("view") === "tasks" ? "tasks" : "projects");
+  const [bucket, setBucket] = useState<Bucket>(validBucket(searchParams.get("filter")));
+  const [scope, setScope] = useState<Scope>(validScope(searchParams.get("scope")));
+  const [projectF, setProjectF] = useState(searchParams.get("project") ?? "all");
+  const [dateF, setDateF] = useState(searchParams.get("date") ?? "all");
+  const [typeF, setTypeF] = useState(searchParams.get("type") ?? "all");
+  const [assigneeF, setAssigneeF] = useState(searchParams.get("assignee") ?? "all");
   const [timeline, setTimeline] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    setView(searchParams.get("view") === "tasks" ? "tasks" : "projects");
+    setBucket(validBucket(searchParams.get("filter")));
+    setScope(validScope(searchParams.get("scope")));
+    setProjectF(searchParams.get("project") ?? "all");
+    setDateF(searchParams.get("date") ?? "all");
+    setTypeF(searchParams.get("type") ?? "all");
+    setAssigneeF(searchParams.get("assignee") ?? "all");
+  }, [searchParams]);
 
   const isOverdue = (task: TaskRow) => task.status !== "done" && Boolean(task.due_date && task.due_date < today);
   const attention = (task: TaskRow) => task.status !== "done" && (task.status === "blocked" || !task.assigneeId || isOverdue(task));
@@ -69,28 +86,38 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     unassigned: tasks.filter((task) => task.status !== "done" && !task.assigneeId).length,
     completion: tasks.length ? Math.round((counts.completed / tasks.length) * 100) : 0,
   };
-  const openTasks = ({ bucket: nextBucket = "all", project = "all", nextScope = "all", nextDate = "all" }: { bucket?: typeof bucket; project?: string; nextScope?: typeof scope; nextDate?: string } = {}) => {
+  const openTasks = ({ bucket: nextBucket = "all", project = "all", nextScope = "all", nextDate = "all", nextType = "all", nextAssignee = "all" }: { bucket?: Bucket; project?: string; nextScope?: Scope; nextDate?: string; nextType?: string; nextAssignee?: string } = {}) => {
     setView("tasks");
     setBucket(nextBucket);
     setProjectF(project);
     setScope(nextScope);
     setDateF(nextDate);
-    setTypeF("all");
-    setAssigneeF("all");
+    setTypeF(nextType);
+    setAssigneeF(nextAssignee);
+    const params = new URLSearchParams({ view: "tasks", filter: nextBucket });
+    if (project !== "all") params.set("project", project);
+    if (nextScope !== "all") params.set("scope", nextScope);
+    if (nextDate !== "all") params.set("date", nextDate);
+    if (nextType !== "all") params.set("type", nextType);
+    if (nextAssignee !== "all") params.set("assignee", nextAssignee);
+    router.push(`/tasks?${params.toString()}`);
   };
+  const openProjects = () => { setView("projects"); router.push("/tasks"); };
   const chooseProject = (id: string) => openTasks({ bucket: "open", project: id });
   const metric = (label: string, value: number, select: () => void, red = false) => <button type="button" onClick={select} style={{ textAlign: "left", minWidth: 126, border: "1px solid var(--border)", background: red ? "var(--red-bg)" : "var(--card)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}><div style={{ fontSize: 20, fontWeight: 800, color: red ? "var(--red)" : "var(--ink)" }}>{value}</div><div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</div></button>;
+  const selectedProject = projectF === "inbox" ? { name: "Operations inbox" } : projects.find((project) => project.id === projectF);
+  const taskViewTitle = selectedProject?.name ?? (dateF === "overdue" ? "Overdue tasks" : bucket === "blocked" ? "Blocked tasks" : bucket === "attention" ? "Tasks needing attention" : bucket === "completed" ? "Completed tasks" : scope === "unassigned" ? "Unassigned tasks" : bucket === "open" ? "Open tasks" : "All tasks");
 
   return <div>
     <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-      <SegTabs active={view} onSelect={(key) => setView(key as typeof view)} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />
+      <SegTabs active={view} onSelect={(key) => key === "projects" ? openProjects() : openTasks()} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />
       <span style={{ flex: 1 }} />{view === "tasks" && <button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>}
     </div>
-    {view === "tasks" && <section aria-label="Task health" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
+    {view === "tasks" && <><div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>{taskViewTitle}</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{rows.length} task{rows.length === 1 ? "" : "s"} in this view</span><button type="button" onClick={openProjects} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "var(--brand-text)", fontSize: 12.5, fontWeight: 650, cursor: "pointer" }}>← Projects overview</button></div><section aria-label="Task health" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
       {metric("Open", counts.open, () => openTasks({ bucket: "open" }))}
       {metric("Needs attention", counts.attention, () => openTasks({ bucket: "attention" }), true)}
       {metric("Completed", counts.completed, () => openTasks({ bucket: "completed" }))}
-    </section>}
+    </section></>}
     {view === "projects" && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
       <div style={{ ...box, padding: 16, gridColumn: "1 / -1" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>Projects overview</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{projects.length} active project{projects.length === 1 ? "" : "s"} · overall delivery health across Cureocity work.</span></div>
@@ -112,11 +139,11 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
       {projects.length === 0 && <div style={{ ...box, padding: 18, color: "var(--muted)", fontSize: 13, gridColumn: "1 / -1" }}>No projects yet. Create one for a launch, campaign, or event—or use <b>Organize current tasks</b> to create the three safe operational groupings.</div>}
     </section>}
     {view === "tasks" && <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-      <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} style={selectStyle}><option value="all">Everyone’s tasks</option>{currentStaffId && <option value="mine">My tasks</option>}<option value="unassigned">Unassigned</option></select>
-      {projects.length > 0 && <select value={projectF} onChange={(event) => { setProjectF(event.target.value); setView("tasks"); }} style={selectStyle}><option value="all">All projects</option><option value="inbox">Operations inbox</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
-      <select value={dateF} onChange={(event) => setDateF(event.target.value)} style={selectStyle}><option value="all">All dates</option><option value="today">Due today</option><option value="week">Next 7 days</option><option value="overdue">Overdue</option></select>
-      <select value={typeF} onChange={(event) => setTypeF(event.target.value)} style={selectStyle}><option value="all">All task types</option>{types.map((type) => <option key={type} value={type}>{type}</option>)}</select>
-      <select value={assigneeF} onChange={(event) => setAssigneeF(event.target.value)} style={selectStyle}><option value="all">All assignees</option>{staff.map((person) => <option key={person} value={person}>{person}</option>)}</select>
+      <select value={scope} onChange={(event) => openTasks({ bucket, project: projectF, nextScope: event.target.value as Scope, nextDate: dateF, nextType: typeF, nextAssignee: assigneeF })} style={selectStyle}><option value="all">Everyone’s tasks</option>{currentStaffId && <option value="mine">My tasks</option>}<option value="unassigned">Unassigned</option></select>
+      {projects.length > 0 && <select value={projectF} onChange={(event) => openTasks({ bucket, project: event.target.value, nextScope: scope, nextDate: dateF, nextType: typeF, nextAssignee: assigneeF })} style={selectStyle}><option value="all">All projects</option><option value="inbox">Operations inbox</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+      <select value={dateF} onChange={(event) => openTasks({ bucket, project: projectF, nextScope: scope, nextDate: event.target.value, nextType: typeF, nextAssignee: assigneeF })} style={selectStyle}><option value="all">All dates</option><option value="today">Due today</option><option value="week">Next 7 days</option><option value="overdue">Overdue</option></select>
+      <select value={typeF} onChange={(event) => openTasks({ bucket, project: projectF, nextScope: scope, nextDate: dateF, nextType: event.target.value, nextAssignee: assigneeF })} style={selectStyle}><option value="all">All task types</option>{types.map((type) => <option key={type} value={type}>{type}</option>)}</select>
+      <select value={assigneeF} onChange={(event) => openTasks({ bucket, project: projectF, nextScope: scope, nextDate: dateF, nextType: typeF, nextAssignee: event.target.value })} style={selectStyle}><option value="all">All assignees</option>{staff.map((person) => <option key={person} value={person}>{person}</option>)}</select>
       <span style={{ flex: 1 }} /><span style={{ color: "var(--muted)", fontSize: 13 }}>Showing {rows.length} task{rows.length === 1 ? "" : "s"}</span>
     </div>}
     {view === "tasks" && (timeline ? <div style={{ ...box, padding: "8px 18px" }}>{rows.length === 0 && <div style={{ padding: 18, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No tasks in this view.</div>}{rows.map((task, index) => <div key={task.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderTop: index ? "1px solid var(--border)" : "none" }}><div style={{ width: 70, color: "var(--muted)", fontSize: 12 }}>{fmt(task.due_date)}</div><div style={{ width: 10, height: 10, borderRadius: "50%", background: isOverdue(task) ? "var(--red)" : "var(--brand-fill)", marginTop: 3 }} /><div><b>{task.title}</b><div style={{ fontSize: 12, color: "var(--muted)" }}>{task.projectName ?? "Operations inbox"} · {task.assignee ?? "Unassigned"} · {dueText(task)}</div></div></div>)}</div> : <div style={{ ...box, overflow: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}><thead><tr>{["Task", "Project", "Assignee", "Due", "Linked record", "Status", ""].map((label) => <th key={label} style={{ padding: "11px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase" }}>{label}</th>)}</tr></thead><tbody>
