@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskOperationsSummary, taskReminderPlan } from "@/lib/cron/task-reminders";
+import { taskOperationsProjectSummary, taskOperationsSummary, taskReminderPlan } from "@/lib/cron/task-reminders";
 
 describe("task reminder cadence", () => {
   it("notifies on the due date and only on measured overdue intervals", () => {
@@ -23,5 +23,15 @@ describe("operations digest summary", () => {
       { status: "doing", assigneeId: null },
       { status: "done", assigneeId: null },
     ])).toEqual({ open: 3, overdue: 0, blocked: 1, unassigned: 1 });
+  });
+
+  it("includes compact project health without task or client details", () => {
+    const summary = taskOperationsProjectSummary([
+      { status: "todo", assigneeId: "one", dueDate: "2026-08-18", projectName: "ORB App Launch Event" },
+      { status: "blocked", assigneeId: "one", dueDate: "2026-08-17", projectName: "ORB App Launch Event" },
+      { status: "doing", assigneeId: "two", dueDate: "2026-08-20", projectName: "Marketing & Media" },
+      { status: "done", assigneeId: "two", dueDate: "2026-08-17", projectName: "Marketing & Media" },
+    ], "2026-08-18");
+    expect(summary).toBe("ORB App Launch Event: 2 open / 1 overdue / 1 blocked; Marketing & Media: 1 open");
   });
 });

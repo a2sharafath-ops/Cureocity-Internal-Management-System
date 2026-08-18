@@ -33,7 +33,13 @@ function operationsDigestEnabled() {
     && watiReadiness().ready;
 }
 
-export type OperationsTask = { status: string; assigneeId: string | null; assigneeIds?: string[] };
+export type OperationsTask = {
+  status: string;
+  assigneeId: string | null;
+  assigneeIds?: string[];
+  dueDate?: string | null;
+  projectName?: string | null;
+};
 
 /** A short, non-sensitive count summary for a manager's own operating scope. */
 export function taskOperationsSummary(tasks: OperationsTask[]) {
@@ -46,17 +52,48 @@ export function taskOperationsSummary(tasks: OperationsTask[]) {
   };
 }
 
+/**
+ * Compact, non-sensitive project health for a leadership WhatsApp digest.
+ * It deliberately contains counts and project labels only: no task titles,
+ * client names, staff names, notes, or links leave Cureocity.
+ */
+export function taskOperationsProjectSummary(tasks: OperationsTask[], today: string): string {
+  const grouped = new Map<string, { open: number; overdue: number; blocked: number }>();
+  for (const task of tasks) {
+    if (task.status === "done") continue;
+    const name = task.projectName || "Operations inbox";
+    const group = grouped.get(name) ?? { open: 0, overdue: 0, blocked: 0 };
+    group.open++;
+    if (task.dueDate && task.dueDate < today) group.overdue++;
+    if (task.status === "blocked") group.blocked++;
+    grouped.set(name, group);
+  }
+  const entries = [...grouped.entries()]
+    .sort(([aName, a], [bName, b]) => b.overdue - a.overdue || b.blocked - a.blocked || b.open - a.open || aName.localeCompare(bName))
+    .map(([name, counts]) => `${name}: ${counts.open} open${counts.overdue ? ` / ${counts.overdue} overdue` : ""}${counts.blocked ? ` / ${counts.blocked} blocked` : ""}`);
+  const selected: string[] = [];
+  for (const entry of entries) {
+    const suffix = entries.length > selected.length + 1 ? `; +${entries.length - selected.length - 1} more project${entries.length - selected.length - 1 === 1 ? "" : "s"}` : "";
+    const candidate = [...selected, entry].join("; ") + suffix;
+    if (candidate.length > 180) break;
+    selected.push(entry);
+  }
+  if (!selected.length) return "Operations inbox: 0 open";
+  const omitted = entries.length - selected.length;
+  return `${selected.join("; ")}${omitted ? `; +${omitted} more project${omitted === 1 ? "" : "s"}` : ""}`;
+}
+
 async function sendOperationsDigests(supabase: AnyClient, today: string): Promise<number> {
   if (!operationsDigestEnabled()) return 0;
   const [{ data: profileRows }, { data: taskRows }, { data: staffRows }] = await Promise.all([
     supabase.from("profiles").select("role, staff_id, branch").in("role", ["Super Admin", "Administrator", "Manager"]).not("staff_id", "is", null),
-    supabase.from("tasks").select("id, status, due_date, assignee_id").neq("status", "done"),
+    supabase.from("tasks").select("id, status, due_date, assignee_id, task_projects:project_id(name)").neq("status", "done"),
     supabase.from("staff").select("id, name, branch, task_reminder_phone, task_reminder_whatsapp_opt_in"),
   ]);
   const staff = (staffRows ?? []) as { id: string; name: string; branch: string | null; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null }[];
   const staffById = new Map(staff.map((row) => [row.id, row]));
   const recipients = (profileRows ?? []) as { role: string; staff_id: string; branch: string | null }[];
-  const legacyTasks = (taskRows ?? []) as { id: string; status: string; due_date: string | null; assignee_id: string | null }[];
+  const legacyTasks = (taskRows ?? []) as { id: string; status: string; due_date: string | null; assignee_id: string | null; task_projects: { name: string } | null }[];
   const { data: assignmentRows } = legacyTasks.length ? await supabase.from("task_assignees")
     .select("task_id, staff_id").in("task_id", legacyTasks.map((task) => task.id)) : { data: [] };
   const assigneesByTask = new Map<string, string[]>();
@@ -92,7 +129,14 @@ async function sendOperationsDigests(supabase: AnyClient, today: string): Promis
     const summary = taskOperationsSummary(scoped.map((task) => ({ status: task.status, assigneeId: task.assignee_id, assigneeIds: task.assigneeIds })));
     const overdue = scoped.filter((task) => Boolean(task.due_date && task.due_date < today)).length;
     if (!summary.open) continue;
-    const compact = `${summary.open} open · ${overdue} overdue · ${summary.blocked} blocked · ${summary.unassigned} unassigned`;
+    const projectHealth = taskOperationsProjectSummary(scoped.map((task) => ({
+      status: task.status,
+      assigneeId: task.assignee_id,
+      assigneeIds: task.assigneeIds,
+      dueDate: task.due_date,
+      projectName: task.task_projects?.name ?? null,
+    })), today);
+    const compact = `${summary.open} open · ${overdue} overdue · ${summary.blocked} blocked · ${summary.unassigned} unassigned. Projects: ${projectHealth}`;
     const result = await sendTemplate({
       phone: person.task_reminder_phone,
       template: { name: String(process.env.WATI_TEMPLATE_TASK_OPERATIONS_DIGEST), params: [person.name.split(/\s+/)[0] || "there", compact] },
