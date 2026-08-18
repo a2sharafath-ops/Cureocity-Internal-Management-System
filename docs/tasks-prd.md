@@ -60,6 +60,11 @@ Create or workflow trigger → assign owner, priority and due date → work the 
 - The reminder-contact migration is forward-only. Saving a contact or opt-in
   never sends a message; activation and a Development smoke test remain a
   separate release decision.
+- An optional once-daily Admin/Manager WhatsApp operations digest provides only
+  scoped counts of open, overdue, blocked and unassigned work. A configured
+  branch is the team boundary; an unbranched Admin gets all operations while
+  an unbranched Manager gets only their directly assigned work. It uses a
+  distinct approved template and its own opt-in/configuration gate.
 
 ## 7. Next data-model increment
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskReminderPlan } from "@/lib/cron/task-reminders";
+import { taskOperationsSummary, taskReminderPlan } from "@/lib/cron/task-reminders";
 
 describe("task reminder cadence", () => {
   it("notifies on the due date and only on measured overdue intervals", () => {
@@ -12,5 +12,16 @@ describe("task reminder cadence", () => {
 
   it("does not create a reminder before a task is due", () => {
     expect(taskReminderPlan("2026-08-19", "2026-08-18")).toBeNull();
+  });
+});
+
+describe("operations digest summary", () => {
+  it("contains only operational counts, excluding completed tasks", () => {
+    expect(taskOperationsSummary([
+      { status: "todo", assigneeId: "one" },
+      { status: "blocked", assigneeId: "one" },
+      { status: "doing", assigneeId: null },
+      { status: "done", assigneeId: null },
+    ])).toEqual({ open: 3, overdue: 0, blocked: 1, unassigned: 1 });
   });
 });
