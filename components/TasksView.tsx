@@ -21,7 +21,7 @@ function fmt(date: string | null) { return date ? new Date(`${date}T00:00:00Z`).
 
 export default function TasksView({ tasks, today, staff, types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
   const [view, setView] = useState<"projects" | "tasks">("projects");
-  const [bucket, setBucket] = useState<"open" | "attention" | "completed">("open");
+  const [bucket, setBucket] = useState<"all" | "open" | "attention" | "blocked" | "completed">("open");
   const [scope, setScope] = useState<"all" | "mine" | "unassigned">("all");
   const [projectF, setProjectF] = useState("all");
   const [dateF, setDateF] = useState("all");
@@ -37,7 +37,13 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     const days = Math.round((Date.parse(`${task.due_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
     return days < 0 ? `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue` : days === 0 ? "Due today" : `In ${days} day${days === 1 ? "" : "s"}`;
   };
-  const inBucket = (task: TaskRow) => bucket === "completed" ? task.status === "done" : bucket === "attention" ? attention(task) : task.status !== "done" && task.status !== "blocked" && !isOverdue(task);
+  const inBucket = (task: TaskRow) => {
+    if (bucket === "all") return true;
+    if (bucket === "completed") return task.status === "done";
+    if (bucket === "blocked") return task.status === "blocked";
+    if (bucket === "attention") return attention(task);
+    return task.status !== "done";
+  };
   const matchDate = (task: TaskRow) => {
     if (dateF === "all") return true;
     if (!task.due_date) return false;
@@ -52,7 +58,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     .filter(matchDate)
     .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
   const counts = {
-    open: tasks.filter((task) => task.status !== "done" && task.status !== "blocked" && !isOverdue(task)).length,
+    open: tasks.filter((task) => task.status !== "done").length,
     attention: tasks.filter(attention).length,
     completed: tasks.filter((task) => task.status === "done").length,
   };
@@ -64,24 +70,40 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     unassigned: tasks.filter((task) => task.status !== "done" && !task.assigneeId).length,
     completion: tasks.length ? Math.round((counts.completed / tasks.length) * 100) : 0,
   };
-  const chooseProject = (id: string) => { setProjectF(id); setView("tasks"); setBucket("open"); };
+  const openTasks = ({ bucket: nextBucket = "all", project = "all", nextScope = "all", nextDate = "all" }: { bucket?: typeof bucket; project?: string; nextScope?: typeof scope; nextDate?: string } = {}) => {
+    setView("tasks");
+    setBucket(nextBucket);
+    setProjectF(project);
+    setScope(nextScope);
+    setDateF(nextDate);
+    setTypeF("all");
+    setAssigneeF("all");
+  };
+  const chooseProject = (id: string) => openTasks({ bucket: "open", project: id });
   const metric = (label: string, value: number, select: () => void, red = false) => <button type="button" onClick={select} style={{ textAlign: "left", minWidth: 126, border: "1px solid var(--border)", background: red ? "var(--red-bg)" : "var(--card)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}><div style={{ fontSize: 20, fontWeight: 800, color: red ? "var(--red)" : "var(--ink)" }}>{value}</div><div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</div></button>;
 
   return <div>
     <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
       <SegTabs active={view} onSelect={(key) => setView(key as typeof view)} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />
-      <span style={{ flex: 1 }} /><button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>
+      <span style={{ flex: 1 }} />{view === "tasks" && <button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>}
     </div>
     {view === "tasks" && <section aria-label="Task health" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
-      {metric("Open", counts.open, () => { setBucket("open"); setScope("all"); })}
-      {metric("Needs attention", counts.attention, () => { setBucket("attention"); setScope("all"); }, true)}
-      {metric("Completed", counts.completed, () => { setBucket("completed"); setScope("all"); })}
+      {metric("Open", counts.open, () => openTasks({ bucket: "open" }))}
+      {metric("Needs attention", counts.attention, () => openTasks({ bucket: "attention" }), true)}
+      {metric("Completed", counts.completed, () => openTasks({ bucket: "completed" }))}
     </section>}
     {view === "projects" && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
       <div style={{ ...box, padding: 16, gridColumn: "1 / -1" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>Projects overview</b><span style={{ color: "var(--muted)", fontSize: 12 }}>Overall delivery health across Cureocity work.</span></div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginTop: 14 }}>
-          {[{ label: "Projects", value: overall.projects }, { label: "Total tasks", value: overall.total }, { label: "Completed", value: `${overall.completion}%` }, { label: "Overdue", value: overall.overdue, alert: true }, { label: "Blocked", value: overall.blocked, alert: true }, { label: "Unassigned", value: overall.unassigned, alert: true }].map((item) => <div key={item.label} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: item.alert && Number(item.value) > 0 ? "var(--red-bg)" : "#fff" }}><div style={{ fontWeight: 800, fontSize: 20, color: item.alert && Number(item.value) > 0 ? "var(--red)" : "var(--ink)" }}>{item.value}</div><div style={{ color: "var(--muted)", fontSize: 11.5, fontWeight: 650 }}>{item.label}</div></div>)}
+          {[
+            { label: "Projects", value: overall.projects, onClick: () => setView("projects") },
+            { label: "Total tasks", value: overall.total, onClick: () => openTasks() },
+            { label: "Completed", value: `${overall.completion}%`, onClick: () => openTasks({ bucket: "completed" }) },
+            { label: "Overdue", value: overall.overdue, alert: true, onClick: () => openTasks({ nextDate: "overdue" }) },
+            { label: "Blocked", value: overall.blocked, alert: true, onClick: () => openTasks({ bucket: "blocked" }) },
+            { label: "Unassigned", value: overall.unassigned, alert: true, onClick: () => openTasks({ nextScope: "unassigned" }) },
+          ].map((item) => <button type="button" key={item.label} onClick={item.onClick} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", background: item.alert && Number(item.value) > 0 ? "var(--red-bg)" : "#fff", textAlign: "left", cursor: "pointer" }}><div style={{ fontWeight: 800, fontSize: 20, color: item.alert && Number(item.value) > 0 ? "var(--red)" : "var(--ink)" }}>{item.value}</div><div style={{ color: "var(--muted)", fontSize: 11.5, fontWeight: 650 }}>{item.label}</div></button>)}
         </div>
       </div>
       {projects.filter((project) => project.status !== "completed").map((project) => {
