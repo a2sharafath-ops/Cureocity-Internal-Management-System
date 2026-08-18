@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import Link from "next/link";
-import { deleteTask, remindTask, setTaskStatus } from "@/lib/actions";
+import { deleteTask, remindTask, setTaskProject, setTaskStatus } from "@/lib/actions";
 import SegTabs from "@/components/SegTabs";
 
 export type TaskRow = {
@@ -20,7 +20,7 @@ const selectStyle: React.CSSProperties = { border: "1px solid var(--border)", bo
 function fmt(date: string | null) { return date ? new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "—"; }
 
 export default function TasksView({ tasks, today, staff, types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
-  const [view, setView] = useState<"projects" | "tasks">(projects.length ? "projects" : "tasks");
+  const [view, setView] = useState<"projects" | "tasks">("projects");
   const [bucket, setBucket] = useState<"open" | "attention" | "completed">("open");
   const [scope, setScope] = useState<"all" | "mine" | "unassigned">("all");
   const [projectF, setProjectF] = useState("all");
@@ -61,7 +61,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
 
   return <div>
     <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-      {projects.length > 0 && <SegTabs active={view} onSelect={(key) => setView(key as typeof view)} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />}
+      <SegTabs active={view} onSelect={(key) => setView(key as typeof view)} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />
       <span style={{ flex: 1 }} /><button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>
     </div>
     <section aria-label="Task health" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
@@ -69,12 +69,13 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
       {metric("Needs attention", counts.attention, () => { setBucket("attention"); setScope("all"); }, true)}
       {metric("Completed", counts.completed, () => { setBucket("completed"); setScope("all"); })}
     </section>
-    {view === "projects" && projects.length > 0 && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
+    {view === "projects" && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
       {projects.filter((project) => project.status !== "completed").map((project) => {
         const projectTasks = tasks.filter((task) => task.projectId === project.id && task.status !== "done");
         return <button key={project.id} type="button" onClick={() => chooseProject(project.id)} style={{ ...box, padding: 14, textAlign: "left", cursor: "pointer" }}><div style={{ display: "flex", gap: 8 }}><b>{project.name}</b><span style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 11 }}>{project.status === "on_hold" ? "On hold" : "Active"}</span></div><div style={{ marginTop: 8, color: "var(--muted)", fontSize: 12 }}>{projectTasks.length} open · {projectTasks.filter(attention).length} need attention{project.owner ? ` · ${project.owner}` : ""}</div>{project.dueDate && <div style={{ marginTop: 5, color: "var(--muted)", fontSize: 12 }}>Target {fmt(project.dueDate)}</div>}</button>;
       })}
       {tasks.some((task) => !task.projectId && task.status !== "done") && <button type="button" onClick={() => chooseProject("inbox")} style={{ ...box, padding: 14, textAlign: "left", cursor: "pointer", borderStyle: "dashed" }}><b>Operations inbox</b><div style={{ marginTop: 8, color: "var(--muted)", fontSize: 12 }}>{tasks.filter((task) => !task.projectId && task.status !== "done").length} ungrouped client, lead, and operational tasks</div></button>}
+      {projects.length === 0 && <div style={{ ...box, padding: 18, color: "var(--muted)", fontSize: 13, gridColumn: "1 / -1" }}>No projects yet. Create one for a launch, campaign, or event—or use <b>Organize current tasks</b> to create the three safe operational groupings.</div>}
     </section>}
     <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
       <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} style={selectStyle}><option value="all">Everyone’s tasks</option>{currentStaffId && <option value="mine">My tasks</option>}<option value="unassigned">Unassigned</option></select>

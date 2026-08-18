@@ -9,6 +9,7 @@ import TaskBulkImport from "@/components/TaskBulkImport";
 import TasksView, { type TaskRow } from "@/components/TasksView";
 import TaskReminderContacts from "@/components/TaskReminderContacts";
 import TaskProjectForm from "@/components/TaskProjectForm";
+import TaskProjectTools from "@/components/TaskProjectTools";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export default async function TasksPage() {
         </div>
         <span style={{ flex: 1 }} />
         {canManageTasks(me.role) && !projectError && <TaskProjectForm staff={staff} />}
+        {canManageTasks(me.role) && !projectError && <TaskProjectTools hasProjects={projects.length > 0} />}
         {canManageTasks(me.role) && <TaskForm staff={staff} clients={clients} projects={projects.map(({ id, name }) => ({ id, name }))} />}
         {canManageTasks(me.role) && <TaskReminderContacts available={!contactError} staff={staff.map((person) => {
           const contact = contacts.get(person.id);

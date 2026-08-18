@@ -5058,6 +5058,52 @@ export async function createTaskProject(formData: FormData) {
   revalidatePath("/tasks");
 }
 
+/** Safe initial organisation of legacy flat tasks. Owners, statuses, dates,
+ * reminders and linked records are left unchanged. */
+export async function organizeExistingTasksIntoProjects() {
+  const p = await getProfile();
+  if (!p || !canManageTasks(p.role)) return;
+  const supabase = await createClient();
+  const groups = [
+    { name: "Lead follow-up operations", description: "Tasks generated from lead intake and follow-up." },
+    { name: "Client care follow-ups", description: "Tasks linked to an existing client record." },
+    { name: "General operations", description: "Internal tasks without a linked lead or client." },
+  ];
+  const { data: existing } = await supabase.from("task_projects").select("id, name").in("name", groups.map((group) => group.name));
+  const ids = new Map(((existing ?? []) as { id: string; name: string }[]).map((row) => [row.name, row.id]));
+  const missing = groups.filter((group) => !ids.has(group.name)).map((group) => ({ ...group, created_by: p.name }));
+  if (missing.length) {
+    const { data: created } = await supabase.from("task_projects").insert(missing).select("id, name");
+    for (const row of (created ?? []) as { id: string; name: string }[]) ids.set(row.name, row.id);
+  }
+  const lead = ids.get("Lead follow-up operations");
+  const client = ids.get("Client care follow-ups");
+  const internal = ids.get("General operations");
+  if (!lead || !client || !internal) return;
+  await Promise.all([
+    supabase.from("tasks").update({ project_id: lead }).is("project_id", null).not("lead_id", "is", null),
+    supabase.from("tasks").update({ project_id: client }).is("project_id", null).is("lead_id", null).not("client_id", "is", null),
+    supabase.from("tasks").update({ project_id: internal }).is("project_id", null).is("lead_id", null).is("client_id", null),
+  ]);
+  await logAudit(p, "Existing tasks organised into projects", "Tasks", "Lead follow-up operations; Client care follow-ups; General operations");
+  revalidatePath("/tasks");
+}
+
+export async function setTaskProject(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageTasks(p.role)) return;
+  const id = String(formData.get("id") ?? "");
+  const projectId = String(formData.get("project_id") ?? "").trim();
+  if (!id) return;
+  const supabase = await createClient();
+  if (projectId) {
+    const { data: project } = await supabase.from("task_projects").select("id").eq("id", projectId).maybeSingle();
+    if (!project) return;
+  }
+  await supabase.from("tasks").update({ project_id: projectId || null }).eq("id", id);
+  revalidatePath("/tasks");
+}
+
 export async function setTaskStatus(formData: FormData) {
   const p = await getProfile();
   // Was "is anybody signed in". Any staff member could close or delete any
