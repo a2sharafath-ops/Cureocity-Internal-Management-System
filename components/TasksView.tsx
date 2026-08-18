@@ -13,7 +13,7 @@ export type TaskRow = {
   projectId?: string | null; projectName?: string | null;
 };
 type Project = { id: string; name: string; status: string; dueDate: string | null; owner: string | null };
-type Bucket = "all" | "open" | "attention" | "blocked" | "completed";
+type Bucket = "all" | "open" | "attention" | "blocked" | "doing" | "completed";
 type Scope = "all" | "mine" | "unassigned";
 
 function routeDefaults(pathname: string): { view: "projects" | "tasks"; bucket: Bucket; project: string; scope: Scope; date: string } {
@@ -21,7 +21,7 @@ function routeDefaults(pathname: string): { view: "projects" | "tasks"; bucket: 
   if (projectMatch) return { view: "tasks", bucket: "open", project: projectMatch[1], scope: "all", date: "all" };
   if (pathname === "/tasks/overdue") return { view: "tasks", bucket: "open", project: "all", scope: "all", date: "overdue" };
   if (pathname === "/tasks/unassigned") return { view: "tasks", bucket: "open", project: "all", scope: "unassigned", date: "all" };
-  if (pathname === "/tasks/all" || pathname === "/tasks/open" || pathname === "/tasks/attention" || pathname === "/tasks/blocked" || pathname === "/tasks/completed") return { view: "tasks", bucket: pathname.slice(7) as Bucket, project: "all", scope: "all", date: "all" };
+  if (pathname === "/tasks/all" || pathname === "/tasks/open" || pathname === "/tasks/attention" || pathname === "/tasks/blocked" || pathname === "/tasks/doing" || pathname === "/tasks/completed") return { view: "tasks", bucket: pathname.slice(7) as Bucket, project: "all", scope: "all", date: "all" };
   return { view: "projects", bucket: "all", project: "all", scope: "all", date: "all" };
 }
 
@@ -35,7 +35,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const validBucket = (value: string | null): Bucket => ["all", "open", "attention", "blocked", "completed"].includes(value ?? "") ? value as Bucket : "all";
+  const validBucket = (value: string | null): Bucket => ["all", "open", "attention", "blocked", "doing", "completed"].includes(value ?? "") ? value as Bucket : "all";
   const validScope = (value: string | null): Scope => ["all", "mine", "unassigned"].includes(value ?? "") ? value as Scope : "all";
   const initialRoute = routeDefaults(pathname);
   const [view, setView] = useState<"projects" | "tasks">(searchParams.get("view") === "tasks" ? "tasks" : initialRoute.view);
@@ -70,6 +70,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     if (bucket === "all") return true;
     if (bucket === "completed") return task.status === "done";
     if (bucket === "blocked") return task.status === "blocked";
+    if (bucket === "doing") return task.status === "doing";
     if (bucket === "attention") return attention(task);
     return task.status !== "done";
   };
@@ -120,14 +121,26 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
   const openProjects = () => { setView("projects"); router.push("/tasks"); };
   const chooseProject = (id: string) => openTasks({ bucket: "open", project: id });
   const selectedProject = projectF === "inbox" ? { name: "Operations inbox" } : projects.find((project) => project.id === projectF);
-  const taskViewTitle = selectedProject?.name ?? (dateF === "overdue" ? "Overdue tasks" : bucket === "blocked" ? "Blocked tasks" : bucket === "attention" ? "Tasks needing attention" : bucket === "completed" ? "Completed tasks" : scope === "unassigned" ? "Unassigned tasks" : bucket === "open" ? "Open tasks" : "All tasks");
+  const taskViewTitle = selectedProject?.name ?? (dateF === "overdue" ? "Overdue tasks" : bucket === "blocked" ? "Blocked tasks" : bucket === "doing" ? "In progress tasks" : bucket === "attention" ? "Tasks needing attention" : bucket === "completed" ? "Completed tasks" : scope === "unassigned" ? "Unassigned tasks" : bucket === "open" ? "Open tasks" : "All tasks");
+  const projectTasks = selectedProject ? tasks.filter((task) => projectF === "inbox" ? !task.projectId : task.projectId === projectF) : [];
+  const dueSoon = (task: TaskRow) => {
+    if (task.status === "done" || !task.due_date) return false;
+    const days = Math.round((Date.parse(`${task.due_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    return days >= 0 && days <= 7;
+  };
 
   return <div>
     <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
       <SegTabs active={view} onSelect={(key) => key === "projects" ? openProjects() : openTasks()} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />
       <span style={{ flex: 1 }} />{view === "tasks" && <button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>}
     </div>
-    {view === "tasks" && <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>{taskViewTitle}</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{rows.length} task{rows.length === 1 ? "" : "s"} in this view</span><button type="button" onClick={openProjects} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "var(--brand-text)", fontSize: 12.5, fontWeight: 650, cursor: "pointer" }}>← Projects overview</button></div>}
+    {view === "tasks" && <><div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: selectedProject ? 10 : 14, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>{taskViewTitle}</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{rows.length} task{rows.length === 1 ? "" : "s"} in this view</span><button type="button" onClick={openProjects} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "var(--brand-text)", fontSize: 12.5, fontWeight: 650, cursor: "pointer" }}>← Projects overview</button></div>{selectedProject && <div aria-label="Project task filters" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>{[
+      { label: "Open", value: projectTasks.filter((task) => task.status !== "done").length, action: () => openTasks({ bucket: "open", project: projectF }) },
+      { label: "In progress", value: projectTasks.filter((task) => task.status === "doing").length, action: () => openTasks({ bucket: "doing", project: projectF }) },
+      { label: "Due soon", value: projectTasks.filter(dueSoon).length, action: () => openTasks({ bucket: "open", project: projectF, nextDate: "week" }) },
+      { label: "Overdue", value: projectTasks.filter(isOverdue).length, action: () => openTasks({ bucket: "open", project: projectF, nextDate: "overdue" }) },
+      { label: "Completed", value: projectTasks.filter((task) => task.status === "done").length, action: () => openTasks({ bucket: "completed", project: projectF }) },
+    ].map((item) => <button type="button" key={item.label} onClick={item.action} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 9, padding: "7px 10px", fontSize: 12.5, color: "var(--ink)", cursor: "pointer" }}><b>{item.value}</b> {item.label}</button>)}</div>}</>}
     {view === "projects" && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
       <div style={{ ...box, padding: 16, gridColumn: "1 / -1" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>Projects overview</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{projects.length} active project{projects.length === 1 ? "" : "s"} · overall delivery health across Cureocity work.</span></div>
