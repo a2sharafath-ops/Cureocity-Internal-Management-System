@@ -119,7 +119,6 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
   };
   const openProjects = () => { setView("projects"); router.push("/tasks"); };
   const chooseProject = (id: string) => openTasks({ bucket: "open", project: id });
-  const metric = (label: string, value: number, select: () => void, red = false) => <button type="button" onClick={select} style={{ textAlign: "left", minWidth: 126, border: "1px solid var(--border)", background: red ? "var(--red-bg)" : "var(--card)", borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}><div style={{ fontSize: 20, fontWeight: 800, color: red ? "var(--red)" : "var(--ink)" }}>{value}</div><div style={{ fontSize: 11.5, color: "var(--muted)", fontWeight: 650 }}>{label}</div></button>;
   const selectedProject = projectF === "inbox" ? { name: "Operations inbox" } : projects.find((project) => project.id === projectF);
   const taskViewTitle = selectedProject?.name ?? (dateF === "overdue" ? "Overdue tasks" : bucket === "blocked" ? "Blocked tasks" : bucket === "attention" ? "Tasks needing attention" : bucket === "completed" ? "Completed tasks" : scope === "unassigned" ? "Unassigned tasks" : bucket === "open" ? "Open tasks" : "All tasks");
 
@@ -128,11 +127,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
       <SegTabs active={view} onSelect={(key) => key === "projects" ? openProjects() : openTasks()} items={[{ key: "projects", label: "Projects" }, { key: "tasks", label: "All tasks" }]} />
       <span style={{ flex: 1 }} />{view === "tasks" && <button type="button" onClick={() => setTimeline((value) => !value)} style={{ border: "1px solid var(--border)", background: timeline ? "var(--brand-fill)" : "#fff", color: timeline ? "#fff" : "var(--muted)", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Timeline</button>}
     </div>
-    {view === "tasks" && <><div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>{taskViewTitle}</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{rows.length} task{rows.length === 1 ? "" : "s"} in this view</span><button type="button" onClick={openProjects} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "var(--brand-text)", fontSize: 12.5, fontWeight: 650, cursor: "pointer" }}>← Projects overview</button></div><section aria-label="Task health" style={{ display: "flex", gap: 9, flexWrap: "wrap", marginBottom: 14 }}>
-      {metric("Open", counts.open, () => openTasks({ bucket: "open" }))}
-      {metric("Needs attention", counts.attention, () => openTasks({ bucket: "attention" }), true)}
-      {metric("Completed", counts.completed, () => openTasks({ bucket: "completed" }))}
-    </section></>}
+    {view === "tasks" && <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>{taskViewTitle}</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{rows.length} task{rows.length === 1 ? "" : "s"} in this view</span><button type="button" onClick={openProjects} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "var(--brand-text)", fontSize: 12.5, fontWeight: 650, cursor: "pointer" }}>← Projects overview</button></div>}
     {view === "projects" && <section aria-label="Projects" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, marginBottom: 16 }}>
       <div style={{ ...box, padding: 16, gridColumn: "1 / -1" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}><b style={{ fontSize: 16 }}>Projects overview</b><span style={{ color: "var(--muted)", fontSize: 12 }}>{projects.length} active project{projects.length === 1 ? "" : "s"} · overall delivery health across Cureocity work.</span></div>
