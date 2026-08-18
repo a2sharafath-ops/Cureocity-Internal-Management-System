@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const sql = readFileSync(resolve(process.cwd(), "supabase/0197_task_reminder_automation.sql"), "utf8");
+const sql = readFileSync(resolve(process.cwd(), "supabase/0198_task_reminder_automation.sql"), "utf8");
 
 describe("task reminder contact migration", () => {
   it("is additive, transactionally scoped and opt-in by default", () => {
