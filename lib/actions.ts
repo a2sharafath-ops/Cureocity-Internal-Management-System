@@ -5017,23 +5017,48 @@ export async function addTask(formData: FormData) {
   if (!p || !canManageTasks(p.role)) return; // Admin / Manager / HR
   const title = String(formData.get("title") ?? "").trim();
   const projectId = String(formData.get("project_id") ?? "").trim();
+  const assigneeIds = Array.from(new Set(formData.getAll("assignee_ids").map(String).filter(Boolean))).slice(0, 20);
   if (!title) return;
   const supabase = await createClient();
   if (projectId) {
     const { data: project } = await supabase.from("task_projects").select("id").eq("id", projectId).maybeSingle();
     if (!project) return;
   }
-  await supabase.from("tasks").insert({
+  const { data: created, error } = await supabase.from("tasks").insert({
     title,
-    assignee_id: String(formData.get("assignee_id") || "") || null,
+    assignee_id: assigneeIds[0] ?? null,
     client_id: String(formData.get("client_id") || "") || null,
     type: String(formData.get("type") || "Ops"),
     priority: String(formData.get("priority") || "Medium"),
     due_date: String(formData.get("due_date") || "") || null,
     ...(projectId ? { project_id: projectId } : {}),
     status: "todo", created_by: p.name,
-  });
+  }).select("id").maybeSingle();
+  if (error || !created) return;
+  if (assigneeIds.length) {
+    const { error: assignmentError } = await supabase.rpc("set_shared_task_assignees", { p_task_id: created.id, p_staff_ids: assigneeIds });
+    // Do not leave a partly-created task if its shared ownership could not be
+    // recorded (for example, before migration 0200 is applied).
+    if (assignmentError) { await supabase.from("tasks").delete().eq("id", created.id); return; }
+  }
   await logAudit(p, "Task created", title, null);
+  revalidatePath("/tasks");
+}
+
+/** Leadership-only ownership replacement. The database RPC atomically updates
+ * the legacy primary owner and the shared assignment set. */
+export async function setTaskAssignees(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageTasks(p.role)) return;
+  const id = String(formData.get("id") ?? "");
+  const assigneeIds = Array.from(new Set(formData.getAll("assignee_ids").map(String).filter(Boolean))).slice(0, 20);
+  if (!id) return;
+  const supabase = await createClient();
+  const { data: current } = await supabase.from("tasks").select("title").eq("id", id).maybeSingle();
+  if (!current) return;
+  const { error } = await supabase.rpc("set_shared_task_assignees", { p_task_id: id, p_staff_ids: assigneeIds });
+  if (error) return;
+  await logAudit(p, "Task assignees changed", current.title, assigneeIds.length ? `${assigneeIds.length} shared assignee${assigneeIds.length === 1 ? "" : "s"}` : "Unassigned");
   revalidatePath("/tasks");
 }
 

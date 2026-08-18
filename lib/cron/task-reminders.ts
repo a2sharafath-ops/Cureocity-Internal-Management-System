@@ -33,7 +33,7 @@ function operationsDigestEnabled() {
     && watiReadiness().ready;
 }
 
-export type OperationsTask = { status: string; assigneeId: string | null };
+export type OperationsTask = { status: string; assigneeId: string | null; assigneeIds?: string[] };
 
 /** A short, non-sensitive count summary for a manager's own operating scope. */
 export function taskOperationsSummary(tasks: OperationsTask[]) {
@@ -42,7 +42,7 @@ export function taskOperationsSummary(tasks: OperationsTask[]) {
     open: open.length,
     overdue: 0, // due-date treatment is added by the cron's scoped query below
     blocked: open.filter((task) => task.status === "blocked").length,
-    unassigned: open.filter((task) => !task.assigneeId).length,
+    unassigned: open.filter((task) => !(task.assigneeIds?.length ?? (task.assigneeId ? 1 : 0))).length,
   };
 }
 
@@ -56,7 +56,17 @@ async function sendOperationsDigests(supabase: AnyClient, today: string): Promis
   const staff = (staffRows ?? []) as { id: string; name: string; branch: string | null; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null }[];
   const staffById = new Map(staff.map((row) => [row.id, row]));
   const recipients = (profileRows ?? []) as { role: string; staff_id: string; branch: string | null }[];
-  const tasks = (taskRows ?? []) as { id: string; status: string; due_date: string | null; assignee_id: string | null }[];
+  const legacyTasks = (taskRows ?? []) as { id: string; status: string; due_date: string | null; assignee_id: string | null }[];
+  const { data: assignmentRows } = legacyTasks.length ? await supabase.from("task_assignees")
+    .select("task_id, staff_id").in("task_id", legacyTasks.map((task) => task.id)) : { data: [] };
+  const assigneesByTask = new Map<string, string[]>();
+  for (const row of (assignmentRows ?? []) as { task_id: string; staff_id: string }[]) {
+    assigneesByTask.set(row.task_id, [...(assigneesByTask.get(row.task_id) ?? []), row.staff_id]);
+  }
+  const tasks = legacyTasks.map((task) => ({
+    ...task,
+    assigneeIds: assigneesByTask.get(task.id) ?? (task.assignee_id ? [task.assignee_id] : []),
+  }));
   const recipientIds = recipients.map((recipient) => recipient.staff_id);
   if (!recipientIds.length || !tasks.length) return 0;
   const { data: seenRows } = await supabase.from("automation_events")
@@ -75,11 +85,11 @@ async function sendOperationsDigests(supabase: AnyClient, today: string): Promis
     const scoped = recipient.role === "Super Admin"
       ? tasks
       : recipient.branch
-        ? tasks.filter((task) => task.assignee_id && staffById.get(task.assignee_id)?.branch === recipient.branch)
+        ? tasks.filter((task) => task.assigneeIds.some((staffId) => staffById.get(staffId)?.branch === recipient.branch))
         : recipient.role === "Administrator"
           ? tasks
-          : tasks.filter((task) => task.assignee_id === recipient.staff_id);
-    const summary = taskOperationsSummary(scoped.map((task) => ({ status: task.status, assigneeId: task.assignee_id })));
+          : tasks.filter((task) => task.assigneeIds.includes(recipient.staff_id));
+    const summary = taskOperationsSummary(scoped.map((task) => ({ status: task.status, assigneeId: task.assignee_id, assigneeIds: task.assigneeIds })));
     const overdue = scoped.filter((task) => Boolean(task.due_date && task.due_date < today)).length;
     if (!summary.open) continue;
     const compact = `${summary.open} open · ${overdue} overdue · ${summary.blocked} blocked · ${summary.unassigned} unassigned`;
@@ -112,38 +122,53 @@ export async function runTaskReminders(supabase: AnyClient, today: string): Prom
   }[];
   if (!tasks.length) return { scanned: 0, inApp: 0, whatsapp: 0, escalated: 0, operationsDigest: await sendOperationsDigests(supabase, today), skipped: false };
 
-  const { data: seenRows } = await supabase.from("automation_events")
-    .select("subject_id, gate, kind").eq("protocol", PROTOCOL).in("subject_id", tasks.map((task) => task.id));
+  const { data: assignmentRows } = await supabase.from("task_assignees")
+    .select("task_id, staff:staff_id(id, name, task_reminder_phone, task_reminder_whatsapp_opt_in)")
+    .in("task_id", tasks.map((task) => task.id));
+  const assigned = new Map<string, { id: string; name: string; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null }[]>();
+  for (const row of (assignmentRows ?? []) as { task_id: string; staff: { id: string; name: string; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null } | null }[]) {
+    if (row.staff) assigned.set(row.task_id, [...(assigned.get(row.task_id) ?? []), row.staff]);
+  }
+  const gates = Array.from(new Set(tasks.map((task) => taskReminderPlan(task.due_date, today)?.gate).filter(Boolean) as string[]));
+  const { data: seenRows } = gates.length ? await supabase.from("automation_events")
+    .select("subject_id, gate, kind").eq("protocol", PROTOCOL).in("gate", gates) : { data: [] };
   const seen = new Set(((seenRows ?? []) as { subject_id: string; gate: string; kind: string }[]).map((r) => `${r.subject_id}|${r.gate}|${r.kind}`));
   const events: { subject_id: string; subject_kind: string; protocol: string; gate: string; kind: string; due_at: string }[] = [];
   let inApp = 0, whatsapp = 0, escalated = 0;
 
   for (const task of tasks) {
     const plan = taskReminderPlan(task.due_date, today);
-    if (!plan || !task.assignee_id) continue;
-    const base = `${task.id}|${plan.gate}`;
+    if (!plan) continue;
     const message = { title: `Task ${plan.label}`, body: task.title, href: "/tasks", icon: plan.kind === "overdue" ? "🔴" : "⏰" };
-    if (!seen.has(`${base}|in_app`) && await notifyStaff(supabase, task.assignee_id, message)) {
-      events.push({ subject_id: task.id, subject_kind: "task", protocol: PROTOCOL, gate: plan.gate, kind: "in_app", due_at: `${task.due_date}T00:00:00Z` });
-      inApp++;
+    // Legacy rows still have a primary owner even if the migration was just
+    // applied; the fallback keeps that owner covered until backfill is read.
+    const recipients = assigned.get(task.id) ?? (task.staff ? [task.staff] : []);
+    for (const staff of recipients) {
+      const subject = `${task.id}:${staff.id}`;
+      const base = `${subject}|${plan.gate}`;
+      const legacyBase = `${task.id}|${plan.gate}`;
+      const alreadyNotified = (kind: "in_app" | "whatsapp") => seen.has(`${base}|${kind}`)
+        || (staff.id === task.assignee_id && seen.has(`${legacyBase}|${kind}`));
+      if (!alreadyNotified("in_app") && await notifyStaff(supabase, staff.id, message)) {
+        events.push({ subject_id: subject, subject_kind: "task_assignment", protocol: PROTOCOL, gate: plan.gate, kind: "in_app", due_at: `${task.due_date}T00:00:00Z` });
+        inApp++;
+      }
+      if (plan.whatsapp && staff.task_reminder_whatsapp_opt_in && staff.task_reminder_phone && whatsappEnabled() && !alreadyNotified("whatsapp")) {
+        const result = await sendTemplate({
+          phone: staff.task_reminder_phone,
+          template: { name: String(process.env.WATI_TEMPLATE_STAFF_TASK_REMINDER), params: [staff.name.split(/\s+/)[0] || "there", plan.label] },
+        });
+        if (result.ok) {
+          events.push({ subject_id: subject, subject_kind: "task_assignment", protocol: PROTOCOL, gate: plan.gate, kind: "whatsapp", due_at: `${task.due_date}T00:00:00Z` });
+          whatsapp++;
+        }
+      }
     }
-    if (plan.escalate && !seen.has(`${base}|management`)) {
+    const managementBase = `${task.id}|${plan.gate}`;
+    if (plan.escalate && !seen.has(`${managementBase}|management`)) {
       await notifyRoles(supabase, MANAGEMENT, { ...message, title: `Task needs attention — ${plan.label}`, body: task.title, icon: "⚠️" });
       events.push({ subject_id: task.id, subject_kind: "task", protocol: PROTOCOL, gate: plan.gate, kind: "management", due_at: `${task.due_date}T00:00:00Z` });
       escalated++;
-    }
-    const staff = task.staff;
-    if (plan.whatsapp && staff?.task_reminder_whatsapp_opt_in && staff.task_reminder_phone && whatsappEnabled() && !seen.has(`${base}|whatsapp`)) {
-      // Template only receives the staff member's first name and a neutral
-      // timing label. It never carries task/client information.
-      const result = await sendTemplate({
-        phone: staff.task_reminder_phone,
-        template: { name: String(process.env.WATI_TEMPLATE_STAFF_TASK_REMINDER), params: [staff.name.split(/\s+/)[0] || "there", plan.label] },
-      });
-      if (result.ok) {
-        events.push({ subject_id: task.id, subject_kind: "task", protocol: PROTOCOL, gate: plan.gate, kind: "whatsapp", due_at: `${task.due_date}T00:00:00Z` });
-        whatsapp++;
-      }
     }
   }
   if (events.length) await supabase.from("automation_events").upsert(events, { onConflict: "subject_id,protocol,gate,kind", ignoreDuplicates: true });

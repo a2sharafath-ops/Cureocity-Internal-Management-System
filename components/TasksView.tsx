@@ -8,7 +8,7 @@ import SegTabs from "@/components/SegTabs";
 
 export type TaskRow = {
   id: string; title: string; type: string; priority: string; status: string;
-  due_date: string | null; assigneeId: string | null; assignee: string | null;
+  due_date: string | null; assigneeId: string | null; assignee: string | null; assigneeIds: string[]; assignees: string[];
   clientId: string | null; clientName: string | null; leadId?: string | null; leadName?: string | null;
   projectId?: string | null; projectName?: string | null;
 };
@@ -31,7 +31,7 @@ const box: React.CSSProperties = { background: "var(--card)", border: "1px solid
 const selectStyle: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 13, background: "#fff" };
 function fmt(date: string | null) { return date ? new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }) : "—"; }
 
-export default function TasksView({ tasks, today, staff, types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
+export default function TasksView({ tasks, today, staff, staffOptions = [], types, projects = [], currentStaffId }: { tasks: TaskRow[]; today: string; staff: string[]; staffOptions?: { id: string; name: string }[]; types: string[]; projects?: Project[]; currentStaffId: string | null }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -60,7 +60,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
   }, [pathname, searchParams]);
 
   const isOverdue = (task: TaskRow) => task.status !== "done" && Boolean(task.due_date && task.due_date < today);
-  const attention = (task: TaskRow) => task.status !== "done" && (task.status === "blocked" || !task.assigneeId || isOverdue(task));
+  const attention = (task: TaskRow) => task.status !== "done" && (task.status === "blocked" || task.assigneeIds.length === 0 || isOverdue(task));
   const dueText = (task: TaskRow) => {
     if (!task.due_date) return "No due date";
     const days = Math.round((Date.parse(`${task.due_date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
@@ -81,7 +81,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     return dateF === "today" ? days === 0 : dateF === "week" ? days >= 0 && days <= 7 : days < 0;
   };
   const rows = tasks.filter(inBucket)
-    .filter((task) => scope === "all" || (scope === "mine" ? Boolean(currentStaffId && task.assigneeId === currentStaffId) : !task.assigneeId))
+    .filter((task) => scope === "all" || (scope === "mine" ? Boolean(currentStaffId && task.assigneeIds.includes(currentStaffId)) : task.assigneeIds.length === 0))
     .filter((task) => projectF === "all" || (projectF === "inbox" ? !task.projectId : task.projectId === projectF))
     .filter((task) => typeF === "all" || task.type === typeF)
     .filter((task) => assigneeF === "all" || task.assignee === assigneeF)
@@ -96,7 +96,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
     total: tasks.length,
     overdue: tasks.filter(isOverdue).length,
     blocked: tasks.filter((task) => task.status === "blocked").length,
-    unassigned: tasks.filter((task) => task.status !== "done" && !task.assigneeId).length,
+    unassigned: tasks.filter((task) => task.status !== "done" && task.assigneeIds.length === 0).length,
     completion: tasks.length ? Math.round((counts.completed / tasks.length) * 100) : 0,
   };
   const openTasks = ({ bucket: nextBucket = "all", project = "all", nextScope = "all", nextDate = "all", nextType = "all", nextAssignee = "all" }: { bucket?: Bucket; project?: string; nextScope?: Scope; nextDate?: string; nextType?: string; nextAssignee?: string } = {}) => {
@@ -169,7 +169,7 @@ export default function TasksView({ tasks, today, staff, types, projects = [], c
       <select value={assigneeF} onChange={(event) => openTasks({ bucket, project: projectF, nextScope: scope, nextDate: dateF, nextType: typeF, nextAssignee: event.target.value })} style={selectStyle}><option value="all">All assignees</option>{staff.map((person) => <option key={person} value={person}>{person}</option>)}</select>
       <span style={{ flex: 1 }} /><span style={{ color: "var(--muted)", fontSize: 13 }}>Showing {rows.length} task{rows.length === 1 ? "" : "s"}</span>
     </div>}
-    {view === "tasks" && (timeline ? <div style={{ ...box, padding: "8px 18px" }}>{rows.length === 0 && <div style={{ padding: 18, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No tasks in this view.</div>}{rows.map((task, index) => <div key={task.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderTop: index ? "1px solid var(--border)" : "none" }}><div style={{ width: 70, color: "var(--muted)", fontSize: 12 }}>{fmt(task.due_date)}</div><div style={{ width: 10, height: 10, borderRadius: "50%", background: isOverdue(task) ? "var(--red)" : "var(--brand-fill)", marginTop: 3 }} /><div><b>{task.title}</b><div style={{ fontSize: 12, color: "var(--muted)" }}>{task.projectName ?? "Operations inbox"} · {task.assignee ?? "Unassigned"} · {dueText(task)}</div></div></div>)}</div> : <div style={{ ...box, overflow: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}><thead><tr>{["Task", "Project", "Assignee", "Due", "Linked record", "Status", ""].map((label) => <th key={label} style={{ padding: "11px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase" }}>{label}</th>)}</tr></thead><tbody>
+    {view === "tasks" && (timeline ? <div style={{ ...box, padding: "8px 18px" }}>{rows.length === 0 && <div style={{ padding: 18, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>No tasks in this view.</div>}{rows.map((task, index) => <div key={task.id} style={{ display: "flex", gap: 12, padding: "12px 0", borderTop: index ? "1px solid var(--border)" : "none" }}><div style={{ width: 70, color: "var(--muted)", fontSize: 12 }}>{fmt(task.due_date)}</div><div style={{ width: 10, height: 10, borderRadius: "50%", background: isOverdue(task) ? "var(--red)" : "var(--brand-fill)", marginTop: 3 }} /><div><b>{task.title}</b><div style={{ fontSize: 12, color: "var(--muted)" }}>{task.projectName ?? "Operations inbox"} · {task.assignee ?? "Unassigned"} · {dueText(task)}</div></div></div>)}</div> : <div style={{ ...box, overflow: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}><thead><tr>{["Task", "Project", "Assignees", "Due", "Linked record", "Status", ""].map((label) => <th key={label} style={{ padding: "11px 16px", textAlign: "left", color: "var(--muted)", fontSize: 11, textTransform: "uppercase" }}>{label}</th>)}</tr></thead><tbody>
       {rows.map((task) => <Fragment key={task.id}><tr style={{ borderTop: "1px solid var(--border)" }}><td style={{ padding: "12px 16px", fontSize: 13 }}><b>{task.title}</b><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{task.type} · {task.priority}</div></td><td style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>{task.projectName ?? "Operations inbox"}</td><td style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}>{task.assignee ?? "Unassigned"}</td><td style={{ padding: "12px 16px", fontSize: 13, color: isOverdue(task) ? "var(--red)" : "var(--muted)" }}>{fmt(task.due_date)}<div style={{ fontSize: 11.5 }}>{dueText(task)}</div></td><td style={{ padding: "12px 16px", fontSize: 13 }}>{task.clientId ? <Link href={`/clients/${task.clientId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{task.clientName}</Link> : task.leadId ? <Link href={`/leads/${task.leadId}`} style={{ color: "var(--brand-text)", textDecoration: "none", fontWeight: 600 }}>{task.leadName} <span style={{ color: "var(--muted)", fontSize: 11 }}>· lead</span></Link> : <span style={{ color: "var(--muted)" }}>—</span>}</td><td style={{ padding: "12px 16px", fontSize: 13 }}><form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><select name="status" defaultValue={task.status} onChange={(event) => event.currentTarget.form?.requestSubmit()} style={{ ...selectStyle, padding: "6px 8px" }}>{STATUS_OPTS.map((status) => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}</select></form></td><td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}><button type="button" onClick={() => setOpen(open === task.id ? null : task.id)} style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>View</button>{" "}<form action={remindTask} style={{ display: "inline" }}><input type="hidden" name="id" value={task.id} /><button title="Send reminder" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "6px 9px", fontSize: 13, cursor: "pointer" }}>🔔</button></form></td></tr>{open === task.id && <tr style={{ background: "#fafafa" }}><td colSpan={7} style={{ padding: "12px 16px", fontSize: 13, color: "var(--muted)" }}><div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}><span><b style={{ color: "var(--ink)" }}>{task.title}</b> · {task.assignee ?? "Unassigned"} · due {fmt(task.due_date)}</span><form action={setTaskProject} style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="hidden" name="id" value={task.id} /><label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>Project</label><select name="project_id" defaultValue={task.projectId ?? ""} onChange={(event) => event.currentTarget.form?.requestSubmit()} style={{ ...selectStyle, padding: "5px 8px", fontSize: 12 }}><option value="">Operations inbox</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></form><form action={deleteTask} style={{ marginLeft: "auto" }}><input type="hidden" name="id" value={task.id} /><button style={{ border: "1px solid #fecaca", background: "#fff", color: "var(--red)", borderRadius: 8, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>Delete task</button></form></div></td></tr>}</Fragment>)}
       {rows.length === 0 && <tr><td colSpan={7} style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>No tasks in this view.</td></tr>}
     </tbody></table></div>)}
