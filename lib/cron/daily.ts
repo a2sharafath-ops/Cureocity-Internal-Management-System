@@ -11,6 +11,7 @@ import { runLeadFollowups } from "@/lib/cron/lead-followups";
 import { runLeadCoverage } from "@/lib/cron/lead-coverage";
 import { runLeadIdle } from "@/lib/cron/lead-idle";
 import { runConcernEscalation } from "@/lib/cron/concern-escalation";
+import { runTaskReminders } from "@/lib/cron/task-reminders";
 import { runLeadStagnation } from "@/lib/cron/lead-stagnation";
 import { atomicBillingEnabled, runAtomicBillingRpc, subscriptionRenewalKey } from "@/lib/billing-atomic";
 
@@ -244,6 +245,9 @@ export async function runDaily() {
   const stag = await runLeadStagnation(supabase, todayISO());
   // Concerns the coach hasn't answered — escalated to the Medical Director.
   const esc = await runConcernEscalation(supabase, todayISO());
+  // Staff task reminders are disabled unless the explicit runtime flag is on.
+  // The function owns its own once-only gates in automation_events.
+  const taskReminders = await runTaskReminders(supabase, todayISO());
   await supabase.from("audit_log").insert({
     actor_name: "System (cron)", actor_role: "System", action: "Daily automation run",
     target: null,
@@ -268,5 +272,5 @@ export async function runDaily() {
           : ""),
     href: "/followups", icon: "⚙️",
   });
-  return { renewed, reminders, followups, sla, comp, callbacks: cb, coverage: cov, idle, stagnation: stag, ranAt: new Date().toISOString() };
+  return { renewed, reminders, followups, sla, comp, callbacks: cb, coverage: cov, idle, stagnation: stag, taskReminders, ranAt: new Date().toISOString() };
 }

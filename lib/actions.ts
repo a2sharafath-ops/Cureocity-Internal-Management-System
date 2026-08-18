@@ -5038,17 +5038,41 @@ export async function setTaskStatus(formData: FormData) {
   revalidatePath("/tasks");
 }
 
-// Nudge the team about a task (in-app notification to Admin/Manager + audit).
+// Nudge the person who owns a task.  Management is a deliberate fallback for
+// unassigned work or an owner who has no linked staff login.
 export async function remindTask(formData: FormData) {
   const p = await getProfile();
   if (!p || !isStaffRole(p.role)) return;
   const id = String(formData.get("id"));
   const supabase = await createClient();
-  const { data: t } = await supabase.from("tasks").select("title, staff:assignee_id(name)").eq("id", id).maybeSingle();
+  const { data: t } = await supabase.from("tasks").select("title, assignee_id, staff:assignee_id(name)").eq("id", id).maybeSingle();
   const title = (t as { title?: string } | null)?.title ?? "task";
+  const assigneeId = (t as { assignee_id?: string | null } | null)?.assignee_id ?? null;
   const who = (t as { staff?: { name: string } | null } | null)?.staff?.name;
-  await notifyRoles(supabase, ["Administrator", "Manager"], { title: "Task reminder", body: `${title}${who ? ` · ${who}` : ""}`, href: "/tasks", icon: "⏰" });
+  const notification = { title: "Task reminder", body: title, href: "/tasks", icon: "⏰" };
+  const reached = assigneeId ? await notifyStaff(supabase, assigneeId, notification) : false;
+  if (!reached) await notifyRoles(supabase, ["Administrator", "Manager", "Super Admin"], { ...notification, body: `${title}${who ? ` · ${who}` : " · unassigned"}` });
   await logAudit(p, "Task reminder sent", title, null);
+  revalidatePath("/tasks");
+}
+
+/** Record a staff member's confirmed contact preference.  WhatsApp delivery
+ * still stays off until both deployment flags and Wati's approved template are
+ * configured; saving this contact never sends a message. */
+export async function saveTaskReminderContact(formData: FormData) {
+  const p = await getProfile();
+  if (!p || !canManageTasks(p.role)) return;
+  const staffId = String(formData.get("staff_id") ?? "");
+  const phone = String(formData.get("task_reminder_phone") ?? "").trim();
+  const optedIn = String(formData.get("task_reminder_whatsapp_opt_in") ?? "") === "true";
+  if (!staffId || phone.length > 30) return;
+  const supabase = await createClient();
+  await supabase.from("staff").update({
+    task_reminder_phone: phone || null,
+    // Never retain an active opt-in without a reachable contact number.
+    task_reminder_whatsapp_opt_in: Boolean(phone) && optedIn,
+  }).eq("id", staffId);
+  await logAudit(p, "Task reminder contact updated", staffId, optedIn && phone ? "WhatsApp opt-in confirmed" : "WhatsApp opt-in off");
   revalidatePath("/tasks");
 }
 

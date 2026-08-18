@@ -65,6 +65,6 @@ describe("role preview navigation", () => {
   it("labels the reset control with the real account role", () => {
     expect(nativeRoleOptionLabel("Super Admin", false)).toBe("View as… (Super Admin)");
     expect(nativeRoleOptionLabel("Super Admin", true)).toBe("Return to Super Admin");
-    expect(nativeRoleOptionLabel("Administrator", true)).toBe("Return to Administrator");
+    expect(nativeRoleOptionLabel("Administrator", true)).toBe("Return to Admin");
   });
 });

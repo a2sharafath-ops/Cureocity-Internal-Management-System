@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { normalisePhone, templateFor, watiReadiness } from "@/lib/wati";
+import { normalisePhone, sendTemplate, templateFor, watiReadiness } from "@/lib/wati";
 
 describe("normalisePhone", () => {
   it("accepts the forms a real number arrives in", () => {
@@ -78,5 +78,23 @@ describe("watiReadiness", () => {
     process.env.WATI_API_ENDPOINT = "https://live.wati.io";
     process.env.WATI_ACCESS_TOKEN = "Bearer x";
     expect(watiReadiness().ready).toBe(true);
+  });
+});
+
+describe("sendTemplate", () => {
+  const keys = ["WATI_API_ENDPOINT", "WATI_ACCESS_TOKEN"];
+  let saved: Record<string, string | undefined>;
+  beforeEach(() => { saved = Object.fromEntries(keys.map((k) => [k, process.env[k]])); process.env.WATI_API_ENDPOINT = "https://wati.example"; process.env.WATI_ACCESS_TOKEN = "test"; });
+  afterEach(() => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
+
+  it("uses an approved template without document parameters", async () => {
+    const prior = global.fetch;
+    let body = "";
+    global.fetch = (async (_url: string | URL | Request, init?: RequestInit) => { body = String(init?.body); return new Response('{"result":true}', { status: 200 }); }) as typeof fetch;
+    try {
+      await expect(sendTemplate({ phone: "9645999972", template: { name: "staff_task_reminder", params: ["Sam", "due today"] } })).resolves.toEqual({ ok: true });
+      expect(body).toContain("staff_task_reminder");
+      expect(body).not.toContain("document_url");
+    } finally { global.fetch = prior; }
   });
 });

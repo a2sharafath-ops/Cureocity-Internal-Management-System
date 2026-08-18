@@ -78,6 +78,45 @@ export function watiReadiness(): WatiReadiness {
 export type SendResult = { ok: boolean; error?: string };
 
 /**
+ * Send a text-only approved Wati template.  This is deliberately separate
+ * from sendDocument(): operational reminders must never need a public file
+ * URL, and callers should use an approved template rather than ad-hoc text.
+ */
+export async function sendTemplate(opts: { phone: string; template: WatiTemplate }): Promise<SendResult> {
+  const { ready, missing } = watiReadiness();
+  if (!ready) return { ok: false, error: `WhatsApp isn't set up — missing ${missing.join(", ")}.` };
+
+  const to = normalisePhone(opts.phone);
+  if (!to) return { ok: false, error: `"${opts.phone}" isn't a number we can send to.` };
+  if (!opts.template.name) return { ok: false, error: "No approved WhatsApp template is configured." };
+
+  const endpoint = String(process.env.WATI_API_ENDPOINT).replace(/\/+$/, "");
+  const url = `${endpoint}/api/v1/sendTemplateMessage?whatsappNumber=${encodeURIComponent(to)}`;
+  const body = {
+    template_name: opts.template.name,
+    broadcast_name: `${opts.template.name}_${Date.now()}`,
+    parameters: opts.template.params.map((value, i) => ({ name: String(i + 1), value })),
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: String(process.env.WATI_ACCESS_TOKEN) },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, error: `Wati ${res.status}: ${text.slice(0, 200)}` };
+    try {
+      const json = JSON.parse(text) as { result?: boolean; ok?: boolean; info?: string; message?: string };
+      if (json.result === false || json.ok === false) return { ok: false, error: json.info || json.message || "Wati refused the send." };
+    } catch { /* A successful non-JSON reply is unusual but usable. */ }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
  * Send one approved template with a document attached.
  *
  * `mediaUrl` must be publicly fetchable by Wati's servers for as long as the

@@ -7,6 +7,7 @@ import RealtimeRefresh from "@/components/RealtimeRefresh";
 import TaskForm from "@/components/TaskForm";
 import TaskBulkImport from "@/components/TaskBulkImport";
 import TasksView, { type TaskRow } from "@/components/TasksView";
+import TaskReminderContacts from "@/components/TaskReminderContacts";
 
 export const dynamic = "force-dynamic";
 
@@ -17,13 +18,17 @@ export default async function TasksPage() {
   if (!me || !canSee(me.role, "/tasks")) redirect("/dashboard");
 
   const supabase = await createClient();
-  const [{ data: taskData }, { data: staffData }, { data: clientData }] = await Promise.all([
+  const [{ data: taskData }, { data: staffData }, { data: clientData }, { data: contactData, error: contactError }] = await Promise.all([
     supabase.from("tasks").select("id, title, type, priority, status, due_date, assignee_id, staff(name), clients(id, name), leads(id, name)").order("created_at", { ascending: false }),
     supabase.from("staff").select("id, name").order("name"),
     supabase.from("clients").select("id, name").order("name"),
+    // 0197 may not be installed yet on a deployed environment. Keep the core
+    // task board usable until the contact-preference migration is applied.
+    supabase.from("staff").select("id, task_reminder_phone, task_reminder_whatsapp_opt_in"),
   ]);
   const raw = (taskData ?? []) as unknown as Raw[];
   const staff = (staffData ?? []) as { id: string; name: string }[];
+  const contacts = new Map(((contactData ?? []) as { id: string; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null }[]).map((row) => [row.id, row]));
   const clients = (clientData ?? []) as { id: string; name: string }[];
 
   const tasks: TaskRow[] = raw.map((t) => ({
@@ -47,6 +52,10 @@ export default async function TasksPage() {
         </div>
         <span style={{ flex: 1 }} />
         {canManageTasks(me.role) && <TaskForm staff={staff} clients={clients} />}
+        {canManageTasks(me.role) && <TaskReminderContacts available={!contactError} staff={staff.map((person) => {
+          const contact = contacts.get(person.id);
+          return { id: person.id, name: person.name, phone: contact?.task_reminder_phone ?? null, optedIn: Boolean(contact?.task_reminder_whatsapp_opt_in) };
+        })} />}
       </div>
 
       {canManageTasks(me.role) && <TaskBulkImport />}

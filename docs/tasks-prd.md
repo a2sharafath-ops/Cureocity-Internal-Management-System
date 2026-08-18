@@ -44,7 +44,22 @@ Create or workflow trigger → assign owner, priority and due date → work the 
   Coach where that assignment exists; unresolved work remains visibly
   unassigned for triage.
 - Preserved table, filters, timeline, reminders and linked client/lead routes.
-- No database migration and no change to task data or permissions.
+
+### Controlled task reminders (implemented, disabled by default)
+
+- The daily automation can notify an assigned staff member in-app when a task
+  is due today, then at measured overdue intervals (day 1, 3, 7, then weekly).
+  From day 3, management is also notified in-app.
+- Each reminder is recorded in `automation_events`, so a cron retry does not
+  duplicate it. A task without an assignee is deliberately not messaged.
+- Optional WhatsApp delivery is staff-only and generic: it contains no client
+  name, task title, clinical detail or private link. It requires a confirmed
+  staff contact/opt-in, an approved Wati template, Wati credentials, and both
+  `TASK_REMINDERS_ENABLED=true` and
+  `TASK_REMINDERS_WHATSAPP_ENABLED=true` in the intended environment.
+- The reminder-contact migration is forward-only. Saving a contact or opt-in
+  never sends a message; activation and a Development smoke test remain a
+  separate release decision.
 
 ## 7. Next data-model increment
 
