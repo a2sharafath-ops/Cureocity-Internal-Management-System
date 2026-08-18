@@ -5975,6 +5975,7 @@ export async function transitionCoachProgrammeLifecycle(
   const reason = String(formData.get("reason") || "").trim();
   const effectiveDate = String(formData.get("effective_date") || "");
   const currentEffectiveDate = String(formData.get("current_effective_date") || "") || null;
+  const initialising = String(formData.get("initialise_programme") || "") === "true";
   const nextContactDate = String(formData.get("next_contact_date") || "") || null;
   const nextContactPlan = String(formData.get("next_contact_plan") || "").trim() || null;
   if (!clientId) return { error: "Choose a client." };
@@ -5984,8 +5985,7 @@ export async function transitionCoachProgrammeLifecycle(
     return { error: "The current programme status is invalid." };
   }
   const problem = coachProgrammeTransitionProblem({
-    from: fromStatus as (typeof COACH_PROGRAMME_STATUSES)[number],
-    to: toStatus, reason, effectiveDate, currentEffectiveDate, nextContactDate, nextContactPlan, today: todayISO(),
+    from: fromStatus as (typeof COACH_PROGRAMME_STATUSES)[number], to: toStatus, initialising, reason, effectiveDate, currentEffectiveDate, nextContactDate, nextContactPlan, today: todayISO(),
   });
   if (problem) return { error: problem };
 
@@ -6020,10 +6020,11 @@ export async function transitionCoachProgrammeLifecycle(
     // The immutable transition remains authoritative if notification delivery
     // is unavailable; the client record still shows the next-contact prompt.
   }
-  await logAudit(p, "Health Coach programme status changed", await clientName(supabase, clientId), `${fromStatus} → ${toStatus} · ${reason}`);
+  const auditDetail = initialising ? `Programme started · ${reason}` : `${fromStatus} → ${toStatus} · ${reason}`;
+  await logAudit(p, "Health Coach programme status changed", await clientName(supabase, clientId), auditDetail);
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/workspace");
-  return { ok: `Programme moved from ${fromStatus} to ${toStatus}.` };
+  return { ok: initialising ? "Active coaching programme started." : `Programme moved from ${fromStatus} to ${toStatus}.` };
 }
 
 // client checks a habit on/off for today (portal)

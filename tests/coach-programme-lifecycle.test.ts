@@ -24,6 +24,21 @@ describe("Health Coach programme lifecycle", () => {
     })).toMatch(/12 characters/);
   });
 
+  it("allows only the first Active programme to be explicitly started", () => {
+    expect(coachProgrammeTransitionProblem({
+      from: "Active", to: "Active", initialising: true,
+      reason: "Client agreed to begin structured coaching support.",
+      effectiveDate: "2026-08-13", nextContactDate: "2026-08-20",
+      nextContactPlan: "Review the walking goal and agree the next practical step.", today: "2026-08-13",
+    })).toBeNull();
+    expect(coachProgrammeTransitionProblem({
+      from: "Active", to: "Active", initialising: false,
+      reason: "Client agreed to begin structured coaching support.",
+      effectiveDate: "2026-08-13", nextContactDate: "2026-08-20",
+      nextContactPlan: "Review the walking goal and agree the next practical step.", today: "2026-08-13",
+    })).toMatch(/cannot move/);
+  });
+
   it("requires an actionable next contact when reactivating", () => {
     expect(coachProgrammeTransitionProblem({
       from: "Disengaged", to: "Active", reason: "Client asked to restart coaching support.",
@@ -47,6 +62,7 @@ describe("Health Coach programme lifecycle", () => {
       { from_status: "Paused", to_status: "Disengaged" },
       { from_status: "Disengaged", to_status: "Active" },
       { from_status: "Active", to_status: "Completed" },
-    ])).toEqual({ transitions: 4, disengaged: 1, reactivated: 1, paused: 1, completed: 1, transferred: 0 });
+      { from_status: null, to_status: "Active" },
+    ])).toEqual({ transitions: 5, disengaged: 1, reactivated: 1, paused: 1, completed: 1, transferred: 0 });
   });
 });
