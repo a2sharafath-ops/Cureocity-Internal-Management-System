@@ -37,7 +37,9 @@ export default async function TasksPageContent() {
   const staff = (staffData ?? []) as { id: string; name: string }[];
   const contacts = new Map(((contactData ?? []) as { id: string; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null }[]).map((row) => [row.id, row]));
   const clients = (clientData ?? []) as { id: string; name: string }[];
-  const projects = projectError ? [] : (projectData ?? []) as unknown as Project[];
+  // Completed projects are retained as history, but should not remain in the
+  // active project dashboard or assignment controls.
+  const projects = projectError ? [] : ((projectData ?? []) as unknown as Project[]).filter((project) => project.status !== "completed");
   const projectById = new Map(projects.map((project) => [project.id, project]));
   const sharedByTask = new Map<string, { id: string; name: string }[]>();
   for (const row of (sharedAssignmentData ?? []) as unknown as TaskAssignee[]) {
