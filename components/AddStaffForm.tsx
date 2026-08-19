@@ -90,6 +90,21 @@ export default function AddStaffForm() {
               <label style={label}>Temporary password *</label>
               <input style={input} name="password" placeholder="min 6 characters" required minLength={6} />
             </div>
+            <div>
+              <label style={label}>WhatsApp number</label>
+              <input
+                style={input}
+                type="tel"
+                name="task_reminder_phone"
+                placeholder="e.g. +919876543210"
+                pattern="\+[1-9][0-9]{7,14}"
+                title="Use international format with country code, for example +919876543210"
+              />
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--muted)" }}>
+              <input name="task_reminder_whatsapp_opt_in" value="true" type="checkbox" />
+              Staff member confirmed WhatsApp task-reminder opt-in
+            </label>
           </div>
 
           {state.error && (
@@ -106,7 +121,7 @@ export default function AddStaffForm() {
           <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 12 }}>
             <SubmitButton />
             <span style={{ color: "var(--muted)", fontSize: 12 }}>
-              They can sign in immediately with this email + temporary password.
+              They can sign in immediately. WhatsApp reminders stay off unless a valid number and confirmed opt-in are both supplied.
             </span>
           </div>
         </form>

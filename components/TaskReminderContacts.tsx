@@ -18,7 +18,15 @@ export default function TaskReminderContacts({ staff, available }: { staff: Staf
       {staff.map((person) => <form key={person.id} action={saveTaskReminderContact} style={{ display: "grid", gridTemplateColumns: "minmax(140px, 1fr) minmax(180px, 1.2fr) auto auto", gap: 8, alignItems: "center" }}>
         <input type="hidden" name="staff_id" value={person.id} />
         <span style={{ fontSize: 13, fontWeight: 600 }}>{person.name}</span>
-        <input name="task_reminder_phone" defaultValue={person.phone ?? ""} placeholder="Staff WhatsApp number" style={input} />
+        <input
+          name="task_reminder_phone"
+          type="tel"
+          defaultValue={person.phone ?? ""}
+          placeholder="e.g. +919876543210"
+          pattern="\+[1-9][0-9]{7,14}"
+          title="Use international format with country code, for example +919876543210"
+          style={input}
+        />
         <label style={{ whiteSpace: "nowrap", fontSize: 12.5, color: "var(--muted)" }}><input name="task_reminder_whatsapp_opt_in" value="true" type="checkbox" defaultChecked={person.optedIn} /> Confirmed opt-in</label>
         <button type="submit" style={{ border: "1px solid var(--border)", background: "#fff", borderRadius: 8, padding: "7px 10px", fontSize: 12, cursor: "pointer" }}>Save</button>
       </form>)}

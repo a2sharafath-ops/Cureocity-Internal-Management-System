@@ -226,6 +226,8 @@ const ALLOWED_ROLES = [
 
 export type InviteState = { error?: string; ok?: string };
 
+const INTERNATIONAL_PHONE = /^\+[1-9]\d{7,14}$/;
+
 export async function inviteStaff(_prev: InviteState, formData: FormData): Promise<InviteState> {
   const me = await getProfile();
   if (!me || (me.role !== "Administrator" && me.role !== "Super Admin")) return { error: "Not authorized." };
@@ -235,10 +237,16 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
   const role = String(formData.get("role") ?? "Front Desk");
   const branch = String(formData.get("branch") ?? "Kochi");
   const password = String(formData.get("password") ?? "");
+  const reminderPhone = String(formData.get("task_reminder_phone") ?? "").trim();
+  const reminderOptIn = String(formData.get("task_reminder_whatsapp_opt_in") ?? "") === "true";
 
   if (!email || !password) return { error: "Email and a temporary password are required." };
   if (password.length < 6) return { error: "Password must be at least 6 characters." };
   if (!ALLOWED_ROLES.includes(role)) return { error: "Invalid role." };
+  if (reminderPhone && !INTERNATIONAL_PHONE.test(reminderPhone)) {
+    return { error: "WhatsApp number must include the country code, for example +919876543210." };
+  }
+  if (reminderOptIn && !reminderPhone) return { error: "Add a WhatsApp number before confirming opt-in." };
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
@@ -268,7 +276,16 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
         if (displayName.length > (match.name ?? "").length) {
           await admin.from("staff").update({ name: displayName }).eq("id", match.id);
         }
-        await admin.from("staff").update({ role, branch }).eq("id", match.id);
+        await admin.from("staff").update({
+          role,
+          branch,
+          // An existing directory contact may predate their login. Leaving the
+          // optional field blank must not silently erase that saved consent.
+          ...(reminderPhone ? {
+            task_reminder_phone: reminderPhone,
+            task_reminder_whatsapp_opt_in: reminderOptIn,
+          } : {}),
+        }).eq("id", match.id);
       } else {
         const d = directoryDefaults(role);
         staffId = staffIdFor(displayName, email, rows.map((s) => s.id));
@@ -276,6 +293,8 @@ export async function inviteStaff(_prev: InviteState, formData: FormData): Promi
           id: staffId, name: displayName, role, branch,
           designation: d.designation, department: d.department,
           is_trainer: d.is_trainer, color: d.color,
+          task_reminder_phone: reminderPhone || null,
+          task_reminder_whatsapp_opt_in: Boolean(reminderPhone) && reminderOptIn,
         });
       }
     }
@@ -5181,7 +5200,7 @@ export async function saveTaskReminderContact(formData: FormData) {
   const staffId = String(formData.get("staff_id") ?? "");
   const phone = String(formData.get("task_reminder_phone") ?? "").trim();
   const optedIn = String(formData.get("task_reminder_whatsapp_opt_in") ?? "") === "true";
-  if (!staffId || phone.length > 30) return;
+  if (!staffId || (phone && !INTERNATIONAL_PHONE.test(phone))) return;
   const supabase = await createClient();
   await supabase.from("staff").update({
     task_reminder_phone: phone || null,
