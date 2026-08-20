@@ -1,13 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getProfile } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
-
-export default async function ControlledTaskReminderPage() {
-  const profile = await getProfile();
-  if (profile?.role !== "Super Admin") redirect("/tasks");
-
+export default function ControlledTaskReminderPage() {
   return (
     <div style={{ maxWidth: 680 }}>
       <h1 style={{ fontSize: 22, margin: "0 0 4px" }}>Controlled task-reminder test</h1>
