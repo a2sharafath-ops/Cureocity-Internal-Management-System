@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getProfile } from "@/lib/auth";
 import { runTaskReminders } from "@/lib/cron/task-reminders";
 import { bearerOk } from "@/lib/safe-equal";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,8 +16,12 @@ export const dynamic = "force-dynamic";
  * the rest of the daily automation suite or notifying other staff.
  */
 export async function POST(req: Request) {
-  if (!bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET)) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const cronAuthorized = bearerOk(req.headers.get("authorization"), process.env.CRON_SECRET);
+  if (!cronAuthorized) {
+    const profile = await getProfile();
+    if (profile?.role !== "Super Admin") {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const supabase = createAdminClient();

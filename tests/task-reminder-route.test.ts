@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   createAdminClient: vi.fn(),
+  getProfile: vi.fn(),
   runTaskReminders: vi.fn(),
   todayISO: vi.fn(() => "2026-08-20"),
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.createAdminClient }));
+vi.mock("@/lib/auth", () => ({ getProfile: mocks.getProfile }));
 vi.mock("@/lib/cron/task-reminders", () => ({ runTaskReminders: mocks.runTaskReminders }));
 vi.mock("@/lib/today", () => ({ todayISO: mocks.todayISO }));
 
@@ -21,10 +23,10 @@ function staffQuery(data: unknown[], error: unknown = null) {
   return query;
 }
 
-function request(secret = "cron-fixture") {
+function request(secret: string | null = "cron-fixture") {
   return new Request("https://example.test/api/cron/task-reminders", {
     method: "POST",
-    headers: { authorization: `Bearer ${secret}` },
+    headers: secret ? { authorization: `Bearer ${secret}` } : undefined,
   });
 }
 
@@ -33,6 +35,7 @@ const previousSecret = process.env.CRON_SECRET;
 beforeEach(() => {
   process.env.CRON_SECRET = "cron-fixture";
   mocks.createAdminClient.mockReset();
+  mocks.getProfile.mockReset().mockResolvedValue(null);
   mocks.runTaskReminders.mockReset().mockResolvedValue({
     scanned: 2,
     inApp: 1,
@@ -53,6 +56,19 @@ describe("controlled task-reminder route", () => {
     const response = await POST(request("wrong-secret"));
     expect(response.status).toBe(401);
     expect(mocks.createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("accepts the existing real Super Admin session without revealing the cron secret", async () => {
+    const admin = { from: vi.fn(() => staffQuery([
+      { id: "staff-1", task_reminder_phone: "+919000000001" },
+    ])) };
+    mocks.getProfile.mockResolvedValue({ role: "Super Admin" });
+    mocks.createAdminClient.mockReturnValue(admin);
+
+    const response = await POST(request(null));
+    expect(response.status).toBe(200);
+    expect(mocks.getProfile).toHaveBeenCalledTimes(1);
+    expect(mocks.runTaskReminders).toHaveBeenCalledTimes(1);
   });
 
   it("refuses to run unless exactly one opted-in contact is ready", async () => {
