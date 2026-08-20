@@ -5,6 +5,17 @@ type AnyClient = { from: (t: string) => any }; // eslint-disable-line @typescrip
 
 export type TaskReminderResult = { scanned: number; inApp: number; whatsapp: number; escalated: number; operationsDigest: number; skipped: boolean };
 
+export type TaskReminderOptions = {
+  /** Restrict every recipient-facing effect to one staff record. */
+  onlyStaffId?: string;
+  /** Keep normal daily behaviour by default; controlled runs can suppress it. */
+  sendInApp?: boolean;
+  /** Keep normal daily behaviour by default; controlled runs can suppress it. */
+  escalateManagement?: boolean;
+  /** The daily digest remains enabled by default. */
+  includeOperationsDigest?: boolean;
+};
+
 const MANAGEMENT = ["Administrator", "Manager", "Super Admin"];
 const PROTOCOL = "task_reminders";
 
@@ -83,7 +94,7 @@ export function taskOperationsProjectSummary(tasks: OperationsTask[], today: str
   return `${selected.join("; ")}${omitted ? `; +${omitted} more project${omitted === 1 ? "" : "s"}` : ""}`;
 }
 
-async function sendOperationsDigests(supabase: AnyClient, today: string): Promise<number> {
+async function sendOperationsDigests(supabase: AnyClient, today: string, onlyStaffId?: string): Promise<number> {
   if (!operationsDigestEnabled()) return 0;
   const [{ data: profileRows }, { data: taskRows }, { data: staffRows }] = await Promise.all([
     supabase.from("profiles").select("role, staff_id, branch").in("role", ["Super Admin", "Administrator", "Manager"]).not("staff_id", "is", null),
@@ -92,7 +103,8 @@ async function sendOperationsDigests(supabase: AnyClient, today: string): Promis
   ]);
   const staff = (staffRows ?? []) as { id: string; name: string; branch: string | null; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null }[];
   const staffById = new Map(staff.map((row) => [row.id, row]));
-  const recipients = (profileRows ?? []) as { role: string; staff_id: string; branch: string | null }[];
+  const recipients = ((profileRows ?? []) as { role: string; staff_id: string; branch: string | null }[])
+    .filter((recipient) => !onlyStaffId || recipient.staff_id === onlyStaffId);
   const legacyTasks = (taskRows ?? []) as { id: string; status: string; due_date: string | null; assignee_id: string | null; task_projects: { name: string } | null }[];
   const { data: assignmentRows } = legacyTasks.length ? await supabase.from("task_assignees")
     .select("task_id, staff_id").in("task_id", legacyTasks.map((task) => task.id)) : { data: [] };
@@ -154,8 +166,15 @@ async function sendOperationsDigests(supabase: AnyClient, today: string): Promis
  * explicit runtime switch is enabled.  WhatsApp copies are generic by design:
  * no client name, task title, clinical detail, or link token leaves Cureocity.
  */
-export async function runTaskReminders(supabase: AnyClient, today: string): Promise<TaskReminderResult> {
+export async function runTaskReminders(supabase: AnyClient, today: string, options: TaskReminderOptions = {}): Promise<TaskReminderResult> {
   if (process.env.TASK_REMINDERS_ENABLED !== "true") return { scanned: 0, inApp: 0, whatsapp: 0, escalated: 0, operationsDigest: 0, skipped: true };
+
+  const sendInApp = options.sendInApp !== false;
+  const escalateManagement = options.escalateManagement !== false;
+  const includeOperationsDigest = options.includeOperationsDigest !== false;
+  const operationsDigest = () => includeOperationsDigest
+    ? sendOperationsDigests(supabase, today, options.onlyStaffId)
+    : Promise.resolve(0);
 
   const { data } = await supabase.from("tasks")
     .select("id, title, due_date, assignee_id, staff:assignee_id(id, name, task_reminder_phone, task_reminder_whatsapp_opt_in)")
@@ -164,7 +183,7 @@ export async function runTaskReminders(supabase: AnyClient, today: string): Prom
     id: string; title: string; due_date: string; assignee_id: string | null;
     staff: { id: string; name: string; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null } | null;
   }[];
-  if (!tasks.length) return { scanned: 0, inApp: 0, whatsapp: 0, escalated: 0, operationsDigest: await sendOperationsDigests(supabase, today), skipped: false };
+  if (!tasks.length) return { scanned: 0, inApp: 0, whatsapp: 0, escalated: 0, operationsDigest: await operationsDigest(), skipped: false };
 
   const { data: assignmentRows } = await supabase.from("task_assignees")
     .select("task_id, staff:staff_id(id, name, task_reminder_phone, task_reminder_whatsapp_opt_in)")
@@ -173,27 +192,32 @@ export async function runTaskReminders(supabase: AnyClient, today: string): Prom
   for (const row of (assignmentRows ?? []) as { task_id: string; staff: { id: string; name: string; task_reminder_phone: string | null; task_reminder_whatsapp_opt_in: boolean | null } | null }[]) {
     if (row.staff) assigned.set(row.task_id, [...(assigned.get(row.task_id) ?? []), row.staff]);
   }
-  const gates = Array.from(new Set(tasks.map((task) => taskReminderPlan(task.due_date, today)?.gate).filter(Boolean) as string[]));
+  const scopedTasks = options.onlyStaffId
+    ? tasks.filter((task) => (assigned.get(task.id) ?? (task.staff ? [task.staff] : []))
+      .some((staff) => staff.id === options.onlyStaffId))
+    : tasks;
+  const gates = Array.from(new Set(scopedTasks.map((task) => taskReminderPlan(task.due_date, today)?.gate).filter(Boolean) as string[]));
   const { data: seenRows } = gates.length ? await supabase.from("automation_events")
     .select("subject_id, gate, kind").eq("protocol", PROTOCOL).in("gate", gates) : { data: [] };
   const seen = new Set(((seenRows ?? []) as { subject_id: string; gate: string; kind: string }[]).map((r) => `${r.subject_id}|${r.gate}|${r.kind}`));
   const events: { subject_id: string; subject_kind: string; protocol: string; gate: string; kind: string; due_at: string }[] = [];
   let inApp = 0, whatsapp = 0, escalated = 0;
 
-  for (const task of tasks) {
+  for (const task of scopedTasks) {
     const plan = taskReminderPlan(task.due_date, today);
     if (!plan) continue;
     const message = { title: `Task ${plan.label}`, body: task.title, href: "/tasks", icon: plan.kind === "overdue" ? "🔴" : "⏰" };
     // Legacy rows still have a primary owner even if the migration was just
     // applied; the fallback keeps that owner covered until backfill is read.
-    const recipients = assigned.get(task.id) ?? (task.staff ? [task.staff] : []);
+    const recipients = (assigned.get(task.id) ?? (task.staff ? [task.staff] : []))
+      .filter((staff) => !options.onlyStaffId || staff.id === options.onlyStaffId);
     for (const staff of recipients) {
       const subject = `${task.id}:${staff.id}`;
       const base = `${subject}|${plan.gate}`;
       const legacyBase = `${task.id}|${plan.gate}`;
       const alreadyNotified = (kind: "in_app" | "whatsapp") => seen.has(`${base}|${kind}`)
         || (staff.id === task.assignee_id && seen.has(`${legacyBase}|${kind}`));
-      if (!alreadyNotified("in_app") && await notifyStaff(supabase, staff.id, message)) {
+      if (sendInApp && !alreadyNotified("in_app") && await notifyStaff(supabase, staff.id, message)) {
         events.push({ subject_id: subject, subject_kind: "task_assignment", protocol: PROTOCOL, gate: plan.gate, kind: "in_app", due_at: `${task.due_date}T00:00:00Z` });
         inApp++;
       }
@@ -209,12 +233,12 @@ export async function runTaskReminders(supabase: AnyClient, today: string): Prom
       }
     }
     const managementBase = `${task.id}|${plan.gate}`;
-    if (plan.escalate && !seen.has(`${managementBase}|management`)) {
+    if (escalateManagement && plan.escalate && !seen.has(`${managementBase}|management`)) {
       await notifyRoles(supabase, MANAGEMENT, { ...message, title: `Task needs attention — ${plan.label}`, body: task.title, icon: "⚠️" });
       events.push({ subject_id: task.id, subject_kind: "task", protocol: PROTOCOL, gate: plan.gate, kind: "management", due_at: `${task.due_date}T00:00:00Z` });
       escalated++;
     }
   }
   if (events.length) await supabase.from("automation_events").upsert(events, { onConflict: "subject_id,protocol,gate,kind", ignoreDuplicates: true });
-  return { scanned: tasks.length, inApp, whatsapp, escalated, operationsDigest: await sendOperationsDigests(supabase, today), skipped: false };
+  return { scanned: scopedTasks.length, inApp, whatsapp, escalated, operationsDigest: await operationsDigest(), skipped: false };
 }
